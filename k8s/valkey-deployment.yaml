@@ -1,0 +1,31 @@
+# valkey-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valkey-deployment
+  namespace: lattice-cast
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: valkey
+  template:
+    metadata:
+      labels:
+        app: valkey
+    spec:
+      containers:
+      - name: valkey
+        image: valkey/valkey:8-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 6379
+        command: ["valkey-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+        volumeMounts:
+        - name: valkey-data
+          mountPath: /data
+      volumes:
+      - name: valkey-data
+        hostPath:
+          path: /home/posetmage/HDD/Download/Github/LatticeMage/LatticeCast/.valkey/
+          type: DirectoryOrCreate

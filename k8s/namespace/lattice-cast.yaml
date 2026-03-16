@@ -1,0 +1,5 @@
+# namespace/lattice-cast.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lattice-cast

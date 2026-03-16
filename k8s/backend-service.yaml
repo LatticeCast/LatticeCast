@@ -1,0 +1,14 @@
+# backend-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: lattice-cast
+spec:
+  selector:
+    app: backend
+  ports:
+    - protocol: TCP
+      port: 5000  # Service port
+      targetPort: 5000 # Container port
+  type: ClusterIP # Important: Use ClusterIP

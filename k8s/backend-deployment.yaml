@@ -1,0 +1,83 @@
+# backend-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  namespace: lattice-cast
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: 127.0.0.1:7000/lattice-cast-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 5000
+
+          envFrom:
+            # Non-sensitive config from ConfigMap
+            - configMapRef:
+                name: backend-config
+
+          env:
+            # Postgres from secret
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_DB
+
+            # MinIO from secret
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secret
+                  key: MINIO_ACCESS_KEY
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: minio-secret
+                  key: MINIO_SECRET_KEY
+
+            # OAuth from secret
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: oauth-secret
+                  key: GOOGLE_CLIENT_ID
+            - name: GOOGLE_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: oauth-secret
+                  key: GOOGLE_CLIENT_SECRET
+            - name: AUTHENTIK_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: oauth-secret
+                  key: AUTHENTIK_CLIENT_ID
+            - name: AUTHENTIK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: oauth-secret
+                  key: AUTHENTIK_URL
+
+            # Database URL (composed from secrets)
+            - name: POSTGRES_URL
+              value: "db:5432"

@@ -1,0 +1,142 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+        - AUTHENTIK_URL=${AUTHENTIK_URL}
+        - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ./frontend/:/app/
+    env_file:
+      - .env
+    networks:
+      - shared-network
+    command: npm run dev
+    tty: true
+    stdin_open: true
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - ./backend/:/app/
+      - ./migration/:/migration/:ro
+    env_file:
+      - .env
+    environment:
+      BACKEND_PORT: 5000
+      POSTGRES_URL: db:5432
+      REDIS_URL: redis://valkey:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - shared-network
+      - app-network
+
+  db:
+    ports:
+      - 15432:5432
+    image: postgres:18
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    restart: always
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - valkey_data:/data
+    command: valkey-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app-network
+
+  minio:
+    image: minio/minio:latest
+    restart: always
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio_data:/data
+    env_file:
+      - .env
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  backend-test:
+    profiles:
+      - test
+    build:
+      context: ./backend
+    volumes:
+      # Mount tests directory (includes tokens.json for auth)
+      - ./backend/tests:/app/tests:ro
+    env_file:
+      - .env
+    environment:
+      BASE_URL: http://backend:5000
+    depends_on:
+      - backend
+    networks:
+      - app-network
+    command: ["python", "tests/run_all_tests.py"]
+
+  browser:
+    profiles:
+      - browser
+    build:
+      context: ./browser
+    volumes:
+      - ./.browser:/output
+    environment:
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    networks:
+      - shared-network
+    tty: true
+    stdin_open: true
+
+networks:
+  app-network:
+    driver: bridge
+
+  shared-network:
+    external: true
+
+volumes:
+  db_data:
+  valkey_data:
+  minio_data:
