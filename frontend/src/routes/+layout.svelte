@@ -120,6 +120,22 @@
 					Debug
 				</button>
 
+				<button
+					onclick={() => navigate('/tables')}
+					data-testid="nav-tables"
+					class="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-white/90 transition hover:bg-white/20"
+				>
+					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M3 10h18M3 14h18M10 3v18M6 3h12a1 1 0 011 1v16a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z"
+						/>
+					</svg>
+					Tables
+				</button>
+
 				</nav>
 
 			<!-- Bottom Section -->
