@@ -18,7 +18,10 @@ from core.db import close_db, init_db
 from middleware.jwks import get_jwks
 from router.api.admin.users import router as admin_users_router
 from router.api.auth import router as api_auth_router
+from router.api.columns import router as api_columns_router
+from router.api.rows import router as api_rows_router
 from router.api.storage import router as api_storage_router
+from router.api.tables import router as api_tables_router
 
 # Local imports
 from ServerTee import ServerTee
@@ -136,6 +139,9 @@ api_router = APIRouter(prefix="/api")
 api_router.include_router(api_auth_router)
 api_router.include_router(api_storage_router)
 api_router.include_router(admin_users_router)
+api_router.include_router(api_tables_router)
+api_router.include_router(api_columns_router)
+api_router.include_router(api_rows_router)
 
 
 # --------------------------------------------------
