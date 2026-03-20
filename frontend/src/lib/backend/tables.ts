@@ -1,0 +1,151 @@
+// lib/backend/tables.ts
+// API client for tables/columns/rows CRUD
+
+import { get } from 'svelte/store';
+import { authStore } from '$lib/stores/auth.store';
+import { BACKEND_URL } from './config';
+import type {
+	Table,
+	Column,
+	Row,
+	CreateTable,
+	CreateColumn,
+	CreateRow,
+	UpdateTable,
+	UpdateColumn,
+	UpdateRow
+} from '$lib/types/table';
+
+async function getAuthHeaders(): Promise<HeadersInit> {
+	const auth = get(authStore);
+	if (!auth?.accessToken) {
+		throw new Error('Not authenticated');
+	}
+	return {
+		Authorization: `Bearer ${auth.accessToken}`,
+		'Content-Type': 'application/json'
+	};
+}
+
+// Tables
+
+export async function fetchTables(): Promise<Table[]> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/tables`, { headers });
+	if (!response.ok) throw new Error(`Failed to fetch tables: ${response.statusText}`);
+	return response.json();
+}
+
+export async function createTable(data: CreateTable): Promise<Table> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/tables`, {
+		method: 'POST',
+		headers,
+		body: JSON.stringify(data)
+	});
+	if (!response.ok) throw new Error(`Failed to create table: ${response.statusText}`);
+	return response.json();
+}
+
+export async function updateTable(id: string, data: UpdateTable): Promise<Table> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/tables/${id}`, {
+		method: 'PUT',
+		headers,
+		body: JSON.stringify(data)
+	});
+	if (!response.ok) throw new Error(`Failed to update table: ${response.statusText}`);
+	return response.json();
+}
+
+export async function deleteTable(id: string): Promise<void> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/tables/${id}`, {
+		method: 'DELETE',
+		headers
+	});
+	if (!response.ok) throw new Error(`Failed to delete table: ${response.statusText}`);
+}
+
+// Columns
+
+export async function fetchColumns(tableId: string): Promise<Column[]> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/columns`, { headers });
+	if (!response.ok) throw new Error(`Failed to fetch columns: ${response.statusText}`);
+	return response.json();
+}
+
+export async function createColumn(tableId: string, data: CreateColumn): Promise<Column> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/columns`, {
+		method: 'POST',
+		headers,
+		body: JSON.stringify(data)
+	});
+	if (!response.ok) throw new Error(`Failed to create column: ${response.statusText}`);
+	return response.json();
+}
+
+export async function updateColumn(id: string, data: UpdateColumn): Promise<Column> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/columns/${id}`, {
+		method: 'PUT',
+		headers,
+		body: JSON.stringify(data)
+	});
+	if (!response.ok) throw new Error(`Failed to update column: ${response.statusText}`);
+	return response.json();
+}
+
+export async function deleteColumn(id: string): Promise<void> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/columns/${id}`, {
+		method: 'DELETE',
+		headers
+	});
+	if (!response.ok) throw new Error(`Failed to delete column: ${response.statusText}`);
+}
+
+// Rows
+
+export async function fetchRows(tableId: string, offset = 0, limit = 100): Promise<Row[]> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(
+		`${BACKEND_URL}/api/tables/${tableId}/rows?offset=${offset}&limit=${limit}`,
+		{ headers }
+	);
+	if (!response.ok) throw new Error(`Failed to fetch rows: ${response.statusText}`);
+	return response.json();
+}
+
+export async function createRow(tableId: string, data: CreateRow): Promise<Row> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows`, {
+		method: 'POST',
+		headers,
+		body: JSON.stringify(data)
+	});
+	if (!response.ok) throw new Error(`Failed to create row: ${response.statusText}`);
+	return response.json();
+}
+
+export async function updateRow(id: string, data: UpdateRow): Promise<Row> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/rows/${id}`, {
+		method: 'PUT',
+		headers,
+		body: JSON.stringify(data)
+	});
+	if (!response.ok) throw new Error(`Failed to update row: ${response.statusText}`);
+	return response.json();
+}
+
+export async function deleteRow(id: string): Promise<void> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/rows/${id}`, {
+		method: 'DELETE',
+		headers
+	});
+	if (!response.ok) throw new Error(`Failed to delete row: ${response.statusText}`);
+}
