@@ -15,12 +15,13 @@
 		refreshRows,
 		refreshColumns
 	} from '$lib/stores/tables.store';
-	import { fetchTables, createRow, createColumn, deleteColumn, updateColumn, updateRow } from '$lib/backend/tables';
+	import { fetchTables, createRow, createColumn, deleteColumn, updateColumn, updateRow, deleteRow } from '$lib/backend/tables';
 	import type { Column } from '$lib/types/table';
 
 	const COLUMN_TYPES = ['text', 'number', 'date', 'select', 'checkbox', 'url'] as const;
 
 	let addingRow = $state(false);
+	let deletingRowId = $state<string | null>(null);
 
 	// Add-column modal
 	let showAddColumn = $state(false);
@@ -69,6 +70,20 @@
 		}
 	}
 
+	async function handleDeleteRow(rowId: string) {
+		const tableId = $page.params.id;
+		deletingRowId = rowId;
+		error.set(null);
+		try {
+			await deleteRow(rowId);
+			await refreshRows(tableId);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to delete row');
+		} finally {
+			deletingRowId = null;
+		}
+	}
+
 	async function handleAddColumn() {
 		if (!newColName.trim()) return;
 		const tableId = $page.params.id;
@@ -95,6 +110,25 @@
 			await refreshColumns(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to delete column');
+		}
+	}
+
+	async function handleMoveColumn(col: Column, direction: 'up' | 'down') {
+		const tableId = $page.params.id;
+		const sorted = [...$columns].sort((a, b) => a.position - b.position);
+		const idx = sorted.findIndex((c) => c.id === col.id);
+		const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+		if (swapIdx < 0 || swapIdx >= sorted.length) return;
+		const swapCol = sorted[swapIdx];
+		error.set(null);
+		try {
+			await Promise.all([
+				updateColumn(col.id, { position: swapCol.position }),
+				updateColumn(swapCol.id, { position: col.position })
+			]);
+			await refreshColumns(tableId);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to reorder column');
 		}
 	}
 
@@ -181,6 +215,8 @@
 		if (Array.isArray(opts?.choices)) return opts.choices as string[];
 		return [];
 	}
+
+	const sortedColumns = $derived([...$columns].sort((a, b) => a.position - b.position));
 </script>
 
 <div class="min-h-screen bg-linear-to-br from-violet-600 via-purple-600 to-fuchsia-600">
@@ -232,11 +268,36 @@
 			<table class="w-full border-collapse rounded-2xl bg-white/10 text-white">
 				<thead>
 					<tr>
-						{#each $columns.sort((a, b) => a.position - b.position) as col (col.id)}
+						{#each sortedColumns as col, i (col.id)}
 							<th
 								class="border-b border-white/20 px-4 py-3 text-left text-sm font-semibold uppercase tracking-wide text-white/80"
 							>
-								<div class="flex items-center gap-2">
+								<div class="flex items-center gap-1">
+									<!-- Position arrows -->
+									<div class="flex flex-col mr-1">
+										<button
+											onclick={() => handleMoveColumn(col, 'up')}
+											disabled={i === 0}
+											class="rounded p-0.5 text-white/30 transition hover:bg-white/20 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed"
+											aria-label="Move column left"
+											title="Move left"
+										>
+											<svg class="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+											</svg>
+										</button>
+										<button
+											onclick={() => handleMoveColumn(col, 'down')}
+											disabled={i === sortedColumns.length - 1}
+											class="rounded p-0.5 text-white/30 transition hover:bg-white/20 hover:text-white disabled:opacity-20 disabled:cursor-not-allowed"
+											aria-label="Move column right"
+											title="Move right"
+										>
+											<svg class="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+											</svg>
+										</button>
+									</div>
 									{#if renamingColId === col.id}
 										<input
 											class="rounded bg-white/20 px-2 py-0.5 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
@@ -271,12 +332,14 @@
 								</div>
 							</th>
 						{/each}
+						<!-- Actions column header -->
+						<th class="border-b border-white/20 w-10"></th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each $rows as row (row.id)}
-						<tr class="border-b border-white/10 transition hover:bg-white/5">
-							{#each $columns.sort((a, b) => a.position - b.position) as col (col.id)}
+						<tr class="border-b border-white/10 transition hover:bg-white/5 {deletingRowId === row.id ? 'opacity-50' : ''}">
+							{#each sortedColumns as col (col.id)}
 								<td
 									class="px-2 py-1 text-sm text-white/90"
 									onclick={() => {
@@ -354,11 +417,25 @@
 									{/if}
 								</td>
 							{/each}
+							<!-- Row delete button -->
+							<td class="px-2 py-1 text-center">
+								<button
+									onclick={() => handleDeleteRow(row.id)}
+									disabled={deletingRowId === row.id}
+									class="rounded p-1 text-white/30 transition hover:bg-red-500/30 hover:text-red-300 disabled:opacity-50"
+									aria-label="Delete row"
+									title="Delete row"
+								>
+									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+									</svg>
+								</button>
+							</td>
 						</tr>
 					{:else}
 						<tr>
 							<td
-								colspan={$columns.length}
+								colspan={sortedColumns.length + 1}
 								class="px-4 py-8 text-center text-sm text-white/50"
 							>
 								No rows yet. Click "+ Add Row" to start.
