@@ -15,7 +15,8 @@
 		refreshRows,
 		refreshColumns
 	} from '$lib/stores/tables.store';
-	import { fetchTables, createRow, createColumn, deleteColumn, updateColumn } from '$lib/backend/tables';
+	import { fetchTables, createRow, createColumn, deleteColumn, updateColumn, updateRow } from '$lib/backend/tables';
+	import type { Column } from '$lib/types/table';
 
 	const COLUMN_TYPES = ['text', 'number', 'date', 'select', 'checkbox', 'url'] as const;
 
@@ -30,6 +31,10 @@
 	// Inline rename
 	let renamingColId = $state<string | null>(null);
 	let renameValue = $state('');
+
+	// Inline cell editing
+	let editingCell = $state<{ rowId: string; colId: string } | null>(null);
+	let editValue = $state<string>('');
 
 	onMount(async () => {
 		if (!$authStore?.role) {
@@ -120,6 +125,61 @@
 		if (val === null || val === undefined) return '';
 		if (typeof val === 'boolean') return val ? '✓' : '';
 		return String(val);
+	}
+
+	function startEdit(rowId: string, col: Column, currentVal: unknown) {
+		editingCell = { rowId, colId: col.id };
+		if (col.type === 'checkbox') {
+			editValue = String(!!currentVal);
+		} else {
+			editValue = currentVal === null || currentVal === undefined ? '' : String(currentVal);
+		}
+	}
+
+	async function commitEdit(rowId: string, col: Column) {
+		if (!editingCell) return;
+		editingCell = null;
+
+		const row = $rows.find((r) => r.id === rowId);
+		if (!row) return;
+
+		let parsed: unknown = editValue;
+		if (col.type === 'number') {
+			parsed = editValue === '' ? null : Number(editValue);
+		} else if (col.type === 'checkbox') {
+			parsed = editValue === 'true';
+		} else if (editValue === '') {
+			parsed = null;
+		}
+
+		const newData = { ...row.data, [col.id]: parsed };
+		error.set(null);
+		try {
+			await updateRow(rowId, { data: newData });
+			await refreshRows($page.params.id);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to update cell');
+		}
+	}
+
+	async function toggleCheckbox(rowId: string, col: Column) {
+		const row = $rows.find((r) => r.id === rowId);
+		if (!row) return;
+		const current = !!row.data[col.id];
+		const newData = { ...row.data, [col.id]: !current };
+		error.set(null);
+		try {
+			await updateRow(rowId, { data: newData });
+			await refreshRows($page.params.id);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to update cell');
+		}
+	}
+
+	function getSelectOptions(col: Column): string[] {
+		const opts = col.options;
+		if (Array.isArray(opts?.choices)) return opts.choices as string[];
+		return [];
 	}
 </script>
 
@@ -215,10 +275,83 @@
 				</thead>
 				<tbody>
 					{#each $rows as row (row.id)}
-						<tr class="border-b border-white/10 transition hover:bg-white/10">
+						<tr class="border-b border-white/10 transition hover:bg-white/5">
 							{#each $columns.sort((a, b) => a.position - b.position) as col (col.id)}
-								<td class="px-4 py-3 text-sm text-white/90">
-									{getCellValue(row, col.id)}
+								<td
+									class="px-2 py-1 text-sm text-white/90"
+									onclick={() => {
+										if (col.type !== 'checkbox' && !(editingCell?.rowId === row.id && editingCell?.colId === col.id)) {
+											startEdit(row.id, col, row.data[col.id]);
+										}
+									}}
+								>
+									{#if editingCell?.rowId === row.id && editingCell?.colId === col.id}
+										{#if col.type === 'select'}
+											{@const opts = getSelectOptions(col)}
+											<select
+												class="w-full rounded bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
+												bind:value={editValue}
+												onblur={() => commitEdit(row.id, col)}
+												onchange={() => commitEdit(row.id, col)}
+												autofocus
+											>
+												<option value="">—</option>
+												{#each opts as opt}
+													<option value={opt}>{opt}</option>
+												{/each}
+											</select>
+										{:else if col.type === 'number'}
+											<input
+												type="number"
+												class="w-full rounded bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
+												bind:value={editValue}
+												onblur={() => commitEdit(row.id, col)}
+												onkeydown={(e) => {
+													if (e.key === 'Enter') commitEdit(row.id, col);
+													if (e.key === 'Escape') editingCell = null;
+												}}
+												autofocus
+											/>
+										{:else if col.type === 'date'}
+											<input
+												type="date"
+												class="w-full rounded bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
+												bind:value={editValue}
+												onblur={() => commitEdit(row.id, col)}
+												onkeydown={(e) => {
+													if (e.key === 'Enter') commitEdit(row.id, col);
+													if (e.key === 'Escape') editingCell = null;
+												}}
+												autofocus
+											/>
+										{:else}
+											<input
+												type={col.type === 'url' ? 'url' : 'text'}
+												class="w-full rounded bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
+												bind:value={editValue}
+												onblur={() => commitEdit(row.id, col)}
+												onkeydown={(e) => {
+													if (e.key === 'Enter') commitEdit(row.id, col);
+													if (e.key === 'Escape') editingCell = null;
+												}}
+												autofocus
+											/>
+										{/if}
+									{:else if col.type === 'checkbox'}
+										<input
+											type="checkbox"
+											class="h-4 w-4 cursor-pointer accent-fuchsia-400"
+											checked={!!row.data[col.id]}
+											onchange={() => toggleCheckbox(row.id, col)}
+										/>
+									{:else}
+										<span
+											class="block min-h-[1.5rem] min-w-[4rem] cursor-text px-2 py-1"
+											title="Click to edit"
+										>
+											{getCellValue(row, col.id)}
+										</span>
+									{/if}
 								</td>
 							{/each}
 						</tr>
