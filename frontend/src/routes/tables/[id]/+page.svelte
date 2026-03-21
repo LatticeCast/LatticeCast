@@ -219,7 +219,7 @@
 	const sortedColumns = $derived([...$columns].sort((a, b) => a.position - b.position));
 </script>
 
-<div class="min-h-screen bg-linear-to-br from-violet-600 via-purple-600 to-fuchsia-600">
+<div class="min-h-screen bg-linear-to-br from-blue-600 via-blue-500 to-sky-500">
 	<!-- Header -->
 	<div class="flex items-center gap-4 px-6 py-4">
 		<button
@@ -245,7 +245,7 @@
 			<button
 				onclick={handleAddRow}
 				disabled={addingRow || $loading}
-				class="rounded-2xl bg-white px-5 py-2 font-semibold text-purple-600 transition hover:bg-white/90 disabled:opacity-50"
+				class="rounded-2xl bg-white px-5 py-2 font-semibold text-blue-600 transition hover:bg-white/90 disabled:opacity-50"
 			>
 				{addingRow ? 'Adding...' : '+ Add Row'}
 			</button>
@@ -403,7 +403,7 @@
 									{:else if col.type === 'checkbox'}
 										<input
 											type="checkbox"
-											class="h-4 w-4 cursor-pointer accent-fuchsia-400"
+											class="h-4 w-4 cursor-pointer accent-blue-500"
 											checked={!!row.data[col.id]}
 											onchange={() => toggleCheckbox(row.id, col)}
 										/>
@@ -463,7 +463,7 @@
 				<label class="mb-1 block text-sm font-medium text-gray-600" for="col-name">Name</label>
 				<input
 					id="col-name"
-					class="w-full rounded-xl border border-gray-200 px-4 py-2 text-gray-800 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
+					class="w-full rounded-xl border border-gray-200 px-4 py-2 text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
 					bind:value={newColName}
 					placeholder="Column name"
 					onkeydown={(e) => { if (e.key === 'Enter') handleAddColumn(); }}
@@ -474,7 +474,7 @@
 				<label class="mb-1 block text-sm font-medium text-gray-600" for="col-type">Type</label>
 				<select
 					id="col-type"
-					class="w-full rounded-xl border border-gray-200 px-4 py-2 text-gray-800 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400"
+					class="w-full rounded-xl border border-gray-200 px-4 py-2 text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
 					bind:value={newColType}
 				>
 					{#each COLUMN_TYPES as t}
@@ -492,7 +492,7 @@
 				<button
 					onclick={handleAddColumn}
 					disabled={addingColumn || !newColName.trim()}
-					class="flex-1 rounded-2xl bg-linear-to-r from-violet-500 to-fuchsia-500 px-4 py-2 font-semibold text-white transition hover:shadow-lg disabled:opacity-50"
+					class="flex-1 rounded-2xl bg-linear-to-r from-blue-600 to-blue-500 px-4 py-2 font-semibold text-white transition hover:shadow-lg disabled:opacity-50"
 				>
 					{addingColumn ? 'Adding...' : 'Add Column'}
 				</button>
