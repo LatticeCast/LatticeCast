@@ -29,7 +29,7 @@ async def create_row(
     session: AsyncSession = Depends(get_session),
 ):
     """Create a new row in a table (must be owned by current user)"""
-    table_result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.id))
+    table_result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.user_id))
     if not table_result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
 
@@ -46,7 +46,7 @@ async def list_rows(
     session: AsyncSession = Depends(get_session),
 ):
     """List all rows in a table (must be owned by current user)"""
-    table_result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.id))
+    table_result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.user_id))
     if not table_result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
 
@@ -71,7 +71,7 @@ async def update_row(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
-    table_result = await session.execute(select(Table).where(Table.id == row.table_id, Table.user_id == user.id))
+    table_result = await session.execute(select(Table).where(Table.id == row.table_id, Table.user_id == user.user_id))
     if not table_result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
@@ -90,7 +90,7 @@ async def delete_row(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
-    table_result = await session.execute(select(Table).where(Table.id == row.table_id, Table.user_id == user.id))
+    table_result = await session.execute(select(Table).where(Table.id == row.table_id, Table.user_id == user.user_id))
     if not table_result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 

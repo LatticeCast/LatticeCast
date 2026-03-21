@@ -1,6 +1,5 @@
 # src/repository/user.py
 from datetime import datetime
-from uuid import UUID
 
 from sqlmodel import Session, select
 
@@ -11,15 +10,12 @@ class UserRepository:
     def __init__(self, session: Session):
         self.session = session
 
-    def get_by_uuid(self, uuid: UUID) -> User | None:
-        return self.session.get(User, uuid)
-
-    def get_by_id(self, id: str) -> User | None:
-        statement = select(User).where(User.id == id)
+    def get_by_id(self, user_id: str) -> User | None:
+        statement = select(User).where(User.user_id == user_id)
         return self.session.exec(statement).first()
 
-    def create(self, id: str, role: str = "user") -> User:
-        user = User(id=id, role=role)
+    def create(self, user_id: str, role: str = "user") -> User:
+        user = User(user_id=user_id, role=role)
         self.session.add(user)
         self.session.commit()
         self.session.refresh(user)
@@ -34,8 +30,8 @@ class UserRepository:
         self.session.refresh(user)
         return user
 
-    def get_or_create(self, id: str, role: str = "user") -> User:
-        user = self.get_by_id(id)
+    def get_or_create(self, user_id: str, role: str = "user") -> User:
+        user = self.get_by_id(user_id)
         if user:
             return user
-        return self.create(id, role)
+        return self.create(user_id, role)

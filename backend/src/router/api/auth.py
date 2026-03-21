@@ -17,6 +17,23 @@ router = APIRouter(prefix="/login", tags=["auth"])
 
 
 # --------------------------------------------------
+# Public config endpoint (no auth required)
+# --------------------------------------------------
+
+
+class AppConfigResponse(BaseModel):
+    """Public app configuration"""
+
+    auth_required: bool = Field(..., description="Whether OAuth login is required")
+
+
+@router.get("/config", response_model=AppConfigResponse)
+async def get_config() -> AppConfigResponse:
+    """Get public app configuration (no auth required)."""
+    return AppConfigResponse(auth_required=settings.auth_required)
+
+
+# --------------------------------------------------
 # Pydantic Models
 # --------------------------------------------------
 
@@ -61,7 +78,7 @@ class MeResponse(BaseModel):
     email: EmailStr = Field(..., description="User email address")
     name: str | None = Field(default=None, description="Display name")
     picture: str | None = Field(default=None, description="Profile picture URL")
-    provider: Literal["google", "authentik"] = Field(..., description="OAuth provider used")
+    provider: Literal["google", "authentik", "none"] = Field(..., description="OAuth provider used")
     role: str | None = Field(default=None, description="User role in the system")
 
 
@@ -88,7 +105,7 @@ async def me(user: User = Depends(get_current_user)) -> MeResponse:
 
     return MeResponse(
         sub=token_payload.get("sub"),
-        email=user.id,
+        email=user.user_id,
         name=token_payload.get("preferred_username") or token_payload.get("name"),
         picture=token_payload.get("picture"),
         provider=provider,

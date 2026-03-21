@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
+from sqlalchemy import JSON
 from sqlmodel import Field, SQLModel
 
 ColumnType = Literal["text", "number", "date", "select", "checkbox", "url"]
@@ -17,7 +18,7 @@ class Column(SQLModel, table=True):
     table_id: UUID = Field(foreign_key="tables.id", index=True, description="Parent table ID")
     name: str = Field(description="Column name")
     type: str = Field(description="Column type (text, number, date, select, checkbox, url)")
-    options: dict[str, Any] = Field(default_factory=dict, description="Type-specific options (JSONB)")
+    options: dict[str, Any] = Field(default_factory=dict, sa_type=JSON, description="Type-specific options (JSONB)")
     position: int = Field(default=0, description="Display order")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
 

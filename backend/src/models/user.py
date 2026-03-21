@@ -1,7 +1,6 @@
 # src/models/user.py
 from datetime import datetime
 from typing import Literal
-from uuid import UUID, uuid4
 
 from sqlmodel import Field, SQLModel
 
@@ -13,8 +12,8 @@ class User(SQLModel, table=True):
 
     __tablename__ = "users"
 
-    uuid: UUID = Field(default_factory=uuid4, primary_key=True, description="Unique identifier")
-    id: str = Field(unique=True, index=True, description="Email address (unique identifier)")
+    user_id: str = Field(primary_key=True, description="Email address (unique identifier)")
+    name: str = Field(default="", description="Display name")
     role: str = Field(default="user", index=True, description="User role (user/admin)")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
@@ -23,12 +22,12 @@ class User(SQLModel, table=True):
 class UserResponse(SQLModel):
     """User response model for API"""
 
-    uuid: UUID = Field(..., description="Unique identifier")
-    id: str = Field(..., description="Email address")
+    user_id: str = Field(..., description="Email address")
+    name: str = Field(..., description="Display name")
     role: RoleType = Field(..., description="User role")
 
     model_config = {
         "json_schema_extra": {
-            "examples": [{"uuid": "550e8400-e29b-41d4-a716-446655440000", "id": "user@example.com", "role": "user"}]
+            "examples": [{"user_id": "user@example.com", "name": "User", "role": "user"}]
         }
     }

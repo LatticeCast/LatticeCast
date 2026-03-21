@@ -49,7 +49,8 @@ async def verify_bearer_token(
 ) -> dict:
     """
     Verify token from Authorization header.
-    Tries Authentik JWT first, then Google userinfo.
+    When AUTH_REQUIRED=false, treats the Bearer value as the user_id directly.
+    Otherwise tries Authentik JWT first, then Google userinfo.
     Returns token payload with _provider field.
     """
     total_start = time.time()
@@ -61,6 +62,11 @@ async def verify_bearer_token(
         )
 
     token = authorization.removeprefix("Bearer ").strip()
+
+    # No-auth mode: treat token as user_id
+    if not settings.auth_required:
+        logger.debug(f"Auth not required, using token as user_id: {token}")
+        return {"email": token, "_provider": "none"}
 
     # Try Authentik first (JWT)
     try:

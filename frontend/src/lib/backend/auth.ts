@@ -4,6 +4,21 @@
 import { BACKEND_URL } from './config';
 import type { AuthProvider } from '$lib/types/auth';
 
+export interface AppConfig {
+	auth_required: boolean;
+}
+
+/**
+ * Fetch public app config (no auth required).
+ */
+export async function fetchAppConfig(): Promise<AppConfig> {
+	const response = await fetch(`${BACKEND_URL}/api/login/config`);
+	if (!response.ok) {
+		throw new Error('Failed to fetch app config');
+	}
+	return response.json();
+}
+
 export interface TokenResponse {
 	access_token: string;
 	refresh_token?: string;
@@ -22,7 +37,7 @@ export interface MeResponse {
 	email: string;
 	name?: string;
 	picture?: string;
-	provider: 'google' | 'authentik';
+	provider: 'google' | 'authentik' | 'none';
 	role?: string;
 }
 

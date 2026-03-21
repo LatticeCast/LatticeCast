@@ -104,6 +104,7 @@ class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="")
 
     debug_mode: bool = Field(default=False, alias="DEBUG_MODE")
+    auth_required: bool = Field(default=True, alias="AUTH_REQUIRED")
     backend_port: int = Field(default=8000, alias="BACKEND_PORT")
 
     # Nested settings

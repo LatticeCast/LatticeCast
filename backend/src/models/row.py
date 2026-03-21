@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+from sqlalchemy import JSON
 from sqlmodel import Field, SQLModel
 
 
@@ -13,7 +14,7 @@ class Row(SQLModel, table=True):
 
     id: UUID = Field(default_factory=uuid4, primary_key=True, description="Unique identifier")
     table_id: UUID = Field(foreign_key="tables.id", index=True, description="Parent table ID")
-    data: dict[str, Any] = Field(default_factory=dict, description="Row data keyed by column UUID (JSONB)")
+    data: dict[str, Any] = Field(default_factory=dict, sa_type=JSON, description="Row data keyed by column UUID (JSONB)")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
 

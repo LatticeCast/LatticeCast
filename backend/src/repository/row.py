@@ -33,8 +33,8 @@ class RowRepository:
             .offset(offset)
             .limit(limit)
         )
-        result = await self.session.exec(statement)
-        return list(result.all())
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
 
     async def update(self, row: Row, data: RowUpdate) -> Row:
         row.data = data.data
@@ -58,5 +58,5 @@ class RowRepository:
             .offset(offset)
             .limit(limit)
         )
-        result = await self.session.exec(statement)
-        return list(result.all())
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())

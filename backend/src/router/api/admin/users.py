@@ -27,10 +27,10 @@ RoleType = Literal["user", "admin"]
 class UserCreate(BaseModel):
     """Request body for creating a new user"""
 
-    id: EmailStr = Field(..., description="User email address (used as unique identifier)")
+    user_id: EmailStr = Field(..., description="User email address (used as unique identifier)")
     role: RoleType = Field(default="user", description="User role")
 
-    model_config = {"json_schema_extra": {"examples": [{"id": "user@example.com", "role": "user"}]}}
+    model_config = {"json_schema_extra": {"examples": [{"user_id": "user@example.com", "role": "user"}]}}
 
 
 class UserUpdate(BaseModel):
@@ -65,7 +65,7 @@ async def create_user(
     session: AsyncSession = Depends(get_session),
 ):
     """Create a new user by email"""
-    result = await session.execute(select(User).where(User.id == data.id))
+    result = await session.execute(select(User).where(User.user_id == data.user_id))
     existing = result.scalar_one_or_none()
 
     if existing:
@@ -74,7 +74,7 @@ async def create_user(
             detail="User already exists",
         )
 
-    user = User(id=data.id, role=data.role)
+    user = User(user_id=data.user_id, role=data.role)
     session.add(user)
     await session.commit()
     await session.refresh(user)
@@ -118,7 +118,7 @@ async def get_user(
     session: AsyncSession = Depends(get_session),
 ):
     """Get user by email (id)"""
-    result = await session.execute(select(User).where(User.id == user_id))
+    result = await session.execute(select(User).where(User.user_id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -139,7 +139,7 @@ async def update_user(
     session: AsyncSession = Depends(get_session),
 ):
     """Update user role by email (id)"""
-    result = await session.execute(select(User).where(User.id == user_id))
+    result = await session.execute(select(User).where(User.user_id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -166,7 +166,7 @@ async def delete_user(
     session: AsyncSession = Depends(get_session),
 ):
     """Delete user by email (id)"""
-    result = await session.execute(select(User).where(User.id == user_id))
+    result = await session.execute(select(User).where(User.user_id == user_id))
     user = result.scalar_one_or_none()
 
     if not user:

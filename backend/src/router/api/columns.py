@@ -26,7 +26,7 @@ async def update_column(
     result = await session.execute(
         select(Column)
         .join(Table, Column.table_id == Table.id)
-        .where(Column.id == column_id, Table.user_id == user.id)
+        .where(Column.id == column_id, Table.user_id == user.user_id)
     )
     column = result.scalar_one_or_none()
     if not column:
@@ -56,7 +56,7 @@ async def delete_column(
     result = await session.execute(
         select(Column)
         .join(Table, Column.table_id == Table.id)
-        .where(Column.id == column_id, Table.user_id == user.id)
+        .where(Column.id == column_id, Table.user_id == user.user_id)
     )
     column = result.scalar_one_or_none()
     if not column:

@@ -28,7 +28,7 @@ async def create_table(
     session: AsyncSession = Depends(get_session),
 ):
     """Create a new table for the current user"""
-    table = Table(user_id=user.id, name=data.name)
+    table = Table(user_id=user.user_id, name=data.name)
     session.add(table)
     await session.commit()
     await session.refresh(table)
@@ -41,7 +41,7 @@ async def list_tables(
     session: AsyncSession = Depends(get_session),
 ):
     """List all tables owned by the current user"""
-    result = await session.execute(select(Table).where(Table.user_id == user.id))
+    result = await session.execute(select(Table).where(Table.user_id == user.user_id))
     return list(result.scalars().all())
 
 
@@ -52,7 +52,7 @@ async def get_table(
     session: AsyncSession = Depends(get_session),
 ):
     """Get a table by ID (must be owned by current user)"""
-    result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.id))
+    result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.user_id))
     table = result.scalar_one_or_none()
     if not table:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
@@ -67,7 +67,7 @@ async def update_table(
     session: AsyncSession = Depends(get_session),
 ):
     """Update a table name (must be owned by current user)"""
-    result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.id))
+    result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.user_id))
     table = result.scalar_one_or_none()
     if not table:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
@@ -87,7 +87,7 @@ async def delete_table(
     session: AsyncSession = Depends(get_session),
 ):
     """Delete a table (must be owned by current user)"""
-    result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.id))
+    result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.user_id))
     table = result.scalar_one_or_none()
     if not table:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
@@ -108,7 +108,7 @@ async def list_columns(
     session: AsyncSession = Depends(get_session),
 ):
     """List all columns for a table (must be owned by current user)"""
-    table_result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.id))
+    table_result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.user_id))
     if not table_result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
 
@@ -124,7 +124,7 @@ async def create_column(
     session: AsyncSession = Depends(get_session),
 ):
     """Create a new column in a table (must be owned by current user)"""
-    table_result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.id))
+    table_result = await session.execute(select(Table).where(Table.id == table_id, Table.user_id == user.user_id))
     if not table_result.scalar_one_or_none():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
 

@@ -30,7 +30,7 @@ router = APIRouter(prefix="/storage", tags=["storage"])
 
 def get_user_prefix(user: User) -> str:
     """Get user's storage prefix (first 20 chars of UUID, no dashes)"""
-    return str(user.uuid).replace("-", "")[:20]
+    return user.user_id.replace("@", "_at_").replace(".", "_")[:20]
 
 
 def normalize_path(path: str) -> str:

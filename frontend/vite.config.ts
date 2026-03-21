@@ -43,6 +43,7 @@ export default defineConfig(({ mode }) => {
 		},
 		define: {
 			'import.meta.env.VITE_BACKEND_URL': JSON.stringify(backendUrl),
+			'import.meta.env.VITE_AUTH_REQUIRED': JSON.stringify(process.env.AUTH_REQUIRED ?? 'true'),
 
 			// Authentik OAuth
 			'import.meta.env.VITE_AUTHENTIK_URL': JSON.stringify(process.env.AUTHENTIK_URL),

@@ -1,6 +1,6 @@
 // src/lib/types/auth.ts
 
-export type AuthProvider = 'authentik' | 'google';
+export type AuthProvider = 'authentik' | 'google' | 'none';
 
 export interface UserInfo {
 	sub: string;
