@@ -40,7 +40,7 @@
 </script>
 
 <div
-	class="flex min-h-screen items-center justify-center bg-linear-to-br from-violet-500 via-purple-500 to-fuchsia-500 p-4"
+	class="flex min-h-screen items-center justify-center bg-linear-to-br from-blue-600 via-blue-500 to-sky-500 p-4"
 >
 	<div class="mx-auto w-full max-w-sm">
 		<div class="mb-8 text-center">
@@ -59,7 +59,7 @@
 						data-testid="login-userid"
 						disabled={loggingIn}
 						onkeydown={(e) => e.key === 'Enter' && simpleLogin()}
-						class="w-full rounded-2xl border-2 border-gray-200 bg-gray-50 px-4 py-4 text-center text-lg text-gray-800 placeholder-gray-400 focus:border-purple-400 focus:outline-none disabled:opacity-50"
+						class="w-full rounded-2xl border-2 border-gray-200 bg-gray-50 px-4 py-4 text-center text-lg text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none disabled:opacity-50"
 					/>
 					{#if loginError}
 						<p class="text-center text-sm text-red-500">{loginError}</p>
@@ -68,7 +68,7 @@
 						onclick={simpleLogin}
 						data-testid="login-start"
 						disabled={!userId.trim() || loggingIn}
-						class="w-full rounded-2xl bg-linear-to-r from-violet-500 to-fuchsia-500 px-4 py-4 font-semibold text-white transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+						class="w-full rounded-2xl bg-linear-to-r from-blue-600 to-sky-500 px-4 py-4 font-semibold text-white transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
 					>
 						{loggingIn ? 'Connecting...' : 'Start'}
 					</button>
@@ -81,7 +81,7 @@
 					<button
 						onclick={() => startLogin('authentik')}
 						data-testid="login-authentik"
-						class="flex w-full items-center justify-center gap-3 rounded-2xl bg-linear-to-r from-violet-500 to-fuchsia-500 px-4 py-4 font-semibold text-white transition hover:shadow-lg"
+						class="flex w-full items-center justify-center gap-3 rounded-2xl bg-linear-to-r from-blue-600 to-sky-500 px-4 py-4 font-semibold text-white transition hover:shadow-lg"
 					>
 						Authentik
 					</button>
