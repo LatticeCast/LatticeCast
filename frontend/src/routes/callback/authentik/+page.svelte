@@ -35,12 +35,12 @@
 </script>
 
 <div
-	class="flex min-h-screen items-center justify-center bg-linear-to-br from-violet-500 via-purple-500 to-fuchsia-500 p-4"
+	class="flex min-h-screen items-center justify-center bg-linear-to-br from-blue-600 via-blue-500 to-sky-500 p-4"
 >
 	<div class="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-2xl">
 		{#if loading}
 			<div
-				class="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-4 border-purple-600"
+				class="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-4 border-blue-600"
 			></div>
 			<h2 class="text-xl font-semibold text-gray-800">Signing you in…</h2>
 			<p class="mt-2 text-gray-600">Please wait while we verify your account</p>
@@ -49,7 +49,7 @@
 			<p class="mb-6 text-gray-700">{error}</p>
 			<button
 				onclick={() => goto('/login')}
-				class="rounded-2xl bg-linear-to-r from-violet-500 to-fuchsia-500 px-6 py-3 font-semibold text-white transition hover:shadow-lg"
+				class="rounded-2xl bg-linear-to-r from-blue-600 to-blue-500 px-6 py-3 font-semibold text-white transition hover:shadow-lg"
 			>
 				Back to Login
 			</button>
