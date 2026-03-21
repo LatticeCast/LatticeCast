@@ -96,8 +96,8 @@
 					</div>
 
 					{#if $authStore.refreshToken}
-						<div class="rounded-lg border border-purple-200 bg-purple-50 p-4">
-							<h3 class="mb-2 font-semibold text-purple-900">Refresh Token</h3>
+						<div class="rounded-lg border border-blue-200 bg-blue-50 p-4">
+							<h3 class="mb-2 font-semibold text-blue-900">Refresh Token</h3>
 							<p class="font-mono text-xs break-all text-gray-700">{$authStore.refreshToken}</p>
 						</div>
 					{/if}
@@ -135,7 +135,7 @@
 				{#if !$authStore}
 					<a
 						href="/login"
-						class="inline-block rounded-lg bg-purple-600 px-6 py-3 text-white transition hover:bg-purple-700"
+						class="inline-block rounded-lg bg-blue-600 px-6 py-3 text-white transition hover:bg-blue-700"
 					>
 						Go to Login
 					</a>
