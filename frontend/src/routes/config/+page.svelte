@@ -20,7 +20,7 @@
 	}
 </script>
 
-<div class="min-h-screen bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 p-4">
+<div class="min-h-screen bg-linear-to-br from-blue-600 via-blue-500 to-sky-500 p-4">
 	<div class="mx-auto max-w-md">
 		<div class="mb-6 flex items-center justify-between pt-8">
 			<button
@@ -44,15 +44,15 @@
 						onclick={() => selectLang(lang.value)}
 						class="flex w-full items-center justify-between rounded-2xl border-2 px-4 py-3 transition-all
 							{$settingsStore.speechLang === lang.value
-							? 'border-purple-500 bg-purple-50'
-							: 'border-transparent bg-gray-50 hover:border-purple-200 hover:bg-purple-50/50'}"
+							? 'border-blue-500 bg-blue-50'
+							: 'border-transparent bg-gray-50 hover:border-blue-200 hover:bg-blue-50/50'}"
 					>
 						<div class="flex items-center gap-3">
 							<span class="text-2xl">{lang.flag}</span>
 							<span class="font-medium text-gray-800">{lang.label}</span>
 						</div>
 						{#if $settingsStore.speechLang === lang.value}
-							<span class="text-xl text-purple-500">✓</span>
+							<span class="text-xl text-blue-500">✓</span>
 						{/if}
 					</button>
 				{/each}
@@ -72,7 +72,7 @@
 				<span class="font-medium text-gray-800">Enable notifications</span>
 				<div
 					class="relative h-7 w-12 rounded-full transition-colors {$settingsStore.notificationEnabled
-						? 'bg-purple-500'
+						? 'bg-blue-500'
 						: 'bg-gray-300'}"
 				>
 					<div
@@ -92,8 +92,8 @@
 							onclick={() => ($settingsStore.notificationIntervalMinutes = mins)}
 							class="rounded-xl px-4 py-2 text-sm font-medium transition-all
 								{$settingsStore.notificationIntervalMinutes === mins
-								? 'bg-purple-500 text-white'
-								: 'bg-gray-100 text-gray-700 hover:bg-purple-100'}"
+								? 'bg-blue-500 text-white'
+								: 'bg-gray-100 text-gray-700 hover:bg-blue-100'}"
 						>
 							{mins < 60 ? `${mins} min` : `${mins / 60} hr`}
 						</button>
