@@ -26,7 +26,7 @@
 <button
 	onclick={() => (menuOpen = !menuOpen)}
 	data-testid="menu-toggle"
-	class="fixed top-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-white/20 shadow-lg backdrop-blur-sm transition-all hover:scale-105 hover:bg-white/30"
+	class="fixed top-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-blue-600 shadow-lg transition-all hover:scale-105 hover:bg-blue-700"
 	aria-label="Toggle menu"
 >
 	{#if menuOpen}
@@ -40,6 +40,7 @@
 		</svg>
 	{:else}
 		<svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+
 			<path
 				stroke-linecap="round"
 				stroke-linejoin="round"
@@ -62,14 +63,14 @@
 
 	<!-- Menu Panel -->
 	<div
-		class="fixed top-0 right-0 z-50 h-full w-64 bg-gradient-to-b from-violet-600 via-purple-600 to-fuchsia-600 shadow-2xl"
+		class="fixed top-0 right-0 z-50 h-full w-64 bg-white shadow-2xl border-l border-gray-200"
 	>
 		<div class="flex h-full flex-col pt-20">
 			<nav data-testid="menu-nav" class="flex-1 space-y-1 px-4">
 				<button
 					onclick={() => navigate('/')}
 					data-testid="nav-home"
-					class="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-white/90 transition hover:bg-white/20"
+					class="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-gray-700 transition hover:bg-blue-50 hover:text-blue-600"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
@@ -85,7 +86,7 @@
 				<button
 					onclick={() => navigate('/config')}
 					data-testid="nav-settings"
-					class="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-white/90 transition hover:bg-white/20"
+					class="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-gray-700 transition hover:bg-blue-50 hover:text-blue-600"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
@@ -107,7 +108,7 @@
 				<button
 					onclick={() => navigate('/debug')}
 					data-testid="nav-debug"
-					class="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-white/90 transition hover:bg-white/20"
+					class="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-gray-700 transition hover:bg-blue-50 hover:text-blue-600"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
@@ -123,7 +124,7 @@
 				<button
 					onclick={() => navigate('/tables')}
 					data-testid="nav-tables"
-					class="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-white/90 transition hover:bg-white/20"
+					class="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-gray-700 transition hover:bg-blue-50 hover:text-blue-600"
 				>
 					<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
@@ -139,7 +140,7 @@
 				</nav>
 
 			<!-- Bottom Section -->
-			<div class="border-t border-white/20 p-4">
+			<div class="border-t border-gray-200 p-4">
 				{#if $authStore?.role}
 					{#if $authStore.userInfo}
 						<div class="mb-3 flex items-center gap-3 px-2">
@@ -147,7 +148,7 @@
 								<img src={$authStore.userInfo.picture} alt="Profile" class="h-8 w-8 rounded-full" />
 							{:else}
 								<div
-									class="flex h-8 w-8 items-center justify-center rounded-full bg-white/20 text-white"
+									class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-blue-600"
 								>
 									{($authStore.userInfo.name || $authStore.userInfo.email || '?')
 										.charAt(0)
@@ -155,13 +156,13 @@
 								</div>
 							{/if}
 							<div class="min-w-0 flex-1">
-								<p class="truncate text-sm font-medium text-white">
+								<p class="truncate text-sm font-medium text-gray-900">
 									{$authStore.userInfo.name || $authStore.userInfo.email || 'User'}
 								</p>
-								<p class="truncate text-xs text-white/70">
+								<p class="truncate text-xs text-gray-500">
 									{$authStore.provider}
 									<span
-										class={`ml-1 rounded px-1 text-xs ${$authStore.role === 'admin' ? 'bg-red-400/30 text-red-100' : 'bg-green-400/30 text-green-100'}`}
+										class={`ml-1 rounded px-1 text-xs ${$authStore.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}
 									>
 										{$authStore.role}
 									</span>
@@ -172,7 +173,7 @@
 					<button
 						onclick={handleLogout}
 						data-testid="nav-logout"
-						class="flex w-full items-center gap-3 rounded-xl bg-white/10 px-4 py-3 text-white transition hover:bg-white/20"
+						class="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-gray-700 transition hover:bg-blue-50 hover:text-blue-600"
 					>
 						<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path
@@ -188,7 +189,7 @@
 					<button
 						onclick={() => navigate('/login')}
 						data-testid="nav-login"
-						class="flex w-full items-center gap-3 rounded-xl bg-white px-4 py-3 font-semibold text-purple-600 transition hover:bg-white/90"
+						class="flex w-full items-center gap-3 rounded-xl bg-blue-600 px-4 py-3 font-semibold text-white transition hover:bg-blue-700"
 					>
 						<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path
