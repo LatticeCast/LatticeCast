@@ -1,6 +1,16 @@
 // src/lib/types/table.ts
 
-export type ColumnType = 'text' | 'number' | 'date' | 'select' | 'checkbox' | 'url';
+export type ColumnType = 'text' | 'string' | 'number' | 'date' | 'select' | 'tags' | 'checkbox' | 'url';
+
+export interface ColumnChoice {
+	value: string;
+	color: string;
+}
+
+export interface ColumnOptions {
+	choices?: ColumnChoice[];
+	width?: number;
+}
 
 export interface Table {
 	id: string;
@@ -15,7 +25,7 @@ export interface Column {
 	table_id: string;
 	name: string;
 	type: ColumnType;
-	options: Record<string, unknown>;
+	options: ColumnOptions;
 	position: number;
 	created_at: string;
 }
@@ -35,7 +45,7 @@ export interface CreateTable {
 export interface CreateColumn {
 	name: string;
 	type: ColumnType;
-	options?: Record<string, unknown>;
+	options?: ColumnOptions;
 	position?: number;
 }
 
@@ -50,7 +60,7 @@ export interface UpdateTable {
 export interface UpdateColumn {
 	name?: string;
 	type?: ColumnType;
-	options?: Record<string, unknown>;
+	options?: ColumnOptions;
 	position?: number;
 }
 
