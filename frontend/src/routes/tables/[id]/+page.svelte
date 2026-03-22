@@ -364,7 +364,11 @@
 	);
 </script>
 
-<div class="min-h-screen bg-linear-to-br from-blue-600 via-blue-500 to-sky-500 {resizingColId ? 'cursor-col-resize select-none' : ''}">
+<div
+	class="min-h-screen bg-linear-to-br from-blue-600 via-blue-500 to-sky-500 {resizingColId
+		? 'cursor-col-resize select-none'
+		: ''}"
+>
 	<!-- Header -->
 	<div class="flex items-center gap-4 px-6 py-4">
 		<button
@@ -516,7 +520,10 @@
 								</div>
 								<!-- Resize handle -->
 								<div
-									class="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-white/40 {resizingColId === col.id ? 'bg-white/40' : ''}"
+									class="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-white/40 {resizingColId ===
+									col.id
+										? 'bg-white/40'
+										: ''}"
 									onmousedown={(e) => handleResizeStart(e, col)}
 									role="separator"
 									aria-label="Resize column {col.name}"
@@ -528,13 +535,20 @@
 						<!-- Add column "+" header -->
 						<th class="border-b border-white/20 bg-blue-500/20" style="width: 40px;">
 							<button
-								onclick={() => { showAddColumn = true; }}
+								onclick={() => {
+									showAddColumn = true;
+								}}
 								class="flex h-full w-full items-center justify-center rounded p-1 text-white/40 hover:bg-white/20 hover:text-white/80"
 								title="Add column"
 								aria-label="Add column"
 							>
 								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M12 4v16m8-8H4"
+									/>
 								</svg>
 							</button>
 						</th>
@@ -558,7 +572,7 @@
 								<td
 									class="overflow-hidden py-1 text-sm text-white/90
 										{i === 0 ? 'sticky left-12 z-10 border-r border-white/10 bg-blue-600 px-2' : 'px-2'}"
-									style="width: {col.options?.width ?? 150}px;"
+									style="width: {getColWidth(col)}px;"
 									onclick={() => {
 										if (
 											col.type !== 'checkbox' &&
@@ -762,11 +776,13 @@
 									</svg>
 								</button>
 							</td>
+							<!-- Empty cell for "+" add column header -->
+							<td style="width: 40px;"></td>
 						</tr>
 					{:else}
 						<tr>
 							<td
-								colspan={sortedColumns.length + 2}
+								colspan={sortedColumns.length + 3}
 								class="px-4 py-8 text-center text-sm text-white/50"
 							>
 								No rows yet. Click "+ Add Row" to start.
