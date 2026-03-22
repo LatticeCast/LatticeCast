@@ -25,7 +25,7 @@
 		updateRow,
 		deleteRow
 	} from '$lib/backend/tables';
-	import type { Column, ColumnChoice } from '$lib/types/table';
+	import type { Column, ColumnChoice, Row } from '$lib/types/table';
 	import { TAG_COLORS } from '$lib/UI/theme.svelte';
 
 	const COLUMN_TYPES = [
@@ -106,7 +106,8 @@
 	let showSortMenu = $state(false);
 	let showGroupMenu = $state(false);
 	let showHideMenu = $state(false);
-	let groupConfig = $state<{ colId: string } | null>(null);
+	let groupConfig = $state<{ colId: string; granularity?: 'month' | 'day' } | null>(null);
+	let collapsedGroups = $state<Set<string>>(new Set());
 
 	// Column resize
 	let resizingColId = $state<string | null>(null);
@@ -193,6 +194,21 @@
 		error.set(null);
 		try {
 			await createRow(tableId, { data: {} });
+			await refreshRows(tableId);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to add row');
+		} finally {
+			addingRow = false;
+		}
+	}
+
+	async function handleAddRowInGroup(groupKey: string, col: Column) {
+		const tableId = $page.params.id;
+		addingRow = true;
+		error.set(null);
+		try {
+			const val: unknown = groupKey === '(empty)' ? null : groupKey;
+			await createRow(tableId, { data: { [col.id]: val } });
 			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
@@ -471,6 +487,35 @@
 	const tableMinWidth = $derived(
 		48 + sortedColumns.reduce((sum, col) => sum + getColWidth(col), 0) + 40 + 40
 	);
+
+	function getGroupKey(row: Row, colId: string, col: Column): string {
+		const val = row.data[colId];
+		if (val === null || val === undefined || val === '') return '(empty)';
+		if (col.type === 'date') {
+			const normalized = formatDate(String(val));
+			const granularity = groupConfig?.granularity ?? 'month';
+			if (granularity === 'month') return normalized.slice(0, 7); // YYYY-MM
+			return normalized.slice(0, 10); // YYYY-MM-DD
+		}
+		return String(val);
+	}
+
+	const groupedRows = $derived((() => {
+		if (!groupConfig) return null;
+		const col = $columns.find((c) => c.id === groupConfig.colId);
+		if (!col) return null;
+		const keyOrder: string[] = [];
+		const keyMap: Record<string, Row[]> = {};
+		for (const row of sortedRows) {
+			const key = getGroupKey(row, col.id, col);
+			if (!keyMap[key]) {
+				keyMap[key] = [];
+				keyOrder.push(key);
+			}
+			keyMap[key].push(row);
+		}
+		return { groups: keyOrder.map((key) => ({ key, rows: keyMap[key] })), col };
+	})());
 </script>
 
 <div
@@ -592,20 +637,50 @@
 				>
 					<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">Group by</div>
 					{#each [...$columns].sort((a, b) => a.position - b.position).filter((c) => c.type === 'select' || c.type === 'date') as col (col.id)}
-						<button
-							class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId === col.id ? 'font-semibold text-blue-600' : ''}"
-							onclick={() => {
-								groupConfig = groupConfig?.colId === col.id ? null : { colId: col.id };
-								showGroupMenu = false;
-							}}
-							role="menuitem"
-						>
-							{col.name}
-							<span class="ml-1 text-xs text-gray-400">({col.type})</span>
-							{#if groupConfig?.colId === col.id}
-								<span class="ml-auto text-xs text-blue-500">✓</span>
-							{/if}
-						</button>
+						{#if col.type === 'date'}
+							<div class="px-3 py-1 text-xs font-medium text-gray-500">{col.name} <span class="text-gray-400">(date)</span></div>
+							<button
+								class="flex w-full items-center gap-2 px-5 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId === col.id && groupConfig?.granularity === 'month' ? 'font-semibold text-blue-600' : ''}"
+								onclick={() => {
+									groupConfig = groupConfig?.colId === col.id && groupConfig?.granularity === 'month' ? null : { colId: col.id, granularity: 'month' };
+									showGroupMenu = false;
+								}}
+								role="menuitem"
+							>
+								by month
+								{#if groupConfig?.colId === col.id && groupConfig?.granularity === 'month'}
+									<span class="ml-auto text-xs text-blue-500">✓</span>
+								{/if}
+							</button>
+							<button
+								class="flex w-full items-center gap-2 px-5 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId === col.id && groupConfig?.granularity === 'day' ? 'font-semibold text-blue-600' : ''}"
+								onclick={() => {
+									groupConfig = groupConfig?.colId === col.id && groupConfig?.granularity === 'day' ? null : { colId: col.id, granularity: 'day' };
+									showGroupMenu = false;
+								}}
+								role="menuitem"
+							>
+								by day
+								{#if groupConfig?.colId === col.id && groupConfig?.granularity === 'day'}
+									<span class="ml-auto text-xs text-blue-500">✓</span>
+								{/if}
+							</button>
+						{:else}
+							<button
+								class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId === col.id ? 'font-semibold text-blue-600' : ''}"
+								onclick={() => {
+									groupConfig = groupConfig?.colId === col.id ? null : { colId: col.id };
+									showGroupMenu = false;
+								}}
+								role="menuitem"
+							>
+								{col.name}
+								<span class="ml-1 text-xs text-gray-400">({col.type})</span>
+								{#if groupConfig?.colId === col.id}
+									<span class="ml-auto text-xs text-blue-500">✓</span>
+								{/if}
+							</button>
+						{/if}
 					{:else}
 						<div class="px-3 py-2 text-xs text-gray-400">No select or date columns</div>
 					{/each}
