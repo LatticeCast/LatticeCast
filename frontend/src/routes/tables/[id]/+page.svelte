@@ -109,11 +109,16 @@
 			}
 			for (const cond of filterConditions) {
 				if (!cond.colId) continue;
-				if (cond.operator !== 'is_empty' && cond.operator !== 'not_empty' && !cond.value.trim()) continue;
+				if (cond.operator !== 'is_empty' && cond.operator !== 'not_empty' && !cond.value.trim())
+					continue;
 				const lv = cond.value.toLowerCase();
 				result = result.filter((r) => {
 					const cell = r.data[cond.colId];
-					const isEmpty = cell === null || cell === undefined || (typeof cell === 'string' && cell === '') || (Array.isArray(cell) && cell.length === 0);
+					const isEmpty =
+						cell === null ||
+						cell === undefined ||
+						(typeof cell === 'string' && cell === '') ||
+						(Array.isArray(cell) && cell.length === 0);
 					if (cond.operator === 'is_empty') return isEmpty;
 					if (cond.operator === 'not_empty') return !isEmpty;
 					if (isEmpty) return false;
@@ -163,7 +168,10 @@
 			const keyMap: Record<string, Row[]> = {};
 			for (const row of sortedRows) {
 				const key = getGroupKey(row, col.id, col);
-				if (!keyMap[key]) { keyMap[key] = []; keyOrder.push(key); }
+				if (!keyMap[key]) {
+					keyMap[key] = [];
+					keyOrder.push(key);
+				}
 				keyMap[key].push(row);
 			}
 			return { groups: keyOrder.map((key) => ({ key, rows: keyMap[key] })), col };
@@ -177,9 +185,16 @@
 			}
 			const items: RenderItem[] = [];
 			for (const group of groupedRows.groups) {
-				items.push({ type: 'group-header', key: group.key, count: group.rows.length, col: groupedRows.col });
+				items.push({
+					type: 'group-header',
+					key: group.key,
+					count: group.rows.length,
+					col: groupedRows.col
+				});
 				if (!collapsedGroups.has(group.key)) {
-					group.rows.forEach((row, rowIdx) => { items.push({ type: 'row', row, rowIdx }); });
+					group.rows.forEach((row, rowIdx) => {
+						items.push({ type: 'row', row, rowIdx });
+					});
 					items.push({ type: 'group-add', key: group.key, col: groupedRows.col });
 				}
 			}
@@ -191,12 +206,18 @@
 
 	onMount(() => {
 		(async () => {
-			if (!$authStore?.role) { goto('/login'); return; }
+			if (!$authStore?.role) {
+				goto('/login');
+				return;
+			}
 			const tableId = $page.params.id;
 			try {
 				const all = await fetchTables();
 				const table = all.find((t) => t.id === tableId);
-				if (!table) { goto('/tables'); return; }
+				if (!table) {
+					goto('/tables');
+					return;
+				}
 				await loadTable(table);
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to load table');
@@ -245,9 +266,14 @@
 		const tableId = $page.params.id;
 		addingRow = true;
 		error.set(null);
-		try { await createRow(tableId, { data: {} }); await refreshRows(tableId); }
-		catch (e) { error.set(e instanceof Error ? e.message : 'Failed to add row'); }
-		finally { addingRow = false; }
+		try {
+			await createRow(tableId, { data: {} });
+			await refreshRows(tableId);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to add row');
+		} finally {
+			addingRow = false;
+		}
 	}
 
 	async function handleAddRowInGroup(groupKey: string, col: Column) {
@@ -258,17 +284,25 @@
 			const val: unknown = groupKey === '(empty)' ? null : groupKey;
 			await createRow(tableId, { data: { [col.id]: val } });
 			await refreshRows(tableId);
-		} catch (e) { error.set(e instanceof Error ? e.message : 'Failed to add row'); }
-		finally { addingRow = false; }
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to add row');
+		} finally {
+			addingRow = false;
+		}
 	}
 
 	async function handleDeleteRow(rowId: string) {
 		const tableId = $page.params.id;
 		deletingRowId = rowId;
 		error.set(null);
-		try { await deleteRow(rowId); await refreshRows(tableId); }
-		catch (e) { error.set(e instanceof Error ? e.message : 'Failed to delete row'); }
-		finally { deletingRowId = null; }
+		try {
+			await deleteRow(rowId);
+			await refreshRows(tableId);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to delete row');
+		} finally {
+			deletingRowId = null;
+		}
 	}
 
 	async function handleAddColumn(name: string, type: string) {
@@ -278,14 +312,20 @@
 			await createColumn(tableId, { name, type });
 			await refreshColumns(tableId);
 			showAddColumn = false;
-		} catch (e) { error.set(e instanceof Error ? e.message : 'Failed to add column'); }
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to add column');
+		}
 	}
 
 	async function handleDeleteColumn(colId: string) {
 		const tableId = $page.params.id;
 		error.set(null);
-		try { await deleteColumn(colId); await refreshColumns(tableId); }
-		catch (e) { error.set(e instanceof Error ? e.message : 'Failed to delete column'); }
+		try {
+			await deleteColumn(colId);
+			await refreshColumns(tableId);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to delete column');
+		}
 	}
 
 	async function handleMoveColumn(col: Column, direction: 'up' | 'down') {
@@ -297,20 +337,36 @@
 		const swapCol = sorted[swapIdx];
 		error.set(null);
 		try {
-			await Promise.all([updateColumn(col.id, { position: swapCol.position }), updateColumn(swapCol.id, { position: col.position })]);
+			await Promise.all([
+				updateColumn(col.id, { position: swapCol.position }),
+				updateColumn(swapCol.id, { position: col.position })
+			]);
 			await refreshColumns(tableId);
-		} catch (e) { error.set(e instanceof Error ? e.message : 'Failed to reorder column'); }
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to reorder column');
+		}
 	}
 
-	function startRename(colId: string, currentName: string) { renamingColId = colId; renameValue = currentName; }
+	function startRename(colId: string, currentName: string) {
+		renamingColId = colId;
+		renameValue = currentName;
+	}
 
 	async function commitRename(colId: string) {
-		if (!renameValue.trim()) { renamingColId = null; return; }
+		if (!renameValue.trim()) {
+			renamingColId = null;
+			return;
+		}
 		const tableId = $page.params.id;
 		error.set(null);
-		try { await updateColumn(colId, { name: renameValue.trim() }); await refreshColumns(tableId); }
-		catch (e) { error.set(e instanceof Error ? e.message : 'Failed to rename column'); }
-		finally { renamingColId = null; }
+		try {
+			await updateColumn(colId, { name: renameValue.trim() });
+			await refreshColumns(tableId);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to rename column');
+		} finally {
+			renamingColId = null;
+		}
 	}
 
 	function startEdit(rowId: string, col: Column, currentVal: unknown) {
@@ -329,8 +385,12 @@
 		else if (editValue === '') parsed = null;
 		const newData = { ...row.data, [col.id]: parsed };
 		error.set(null);
-		try { await updateRow(rowId, { data: newData }); await refreshRows($page.params.id); }
-		catch (e) { error.set(e instanceof Error ? e.message : 'Failed to update cell'); }
+		try {
+			await updateRow(rowId, { data: newData });
+			await refreshRows($page.params.id);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to update cell');
+		}
 	}
 
 	async function toggleCheckbox(rowId: string, col: Column) {
@@ -338,8 +398,12 @@
 		if (!row) return;
 		const newData = { ...row.data, [col.id]: !row.data[col.id] };
 		error.set(null);
-		try { await updateRow(rowId, { data: newData }); await refreshRows($page.params.id); }
-		catch (e) { error.set(e instanceof Error ? e.message : 'Failed to update cell'); }
+		try {
+			await updateRow(rowId, { data: newData });
+			await refreshRows($page.params.id);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to update cell');
+		}
 	}
 
 	async function removeTag(rowId: string, col: Column, tag: string) {
@@ -347,8 +411,12 @@
 		if (!row) return;
 		const current = getTagValues(row, col.id);
 		const newData = { ...row.data, [col.id]: current.filter((t) => t !== tag) };
-		try { await updateRow(rowId, { data: newData }); await refreshRows($page.params.id); }
-		catch (e) { error.set(e instanceof Error ? e.message : 'Failed to update tags'); }
+		try {
+			await updateRow(rowId, { data: newData });
+			await refreshRows($page.params.id);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to update tags');
+		}
 	}
 
 	async function addTag(rowId: string, col: Column, tag: string) {
@@ -358,8 +426,12 @@
 		if (current.includes(tag)) return;
 		const newData = { ...row.data, [col.id]: [...current, tag] };
 		tagsPopupCell = null;
-		try { await updateRow(rowId, { data: newData }); await refreshRows($page.params.id); }
-		catch (e) { error.set(e instanceof Error ? e.message : 'Failed to update tags'); }
+		try {
+			await updateRow(rowId, { data: newData });
+			await refreshRows($page.params.id);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to update tags');
+		}
 	}
 
 	async function handleUpdateRow(rowId: string, data: Record<string, unknown>) {
@@ -370,7 +442,9 @@
 		await refreshRows(tableId);
 	}
 
-	function openExpand(row: Row) { expandedRow = row; }
+	function openExpand(row: Row) {
+		expandedRow = row;
+	}
 
 	function openContextMenu(e: MouseEvent, type: 'row' | 'col', id: string) {
 		e.preventDefault();
@@ -384,8 +458,12 @@
 		if (!row) return;
 		const tableId = $page.params.id;
 		error.set(null);
-		try { await createRow(tableId, { data: { ...row.data } }); await refreshRows(tableId); }
-		catch (e) { error.set(e instanceof Error ? e.message : 'Failed to duplicate row'); }
+		try {
+			await createRow(tableId, { data: { ...row.data } });
+			await refreshRows(tableId);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to duplicate row');
+		}
 		contextMenu = null;
 	}
 
@@ -400,7 +478,10 @@
 	// Filter helpers
 	function addFilterCondition() {
 		const firstCol = $columns[0];
-		filterConditions = [...filterConditions, { id: crypto.randomUUID(), colId: firstCol?.id ?? '', operator: 'contains', value: '' }];
+		filterConditions = [
+			...filterConditions,
+			{ id: crypto.randomUUID(), colId: firstCol?.id ?? '', operator: 'contains', value: '' }
+		];
 	}
 
 	function removeFilterCondition(id: string) {
@@ -419,15 +500,24 @@
 
 	function addFilterForColumn(colId: string) {
 		if (!filterConditions.find((c) => c.colId === colId)) {
-			filterConditions = [...filterConditions, { id: crypto.randomUUID(), colId, operator: 'contains', value: '' }];
+			filterConditions = [
+				...filterConditions,
+				{ id: crypto.randomUUID(), colId, operator: 'contains', value: '' }
+			];
 		}
 		showFilterPanel = true;
 	}
 
 	// Export / Import
 	function handleExportTemplate() {
-		const template = [...$columns].sort((a, b) => a.position - b.position)
-			.map((col) => ({ name: col.name, type: col.type, options: col.options, position: col.position }));
+		const template = [...$columns]
+			.sort((a, b) => a.position - b.position)
+			.map((col) => ({
+				name: col.name,
+				type: col.type,
+				options: col.options,
+				position: col.position
+			}));
 		const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
@@ -440,11 +530,21 @@
 	async function handleImportTemplate(file: File) {
 		const tableId = $page.params.id;
 		const text = await file.text();
-		const template = JSON.parse(text) as Array<{ name: string; type: string; options?: ColumnOptions; position?: number }>;
+		const template = JSON.parse(text) as Array<{
+			name: string;
+			type: string;
+			options?: ColumnOptions;
+			position?: number;
+		}>;
 		if (!Array.isArray(template)) throw new Error('Invalid template: expected an array');
 		await Promise.all([...$columns].map((col) => deleteColumn(col.id)));
 		for (const col of template) {
-			await createColumn(tableId, { name: col.name, type: col.type as ColumnType, options: col.options ?? {}, position: col.position ?? 0 });
+			await createColumn(tableId, {
+				name: col.name,
+				type: col.type as ColumnType,
+				options: col.options ?? {},
+				position: col.position ?? 0
+			});
 		}
 		await refreshColumns(tableId);
 		showImportTemplateModal = false;
@@ -454,16 +554,25 @@
 		const cols = [...$columns].sort((a, b) => a.position - b.position);
 		const headers = cols.map((c) => c.name);
 		const escapeCSV = (v: string) => `"${v.replace(/"/g, '""')}"`;
-		const csvRows = [headers.map(escapeCSV).join(','), ...$rows.map((row) => cols.map((col) => {
-			const val = row.data[col.id];
-			if (val === null || val === undefined) return '';
-			if (Array.isArray(val)) return escapeCSV(val.join(','));
-			return escapeCSV(String(val));
-		}).join(','))];
+		const csvRows = [
+			headers.map(escapeCSV).join(','),
+			...$rows.map((row) =>
+				cols
+					.map((col) => {
+						const val = row.data[col.id];
+						if (val === null || val === undefined) return '';
+						if (Array.isArray(val)) return escapeCSV(val.join(','));
+						return escapeCSV(String(val));
+					})
+					.join(',')
+			)
+		];
 		const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
-		a.href = url; a.download = `${$currentTable?.name ?? 'table'}.csv`; a.click();
+		a.href = url;
+		a.download = `${$currentTable?.name ?? 'table'}.csv`;
+		a.click();
 		URL.revokeObjectURL(url);
 	}
 
@@ -477,7 +586,9 @@
 		const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
-		a.href = url; a.download = `${$currentTable?.name ?? 'table'}-data.json`; a.click();
+		a.href = url;
+		a.download = `${$currentTable?.name ?? 'table'}-data.json`;
+		a.click();
 		URL.revokeObjectURL(url);
 	}
 
@@ -494,7 +605,9 @@
 			importPreviewHeaders = headers;
 			importPreviewRows = parsed.slice(1).map((cells) => {
 				const obj: Record<string, string> = {};
-				headers.forEach((h, i) => { obj[h] = cells[i] ?? ''; });
+				headers.forEach((h, i) => {
+					obj[h] = cells[i] ?? '';
+				});
 				return obj;
 			});
 			importNewColumns = [];
@@ -521,11 +634,19 @@
 					if (!newColValueSets[colName]) return;
 					const val = (cells[i] ?? '').trim();
 					if (!val) return;
-					if (colType === 'tags') val.split(',').map((v) => v.trim()).filter(Boolean).forEach((v) => newColValueSets[colName].add(v));
+					if (colType === 'tags')
+						val
+							.split(',')
+							.map((v) => v.trim())
+							.filter(Boolean)
+							.forEach((v) => newColValueSets[colName].add(v));
 					else if (colType === 'select') newColValueSets[colName].add(val);
 				});
 			}
-			importNewColumns = importNewColumns.map((nc) => ({ ...nc, values: newColValueSets[nc.name] ? [...newColValueSets[nc.name]] : [] }));
+			importNewColumns = importNewColumns.map((nc) => ({
+				...nc,
+				values: newColValueSets[nc.name] ? [...newColValueSets[nc.name]] : []
+			}));
 			importError = null;
 			showImportModal = true;
 		};
@@ -540,10 +661,15 @@
 		try {
 			for (let i = 0; i < importNewColumns.length; i++) {
 				const nc = importNewColumns[i];
-				const choices = nc.values && nc.values.length > 0
-					? nc.values.map((v, vi) => ({ value: v, color: TAG_COLORS[vi % TAG_COLORS.length].bg }))
-					: [];
-				await createColumn(tableId, { name: nc.name, type: nc.type as ColumnType, options: { choices } });
+				const choices =
+					nc.values && nc.values.length > 0
+						? nc.values.map((v, vi) => ({ value: v, color: TAG_COLORS[vi % TAG_COLORS.length].bg }))
+						: [];
+				await createColumn(tableId, {
+					name: nc.name,
+					type: nc.type as ColumnType,
+					options: { choices }
+				});
 			}
 			await refreshColumns(tableId);
 			const currentCols = get(columns);
@@ -559,10 +685,17 @@
 					if (!col) continue;
 					const rawVal = previewRow[h];
 					if (rawVal === '' || rawVal === undefined) continue;
-					if (col.type === 'tags') data[col.id] = rawVal.split(',').map((v) => v.trim()).filter(Boolean);
-					else if (col.type === 'checkbox') data[col.id] = rawVal.toLowerCase() === 'true' || rawVal === '1';
-					else if (col.type === 'number') { const n = Number(rawVal); data[col.id] = isNaN(n) ? null : n; }
-					else data[col.id] = rawVal;
+					if (col.type === 'tags')
+						data[col.id] = rawVal
+							.split(',')
+							.map((v) => v.trim())
+							.filter(Boolean);
+					else if (col.type === 'checkbox')
+						data[col.id] = rawVal.toLowerCase() === 'true' || rawVal === '1';
+					else if (col.type === 'number') {
+						const n = Number(rawVal);
+						data[col.id] = isNaN(n) ? null : n;
+					} else data[col.id] = rawVal;
 				}
 				await createRow(tableId, { data });
 			}
@@ -571,12 +704,17 @@
 			importPreviewRows = [];
 			importPreviewHeaders = [];
 			importNewColumns = [];
-		} catch (e) { importError = e instanceof Error ? e.message : 'Import failed'; }
-		finally { importingData = false; }
+		} catch (e) {
+			importError = e instanceof Error ? e.message : 'Import failed';
+		} finally {
+			importingData = false;
+		}
 	}
 </script>
 
-<div class="flex min-h-screen flex-col bg-white {resizingColId ? 'cursor-col-resize select-none' : ''}">
+<div
+	class="flex min-h-screen flex-col bg-white {resizingColId ? 'cursor-col-resize select-none' : ''}"
+>
 	<TableHeader
 		tableName={$currentTable?.name ?? 'Loading...'}
 		loading={$loading}

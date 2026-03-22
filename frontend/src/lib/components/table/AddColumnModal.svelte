@@ -1,7 +1,11 @@
 <script lang="ts">
 	import { COLUMN_TYPES } from './table.utils';
 
-	let { show, onClose, onAdd }: {
+	let {
+		show,
+		onClose,
+		onAdd
+	}: {
 		show: boolean;
 		onClose: () => void;
 		onAdd: (name: string, type: string) => void;
@@ -27,7 +31,9 @@
 {#if show}
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-		onclick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+		onclick={(e) => {
+			if (e.target === e.currentTarget) handleClose();
+		}}
 		role="dialog"
 		aria-modal="true"
 		aria-label="Add column"
@@ -41,7 +47,9 @@
 					class="w-full rounded-xl border border-gray-200 px-4 py-2 text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
 					bind:value={newColName}
 					placeholder="Column name"
-					onkeydown={(e) => { if (e.key === 'Enter') handleAdd(); }}
+					onkeydown={(e) => {
+						if (e.key === 'Enter') handleAdd();
+					}}
 					autofocus
 				/>
 			</div>

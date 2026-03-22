@@ -1,5 +1,13 @@
 <script lang="ts">
-	let { tableName, loading, addingRow, error, onBack, onAddColumn, onAddRow }: {
+	let {
+		tableName,
+		loading,
+		addingRow,
+		error,
+		onBack,
+		onAddColumn,
+		onAddRow
+	}: {
 		tableName: string;
 		loading: boolean;
 		addingRow: boolean;

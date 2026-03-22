@@ -1,5 +1,14 @@
 <script lang="ts">
-	let { show, headers, previewRows, newColumns, importing, error, onClose, onConfirm }: {
+	let {
+		show,
+		headers,
+		previewRows,
+		newColumns,
+		importing,
+		error,
+		onClose,
+		onConfirm
+	}: {
 		show: boolean;
 		headers: string[];
 		previewRows: Record<string, string>[];
@@ -50,7 +59,9 @@
 					<thead class="bg-gray-50">
 						<tr>
 							{#each headers as h (h)}
-								<th class="border-b border-gray-200 px-3 py-2 text-left font-semibold text-gray-600">{h}</th>
+								<th class="border-b border-gray-200 px-3 py-2 text-left font-semibold text-gray-600"
+									>{h}</th
+								>
 							{/each}
 						</tr>
 					</thead>
@@ -74,7 +85,8 @@
 				<button
 					onclick={onClose}
 					class="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
-				>Cancel</button>
+					>Cancel</button
+				>
 				<button
 					onclick={onConfirm}
 					disabled={importing}

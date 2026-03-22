@@ -1,5 +1,9 @@
 <script lang="ts">
-	let { show, onClose, onImport }: {
+	let {
+		show,
+		onClose,
+		onImport
+	}: {
 		show: boolean;
 		onClose: () => void;
 		onImport: (file: File) => Promise<void>;
@@ -31,7 +35,9 @@
 {#if show}
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-		onclick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
+		onclick={(e) => {
+			if (e.target === e.currentTarget) handleClose();
+		}}
 		role="dialog"
 		aria-modal="true"
 		aria-label="Import template"
@@ -46,7 +52,9 @@
 				<div class="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</div>
 			{/if}
 			<div class="mb-6">
-				<label class="mb-1 block text-sm font-medium text-gray-600" for="template-file">Template JSON file</label>
+				<label class="mb-1 block text-sm font-medium text-gray-600" for="template-file"
+					>Template JSON file</label
+				>
 				<input
 					id="template-file"
 					type="file"

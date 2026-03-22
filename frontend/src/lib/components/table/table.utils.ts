@@ -1,7 +1,16 @@
 import type { Column, ColumnChoice, Row } from '$lib/types/table';
 import { TAG_COLORS } from '$lib/UI/theme.svelte';
 
-export const COLUMN_TYPES = ['text', 'string', 'number', 'date', 'select', 'tags', 'checkbox', 'url'] as const;
+export const COLUMN_TYPES = [
+	'text',
+	'string',
+	'number',
+	'date',
+	'select',
+	'tags',
+	'checkbox',
+	'url'
+] as const;
 
 export interface FilterCondition {
 	id: string;
