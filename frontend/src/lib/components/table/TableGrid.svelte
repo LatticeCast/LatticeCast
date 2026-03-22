@@ -112,7 +112,7 @@
 	}
 </script>
 
-<div class="overflow-x-auto bg-white">
+<div class="min-h-[calc(100vh-6rem)] flex-1 overflow-x-auto bg-white">
 	{#if loading}
 		<div class="pt-16 text-center text-gray-400">Loading...</div>
 	{:else if sortedColumns.length === 0}
@@ -721,15 +721,36 @@
 						</tr>
 					{/if}
 				{:else}
-					<tr>
-						<td
-							colspan={sortedColumns.length + 3}
-							class="px-4 py-8 text-center text-sm text-gray-400"
-						>
-							No rows yet. Click "+ Row" to start.
-						</td>
-					</tr>
+					<!-- empty -->
 				{/each}
+				<!-- "+" row at bottom — click any cell to add new row -->
+				<tr class="border-b border-gray-100 transition hover:bg-blue-50/30">
+					<td
+						class="sticky left-0 z-20 border-r border-gray-100 bg-gray-50 px-1 py-1 text-center"
+						style="width: 48px;"
+					>
+						<button
+							onclick={onAddRow}
+							disabled={addingRow}
+							class="flex h-full w-full items-center justify-center rounded px-1 py-0.5 text-sm font-medium text-blue-500 hover:bg-blue-100 hover:text-blue-700 disabled:opacity-50"
+							title="Add row"
+						>
+							+
+						</button>
+					</td>
+					{#each sortedColumns as col, i (col.id)}
+						<td
+							class="cursor-pointer py-1 text-sm text-gray-300
+							{i === 0 ? 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2' : 'px-2'}"
+							style="width: {getColWidth(col)}px;"
+							onclick={() => onAddRow()}
+						>
+							<span class="block min-h-[1.5rem] py-1">—</span>
+						</td>
+					{/each}
+					<td style="width: 40px;"></td>
+					<td style="width: 40px;"></td>
+				</tr>
 			</tbody>
 		</table>
 	{/if}

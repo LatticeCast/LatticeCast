@@ -2,19 +2,15 @@
 	let {
 		tableName,
 		loading,
-		addingRow,
 		error,
 		onBack,
-		onAddColumn,
-		onAddRow
+		onAddColumn
 	}: {
 		tableName: string;
 		loading: boolean;
-		addingRow: boolean;
 		error: string | null;
 		onBack: () => void;
 		onAddColumn: () => void;
-		onAddRow: () => void;
 	} = $props();
 </script>
 
@@ -32,20 +28,13 @@
 	<h1 class="text-lg font-semibold text-white">
 		{tableName}
 	</h1>
-	<div class="ml-auto flex gap-2">
+	<div class="ml-auto">
 		<button
 			onclick={onAddColumn}
 			disabled={loading}
 			class="rounded-lg bg-white/15 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-white/25 disabled:opacity-50"
 		>
 			+ Column
-		</button>
-		<button
-			onclick={onAddRow}
-			disabled={addingRow || loading}
-			class="rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-blue-600 transition hover:bg-blue-50 disabled:opacity-50"
-		>
-			{addingRow ? 'Adding...' : '+ Row'}
 		</button>
 	</div>
 </div>

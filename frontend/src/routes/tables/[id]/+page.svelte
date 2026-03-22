@@ -718,11 +718,9 @@
 	<TableHeader
 		tableName={$currentTable?.name ?? 'Loading...'}
 		loading={$loading}
-		{addingRow}
 		error={$error}
 		onBack={() => goto('/tables')}
 		onAddColumn={() => (showAddColumn = true)}
-		onAddRow={handleAddRow}
 	/>
 
 	<TableToolbar
