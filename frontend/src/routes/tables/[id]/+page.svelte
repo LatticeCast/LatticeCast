@@ -25,7 +25,7 @@
 		updateRow,
 		deleteRow
 	} from '$lib/backend/tables';
-	import type { Column, ColumnChoice, Row } from '$lib/types/table';
+	import type { Column, ColumnChoice, ColumnOptions, ColumnType, Row } from '$lib/types/table';
 	import { TAG_COLORS } from '$lib/UI/theme.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 
@@ -110,6 +110,15 @@
 	let showSortMenu = $state(false);
 	let showGroupMenu = $state(false);
 	let showHideMenu = $state(false);
+	let showExportMenu = $state(false);
+
+	// Export / Import state
+	let showImportModal = $state(false);
+	let importPreviewHeaders = $state<string[]>([]);
+	let importPreviewRows = $state<Record<string, string>[]>([]);
+	let importNewColumns = $state<{ name: string; type: string }[]>([]);
+	let importingData = $state(false);
+	let importError = $state<string | null>(null);
 	let groupConfig = $state<{ colId: string; granularity?: 'month' | 'day' } | null>(null);
 	let collapsedGroups = new SvelteSet<string>();
 
@@ -141,6 +150,60 @@
 			error.set(e instanceof Error ? e.message : 'Failed to duplicate row');
 		}
 		contextMenu = null;
+	}
+
+	// Template export / import
+	let showImportTemplateModal = $state(false);
+	let importTemplateError = $state<string | null>(null);
+	let importingTemplate = $state(false);
+
+	function handleExportTemplate() {
+		const template = [...$columns]
+			.sort((a, b) => a.position - b.position)
+			.map((col) => ({
+				name: col.name,
+				type: col.type,
+				options: col.options,
+				position: col.position
+			}));
+		const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${$currentTable?.name ?? 'table'}-template.json`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	async function handleImportTemplate(file: File) {
+		importingTemplate = true;
+		importTemplateError = null;
+		const tableId = $page.params.id;
+		try {
+			const text = await file.text();
+			const template = JSON.parse(text) as Array<{
+				name: string;
+				type: string;
+				options?: ColumnOptions;
+				position?: number;
+			}>;
+			if (!Array.isArray(template)) throw new Error('Invalid template: expected an array');
+			await Promise.all([...$columns].map((col) => deleteColumn(col.id)));
+			for (const col of template) {
+				await createColumn(tableId, {
+					name: col.name,
+					type: col.type as ColumnType,
+					options: col.options ?? {},
+					position: col.position ?? 0
+				});
+			}
+			await refreshColumns(tableId);
+			showImportTemplateModal = false;
+		} catch (e) {
+			importTemplateError = e instanceof Error ? e.message : 'Failed to import template';
+		} finally {
+			importingTemplate = false;
+		}
 	}
 
 	// Column resize
@@ -209,6 +272,7 @@
 			showSortMenu = false;
 			showGroupMenu = false;
 			showHideMenu = false;
+			showExportMenu = false;
 			contextMenu = null;
 		}
 
@@ -657,6 +721,179 @@
 			return items;
 		})()
 	);
+	function exportCSV() {
+		const cols = [...$columns].sort((a, b) => a.position - b.position);
+		const headers = cols.map((c) => c.name);
+		const escapeCSV = (v: string) => `"${v.replace(/"/g, '""')}"`;
+		const csvRows = [
+			headers.map(escapeCSV).join(','),
+			...$rows.map((row) =>
+				cols
+					.map((col) => {
+						const val = row.data[col.id];
+						if (val === null || val === undefined) return '';
+						if (Array.isArray(val)) return escapeCSV(val.join(','));
+						return escapeCSV(String(val));
+					})
+					.join(',')
+			)
+		];
+		const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${$currentTable?.name ?? 'table'}.csv`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function exportJSON() {
+		const cols = [...$columns].sort((a, b) => a.position - b.position);
+		const data = $rows.map((row) => {
+			const obj: Record<string, unknown> = {};
+			for (const col of cols) obj[col.name] = row.data[col.id] ?? null;
+			return obj;
+		});
+		const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${$currentTable?.name ?? 'table'}-data.json`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function parseCSV(text: string): string[][] {
+		const lines = text.split(/\r?\n/).filter((l) => l.trim());
+		return lines.map((line) => {
+			const fields: string[] = [];
+			let i = 0;
+			while (i < line.length) {
+				if (line[i] === '"') {
+					let j = i + 1;
+					let field = '';
+					while (j < line.length) {
+						if (line[j] === '"' && line[j + 1] === '"') {
+							field += '"';
+							j += 2;
+						} else if (line[j] === '"') {
+							j++;
+							break;
+						} else {
+							field += line[j++];
+						}
+					}
+					fields.push(field);
+					i = j;
+					if (line[i] === ',') i++;
+				} else {
+					const end = line.indexOf(',', i);
+					if (end === -1) {
+						fields.push(line.slice(i));
+						break;
+					} else {
+						fields.push(line.slice(i, end));
+						i = end + 1;
+					}
+				}
+			}
+			return fields;
+		});
+	}
+
+	function handleImportFile(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		const reader = new FileReader();
+		reader.onload = (ev) => {
+			const text = ev.target?.result as string;
+			const parsed = parseCSV(text);
+			if (parsed.length < 1) return;
+			const headers = parsed[0];
+			importPreviewHeaders = headers;
+			importPreviewRows = parsed.slice(1).map((cells) => {
+				const obj: Record<string, string> = {};
+				headers.forEach((h, i) => {
+					obj[h] = cells[i] ?? '';
+				});
+				return obj;
+			});
+			importNewColumns = [];
+			for (const h of headers) {
+				const m = h.match(/^(.+)\{\{(\w+)\}\}$/);
+				if (m) {
+					const colName = m[1].trim();
+					const colType = m[2].toLowerCase();
+					const exists = $columns.some((c) => c.name === colName);
+					if (!exists) {
+						importNewColumns = [...importNewColumns, { name: colName, type: colType }];
+					}
+				}
+			}
+			importError = null;
+			showImportModal = true;
+		};
+		reader.readAsText(file);
+		input.value = '';
+	}
+
+	async function commitImport() {
+		importingData = true;
+		importError = null;
+		const tableId = $page.params.id;
+		try {
+			for (let i = 0; i < importNewColumns.length; i++) {
+				const nc = importNewColumns[i];
+				await createColumn(tableId, {
+					name: nc.name,
+					type: nc.type as 'text',
+					options: { choices: [] }
+				});
+			}
+			await refreshColumns(tableId);
+			const currentCols = get(columns);
+
+			function headerColName(h: string): string {
+				const m = h.match(/^(.+)\{\{(\w+)\}\}$/);
+				return m ? m[1].trim() : h;
+			}
+
+			for (const previewRow of importPreviewRows) {
+				const data: Record<string, unknown> = {};
+				for (const h of importPreviewHeaders) {
+					const colName = headerColName(h);
+					const col = currentCols.find((c) => c.name === colName);
+					if (!col) continue;
+					const rawVal = previewRow[h];
+					if (rawVal === '' || rawVal === undefined) continue;
+					if (col.type === 'tags') {
+						data[col.id] = rawVal
+							.split(',')
+							.map((v) => v.trim())
+							.filter(Boolean);
+					} else if (col.type === 'checkbox') {
+						data[col.id] = rawVal.toLowerCase() === 'true' || rawVal === '1';
+					} else if (col.type === 'number') {
+						const n = Number(rawVal);
+						data[col.id] = isNaN(n) ? null : n;
+					} else {
+						data[col.id] = rawVal;
+					}
+				}
+				await createRow(tableId, { data });
+			}
+			await refreshRows(tableId);
+			showImportModal = false;
+			importPreviewRows = [];
+			importPreviewHeaders = [];
+			importNewColumns = [];
+		} catch (e) {
+			importError = e instanceof Error ? e.message : 'Import failed';
+		} finally {
+			importingData = false;
+		}
+	}
 </script>
 
 <div
@@ -990,6 +1227,102 @@
 				</span>
 			{/if}
 		</button>
+
+		<!-- Export Template -->
+		<button
+			onclick={handleExportTemplate}
+			class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+		>
+			<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+				/>
+			</svg>
+			Export Template
+		</button>
+
+		<!-- Import Template -->
+		<button
+			onclick={() => (showImportTemplateModal = true)}
+			class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+		>
+			<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12"
+				/>
+			</svg>
+			Import Template
+		</button>
+
+		<!-- Export Data -->
+		<div class="relative">
+			<button
+				onclick={(e) => {
+					e.stopPropagation();
+					showExportMenu = !showExportMenu;
+					showSortMenu = false;
+					showGroupMenu = false;
+					showHideMenu = false;
+				}}
+				class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+			>
+				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+					/>
+				</svg>
+				Export
+			</button>
+			{#if showExportMenu}
+				<div
+					class="absolute top-full left-0 z-30 mt-1 min-w-[150px] rounded-xl border border-gray-100 bg-white py-1 shadow-xl"
+					onclick={(e) => e.stopPropagation()}
+					role="menu"
+				>
+					<button
+						class="w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+						onclick={() => {
+							exportCSV();
+							showExportMenu = false;
+						}}
+						role="menuitem">Export CSV</button
+					>
+					<button
+						class="w-full px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50"
+						onclick={() => {
+							exportJSON();
+							showExportMenu = false;
+						}}
+						role="menuitem">Export JSON</button
+					>
+				</div>
+			{/if}
+		</div>
+
+		<!-- Import -->
+		<label
+			class="flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-white/70 transition hover:bg-white/10 hover:text-white"
+		>
+			<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l4-4m0 0l4 4m-4-4v12"
+				/>
+			</svg>
+			Import CSV
+			<input type="file" accept=".csv" class="hidden" onchange={handleImportFile} />
+		</label>
 
 		<!-- Spacer -->
 		<div class="flex-1"></div>
@@ -2301,6 +2634,145 @@
 					{/if}
 				</div>
 			{/each}
+		</div>
+	</div>
+{/if}
+
+<!-- Import Template Modal -->
+{#if showImportTemplateModal}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+		onclick={(e) => {
+			if (e.target === e.currentTarget) {
+				showImportTemplateModal = false;
+				importTemplateError = null;
+			}
+		}}
+		role="dialog"
+		aria-modal="true"
+		aria-label="Import template"
+	>
+		<div class="w-full max-w-sm rounded-3xl bg-white p-8 shadow-2xl">
+			<h2 class="mb-2 text-xl font-bold text-gray-800">Import Template</h2>
+			<p class="mb-6 text-sm text-gray-500">
+				Select a <code class="rounded bg-gray-100 px-1 py-0.5 text-xs">template.json</code> file to restore
+				column layout, types, and options. Existing rows will not be modified.
+			</p>
+			{#if importTemplateError}
+				<div class="mb-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+					{importTemplateError}
+				</div>
+			{/if}
+			<div class="mb-6">
+				<label class="mb-1 block text-sm font-medium text-gray-600" for="template-file"
+					>Template JSON file</label
+				>
+				<input
+					id="template-file"
+					type="file"
+					accept=".json,application/json"
+					class="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-800 outline-none file:mr-3 file:rounded-lg file:border-0 file:bg-blue-50 file:px-3 file:py-1 file:text-sm file:font-medium file:text-blue-600 hover:file:bg-blue-100 focus:border-blue-500"
+					onchange={async (e) => {
+						const file = (e.currentTarget as HTMLInputElement).files?.[0];
+						if (file) await handleImportTemplate(file);
+					}}
+					disabled={importingTemplate}
+				/>
+			</div>
+			{#if importingTemplate}
+				<p class="mb-4 text-center text-sm text-blue-500">Importing…</p>
+			{/if}
+			<button
+				onclick={() => {
+					showImportTemplateModal = false;
+					importTemplateError = null;
+				}}
+				disabled={importingTemplate}
+				class="w-full rounded-2xl border border-gray-200 px-4 py-2 font-semibold text-gray-600 transition hover:bg-gray-50 disabled:opacity-50"
+			>
+				Cancel
+			</button>
+		</div>
+	</div>
+{/if}
+
+<!-- Import Preview Modal -->
+{#if showImportModal}
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+		onclick={() => (showImportModal = false)}
+	>
+		<div
+			class="max-h-[80vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white p-6 shadow-2xl"
+			onclick={(e) => e.stopPropagation()}
+			role="dialog"
+			aria-modal="true"
+			aria-label="Import CSV preview"
+		>
+			<h2 class="mb-4 text-lg font-bold text-gray-900">Import CSV Preview</h2>
+
+			{#if importNewColumns.length > 0}
+				<div class="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3">
+					<p class="mb-1 text-sm font-semibold text-blue-700">New columns to create:</p>
+					<ul class="space-y-0.5">
+						{#each importNewColumns as nc (nc.name)}
+							<li class="text-sm text-blue-600">
+								<span class="font-medium">{nc.name}</span>
+								<span class="text-blue-400"> ({nc.type})</span>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
+
+			<p class="mb-2 text-sm text-gray-500">
+				{importPreviewRows.length} row{importPreviewRows.length === 1 ? '' : 's'} to import. Preview
+				(first 5):
+			</p>
+
+			<div class="mb-4 overflow-x-auto rounded-xl border border-gray-200">
+				<table class="w-full text-sm">
+					<thead class="bg-gray-50">
+						<tr>
+							{#each importPreviewHeaders as h (h)}
+								<th class="border-b border-gray-200 px-3 py-2 text-left font-semibold text-gray-600"
+									>{h}</th
+								>
+							{/each}
+						</tr>
+					</thead>
+					<tbody>
+						{#each importPreviewRows.slice(0, 5) as row, i (i)}
+							<tr class={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+								{#each importPreviewHeaders as h (h)}
+									<td class="border-b border-gray-100 px-3 py-1.5 text-gray-700">{row[h] ?? ''}</td>
+								{/each}
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+
+			{#if importError}
+				<div class="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{importError}</div>
+			{/if}
+
+			<div class="flex justify-end gap-3">
+				<button
+					onclick={() => (showImportModal = false)}
+					class="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50"
+					>Cancel</button
+				>
+				<button
+					onclick={commitImport}
+					disabled={importingData}
+					class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+				>
+					{importingData ? 'Importing...' : `Import ${importPreviewRows.length} rows`}
+				</button>
+			</div>
 		</div>
 	</div>
 {/if}
