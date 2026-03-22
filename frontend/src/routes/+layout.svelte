@@ -40,7 +40,6 @@
 		</svg>
 	{:else}
 		<svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-
 			<path
 				stroke-linecap="round"
 				stroke-linejoin="round"
@@ -62,9 +61,7 @@
 	></button>
 
 	<!-- Menu Panel -->
-	<div
-		class="fixed top-0 right-0 z-50 h-full w-64 bg-white shadow-2xl border-l border-gray-200"
-	>
+	<div class="fixed top-0 right-0 z-50 h-full w-64 border-l border-gray-200 bg-white shadow-2xl">
 		<div class="flex h-full flex-col pt-20">
 			<nav data-testid="menu-nav" class="flex-1 space-y-1 px-4">
 				<button
@@ -136,8 +133,7 @@
 					</svg>
 					Tables
 				</button>
-
-				</nav>
+			</nav>
 
 			<!-- Bottom Section -->
 			<div class="border-t border-gray-200 p-4">

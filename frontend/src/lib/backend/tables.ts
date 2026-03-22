@@ -4,7 +4,17 @@
 import { get } from 'svelte/store';
 import { authStore } from '$lib/stores/auth.store';
 import { BACKEND_URL } from './config';
-import type { Table, Column, Row, CreateTable, CreateColumn, CreateRow, UpdateTable, UpdateColumn, UpdateRow } from '$lib/types/table';
+import type {
+	Table,
+	Column,
+	Row,
+	CreateTable,
+	CreateColumn,
+	CreateRow,
+	UpdateTable,
+	UpdateColumn,
+	UpdateRow
+} from '$lib/types/table';
 
 async function getAuthHeaders(): Promise<HeadersInit> {
 	const auth = get(authStore);

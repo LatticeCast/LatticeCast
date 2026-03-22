@@ -1,6 +1,14 @@
 // src/lib/types/table.ts
 
-export type ColumnType = 'text' | 'string' | 'number' | 'date' | 'select' | 'tags' | 'checkbox' | 'url';
+export type ColumnType =
+	| 'text'
+	| 'string'
+	| 'number'
+	| 'date'
+	| 'select'
+	| 'tags'
+	| 'checkbox'
+	| 'url';
 
 export interface ColumnChoice {
 	value: string;

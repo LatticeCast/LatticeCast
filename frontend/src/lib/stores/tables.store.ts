@@ -2,11 +2,7 @@
 
 import { writable } from 'svelte/store';
 import type { Table, Column, Row } from '$lib/types/table';
-import {
-	fetchTables,
-	fetchColumns,
-	fetchRows
-} from '$lib/backend/tables';
+import { fetchTables, fetchColumns, fetchRows } from '$lib/backend/tables';
 
 export const tables = writable<Table[]>([]);
 export const currentTable = writable<Table | null>(null);
@@ -33,10 +29,7 @@ export async function loadTable(table: Table): Promise<void> {
 	loading.set(true);
 	error.set(null);
 	try {
-		const [cols, rws] = await Promise.all([
-			fetchColumns(table.id),
-			fetchRows(table.id)
-		]);
+		const [cols, rws] = await Promise.all([fetchColumns(table.id), fetchRows(table.id)]);
 		columns.set(cols);
 		rows.set(rws);
 	} catch (e) {

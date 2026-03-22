@@ -26,8 +26,8 @@ export default defineConfig(({ mode }) => {
 
 	const isProduction = mode === 'production';
 
-	const allowedHosts =
-		safeMode === 'development' ? ['*', 'localhost', '127.0.0.1'] : ['lattice-cast.posetmage.com'];
+	const allowedHosts: string[] | true =
+		safeMode === 'development' ? true : ['lattice-cast.posetmage.com'];
 
 	return {
 		base: isProduction ? projectBaseWithSlash : '/',
@@ -54,9 +54,7 @@ export default defineConfig(({ mode }) => {
 
 			// Google OAuth
 			'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify(process.env.GOOGLE_CLIENT_ID),
-			'import.meta.env.VITE_GOOGLE_REDIRECT_URI': JSON.stringify(
-				`${frontendUrl}/callback/google`
-			)
+			'import.meta.env.VITE_GOOGLE_REDIRECT_URI': JSON.stringify(`${frontendUrl}/callback/google`)
 		},
 		test: {
 			workspace: [
