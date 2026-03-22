@@ -57,7 +57,8 @@
 		onShowAddColumn,
 		onAddRow,
 		onAddRowInGroup,
-		onToggleCollapseGroup
+		onToggleCollapseGroup,
+		onManageOptions
 	}: {
 		columns: Column[];
 		sortedColumns: Column[];
@@ -105,6 +106,7 @@
 		onAddRow: () => void;
 		onAddRowInGroup: (key: string, col: Column) => void;
 		onToggleCollapseGroup: (key: string) => void;
+		onManageOptions: (col: Column) => void;
 	} = $props();
 
 	function getColWidth(col: Column): number {
@@ -123,8 +125,8 @@
 		</div>
 	{:else}
 		<table
-			class="w-full border-collapse text-gray-800"
-			style="table-layout: fixed; min-width: {tableMinWidth}px;"
+			class="border-collapse text-gray-800"
+			style="table-layout: fixed; width: {tableMinWidth}px;"
 		>
 			<thead>
 				<tr>
@@ -218,6 +220,19 @@
 										>
 										Rename
 									</button>
+									{#if col.type === 'select' || col.type === 'tags'}
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+											onclick={() => {
+												onManageOptions(col);
+												onColMenuChange(null);
+											}}
+											role="menuitem"
+										>
+											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>
+											Manage Options
+										</button>
+									{/if}
 									<hr class="my-1 border-gray-100" />
 									<button
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"

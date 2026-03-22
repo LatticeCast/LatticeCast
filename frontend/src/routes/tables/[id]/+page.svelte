@@ -49,6 +49,7 @@
 	import RowExpandPanel from '$lib/components/table/RowExpandPanel.svelte';
 	import ImportTemplateModal from '$lib/components/table/ImportTemplateModal.svelte';
 	import ImportPreviewModal from '$lib/components/table/ImportPreviewModal.svelte';
+	import ManageOptionsModal from '$lib/components/table/ManageOptionsModal.svelte';
 
 	// ─── State ───────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,7 @@
 	let importNewColumns = $state<{ name: string; type: string; values?: string[] }[]>([]);
 	let importingData = $state(false);
 	let importError = $state<string | null>(null);
+	let managingOptionsCol = $state<Column | null>(null);
 
 	// Column resize
 	let resizingColId = $state<string | null>(null);
@@ -467,6 +469,19 @@
 		contextMenu = null;
 	}
 
+	async function handleSaveOptions(colId: string, choices: import('$lib/types/table').ColumnChoice[]) {
+		const tableId = $page.params.id;
+		const col = $columns.find((c) => c.id === colId);
+		if (!col) return;
+		error.set(null);
+		try {
+			await updateColumn(colId, { options: { ...col.options, choices } });
+			await refreshColumns(tableId);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to update options');
+		}
+	}
+
 	function handleResizeStart(e: MouseEvent, col: Column) {
 		e.preventDefault();
 		e.stopPropagation();
@@ -795,6 +810,7 @@
 		onAddRow={handleAddRow}
 		onAddRowInGroup={handleAddRowInGroup}
 		onToggleCollapseGroup={toggleCollapseGroup}
+		onManageOptions={(col) => (managingOptionsCol = col)}
 	/>
 </div>
 
@@ -851,3 +867,11 @@
 	onClose={() => (showImportModal = false)}
 	onConfirm={commitImport}
 />
+
+{#if managingOptionsCol}
+	<ManageOptionsModal
+		col={managingOptionsCol}
+		onClose={() => (managingOptionsCol = null)}
+		onSave={handleSaveOptions}
+	/>
+{/if}
