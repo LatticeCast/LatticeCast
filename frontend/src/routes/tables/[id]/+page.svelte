@@ -27,6 +27,7 @@
 	} from '$lib/backend/tables';
 	import type { Column, ColumnChoice, Row } from '$lib/types/table';
 	import { TAG_COLORS } from '$lib/UI/theme.svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	const COLUMN_TYPES = [
 		'text',
@@ -92,13 +93,11 @@
 	}
 
 	// Hidden columns (local state)
-	let hiddenCols = $state<Set<string>>(new Set());
+	let hiddenCols = new SvelteSet<string>();
 
 	function toggleHideCol(colId: string) {
-		const next = new Set(hiddenCols);
-		if (next.has(colId)) next.delete(colId);
-		else next.add(colId);
-		hiddenCols = next;
+		if (hiddenCols.has(colId)) hiddenCols.delete(colId);
+		else hiddenCols.add(colId);
 	}
 
 	// Toolbar state (Phase 8 Ticket 1)
@@ -107,7 +106,7 @@
 	let showGroupMenu = $state(false);
 	let showHideMenu = $state(false);
 	let groupConfig = $state<{ colId: string; granularity?: 'month' | 'day' } | null>(null);
-	let collapsedGroups = $state<Set<string>>(new Set());
+	let collapsedGroups = new SvelteSet<string>();
 
 	// Column resize
 	let resizingColId = $state<string | null>(null);
@@ -434,54 +433,56 @@
 		[...$columns].sort((a, b) => a.position - b.position).filter((c) => !hiddenCols.has(c.id))
 	);
 
-	const sortedRows = $derived((() => {
-		let result = $rows;
-		// Global search
-		if (searchQuery.trim()) {
-			const q = searchQuery.trim().toLowerCase();
-			result = result.filter((r) =>
-				Object.values(r.data).some((v) => {
-					if (v === null || v === undefined) return false;
-					if (Array.isArray(v)) return v.some((item) => String(item).toLowerCase().includes(q));
-					return String(v).toLowerCase().includes(q);
-				})
-			);
-		}
-		for (const cond of filterConditions) {
-			if (!cond.colId) continue;
-			if (cond.operator !== 'is_empty' && cond.operator !== 'not_empty' && !cond.value.trim())
-				continue;
-			const lv = cond.value.toLowerCase();
-			result = result.filter((r) => {
-				const cell = r.data[cond.colId];
-				const isEmpty =
-					cell === null ||
-					cell === undefined ||
-					(typeof cell === 'string' && cell === '') ||
-					(Array.isArray(cell) && cell.length === 0);
-				if (cond.operator === 'is_empty') return isEmpty;
-				if (cond.operator === 'not_empty') return !isEmpty;
-				if (isEmpty) return false;
-				if (cond.operator === 'equals') {
-					if (Array.isArray(cell)) return cell.some((v) => String(v).toLowerCase() === lv);
-					return String(cell).toLowerCase() === lv;
-				}
-				// contains
-				if (Array.isArray(cell)) return cell.some((v) => String(v).toLowerCase().includes(lv));
-				return String(cell).toLowerCase().includes(lv);
+	const sortedRows = $derived(
+		(() => {
+			let result = $rows;
+			// Global search
+			if (searchQuery.trim()) {
+				const q = searchQuery.trim().toLowerCase();
+				result = result.filter((r) =>
+					Object.values(r.data).some((v) => {
+						if (v === null || v === undefined) return false;
+						if (Array.isArray(v)) return v.some((item) => String(item).toLowerCase().includes(q));
+						return String(v).toLowerCase().includes(q);
+					})
+				);
+			}
+			for (const cond of filterConditions) {
+				if (!cond.colId) continue;
+				if (cond.operator !== 'is_empty' && cond.operator !== 'not_empty' && !cond.value.trim())
+					continue;
+				const lv = cond.value.toLowerCase();
+				result = result.filter((r) => {
+					const cell = r.data[cond.colId];
+					const isEmpty =
+						cell === null ||
+						cell === undefined ||
+						(typeof cell === 'string' && cell === '') ||
+						(Array.isArray(cell) && cell.length === 0);
+					if (cond.operator === 'is_empty') return isEmpty;
+					if (cond.operator === 'not_empty') return !isEmpty;
+					if (isEmpty) return false;
+					if (cond.operator === 'equals') {
+						if (Array.isArray(cell)) return cell.some((v) => String(v).toLowerCase() === lv);
+						return String(cell).toLowerCase() === lv;
+					}
+					// contains
+					if (Array.isArray(cell)) return cell.some((v) => String(v).toLowerCase().includes(lv));
+					return String(cell).toLowerCase().includes(lv);
+				});
+			}
+			if (!sortConfig) return result;
+			const { colId, dir } = sortConfig;
+			return [...result].sort((a, b) => {
+				const av = a.data[colId];
+				const bv = b.data[colId];
+				const as = av === null || av === undefined ? '' : String(av);
+				const bs = bv === null || bv === undefined ? '' : String(bv);
+				const cmp = as.localeCompare(bs, undefined, { numeric: true, sensitivity: 'base' });
+				return dir === 'asc' ? cmp : -cmp;
 			});
-		}
-		if (!sortConfig) return result;
-		const { colId, dir } = sortConfig;
-		return [...result].sort((a, b) => {
-			const av = a.data[colId];
-			const bv = b.data[colId];
-			const as = av === null || av === undefined ? '' : String(av);
-			const bs = bv === null || bv === undefined ? '' : String(bv);
-			const cmp = as.localeCompare(bs, undefined, { numeric: true, sensitivity: 'base' });
-			return dir === 'asc' ? cmp : -cmp;
-		});
-	})());
+		})()
+	);
 
 	// Total min-width: row# col (48px) + all column widths + actions col (40px) + add col button (40px)
 	const tableMinWidth = $derived(
@@ -500,22 +501,71 @@
 		return String(val);
 	}
 
-	const groupedRows = $derived((() => {
-		if (!groupConfig) return null;
-		const col = $columns.find((c) => c.id === groupConfig.colId);
-		if (!col) return null;
-		const keyOrder: string[] = [];
-		const keyMap: Record<string, Row[]> = {};
-		for (const row of sortedRows) {
-			const key = getGroupKey(row, col.id, col);
-			if (!keyMap[key]) {
-				keyMap[key] = [];
-				keyOrder.push(key);
+	const groupedRows = $derived(
+		(() => {
+			if (!groupConfig) return null;
+			const col = $columns.find((c) => c.id === groupConfig.colId);
+			if (!col) return null;
+			const keyOrder: string[] = [];
+			const keyMap: Record<string, Row[]> = {};
+			for (const row of sortedRows) {
+				const key = getGroupKey(row, col.id, col);
+				if (!keyMap[key]) {
+					keyMap[key] = [];
+					keyOrder.push(key);
+				}
+				keyMap[key].push(row);
 			}
-			keyMap[key].push(row);
-		}
-		return { groups: keyOrder.map((key) => ({ key, rows: keyMap[key] })), col };
-	})());
+			return { groups: keyOrder.map((key) => ({ key, rows: keyMap[key] })), col };
+		})()
+	);
+
+	interface GroupHeaderItem {
+		type: 'group-header';
+		key: string;
+		count: number;
+		col: Column;
+	}
+	interface DataRowItem {
+		type: 'row';
+		row: Row;
+		rowIdx: number;
+	}
+	interface GroupAddItem {
+		type: 'group-add';
+		key: string;
+		col: Column;
+	}
+	type RenderItem = GroupHeaderItem | DataRowItem | GroupAddItem;
+
+	function getItemKey(item: RenderItem): string {
+		if (item.type === 'row') return 'row-' + item.row.id;
+		return item.type + '-' + item.key;
+	}
+
+	const renderItems = $derived(
+		(() => {
+			if (!groupedRows) {
+				return sortedRows.map((row, rowIdx): RenderItem => ({ type: 'row', row, rowIdx }));
+			}
+			const items: RenderItem[] = [];
+			for (const group of groupedRows.groups) {
+				items.push({
+					type: 'group-header',
+					key: group.key,
+					count: group.rows.length,
+					col: groupedRows.col
+				});
+				if (!collapsedGroups.has(group.key)) {
+					group.rows.forEach((row, rowIdx) => {
+						items.push({ type: 'row', row, rowIdx });
+					});
+					items.push({ type: 'group-add', key: group.key, col: groupedRows.col });
+				}
+			}
+			return items;
+		})()
+	);
 </script>
 
 <div
@@ -566,15 +616,30 @@
 		<!-- Sort -->
 		<div class="relative">
 			<button
-				onclick={(e) => { e.stopPropagation(); showSortMenu = !showSortMenu; showGroupMenu = false; showHideMenu = false; }}
-				class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition {sortConfig ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'}"
+				onclick={(e) => {
+					e.stopPropagation();
+					showSortMenu = !showSortMenu;
+					showGroupMenu = false;
+					showHideMenu = false;
+				}}
+				class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition {sortConfig
+					? 'bg-white/20 text-white'
+					: 'text-white/70 hover:bg-white/10 hover:text-white'}"
 			>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"
+					/>
 				</svg>
 				Sort
 				{#if sortConfig}
-					<span class="flex h-4 w-4 items-center justify-center rounded-full bg-blue-400 text-xs font-bold text-white">1</span>
+					<span
+						class="flex h-4 w-4 items-center justify-center rounded-full bg-blue-400 text-xs font-bold text-white"
+						>1</span
+					>
 				{/if}
 			</button>
 			{#if showSortMenu}
@@ -583,10 +648,15 @@
 					onclick={(e) => e.stopPropagation()}
 					role="menu"
 				>
-					<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">Sort by</div>
+					<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">
+						Sort by
+					</div>
 					{#each [...$columns].sort((a, b) => a.position - b.position) as col (col.id)}
 						<button
-							class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId === col.id ? 'font-semibold text-blue-600' : ''}"
+							class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
+							col.id
+								? 'font-semibold text-blue-600'
+								: ''}"
 							onclick={() => {
 								if (sortConfig?.colId === col.id) {
 									sortConfig = { colId: col.id, dir: sortConfig.dir === 'asc' ? 'desc' : 'asc' };
@@ -599,7 +669,9 @@
 						>
 							{col.name}
 							{#if sortConfig?.colId === col.id}
-								<span class="ml-auto text-xs text-blue-500">{sortConfig.dir === 'asc' ? '↑ A→Z' : '↓ Z→A'}</span>
+								<span class="ml-auto text-xs text-blue-500"
+									>{sortConfig.dir === 'asc' ? '↑ A→Z' : '↓ Z→A'}</span
+								>
 							{/if}
 						</button>
 					{/each}
@@ -607,9 +679,12 @@
 						<hr class="my-1 border-gray-100" />
 						<button
 							class="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50"
-							onclick={() => { sortConfig = null; showSortMenu = false; }}
-							role="menuitem"
-						>Clear sort</button>
+							onclick={() => {
+								sortConfig = null;
+								showSortMenu = false;
+							}}
+							role="menuitem">Clear sort</button
+						>
 					{/if}
 				</div>
 			{/if}
@@ -618,15 +693,30 @@
 		<!-- Group -->
 		<div class="relative">
 			<button
-				onclick={(e) => { e.stopPropagation(); showGroupMenu = !showGroupMenu; showSortMenu = false; showHideMenu = false; }}
-				class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition {groupConfig ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'}"
+				onclick={(e) => {
+					e.stopPropagation();
+					showGroupMenu = !showGroupMenu;
+					showSortMenu = false;
+					showHideMenu = false;
+				}}
+				class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition {groupConfig
+					? 'bg-white/20 text-white'
+					: 'text-white/70 hover:bg-white/10 hover:text-white'}"
 			>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h8M4 18h8" />
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M4 6h16M4 10h16M4 14h8M4 18h8"
+					/>
 				</svg>
 				Group
 				{#if groupConfig}
-					<span class="flex h-4 w-4 items-center justify-center rounded-full bg-blue-400 text-xs font-bold text-white">1</span>
+					<span
+						class="flex h-4 w-4 items-center justify-center rounded-full bg-blue-400 text-xs font-bold text-white"
+						>1</span
+					>
 				{/if}
 			</button>
 			{#if showGroupMenu}
@@ -635,14 +725,26 @@
 					onclick={(e) => e.stopPropagation()}
 					role="menu"
 				>
-					<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">Group by</div>
-					{#each [...$columns].sort((a, b) => a.position - b.position).filter((c) => c.type === 'select' || c.type === 'date') as col (col.id)}
+					<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">
+						Group by
+					</div>
+					{#each [...$columns]
+						.sort((a, b) => a.position - b.position)
+						.filter((c) => c.type === 'select' || c.type === 'date') as col (col.id)}
 						{#if col.type === 'date'}
-							<div class="px-3 py-1 text-xs font-medium text-gray-500">{col.name} <span class="text-gray-400">(date)</span></div>
+							<div class="px-3 py-1 text-xs font-medium text-gray-500">
+								{col.name} <span class="text-gray-400">(date)</span>
+							</div>
 							<button
-								class="flex w-full items-center gap-2 px-5 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId === col.id && groupConfig?.granularity === 'month' ? 'font-semibold text-blue-600' : ''}"
+								class="flex w-full items-center gap-2 px-5 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId ===
+									col.id && groupConfig?.granularity === 'month'
+									? 'font-semibold text-blue-600'
+									: ''}"
 								onclick={() => {
-									groupConfig = groupConfig?.colId === col.id && groupConfig?.granularity === 'month' ? null : { colId: col.id, granularity: 'month' };
+									groupConfig =
+										groupConfig?.colId === col.id && groupConfig?.granularity === 'month'
+											? null
+											: { colId: col.id, granularity: 'month' };
 									showGroupMenu = false;
 								}}
 								role="menuitem"
@@ -653,9 +755,15 @@
 								{/if}
 							</button>
 							<button
-								class="flex w-full items-center gap-2 px-5 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId === col.id && groupConfig?.granularity === 'day' ? 'font-semibold text-blue-600' : ''}"
+								class="flex w-full items-center gap-2 px-5 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId ===
+									col.id && groupConfig?.granularity === 'day'
+									? 'font-semibold text-blue-600'
+									: ''}"
 								onclick={() => {
-									groupConfig = groupConfig?.colId === col.id && groupConfig?.granularity === 'day' ? null : { colId: col.id, granularity: 'day' };
+									groupConfig =
+										groupConfig?.colId === col.id && groupConfig?.granularity === 'day'
+											? null
+											: { colId: col.id, granularity: 'day' };
 									showGroupMenu = false;
 								}}
 								role="menuitem"
@@ -667,7 +775,10 @@
 							</button>
 						{:else}
 							<button
-								class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId === col.id ? 'font-semibold text-blue-600' : ''}"
+								class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId ===
+								col.id
+									? 'font-semibold text-blue-600'
+									: ''}"
 								onclick={() => {
 									groupConfig = groupConfig?.colId === col.id ? null : { colId: col.id };
 									showGroupMenu = false;
@@ -688,9 +799,12 @@
 						<hr class="my-1 border-gray-100" />
 						<button
 							class="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50"
-							onclick={() => { groupConfig = null; showGroupMenu = false; }}
-							role="menuitem"
-						>Clear group</button>
+							onclick={() => {
+								groupConfig = null;
+								showGroupMenu = false;
+							}}
+							role="menuitem">Clear group</button
+						>
 					{/if}
 				</div>
 			{/if}
@@ -699,15 +813,31 @@
 		<!-- Hide Fields -->
 		<div class="relative">
 			<button
-				onclick={(e) => { e.stopPropagation(); showHideMenu = !showHideMenu; showSortMenu = false; showGroupMenu = false; }}
-				class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition {hiddenCols.size > 0 ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'}"
+				onclick={(e) => {
+					e.stopPropagation();
+					showHideMenu = !showHideMenu;
+					showSortMenu = false;
+					showGroupMenu = false;
+				}}
+				class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition {hiddenCols.size >
+				0
+					? 'bg-white/20 text-white'
+					: 'text-white/70 hover:bg-white/10 hover:text-white'}"
 			>
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+					/>
 				</svg>
 				Hide Fields
 				{#if hiddenCols.size > 0}
-					<span class="flex h-4 w-4 items-center justify-center rounded-full bg-blue-400 text-xs font-bold text-white">{hiddenCols.size}</span>
+					<span
+						class="flex h-4 w-4 items-center justify-center rounded-full bg-blue-400 text-xs font-bold text-white"
+						>{hiddenCols.size}</span
+					>
 				{/if}
 			</button>
 			{#if showHideMenu}
@@ -716,7 +846,9 @@
 					onclick={(e) => e.stopPropagation()}
 					role="menu"
 				>
-					<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">Toggle columns</div>
+					<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">
+						Toggle columns
+					</div>
 					{#each [...$columns].sort((a, b) => a.position - b.position) as col (col.id)}
 						<label class="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-gray-50">
 							<input
@@ -732,9 +864,11 @@
 						<hr class="my-1 border-gray-100" />
 						<button
 							class="w-full px-3 py-1.5 text-left text-xs text-blue-500 hover:bg-blue-50"
-							onclick={() => { hiddenCols = new Set(); }}
-							role="menuitem"
-						>Show all fields</button>
+							onclick={() => {
+								hiddenCols.clear();
+							}}
+							role="menuitem">Show all fields</button
+						>
 					{/if}
 				</div>
 			{/if}
@@ -743,14 +877,24 @@
 		<!-- Filter -->
 		<button
 			onclick={() => (showFilterPanel = !showFilterPanel)}
-			class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition {filterConditions.length > 0 ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'}"
+			class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition {filterConditions.length >
+			0
+				? 'bg-white/20 text-white'
+				: 'text-white/70 hover:bg-white/10 hover:text-white'}"
 		>
 			<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"
+				/>
 			</svg>
 			Filter
 			{#if filterConditions.length > 0}
-				<span class="flex h-4 w-4 items-center justify-center rounded-full bg-blue-400 text-xs font-bold text-white">
+				<span
+					class="flex h-4 w-4 items-center justify-center rounded-full bg-blue-400 text-xs font-bold text-white"
+				>
 					{filterConditions.length}
 				</span>
 			{/if}
@@ -761,21 +905,33 @@
 
 		<!-- Search -->
 		<div class="relative flex items-center">
-			<svg class="absolute left-2.5 h-4 w-4 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0" />
+			<svg
+				class="absolute left-2.5 h-4 w-4 text-white/40"
+				fill="none"
+				stroke="currentColor"
+				viewBox="0 0 24 24"
+			>
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"
+				/>
 			</svg>
 			<input
 				type="text"
 				placeholder="Search..."
 				bind:value={searchQuery}
-				class="rounded-lg border border-white/20 bg-white/10 py-1.5 pr-3 pl-8 text-sm text-white placeholder-white/40 outline-none focus:border-white/40 focus:bg-white/20 {searchQuery ? 'w-48' : 'w-36'}"
+				class="rounded-lg border border-white/20 bg-white/10 py-1.5 pr-3 pl-8 text-sm text-white placeholder-white/40 outline-none focus:border-white/40 focus:bg-white/20 {searchQuery
+					? 'w-48'
+					: 'w-36'}"
 			/>
 			{#if searchQuery}
 				<button
 					onclick={() => (searchQuery = '')}
 					class="absolute right-2 text-white/40 hover:text-white/70"
-					aria-label="Clear search"
-				>×</button>
+					aria-label="Clear search">×</button
+				>
 			{/if}
 		</div>
 	</div>
@@ -784,19 +940,20 @@
 	{#if showFilterPanel}
 		<div class="mx-6 mb-3 rounded-xl bg-white/10 p-3">
 			<div class="mb-2 flex items-center justify-between">
-				<span class="text-xs font-semibold tracking-wide text-white/60 uppercase">Filters (AND)</span>
+				<span class="text-xs font-semibold tracking-wide text-white/60 uppercase"
+					>Filters (AND)</span
+				>
 				<div class="flex gap-3">
 					{#if filterConditions.length > 0}
-						<button
-							onclick={clearAllFilters}
-							class="text-xs text-white/50 hover:text-white/80"
-						>Clear all</button>
+						<button onclick={clearAllFilters} class="text-xs text-white/50 hover:text-white/80"
+							>Clear all</button
+						>
 					{/if}
 					<button
 						onclick={() => (showFilterPanel = false)}
 						class="text-xs text-white/50 hover:text-white/80"
-						aria-label="Close filter panel"
-					>✕</button>
+						aria-label="Close filter panel">✕</button
+					>
 				</div>
 			</div>
 			{#each filterConditions as cond (cond.id)}
@@ -837,15 +994,19 @@
 						aria-label="Remove condition"
 					>
 						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M6 18L18 6M6 6l12 12"
+							/>
 						</svg>
 					</button>
 				</div>
 			{/each}
-			<button
-				onclick={addFilterCondition}
-				class="mt-1 text-sm text-white/50 hover:text-white/80"
-			>+ Add condition</button>
+			<button onclick={addFilterCondition} class="mt-1 text-sm text-white/50 hover:text-white/80"
+				>+ Add condition</button
+			>
 		</div>
 	{/if}
 
@@ -936,8 +1097,18 @@
 											}}
 											role="menuitem"
 										>
-											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+											<svg
+												class="h-4 w-4 text-gray-400"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+												/>
 											</svg>
 											Rename
 										</button>
@@ -950,8 +1121,18 @@
 											}}
 											role="menuitem"
 										>
-											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+											<svg
+												class="h-4 w-4 text-gray-400"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M15 19l-7-7 7-7"
+												/>
 											</svg>
 											Move Left
 										</button>
@@ -964,46 +1145,91 @@
 											}}
 											role="menuitem"
 										>
-											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+											<svg
+												class="h-4 w-4 text-gray-400"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M9 5l7 7-7 7"
+												/>
 											</svg>
 											Move Right
 										</button>
 										<hr class="my-1 border-gray-100" />
 										<button
-											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId === col.id && sortConfig?.dir === 'asc' ? 'font-semibold text-blue-600' : ''}"
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
+												col.id && sortConfig?.dir === 'asc'
+												? 'font-semibold text-blue-600'
+												: ''}"
 											onclick={() => {
 												sortConfig = { colId: col.id, dir: 'asc' };
 												colMenuId = null;
 											}}
 											role="menuitem"
 										>
-											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+											<svg
+												class="h-4 w-4 text-gray-400"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"
+												/>
 											</svg>
 											Sort A → Z
 										</button>
 										<button
-											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId === col.id && sortConfig?.dir === 'desc' ? 'font-semibold text-blue-600' : ''}"
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
+												col.id && sortConfig?.dir === 'desc'
+												? 'font-semibold text-blue-600'
+												: ''}"
 											onclick={() => {
 												sortConfig = { colId: col.id, dir: 'desc' };
 												colMenuId = null;
 											}}
 											role="menuitem"
 										>
-											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+											<svg
+												class="h-4 w-4 text-gray-400"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"
+												/>
 											</svg>
 											Sort Z → A
 										</button>
 										<button
-											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {filterConditions.some((c) => c.colId === col.id) ? 'font-semibold text-blue-600' : ''}"
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {filterConditions.some(
+												(c) => c.colId === col.id
+											)
+												? 'font-semibold text-blue-600'
+												: ''}"
 											onclick={() => {
 												const existing = filterConditions.find((c) => c.colId === col.id);
 												if (!existing) {
 													filterConditions = [
-													...filterConditions,
-													{ id: crypto.randomUUID(), colId: col.id, operator: 'contains', value: '' }
+														...filterConditions,
+														{
+															id: crypto.randomUUID(),
+															colId: col.id,
+															operator: 'contains',
+															value: ''
+														}
 													];
 												}
 												showFilterPanel = true;
@@ -1011,8 +1237,18 @@
 											}}
 											role="menuitem"
 										>
-											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+											<svg
+												class="h-4 w-4 text-gray-400"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"
+												/>
 											</svg>
 											Filter by this column
 										</button>
@@ -1020,13 +1256,23 @@
 										<button
 											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50"
 											onclick={() => {
-												hiddenCols = new Set([...hiddenCols, col.id]);
+												hiddenCols.add(col.id);
 												colMenuId = null;
 											}}
 											role="menuitem"
 										>
-											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+											<svg
+												class="h-4 w-4 text-gray-400"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+												/>
 											</svg>
 											Hide
 										</button>
@@ -1039,8 +1285,18 @@
 											}}
 											role="menuitem"
 										>
-											<svg class="h-4 w-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+											<svg
+												class="h-4 w-4 text-red-400"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+												/>
 											</svg>
 											Delete
 										</button>
@@ -1083,230 +1339,294 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each sortedRows as row, rowIdx (row.id)}
-						<tr
-							class="border-b border-white/10 transition hover:bg-white/5 {deletingRowId === row.id
-								? 'opacity-50'
-								: ''}"
-						>
-							<!-- Row number — sticky at left-0 -->
-							<td
-								class="sticky left-0 z-20 border-r border-white/10 bg-blue-700 px-2 py-1 text-center text-xs text-white/40"
-								style="width: 48px;"
-							>
-								{rowIdx + 1}
-							</td>
-							{#each sortedColumns as col, i (col.id)}
-								<td
-									class="overflow-hidden py-1 text-sm text-white/90
-										{i === 0 ? 'sticky left-12 z-10 border-r border-white/10 bg-blue-600 px-2' : 'px-2'}"
-									style="width: {getColWidth(col)}px;"
-									onclick={() => {
-										if (
-											col.type !== 'checkbox' &&
-											col.type !== 'tags' &&
-											!(editingCell?.rowId === row.id && editingCell?.colId === col.id)
-										) {
-											startEdit(row.id, col, row.data[col.id]);
-										}
-									}}
-								>
-									{#if editingCell?.rowId === row.id && editingCell?.colId === col.id}
-										{#if col.type === 'select'}
-											{@const choices = getChoices(col)}
-											<select
-												class="w-full rounded bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
-												bind:value={editValue}
-												onblur={() => commitEdit(row.id, col)}
-												onchange={() => commitEdit(row.id, col)}
-												autofocus
-											>
-												<option value="">—</option>
-												{#each choices as choice (choice.value)}
-													<option value={choice.value}>{choice.value}</option>
-												{/each}
-											</select>
-										{:else if col.type === 'number'}
-											<input
-												type="number"
-												class="w-full rounded bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
-												bind:value={editValue}
-												onblur={() => commitEdit(row.id, col)}
-												onkeydown={(e) => {
-													if (e.key === 'Enter') commitEdit(row.id, col);
-													if (e.key === 'Escape') editingCell = null;
-												}}
-												autofocus
-											/>
-										{:else if col.type === 'date'}
-											<input
-												type="date"
-												class="w-full rounded bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
-												bind:value={editValue}
-												onblur={() => commitEdit(row.id, col)}
-												onkeydown={(e) => {
-													if (e.key === 'Enter') commitEdit(row.id, col);
-													if (e.key === 'Escape') editingCell = null;
-												}}
-												autofocus
-											/>
-										{:else}
-											<input
-												type={col.type === 'url' ? 'url' : 'text'}
-												class="w-full rounded bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
-												bind:value={editValue}
-												onblur={() => commitEdit(row.id, col)}
-												onkeydown={(e) => {
-													if (e.key === 'Enter') commitEdit(row.id, col);
-													if (e.key === 'Escape') editingCell = null;
-												}}
-												autofocus
-											/>
-										{/if}
-									{:else if col.type === 'checkbox'}
-										<!-- Styled toggle -->
+					{#each renderItems as item (getItemKey(item))}
+						{#if item.type === 'group-header'}
+							<tr class="border-b border-white/20">
+								<td colspan={sortedColumns.length + 3} class="bg-white/5 py-0.5">
+									<div class="flex items-center gap-2 px-3 py-1">
 										<button
-											class="relative inline-flex h-5 w-9 items-center rounded-full transition {row
-												.data[col.id]
-												? 'bg-blue-500'
-												: 'bg-white/20'}"
-											onclick={(e) => {
-												e.stopPropagation();
-												toggleCheckbox(row.id, col);
+											onclick={() => {
+												if (collapsedGroups.has(item.key)) collapsedGroups.delete(item.key);
+												else collapsedGroups.add(item.key);
 											}}
-											aria-label="Toggle"
-											role="switch"
-											aria-checked={!!row.data[col.id]}
+											class="rounded p-0.5 text-white/50 hover:text-white/80"
+											aria-label={collapsedGroups.has(item.key) ? 'Expand group' : 'Collapse group'}
 										>
-											<span
-												class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition {row
-													.data[col.id]
-													? 'translate-x-4'
-													: 'translate-x-1'}"
-											></span>
+											<svg
+												class="h-4 w-4 transition {collapsedGroups.has(item.key)
+													? '-rotate-90'
+													: ''}"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M19 9l-7 7-7-7"
+												/>
+											</svg>
 										</button>
-									{:else if col.type === 'url'}
-										{@const urlVal = (row.data[col.id] as string) ?? ''}
-										{#if urlVal}
-											<a
-												href={urlVal}
-												target="_blank"
-												rel="noopener noreferrer"
-												class="block max-w-full truncate text-sky-300 underline hover:text-sky-100"
-												onclick={(e) => e.stopPropagation()}
-												title={urlVal}>{urlVal}</a
-											>
-										{:else}
-											<span class="block min-h-[1.5rem] cursor-text py-1 text-white/30">—</span>
-										{/if}
-									{:else if col.type === 'select'}
-										{@const selVal = (row.data[col.id] as string) ?? ''}
-										{#if selVal}
-											{@const color = getChoiceColor(col, selVal)}
+										{#if item.col.type === 'select' && item.key !== '(empty)'}
+											{@const color = getChoiceColor(item.col, item.key)}
 											<span
-												class="inline-flex cursor-pointer items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
+												class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
 											>
-												{selVal}
+												{item.key}
 											</span>
 										{:else}
-											<span class="block min-h-[1.5rem] cursor-pointer py-1 text-white/30">—</span>
+											<span class="text-sm font-medium text-white/90">{item.key}</span>
 										{/if}
-									{:else if col.type === 'tags'}
-										{@const tagVals = getTagValues(row, col.id)}
-										{@const choices = getChoices(col)}
-										{@const available = choices.filter((c) => !tagVals.includes(c.value))}
-										<div
-											class="flex min-h-[1.75rem] flex-wrap items-center gap-1"
-											onclick={(e) => e.stopPropagation()}
+										<span class="text-xs text-white/50"
+											>{item.count} {item.count === 1 ? 'row' : 'rows'}</span
 										>
-											{#each tagVals as tag (tag)}
-												{@const color = getChoiceColor(col, tag)}
-												<span
-													class="inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
-												>
-													{tag}
-													<button
-														class="ml-0.5 rounded-full leading-none hover:opacity-60"
-														onclick={() => removeTag(row.id, col, tag)}
-														aria-label="Remove {tag}">×</button
-													>
-												</span>
-											{/each}
-											{#if available.length > 0}
-												<div class="relative">
-													<button
-														class="rounded-full border border-white/30 px-2 py-0.5 text-xs text-white/50 hover:border-white/60 hover:text-white/80"
-														onclick={() => {
-															tagsPopupCell =
-																tagsPopupCell?.rowId === row.id && tagsPopupCell?.colId === col.id
-																	? null
-																	: { rowId: row.id, colId: col.id };
-														}}>+</button
-													>
-													{#if tagsPopupCell?.rowId === row.id && tagsPopupCell?.colId === col.id}
-														<div
-															class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border border-gray-100 bg-white py-1 shadow-xl"
-														>
-															{#each available as choice (choice.value)}
-																{@const color =
-																	TAG_COLORS[choices.indexOf(choice) % TAG_COLORS.length]}
-																<button
-																	class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-50"
-																	onclick={() => addTag(row.id, col, choice.value)}
-																>
-																	<span
-																		class="inline-flex items-center rounded-full border px-2 py-0.5 font-medium {color.bg} {color.text} {color.border}"
-																		>{choice.value}</span
-																	>
-																</button>
-															{/each}
-														</div>
-													{/if}
-												</div>
-											{/if}
-										</div>
-									{:else if col.type === 'date'}
-										{@const dateVal = row.data[col.id] ? formatDate(String(row.data[col.id])) : ''}
-										{#if dateVal}
-											<span class="block cursor-text py-1 font-mono text-xs text-white/90"
-												>{dateVal}</span
-											>
-										{:else}
-											<span class="block min-h-[1.5rem] cursor-text py-1 text-white/30">—</span>
-										{/if}
-									{:else}
-										<!-- text / string / number -->
-										<span
-											class="block min-h-[1.5rem] cursor-text truncate py-1"
-											title="Click to edit"
-										>
-											{getCellValue(row, col.id)}
-										</span>
-									{/if}
+									</div>
 								</td>
-							{/each}
-							<!-- Row delete button -->
-							<td class="px-1 py-1 text-center" style="width: 40px;">
-								<button
-									onclick={() => handleDeleteRow(row.id)}
-									disabled={deletingRowId === row.id}
-									class="rounded p-1 text-white/30 transition hover:bg-red-500/30 hover:text-red-300 disabled:opacity-50"
-									aria-label="Delete row"
-									title="Delete row"
+							</tr>
+						{:else if item.type === 'group-add'}
+							<tr class="border-b border-white/10">
+								<td colspan={sortedColumns.length + 3} class="px-4 py-1">
+									<button
+										onclick={() => handleAddRowInGroup(item.key, item.col)}
+										disabled={addingRow}
+										class="rounded px-2 py-0.5 text-xs text-white/40 hover:bg-white/10 hover:text-white/70 disabled:opacity-50"
+									>
+										+ Add row
+									</button>
+								</td>
+							</tr>
+						{:else}
+							{@const row = item.row}
+							{@const rowIdx = item.rowIdx}
+							<tr
+								class="border-b border-white/10 transition hover:bg-white/5 {deletingRowId ===
+								row.id
+									? 'opacity-50'
+									: ''}"
+							>
+								<!-- Row number — sticky at left-0 -->
+								<td
+									class="sticky left-0 z-20 border-r border-white/10 bg-blue-700 px-2 py-1 text-center text-xs text-white/40"
+									style="width: 48px;"
 								>
-									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-										/>
-									</svg>
-								</button>
-							</td>
-							<!-- Empty cell for "+" add column header -->
-							<td style="width: 40px;"></td>
-						</tr>
+									{rowIdx + 1}
+								</td>
+								{#each sortedColumns as col, i (col.id)}
+									<td
+										class="overflow-hidden py-1 text-sm text-white/90
+										{i === 0 ? 'sticky left-12 z-10 border-r border-white/10 bg-blue-600 px-2' : 'px-2'}"
+										style="width: {getColWidth(col)}px;"
+										onclick={() => {
+											if (
+												col.type !== 'checkbox' &&
+												col.type !== 'tags' &&
+												!(editingCell?.rowId === row.id && editingCell?.colId === col.id)
+											) {
+												startEdit(row.id, col, row.data[col.id]);
+											}
+										}}
+									>
+										{#if editingCell?.rowId === row.id && editingCell?.colId === col.id}
+											{#if col.type === 'select'}
+												{@const choices = getChoices(col)}
+												<select
+													class="w-full rounded bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
+													bind:value={editValue}
+													onblur={() => commitEdit(row.id, col)}
+													onchange={() => commitEdit(row.id, col)}
+													autofocus
+												>
+													<option value="">—</option>
+													{#each choices as choice (choice.value)}
+														<option value={choice.value}>{choice.value}</option>
+													{/each}
+												</select>
+											{:else if col.type === 'number'}
+												<input
+													type="number"
+													class="w-full rounded bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
+													bind:value={editValue}
+													onblur={() => commitEdit(row.id, col)}
+													onkeydown={(e) => {
+														if (e.key === 'Enter') commitEdit(row.id, col);
+														if (e.key === 'Escape') editingCell = null;
+													}}
+													autofocus
+												/>
+											{:else if col.type === 'date'}
+												<input
+													type="date"
+													class="w-full rounded bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
+													bind:value={editValue}
+													onblur={() => commitEdit(row.id, col)}
+													onkeydown={(e) => {
+														if (e.key === 'Enter') commitEdit(row.id, col);
+														if (e.key === 'Escape') editingCell = null;
+													}}
+													autofocus
+												/>
+											{:else}
+												<input
+													type={col.type === 'url' ? 'url' : 'text'}
+													class="w-full rounded bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
+													bind:value={editValue}
+													onblur={() => commitEdit(row.id, col)}
+													onkeydown={(e) => {
+														if (e.key === 'Enter') commitEdit(row.id, col);
+														if (e.key === 'Escape') editingCell = null;
+													}}
+													autofocus
+												/>
+											{/if}
+										{:else if col.type === 'checkbox'}
+											<!-- Styled toggle -->
+											<button
+												class="relative inline-flex h-5 w-9 items-center rounded-full transition {row
+													.data[col.id]
+													? 'bg-blue-500'
+													: 'bg-white/20'}"
+												onclick={(e) => {
+													e.stopPropagation();
+													toggleCheckbox(row.id, col);
+												}}
+												aria-label="Toggle"
+												role="switch"
+												aria-checked={!!row.data[col.id]}
+											>
+												<span
+													class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition {row
+														.data[col.id]
+														? 'translate-x-4'
+														: 'translate-x-1'}"
+												></span>
+											</button>
+										{:else if col.type === 'url'}
+											{@const urlVal = (row.data[col.id] as string) ?? ''}
+											{#if urlVal}
+												<a
+													href={urlVal}
+													target="_blank"
+													rel="noopener noreferrer"
+													class="block max-w-full truncate text-sky-300 underline hover:text-sky-100"
+													onclick={(e) => e.stopPropagation()}
+													title={urlVal}>{urlVal}</a
+												>
+											{:else}
+												<span class="block min-h-[1.5rem] cursor-text py-1 text-white/30">—</span>
+											{/if}
+										{:else if col.type === 'select'}
+											{@const selVal = (row.data[col.id] as string) ?? ''}
+											{#if selVal}
+												{@const color = getChoiceColor(col, selVal)}
+												<span
+													class="inline-flex cursor-pointer items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
+												>
+													{selVal}
+												</span>
+											{:else}
+												<span class="block min-h-[1.5rem] cursor-pointer py-1 text-white/30">—</span
+												>
+											{/if}
+										{:else if col.type === 'tags'}
+											{@const tagVals = getTagValues(row, col.id)}
+											{@const choices = getChoices(col)}
+											{@const available = choices.filter((c) => !tagVals.includes(c.value))}
+											<div
+												class="flex min-h-[1.75rem] flex-wrap items-center gap-1"
+												onclick={(e) => e.stopPropagation()}
+											>
+												{#each tagVals as tag (tag)}
+													{@const color = getChoiceColor(col, tag)}
+													<span
+														class="inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
+													>
+														{tag}
+														<button
+															class="ml-0.5 rounded-full leading-none hover:opacity-60"
+															onclick={() => removeTag(row.id, col, tag)}
+															aria-label="Remove {tag}">×</button
+														>
+													</span>
+												{/each}
+												{#if available.length > 0}
+													<div class="relative">
+														<button
+															class="rounded-full border border-white/30 px-2 py-0.5 text-xs text-white/50 hover:border-white/60 hover:text-white/80"
+															onclick={() => {
+																tagsPopupCell =
+																	tagsPopupCell?.rowId === row.id && tagsPopupCell?.colId === col.id
+																		? null
+																		: { rowId: row.id, colId: col.id };
+															}}>+</button
+														>
+														{#if tagsPopupCell?.rowId === row.id && tagsPopupCell?.colId === col.id}
+															<div
+																class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border border-gray-100 bg-white py-1 shadow-xl"
+															>
+																{#each available as choice (choice.value)}
+																	{@const color =
+																		TAG_COLORS[choices.indexOf(choice) % TAG_COLORS.length]}
+																	<button
+																		class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-50"
+																		onclick={() => addTag(row.id, col, choice.value)}
+																	>
+																		<span
+																			class="inline-flex items-center rounded-full border px-2 py-0.5 font-medium {color.bg} {color.text} {color.border}"
+																			>{choice.value}</span
+																		>
+																	</button>
+																{/each}
+															</div>
+														{/if}
+													</div>
+												{/if}
+											</div>
+										{:else if col.type === 'date'}
+											{@const dateVal = row.data[col.id]
+												? formatDate(String(row.data[col.id]))
+												: ''}
+											{#if dateVal}
+												<span class="block cursor-text py-1 font-mono text-xs text-white/90"
+													>{dateVal}</span
+												>
+											{:else}
+												<span class="block min-h-[1.5rem] cursor-text py-1 text-white/30">—</span>
+											{/if}
+										{:else}
+											<!-- text / string / number -->
+											<span
+												class="block min-h-[1.5rem] cursor-text truncate py-1"
+												title="Click to edit"
+											>
+												{getCellValue(row, col.id)}
+											</span>
+										{/if}
+									</td>
+								{/each}
+								<!-- Row delete button -->
+								<td class="px-1 py-1 text-center" style="width: 40px;">
+									<button
+										onclick={() => handleDeleteRow(row.id)}
+										disabled={deletingRowId === row.id}
+										class="rounded p-1 text-white/30 transition hover:bg-red-500/30 hover:text-red-300 disabled:opacity-50"
+										aria-label="Delete row"
+										title="Delete row"
+									>
+										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+											/>
+										</svg>
+									</button>
+								</td>
+								<!-- Empty cell for "+" add column header -->
+								<td style="width: 40px;"></td>
+							</tr>
+						{/if}
 					{:else}
 						<tr>
 							<td
