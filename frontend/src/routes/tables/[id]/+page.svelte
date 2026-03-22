@@ -65,13 +65,48 @@
 	// Client-side sort (Phase 8 will add toolbar sort; this is the column menu sort)
 	let sortConfig = $state<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
 
-	// Column filter (from header dropdown)
-	let filterConfig = $state<{ colId: string; value: string } | null>(null);
-	let filterInputColId = $state<string | null>(null);
-	let filterInputValue = $state('');
+	// Multi-condition filter (Phase 8)
+	interface FilterCondition {
+		id: string;
+		colId: string;
+		operator: 'contains' | 'equals' | 'is_empty' | 'not_empty';
+		value: string;
+	}
+	let filterConditions = $state<FilterCondition[]>([]);
+	let showFilterPanel = $state(false);
+
+	function addFilterCondition() {
+		const firstCol = $columns[0];
+		filterConditions = [
+			...filterConditions,
+			{ id: crypto.randomUUID(), colId: firstCol?.id ?? '', operator: 'contains', value: '' }
+		];
+	}
+
+	function removeFilterCondition(id: string) {
+		filterConditions = filterConditions.filter((c) => c.id !== id);
+	}
+
+	function clearAllFilters() {
+		filterConditions = [];
+	}
 
 	// Hidden columns (local state)
 	let hiddenCols = $state<Set<string>>(new Set());
+
+	function toggleHideCol(colId: string) {
+		const next = new Set(hiddenCols);
+		if (next.has(colId)) next.delete(colId);
+		else next.add(colId);
+		hiddenCols = next;
+	}
+
+	// Toolbar state (Phase 8 Ticket 1)
+	let searchQuery = $state('');
+	let showSortMenu = $state(false);
+	let showGroupMenu = $state(false);
+	let showHideMenu = $state(false);
+	let groupConfig = $state<{ colId: string } | null>(null);
 
 	// Column resize
 	let resizingColId = $state<string | null>(null);
@@ -136,6 +171,9 @@
 
 		function onWindowClick() {
 			colMenuId = null;
+			showSortMenu = false;
+			showGroupMenu = false;
+			showHideMenu = false;
 		}
 
 		window.addEventListener('mousemove', onResizeMove);
@@ -382,12 +420,37 @@
 
 	const sortedRows = $derived((() => {
 		let result = $rows;
-		if (filterConfig) {
-			const { colId, value } = filterConfig;
-			const lv = value.toLowerCase();
+		// Global search
+		if (searchQuery.trim()) {
+			const q = searchQuery.trim().toLowerCase();
+			result = result.filter((r) =>
+				Object.values(r.data).some((v) => {
+					if (v === null || v === undefined) return false;
+					if (Array.isArray(v)) return v.some((item) => String(item).toLowerCase().includes(q));
+					return String(v).toLowerCase().includes(q);
+				})
+			);
+		}
+		for (const cond of filterConditions) {
+			if (!cond.colId) continue;
+			if (cond.operator !== 'is_empty' && cond.operator !== 'not_empty' && !cond.value.trim())
+				continue;
+			const lv = cond.value.toLowerCase();
 			result = result.filter((r) => {
-				const cell = r.data[colId];
-				if (cell === null || cell === undefined) return false;
+				const cell = r.data[cond.colId];
+				const isEmpty =
+					cell === null ||
+					cell === undefined ||
+					(typeof cell === 'string' && cell === '') ||
+					(Array.isArray(cell) && cell.length === 0);
+				if (cond.operator === 'is_empty') return isEmpty;
+				if (cond.operator === 'not_empty') return !isEmpty;
+				if (isEmpty) return false;
+				if (cond.operator === 'equals') {
+					if (Array.isArray(cell)) return cell.some((v) => String(v).toLowerCase() === lv);
+					return String(cell).toLowerCase() === lv;
+				}
+				// contains
 				if (Array.isArray(cell)) return cell.some((v) => String(v).toLowerCase().includes(lv));
 				return String(cell).toLowerCase().includes(lv);
 			});
@@ -453,72 +516,261 @@
 		<div class="mx-6 mb-4 rounded-xl bg-red-500/20 px-4 py-3 text-red-100">{$error}</div>
 	{/if}
 
-	{#if filterInputColId}
-		{@const filterCol = $columns.find((c) => c.id === filterInputColId)}
-		<div class="mx-6 mb-2 flex items-center gap-2 text-sm text-white/80">
-			<svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
-			</svg>
-			<span class="shrink-0">Filter <span class="font-semibold">{filterCol?.name ?? ''}</span> contains:</span>
-			<input
-				class="min-w-0 flex-1 rounded-lg border border-white/30 bg-white/10 px-3 py-1 text-sm text-white placeholder-white/40 outline-none focus:border-white/60 focus:bg-white/20"
-				bind:value={filterInputValue}
-				placeholder="Type to filter…"
-				autofocus
-				onkeydown={(e) => {
-					if (e.key === 'Enter') {
-						filterConfig = { colId: filterInputColId!, value: filterInputValue };
-						filterInputColId = null;
-					}
-					if (e.key === 'Escape') filterInputColId = null;
-				}}
-			/>
+	<!-- Toolbar (Phase 8) -->
+	<div class="mx-6 mb-2 flex items-center gap-1">
+		<!-- Sort -->
+		<div class="relative">
 			<button
-				onclick={() => {
-					filterConfig = { colId: filterInputColId!, value: filterInputValue };
-					filterInputColId = null;
-				}}
-				class="shrink-0 rounded-lg bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30"
-			>Apply</button>
-			<button
-				onclick={() => { filterInputColId = null; }}
-				class="shrink-0 rounded-lg px-3 py-1 text-xs text-white/60 hover:text-white"
-			>Cancel</button>
+				onclick={(e) => { e.stopPropagation(); showSortMenu = !showSortMenu; showGroupMenu = false; showHideMenu = false; }}
+				class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition {sortConfig ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'}"
+			>
+				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+				</svg>
+				Sort
+				{#if sortConfig}
+					<span class="flex h-4 w-4 items-center justify-center rounded-full bg-blue-400 text-xs font-bold text-white">1</span>
+				{/if}
+			</button>
+			{#if showSortMenu}
+				<div
+					class="absolute top-full left-0 z-30 mt-1 min-w-[200px] rounded-xl border border-gray-100 bg-white py-1 shadow-xl"
+					onclick={(e) => e.stopPropagation()}
+					role="menu"
+				>
+					<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">Sort by</div>
+					{#each [...$columns].sort((a, b) => a.position - b.position) as col (col.id)}
+						<button
+							class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId === col.id ? 'font-semibold text-blue-600' : ''}"
+							onclick={() => {
+								if (sortConfig?.colId === col.id) {
+									sortConfig = { colId: col.id, dir: sortConfig.dir === 'asc' ? 'desc' : 'asc' };
+								} else {
+									sortConfig = { colId: col.id, dir: 'asc' };
+								}
+								showSortMenu = false;
+							}}
+							role="menuitem"
+						>
+							{col.name}
+							{#if sortConfig?.colId === col.id}
+								<span class="ml-auto text-xs text-blue-500">{sortConfig.dir === 'asc' ? '↑ A→Z' : '↓ Z→A'}</span>
+							{/if}
+						</button>
+					{/each}
+					{#if sortConfig}
+						<hr class="my-1 border-gray-100" />
+						<button
+							class="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50"
+							onclick={() => { sortConfig = null; showSortMenu = false; }}
+							role="menuitem"
+						>Clear sort</button>
+					{/if}
+				</div>
+			{/if}
 		</div>
-	{/if}
 
-	{#if filterConfig && !filterInputColId}
-		{@const filterCol = $columns.find((c) => c.id === filterConfig!.colId)}
-		<div class="mx-6 mb-2 flex items-center gap-2 text-sm text-white/70">
-			<svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
-			</svg>
-			Filtering <span class="font-semibold text-white/90">{filterCol?.name ?? ''}</span> contains "<span class="font-semibold text-white/90">{filterConfig.value}</span>"
+		<!-- Group -->
+		<div class="relative">
 			<button
-				onclick={() => {
-					filterInputColId = filterConfig!.colId;
-					filterInputValue = filterConfig!.value;
-					filterConfig = null;
-				}}
-				class="rounded px-2 py-0.5 text-xs text-white/90 underline hover:no-underline"
-			>Edit</button>
-			<button
-				onclick={() => { filterConfig = null; filterInputValue = ''; }}
-				class="rounded px-2 py-0.5 text-xs text-white/90 underline hover:no-underline"
-			>Clear</button>
+				onclick={(e) => { e.stopPropagation(); showGroupMenu = !showGroupMenu; showSortMenu = false; showHideMenu = false; }}
+				class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition {groupConfig ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'}"
+			>
+				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h8M4 18h8" />
+				</svg>
+				Group
+				{#if groupConfig}
+					<span class="flex h-4 w-4 items-center justify-center rounded-full bg-blue-400 text-xs font-bold text-white">1</span>
+				{/if}
+			</button>
+			{#if showGroupMenu}
+				<div
+					class="absolute top-full left-0 z-30 mt-1 min-w-[200px] rounded-xl border border-gray-100 bg-white py-1 shadow-xl"
+					onclick={(e) => e.stopPropagation()}
+					role="menu"
+				>
+					<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">Group by</div>
+					{#each [...$columns].sort((a, b) => a.position - b.position).filter((c) => c.type === 'select' || c.type === 'date') as col (col.id)}
+						<button
+							class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId === col.id ? 'font-semibold text-blue-600' : ''}"
+							onclick={() => {
+								groupConfig = groupConfig?.colId === col.id ? null : { colId: col.id };
+								showGroupMenu = false;
+							}}
+							role="menuitem"
+						>
+							{col.name}
+							<span class="ml-1 text-xs text-gray-400">({col.type})</span>
+							{#if groupConfig?.colId === col.id}
+								<span class="ml-auto text-xs text-blue-500">✓</span>
+							{/if}
+						</button>
+					{:else}
+						<div class="px-3 py-2 text-xs text-gray-400">No select or date columns</div>
+					{/each}
+					{#if groupConfig}
+						<hr class="my-1 border-gray-100" />
+						<button
+							class="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50"
+							onclick={() => { groupConfig = null; showGroupMenu = false; }}
+							role="menuitem"
+						>Clear group</button>
+					{/if}
+				</div>
+			{/if}
 		</div>
-	{/if}
 
-	{#if hiddenCols.size > 0}
-		<div class="mx-6 mb-2 flex items-center gap-2 text-sm text-white/70">
+		<!-- Hide Fields -->
+		<div class="relative">
+			<button
+				onclick={(e) => { e.stopPropagation(); showHideMenu = !showHideMenu; showSortMenu = false; showGroupMenu = false; }}
+				class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition {hiddenCols.size > 0 ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'}"
+			>
+				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+				</svg>
+				Hide Fields
+				{#if hiddenCols.size > 0}
+					<span class="flex h-4 w-4 items-center justify-center rounded-full bg-blue-400 text-xs font-bold text-white">{hiddenCols.size}</span>
+				{/if}
+			</button>
+			{#if showHideMenu}
+				<div
+					class="absolute top-full left-0 z-30 mt-1 min-w-[200px] rounded-xl border border-gray-100 bg-white py-1 shadow-xl"
+					onclick={(e) => e.stopPropagation()}
+					role="menu"
+				>
+					<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">Toggle columns</div>
+					{#each [...$columns].sort((a, b) => a.position - b.position) as col (col.id)}
+						<label class="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-gray-50">
+							<input
+								type="checkbox"
+								checked={!hiddenCols.has(col.id)}
+								onchange={() => toggleHideCol(col.id)}
+								class="accent-blue-500"
+							/>
+							<span class="text-sm text-gray-700">{col.name}</span>
+						</label>
+					{/each}
+					{#if hiddenCols.size > 0}
+						<hr class="my-1 border-gray-100" />
+						<button
+							class="w-full px-3 py-1.5 text-left text-xs text-blue-500 hover:bg-blue-50"
+							onclick={() => { hiddenCols = new Set(); }}
+							role="menuitem"
+						>Show all fields</button>
+					{/if}
+				</div>
+			{/if}
+		</div>
+
+		<!-- Filter -->
+		<button
+			onclick={() => (showFilterPanel = !showFilterPanel)}
+			class="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition {filterConditions.length > 0 ? 'bg-white/20 text-white' : 'text-white/70 hover:bg-white/10 hover:text-white'}"
+		>
 			<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
 			</svg>
-			{hiddenCols.size} hidden {hiddenCols.size === 1 ? 'column' : 'columns'}
+			Filter
+			{#if filterConditions.length > 0}
+				<span class="flex h-4 w-4 items-center justify-center rounded-full bg-blue-400 text-xs font-bold text-white">
+					{filterConditions.length}
+				</span>
+			{/if}
+		</button>
+
+		<!-- Spacer -->
+		<div class="flex-1"></div>
+
+		<!-- Search -->
+		<div class="relative flex items-center">
+			<svg class="absolute left-2.5 h-4 w-4 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0" />
+			</svg>
+			<input
+				type="text"
+				placeholder="Search..."
+				bind:value={searchQuery}
+				class="rounded-lg border border-white/20 bg-white/10 py-1.5 pr-3 pl-8 text-sm text-white placeholder-white/40 outline-none focus:border-white/40 focus:bg-white/20 {searchQuery ? 'w-48' : 'w-36'}"
+			/>
+			{#if searchQuery}
+				<button
+					onclick={() => (searchQuery = '')}
+					class="absolute right-2 text-white/40 hover:text-white/70"
+					aria-label="Clear search"
+				>×</button>
+			{/if}
+		</div>
+	</div>
+
+	<!-- Filter panel -->
+	{#if showFilterPanel}
+		<div class="mx-6 mb-3 rounded-xl bg-white/10 p-3">
+			<div class="mb-2 flex items-center justify-between">
+				<span class="text-xs font-semibold tracking-wide text-white/60 uppercase">Filters (AND)</span>
+				<div class="flex gap-3">
+					{#if filterConditions.length > 0}
+						<button
+							onclick={clearAllFilters}
+							class="text-xs text-white/50 hover:text-white/80"
+						>Clear all</button>
+					{/if}
+					<button
+						onclick={() => (showFilterPanel = false)}
+						class="text-xs text-white/50 hover:text-white/80"
+						aria-label="Close filter panel"
+					>✕</button>
+				</div>
+			</div>
+			{#each filterConditions as cond (cond.id)}
+				<div class="mb-2 flex items-center gap-2">
+					<!-- Column picker -->
+					<select
+						bind:value={cond.colId}
+						class="rounded-lg bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/40"
+					>
+						{#each $columns as col (col.id)}
+							<option value={col.id} style="background:#1e40af;">{col.name}</option>
+						{/each}
+					</select>
+					<!-- Operator picker -->
+					<select
+						bind:value={cond.operator}
+						class="rounded-lg bg-white/20 px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-white/40"
+					>
+						<option value="contains" style="background:#1e40af;">contains</option>
+						<option value="equals" style="background:#1e40af;">equals</option>
+						<option value="is_empty" style="background:#1e40af;">is empty</option>
+						<option value="not_empty" style="background:#1e40af;">is not empty</option>
+					</select>
+					<!-- Value input (hidden for is_empty/not_empty) -->
+					{#if cond.operator !== 'is_empty' && cond.operator !== 'not_empty'}
+						<input
+							class="min-w-0 flex-1 rounded-lg bg-white/20 px-2 py-1 text-sm text-white placeholder-white/40 outline-none focus:ring-1 focus:ring-white/40"
+							bind:value={cond.value}
+							placeholder="Value…"
+						/>
+					{:else}
+						<span class="flex-1"></span>
+					{/if}
+					<!-- Remove condition -->
+					<button
+						onclick={() => removeFilterCondition(cond.id)}
+						class="shrink-0 rounded p-1 text-white/40 hover:text-white/80"
+						aria-label="Remove condition"
+					>
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+						</svg>
+					</button>
+				</div>
+			{/each}
 			<button
-				onclick={() => { hiddenCols = new Set(); }}
-				class="rounded px-2 py-0.5 text-xs text-white/90 underline hover:no-underline"
-			>Show all</button>
+				onclick={addFilterCondition}
+				class="mt-1 text-sm text-white/50 hover:text-white/80"
+			>+ Add condition</button>
 		</div>
 	{/if}
 
@@ -670,10 +922,16 @@
 											Sort Z → A
 										</button>
 										<button
-											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {filterConfig?.colId === col.id ? 'font-semibold text-blue-600' : ''}"
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {filterConditions.some((c) => c.colId === col.id) ? 'font-semibold text-blue-600' : ''}"
 											onclick={() => {
-												filterInputColId = col.id;
-												filterInputValue = filterConfig?.colId === col.id ? filterConfig.value : '';
+												const existing = filterConditions.find((c) => c.colId === col.id);
+												if (!existing) {
+													filterConditions = [
+													...filterConditions,
+													{ id: crypto.randomUUID(), colId: col.id, operator: 'contains', value: '' }
+													];
+												}
+												showFilterPanel = true;
 												colMenuId = null;
 											}}
 											role="menuitem"
