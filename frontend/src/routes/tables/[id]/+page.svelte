@@ -59,6 +59,20 @@
 	// Tags popup
 	let tagsPopupCell = $state<{ rowId: string; colId: string } | null>(null);
 
+	// Column header dropdown menu
+	let colMenuId = $state<string | null>(null);
+
+	// Client-side sort (Phase 8 will add toolbar sort; this is the column menu sort)
+	let sortConfig = $state<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
+
+	// Column filter (from header dropdown)
+	let filterConfig = $state<{ colId: string; value: string } | null>(null);
+	let filterInputColId = $state<string | null>(null);
+	let filterInputValue = $state('');
+
+	// Hidden columns (local state)
+	let hiddenCols = $state<Set<string>>(new Set());
+
 	// Column resize
 	let resizingColId = $state<string | null>(null);
 	let resizeStartX = $state(0);
@@ -120,12 +134,18 @@
 			}
 		}
 
+		function onWindowClick() {
+			colMenuId = null;
+		}
+
 		window.addEventListener('mousemove', onResizeMove);
 		window.addEventListener('mouseup', onResizeUp);
+		window.addEventListener('click', onWindowClick);
 
 		return () => {
 			window.removeEventListener('mousemove', onResizeMove);
 			window.removeEventListener('mouseup', onResizeUp);
+			window.removeEventListener('click', onWindowClick);
 		};
 	});
 
@@ -356,7 +376,33 @@
 		}
 	}
 
-	const sortedColumns = $derived([...$columns].sort((a, b) => a.position - b.position));
+	const sortedColumns = $derived(
+		[...$columns].sort((a, b) => a.position - b.position).filter((c) => !hiddenCols.has(c.id))
+	);
+
+	const sortedRows = $derived((() => {
+		let result = $rows;
+		if (filterConfig) {
+			const { colId, value } = filterConfig;
+			const lv = value.toLowerCase();
+			result = result.filter((r) => {
+				const cell = r.data[colId];
+				if (cell === null || cell === undefined) return false;
+				if (Array.isArray(cell)) return cell.some((v) => String(v).toLowerCase().includes(lv));
+				return String(cell).toLowerCase().includes(lv);
+			});
+		}
+		if (!sortConfig) return result;
+		const { colId, dir } = sortConfig;
+		return [...result].sort((a, b) => {
+			const av = a.data[colId];
+			const bv = b.data[colId];
+			const as = av === null || av === undefined ? '' : String(av);
+			const bs = bv === null || bv === undefined ? '' : String(bv);
+			const cmp = as.localeCompare(bs, undefined, { numeric: true, sensitivity: 'base' });
+			return dir === 'asc' ? cmp : -cmp;
+		});
+	})());
 
 	// Total min-width: row# col (48px) + all column widths + actions col (40px) + add col button (40px)
 	const tableMinWidth = $derived(
@@ -407,6 +453,75 @@
 		<div class="mx-6 mb-4 rounded-xl bg-red-500/20 px-4 py-3 text-red-100">{$error}</div>
 	{/if}
 
+	{#if filterInputColId}
+		{@const filterCol = $columns.find((c) => c.id === filterInputColId)}
+		<div class="mx-6 mb-2 flex items-center gap-2 text-sm text-white/80">
+			<svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+			</svg>
+			<span class="shrink-0">Filter <span class="font-semibold">{filterCol?.name ?? ''}</span> contains:</span>
+			<input
+				class="min-w-0 flex-1 rounded-lg border border-white/30 bg-white/10 px-3 py-1 text-sm text-white placeholder-white/40 outline-none focus:border-white/60 focus:bg-white/20"
+				bind:value={filterInputValue}
+				placeholder="Type to filter…"
+				autofocus
+				onkeydown={(e) => {
+					if (e.key === 'Enter') {
+						filterConfig = { colId: filterInputColId!, value: filterInputValue };
+						filterInputColId = null;
+					}
+					if (e.key === 'Escape') filterInputColId = null;
+				}}
+			/>
+			<button
+				onclick={() => {
+					filterConfig = { colId: filterInputColId!, value: filterInputValue };
+					filterInputColId = null;
+				}}
+				class="shrink-0 rounded-lg bg-white/20 px-3 py-1 text-xs font-semibold hover:bg-white/30"
+			>Apply</button>
+			<button
+				onclick={() => { filterInputColId = null; }}
+				class="shrink-0 rounded-lg px-3 py-1 text-xs text-white/60 hover:text-white"
+			>Cancel</button>
+		</div>
+	{/if}
+
+	{#if filterConfig && !filterInputColId}
+		{@const filterCol = $columns.find((c) => c.id === filterConfig!.colId)}
+		<div class="mx-6 mb-2 flex items-center gap-2 text-sm text-white/70">
+			<svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+			</svg>
+			Filtering <span class="font-semibold text-white/90">{filterCol?.name ?? ''}</span> contains "<span class="font-semibold text-white/90">{filterConfig.value}</span>"
+			<button
+				onclick={() => {
+					filterInputColId = filterConfig!.colId;
+					filterInputValue = filterConfig!.value;
+					filterConfig = null;
+				}}
+				class="rounded px-2 py-0.5 text-xs text-white/90 underline hover:no-underline"
+			>Edit</button>
+			<button
+				onclick={() => { filterConfig = null; filterInputValue = ''; }}
+				class="rounded px-2 py-0.5 text-xs text-white/90 underline hover:no-underline"
+			>Clear</button>
+		</div>
+	{/if}
+
+	{#if hiddenCols.size > 0}
+		<div class="mx-6 mb-2 flex items-center gap-2 text-sm text-white/70">
+			<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+			</svg>
+			{hiddenCols.size} hidden {hiddenCols.size === 1 ? 'column' : 'columns'}
+			<button
+				onclick={() => { hiddenCols = new Set(); }}
+				class="rounded px-2 py-0.5 text-xs text-white/90 underline hover:no-underline"
+			>Show all</button>
+		</div>
+	{/if}
+
 	<!-- Spreadsheet -->
 	<div class="overflow-x-auto px-6 pb-6">
 		{#if $loading}
@@ -436,51 +551,6 @@
 								style="width: {getColWidth(col)}px;"
 							>
 								<div class="flex items-center gap-1">
-									<!-- Position arrows -->
-									<div class="mr-1 flex flex-col">
-										<button
-											onclick={() => handleMoveColumn(col, 'up')}
-											disabled={i === 0}
-											class="rounded p-0.5 text-white/30 transition hover:bg-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-20"
-											aria-label="Move column left"
-											title="Move left"
-										>
-											<svg
-												class="h-2.5 w-2.5"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-											>
-												<path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													stroke-width="2"
-													d="M5 15l7-7 7 7"
-												/>
-											</svg>
-										</button>
-										<button
-											onclick={() => handleMoveColumn(col, 'down')}
-											disabled={i === sortedColumns.length - 1}
-											class="rounded p-0.5 text-white/30 transition hover:bg-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-20"
-											aria-label="Move column right"
-											title="Move right"
-										>
-											<svg
-												class="h-2.5 w-2.5"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-											>
-												<path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													stroke-width="2"
-													d="M19 9l-7 7-7-7"
-												/>
-											</svg>
-										</button>
-									</div>
 									{#if renamingColId === col.id}
 										<input
 											class="min-w-0 flex-1 rounded bg-white/20 px-2 py-0.5 text-sm text-white outline-none focus:ring-1 focus:ring-white/50"
@@ -493,31 +563,156 @@
 											autofocus
 										/>
 									{:else}
-										<span
-											ondblclick={() => startRename(col.id, col.name)}
-											class="min-w-0 flex-1 cursor-text truncate"
-											title="Double-click to rename"
+										<!-- Column header — click to open dropdown -->
+										<button
+											onclick={(e) => {
+												e.stopPropagation();
+												colMenuId = colMenuId === col.id ? null : col.id;
+											}}
+											class="min-w-0 flex-1 cursor-pointer truncate text-left"
+											title="Click for column options"
 										>
 											{col.name}
 											<span class="ml-1 text-xs font-normal text-white/40">({col.type})</span>
-										</span>
-									{/if}
-									<button
-										onclick={() => handleDeleteColumn(col.id)}
-										class="ml-1 shrink-0 rounded p-0.5 text-white/30 transition hover:bg-red-500/30 hover:text-red-300"
-										aria-label="Delete column {col.name}"
-										title="Delete column"
-									>
-										<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										</button>
+										<!-- Dropdown chevron indicator -->
+										<svg
+											class="h-3 w-3 shrink-0 text-white/30 transition {colMenuId === col.id
+												? 'rotate-180'
+												: ''}"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+											aria-hidden="true"
+										>
 											<path
 												stroke-linecap="round"
 												stroke-linejoin="round"
 												stroke-width="2"
-												d="M6 18L18 6M6 6l12 12"
+												d="M19 9l-7 7-7-7"
 											/>
 										</svg>
-									</button>
+									{/if}
 								</div>
+								<!-- Column dropdown menu -->
+								{#if colMenuId === col.id}
+									<div
+										class="absolute top-full left-0 z-30 mt-1 min-w-[168px] rounded-xl border border-gray-100 bg-white py-1 shadow-xl"
+										onclick={(e) => e.stopPropagation()}
+										role="menu"
+									>
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+											onclick={() => {
+												startRename(col.id, col.name);
+												colMenuId = null;
+											}}
+											role="menuitem"
+										>
+											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+											</svg>
+											Rename
+										</button>
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+											disabled={i === 0}
+											onclick={() => {
+												handleMoveColumn(col, 'up');
+												colMenuId = null;
+											}}
+											role="menuitem"
+										>
+											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+											</svg>
+											Move Left
+										</button>
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+											disabled={i === sortedColumns.length - 1}
+											onclick={() => {
+												handleMoveColumn(col, 'down');
+												colMenuId = null;
+											}}
+											role="menuitem"
+										>
+											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+											</svg>
+											Move Right
+										</button>
+										<hr class="my-1 border-gray-100" />
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId === col.id && sortConfig?.dir === 'asc' ? 'font-semibold text-blue-600' : ''}"
+											onclick={() => {
+												sortConfig = { colId: col.id, dir: 'asc' };
+												colMenuId = null;
+											}}
+											role="menuitem"
+										>
+											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+											</svg>
+											Sort A → Z
+										</button>
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId === col.id && sortConfig?.dir === 'desc' ? 'font-semibold text-blue-600' : ''}"
+											onclick={() => {
+												sortConfig = { colId: col.id, dir: 'desc' };
+												colMenuId = null;
+											}}
+											role="menuitem"
+										>
+											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" />
+											</svg>
+											Sort Z → A
+										</button>
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {filterConfig?.colId === col.id ? 'font-semibold text-blue-600' : ''}"
+											onclick={() => {
+												filterInputColId = col.id;
+												filterInputValue = filterConfig?.colId === col.id ? filterConfig.value : '';
+												colMenuId = null;
+											}}
+											role="menuitem"
+										>
+											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
+											</svg>
+											Filter by this column
+										</button>
+										<hr class="my-1 border-gray-100" />
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50"
+											onclick={() => {
+												hiddenCols = new Set([...hiddenCols, col.id]);
+												colMenuId = null;
+											}}
+											role="menuitem"
+										>
+											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+											</svg>
+											Hide
+										</button>
+										<hr class="my-1 border-gray-100" />
+										<button
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+											onclick={() => {
+												handleDeleteColumn(col.id);
+												colMenuId = null;
+											}}
+											role="menuitem"
+										>
+											<svg class="h-4 w-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+											</svg>
+											Delete
+										</button>
+									</div>
+								{/if}
 								<!-- Resize handle -->
 								<div
 									class="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-white/40 {resizingColId ===
@@ -555,7 +750,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each $rows as row, rowIdx (row.id)}
+					{#each sortedRows as row, rowIdx (row.id)}
 						<tr
 							class="border-b border-white/10 transition hover:bg-white/5 {deletingRowId === row.id
 								? 'opacity-50'
