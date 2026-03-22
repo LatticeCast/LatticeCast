@@ -2,6 +2,7 @@
 
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { get } from 'svelte/store';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { authStore } from '$lib/stores/auth.store';
@@ -58,23 +59,74 @@
 	// Tags popup
 	let tagsPopupCell = $state<{ rowId: string; colId: string } | null>(null);
 
-	onMount(async () => {
-		if (!$authStore?.role) {
-			goto('/login');
-			return;
-		}
-		const tableId = $page.params.id;
-		try {
-			const all = await fetchTables();
-			const table = all.find((t) => t.id === tableId);
-			if (!table) {
-				goto('/tables');
+	// Column resize
+	let resizingColId = $state<string | null>(null);
+	let resizeStartX = $state(0);
+	let resizeStartWidth = $state(0);
+	let localWidths = $state<Record<string, number>>({});
+
+	function getColWidth(col: Column): number {
+		return localWidths[col.id] ?? col.options?.width ?? 150;
+	}
+
+	function handleResizeStart(e: MouseEvent, col: Column) {
+		e.preventDefault();
+		e.stopPropagation();
+		resizingColId = col.id;
+		resizeStartX = e.clientX;
+		resizeStartWidth = getColWidth(col);
+	}
+
+	onMount(() => {
+		// Async table loading
+		(async () => {
+			if (!$authStore?.role) {
+				goto('/login');
 				return;
 			}
-			await loadTable(table);
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to load table');
+			const tableId = $page.params.id;
+			try {
+				const all = await fetchTables();
+				const table = all.find((t) => t.id === tableId);
+				if (!table) {
+					goto('/tables');
+					return;
+				}
+				await loadTable(table);
+			} catch (e) {
+				error.set(e instanceof Error ? e.message : 'Failed to load table');
+			}
+		})();
+
+		// Resize event handlers
+		function onResizeMove(e: MouseEvent) {
+			if (!resizingColId) return;
+			const delta = e.clientX - resizeStartX;
+			localWidths = { ...localWidths, [resizingColId]: Math.max(60, resizeStartWidth + delta) };
 		}
+
+		async function onResizeUp() {
+			if (!resizingColId) return;
+			const colId = resizingColId;
+			const newWidth = localWidths[colId] ?? resizeStartWidth;
+			resizingColId = null;
+			const col = get(columns).find((c) => c.id === colId);
+			if (!col) return;
+			try {
+				await updateColumn(colId, { options: { ...col.options, width: newWidth } });
+				await refreshColumns(get(page).params.id);
+			} catch (err) {
+				error.set(err instanceof Error ? err.message : 'Failed to resize column');
+			}
+		}
+
+		window.addEventListener('mousemove', onResizeMove);
+		window.addEventListener('mouseup', onResizeUp);
+
+		return () => {
+			window.removeEventListener('mousemove', onResizeMove);
+			window.removeEventListener('mouseup', onResizeUp);
+		};
 	});
 
 	async function handleAddRow() {
@@ -306,13 +358,13 @@
 
 	const sortedColumns = $derived([...$columns].sort((a, b) => a.position - b.position));
 
-	// Total min-width: row# col (48px) + all column widths + actions col (40px)
+	// Total min-width: row# col (48px) + all column widths + actions col (40px) + add col button (40px)
 	const tableMinWidth = $derived(
-		48 + sortedColumns.reduce((sum, col) => sum + (col.options?.width ?? 150), 0) + 40
+		48 + sortedColumns.reduce((sum, col) => sum + getColWidth(col), 0) + 40 + 40
 	);
 </script>
 
-<div class="min-h-screen bg-linear-to-br from-blue-600 via-blue-500 to-sky-500">
+<div class="min-h-screen bg-linear-to-br from-blue-600 via-blue-500 to-sky-500 {resizingColId ? 'cursor-col-resize select-none' : ''}">
 	<!-- Header -->
 	<div class="flex items-center gap-4 px-6 py-4">
 		<button
@@ -375,9 +427,9 @@
 						</th>
 						{#each sortedColumns as col, i (col.id)}
 							<th
-								class="border-b border-white/20 px-4 py-3 text-left text-sm font-semibold tracking-wide text-white/80 uppercase
+								class="relative border-b border-white/20 px-4 py-3 text-left text-sm font-semibold tracking-wide text-white/80 uppercase
 									{i === 0 ? 'sticky left-12 z-10 border-r border-white/20 bg-blue-600' : 'bg-blue-500/30'}"
-								style="width: {col.options?.width ?? 150}px;"
+								style="width: {getColWidth(col)}px;"
 							>
 								<div class="flex items-center gap-1">
 									<!-- Position arrows -->
@@ -462,10 +514,30 @@
 										</svg>
 									</button>
 								</div>
+								<!-- Resize handle -->
+								<div
+									class="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-white/40 {resizingColId === col.id ? 'bg-white/40' : ''}"
+									onmousedown={(e) => handleResizeStart(e, col)}
+									role="separator"
+									aria-label="Resize column {col.name}"
+								></div>
 							</th>
 						{/each}
-						<!-- Actions column header -->
+						<!-- Actions column header (delete) -->
 						<th class="border-b border-white/20 bg-blue-500/30" style="width: 40px;"></th>
+						<!-- Add column "+" header -->
+						<th class="border-b border-white/20 bg-blue-500/20" style="width: 40px;">
+							<button
+								onclick={() => { showAddColumn = true; }}
+								class="flex h-full w-full items-center justify-center rounded p-1 text-white/40 hover:bg-white/20 hover:text-white/80"
+								title="Add column"
+								aria-label="Add column"
+							>
+								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+								</svg>
+							</button>
+						</th>
 					</tr>
 				</thead>
 				<tbody>
