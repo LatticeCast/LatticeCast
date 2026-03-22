@@ -43,6 +43,11 @@
 	let addingRow = $state(false);
 	let deletingRowId = $state<string | null>(null);
 
+	// Row expand panel
+	let expandedRow = $state<Row | null>(null);
+	let expandEditField = $state<string | null>(null);
+	let expandEditVal = $state('');
+
 	// Add-column modal
 	let showAddColumn = $state(false);
 	let newColName = $state('');
@@ -107,6 +112,36 @@
 	let showHideMenu = $state(false);
 	let groupConfig = $state<{ colId: string; granularity?: 'month' | 'day' } | null>(null);
 	let collapsedGroups = new SvelteSet<string>();
+
+	// Context menu (right-click)
+	interface ContextMenuState {
+		type: 'row' | 'col';
+		id: string;
+		x: number;
+		y: number;
+	}
+	let contextMenu = $state<ContextMenuState | null>(null);
+
+	function openContextMenu(e: MouseEvent, type: 'row' | 'col', id: string) {
+		e.preventDefault();
+		e.stopPropagation();
+		colMenuId = null;
+		contextMenu = { type, id, x: e.clientX, y: e.clientY };
+	}
+
+	async function handleDuplicateRow(rowId: string) {
+		const row = $rows.find((r) => r.id === rowId);
+		if (!row) return;
+		const tableId = $page.params.id;
+		error.set(null);
+		try {
+			await createRow(tableId, { data: { ...row.data } });
+			await refreshRows(tableId);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to duplicate row');
+		}
+		contextMenu = null;
+	}
 
 	// Column resize
 	let resizingColId = $state<string | null>(null);
@@ -174,6 +209,7 @@
 			showSortMenu = false;
 			showGroupMenu = false;
 			showHideMenu = false;
+			contextMenu = null;
 		}
 
 		window.addEventListener('mousemove', onResizeMove);
@@ -339,6 +375,61 @@
 			await refreshRows($page.params.id);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
+		}
+	}
+
+	function openExpand(row: Row) {
+		expandedRow = row;
+		expandEditField = null;
+		expandEditVal = '';
+	}
+
+	function startExpandEdit(col: Column, row: Row) {
+		expandEditField = col.id;
+		const val = row.data[col.id];
+		expandEditVal = val === null || val === undefined ? '' : String(val);
+	}
+
+	async function commitExpandEdit(col: Column) {
+		if (!expandedRow || expandEditField !== col.id) return;
+		expandEditField = null;
+
+		let parsed: unknown = expandEditVal;
+		if (col.type === 'number') {
+			parsed = expandEditVal === '' ? null : Number(expandEditVal);
+		} else if (col.type === 'checkbox') {
+			parsed = expandEditVal === 'true';
+		} else if (expandEditVal === '') {
+			parsed = null;
+		}
+
+		const newData = { ...expandedRow.data, [col.id]: parsed };
+		error.set(null);
+		try {
+			await updateRow(expandedRow.id, { data: newData });
+			expandedRow = { ...expandedRow, data: newData };
+			await refreshRows($page.params.id);
+			// Keep expandedRow in sync with latest data
+			const latestRow = $rows.find((r) => r.id === expandedRow!.id);
+			if (latestRow) expandedRow = latestRow;
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to update field');
+		}
+	}
+
+	async function toggleExpandCheckbox(col: Column) {
+		if (!expandedRow) return;
+		const current = !!expandedRow.data[col.id];
+		const newData = { ...expandedRow.data, [col.id]: !current };
+		error.set(null);
+		try {
+			await updateRow(expandedRow.id, { data: newData });
+			expandedRow = { ...expandedRow, data: newData };
+			await refreshRows($page.params.id);
+			const latestRow = $rows.find((r) => r.id === expandedRow!.id);
+			if (latestRow) expandedRow = latestRow;
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to update field');
 		}
 	}
 
@@ -1037,6 +1128,7 @@
 								class="relative border-b border-white/20 px-4 py-3 text-left text-sm font-semibold tracking-wide text-white/80 uppercase
 									{i === 0 ? 'sticky left-12 z-10 border-r border-white/20 bg-blue-600' : 'bg-blue-500/30'}"
 								style="width: {getColWidth(col)}px;"
+								oncontextmenu={(e) => openContextMenu(e, 'col', col.id)}
 							>
 								<div class="flex items-center gap-1">
 									{#if renamingColId === col.id}
@@ -1404,13 +1496,34 @@
 								row.id
 									? 'opacity-50'
 									: ''}"
+								oncontextmenu={(e) => openContextMenu(e, 'row', row.id)}
 							>
-								<!-- Row number — sticky at left-0 -->
+								<!-- Row number — sticky at left-0, click to expand -->
 								<td
-									class="sticky left-0 z-20 border-r border-white/10 bg-blue-700 px-2 py-1 text-center text-xs text-white/40"
+									class="sticky left-0 z-20 border-r border-white/10 bg-blue-700 px-1 py-1 text-center"
 									style="width: 48px;"
 								>
-									{rowIdx + 1}
+									<button
+										onclick={() => openExpand(row)}
+										class="group relative flex h-full w-full items-center justify-center rounded px-1 py-0.5 text-xs text-white/40 hover:bg-white/10 hover:text-white/80"
+										title="Expand row"
+									>
+										{rowIdx + 1}
+										<svg
+											class="absolute right-0.5 hidden h-3 w-3 group-hover:block"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+											aria-hidden="true"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+											/>
+										</svg>
+									</button>
 								</td>
 								{#each sortedColumns as col, i (col.id)}
 									<td
@@ -1643,6 +1756,203 @@
 	</div>
 </div>
 
+<!-- Context Menu (right-click) -->
+{#if contextMenu}
+	{@const ctxCol =
+		contextMenu.type === 'col' ? $columns.find((c) => c.id === contextMenu.id) : null}
+
+	<div
+		class="fixed z-50 min-w-[180px] rounded-xl border border-gray-100 bg-white py-1 shadow-2xl"
+		style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+		onclick={(e) => e.stopPropagation()}
+		role="menu"
+	>
+		{#if contextMenu.type === 'row'}
+			<button
+				class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+				onclick={() => {
+					const row = $rows.find((r) => r.id === contextMenu!.id);
+					if (row) openExpand(row);
+					contextMenu = null;
+				}}
+				role="menuitem"
+			>
+				<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+					/>
+				</svg>
+				Expand
+			</button>
+			<button
+				class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+				onclick={() => handleDuplicateRow(contextMenu.id)}
+				role="menuitem"
+			>
+				<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+					/>
+				</svg>
+				Duplicate
+			</button>
+			<hr class="my-1 border-gray-100" />
+			<button
+				class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+				onclick={() => {
+					handleDeleteRow(contextMenu.id);
+					contextMenu = null;
+				}}
+				role="menuitem"
+			>
+				<svg class="h-4 w-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+					/>
+				</svg>
+				Delete
+			</button>
+		{:else if ctxCol}
+			<button
+				class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+				onclick={() => {
+					startRename(ctxCol.id, ctxCol.name);
+					contextMenu = null;
+				}}
+				role="menuitem"
+			>
+				<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+					/>
+				</svg>
+				Rename
+			</button>
+			<hr class="my-1 border-gray-100" />
+			<button
+				class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
+					ctxCol.id && sortConfig?.dir === 'asc'
+					? 'font-semibold text-blue-600'
+					: ''}"
+				onclick={() => {
+					sortConfig = { colId: ctxCol.id, dir: 'asc' };
+					contextMenu = null;
+				}}
+				role="menuitem"
+			>
+				<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"
+					/>
+				</svg>
+				Sort A → Z
+			</button>
+			<button
+				class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
+					ctxCol.id && sortConfig?.dir === 'desc'
+					? 'font-semibold text-blue-600'
+					: ''}"
+				onclick={() => {
+					sortConfig = { colId: ctxCol.id, dir: 'desc' };
+					contextMenu = null;
+				}}
+				role="menuitem"
+			>
+				<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"
+					/>
+				</svg>
+				Sort Z → A
+			</button>
+			<button
+				class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {filterConditions.some(
+					(c) => c.colId === ctxCol.id
+				)
+					? 'font-semibold text-blue-600'
+					: ''}"
+				onclick={() => {
+					if (!filterConditions.find((c) => c.colId === ctxCol.id)) {
+						filterConditions = [
+							...filterConditions,
+							{ id: crypto.randomUUID(), colId: ctxCol.id, operator: 'contains', value: '' }
+						];
+					}
+					showFilterPanel = true;
+					contextMenu = null;
+				}}
+				role="menuitem"
+			>
+				<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z"
+					/>
+				</svg>
+				Filter
+			</button>
+			<hr class="my-1 border-gray-100" />
+			<button
+				class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50"
+				onclick={() => {
+					hiddenCols.add(ctxCol.id);
+					contextMenu = null;
+				}}
+				role="menuitem"
+			>
+				<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"
+					/>
+				</svg>
+				Hide
+			</button>
+			<hr class="my-1 border-gray-100" />
+			<button
+				class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+				onclick={() => {
+					handleDeleteColumn(ctxCol.id);
+					contextMenu = null;
+				}}
+				role="menuitem"
+			>
+				<svg class="h-4 w-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+					/>
+				</svg>
+				Delete
+			</button>
+		{/if}
+	</div>
+{/if}
+
 <!-- Add Column Modal -->
 {#if showAddColumn}
 	<div
@@ -1700,6 +2010,297 @@
 					{addingColumn ? 'Adding...' : 'Add Column'}
 				</button>
 			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Row Expand Panel -->
+{#if expandedRow}
+	<!-- Backdrop -->
+	<div
+		class="fixed inset-0 z-40 bg-black/30"
+		onclick={() => {
+			expandedRow = null;
+			expandEditField = null;
+		}}
+		role="presentation"
+	></div>
+	<!-- Slide-out panel -->
+	<div
+		class="fixed top-0 right-0 z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
+		role="dialog"
+		aria-modal="true"
+		aria-label="Row details"
+	>
+		<!-- Panel header -->
+		<div
+			class="flex items-center justify-between border-b border-gray-100 bg-linear-to-r from-blue-600 to-blue-500 px-6 py-4"
+		>
+			<h2 class="text-lg font-semibold text-white">Row Details</h2>
+			<button
+				onclick={() => {
+					expandedRow = null;
+					expandEditField = null;
+				}}
+				class="rounded-lg p-1.5 text-white/70 transition hover:bg-white/20 hover:text-white"
+				aria-label="Close panel"
+			>
+				<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M6 18L18 6M6 6l12 12"
+					/>
+				</svg>
+			</button>
+		</div>
+		<!-- Fields list -->
+		<div class="flex-1 overflow-y-auto px-6 py-4">
+			{#each [...$columns].sort((a, b) => a.position - b.position) as col (col.id)}
+				<div class="mb-5">
+					<label class="mb-1 block text-xs font-semibold tracking-wide text-gray-400 uppercase">
+						{col.name}
+						<span class="ml-1 font-normal text-gray-300 normal-case">({col.type})</span>
+					</label>
+					{#if col.type === 'checkbox'}
+						<button
+							class="relative inline-flex h-6 w-10 items-center rounded-full transition {expandedRow
+								.data[col.id]
+								? 'bg-blue-500'
+								: 'bg-gray-200'}"
+							onclick={() => toggleExpandCheckbox(col)}
+							role="switch"
+							aria-checked={!!expandedRow.data[col.id]}
+						>
+							<span
+								class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition {expandedRow
+									.data[col.id]
+									? 'translate-x-5'
+									: 'translate-x-1'}"
+							></span>
+						</button>
+					{:else if col.type === 'select'}
+						{@const choices = getChoices(col)}
+						{#if expandEditField === col.id}
+							<select
+								class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+								bind:value={expandEditVal}
+								onblur={() => commitExpandEdit(col)}
+								onchange={() => commitExpandEdit(col)}
+								autofocus
+							>
+								<option value="">—</option>
+								{#each choices as choice (choice.value)}
+									<option value={choice.value}>{choice.value}</option>
+								{/each}
+							</select>
+						{:else}
+							{@const selVal = (expandedRow.data[col.id] as string) ?? ''}
+							<button
+								class="flex min-h-[2.25rem] w-full items-center rounded-xl border border-gray-200 px-3 py-2 text-left text-sm hover:border-blue-300"
+								onclick={() => startExpandEdit(col, expandedRow!)}
+							>
+								{#if selVal}
+									{@const color = getChoiceColor(col, selVal)}
+									<span
+										class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
+										>{selVal}</span
+									>
+								{:else}
+									<span class="text-gray-400">—</span>
+								{/if}
+							</button>
+						{/if}
+					{:else if col.type === 'tags'}
+						{@const tagVals = getTagValues(expandedRow, col.id)}
+						{@const choices = getChoices(col)}
+						{@const available = choices.filter((c) => !tagVals.includes(c.value))}
+						<div
+							class="flex min-h-[2.25rem] flex-wrap items-center gap-1 rounded-xl border border-gray-200 px-3 py-2"
+						>
+							{#each tagVals as tag (tag)}
+								{@const color = getChoiceColor(col, tag)}
+								<span
+									class="inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
+								>
+									{tag}
+									<button
+										class="ml-0.5 rounded-full leading-none hover:opacity-60"
+										onclick={() => {
+											const current = tagVals.filter((t) => t !== tag);
+											const newData = { ...expandedRow!.data, [col.id]: current };
+											updateRow(expandedRow!.id, { data: newData }).then(() => {
+												expandedRow = { ...expandedRow!, data: newData };
+												refreshRows($page.params.id);
+											});
+										}}
+										aria-label="Remove {tag}">×</button
+									>
+								</span>
+							{/each}
+							{#if available.length > 0}
+								<div class="relative">
+									<button
+										class="rounded-full border border-gray-300 px-2 py-0.5 text-xs text-gray-400 hover:border-blue-400 hover:text-blue-600"
+										onclick={() => {
+											tagsPopupCell =
+												tagsPopupCell?.rowId === expandedRow!.id && tagsPopupCell?.colId === col.id
+													? null
+													: { rowId: expandedRow!.id, colId: col.id };
+										}}>+</button
+									>
+									{#if tagsPopupCell?.rowId === expandedRow.id && tagsPopupCell?.colId === col.id}
+										<div
+											class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border border-gray-100 bg-white py-1 shadow-xl"
+										>
+											{#each available as choice (choice.value)}
+												{@const color = TAG_COLORS[choices.indexOf(choice) % TAG_COLORS.length]}
+												<button
+													class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-50"
+													onclick={() => {
+														const current = getTagValues(expandedRow!, col.id);
+														if (!current.includes(choice.value)) {
+															const newData = {
+																...expandedRow!.data,
+																[col.id]: [...current, choice.value]
+															};
+															tagsPopupCell = null;
+															updateRow(expandedRow!.id, { data: newData }).then(() => {
+																expandedRow = { ...expandedRow!, data: newData };
+																refreshRows($page.params.id);
+															});
+														}
+													}}
+												>
+													<span
+														class="inline-flex items-center rounded-full border px-2 py-0.5 font-medium {color.bg} {color.text} {color.border}"
+														>{choice.value}</span
+													>
+												</button>
+											{/each}
+										</div>
+									{/if}
+								</div>
+							{/if}
+						</div>
+					{:else if col.type === 'url'}
+						{#if expandEditField === col.id}
+							<input
+								type="url"
+								class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+								bind:value={expandEditVal}
+								onblur={() => commitExpandEdit(col)}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') commitExpandEdit(col);
+									if (e.key === 'Escape') expandEditField = null;
+								}}
+								autofocus
+							/>
+						{:else}
+							{@const urlVal = (expandedRow.data[col.id] as string) ?? ''}
+							<button
+								class="flex min-h-[2.25rem] w-full items-center rounded-xl border border-gray-200 px-3 py-2 text-left text-sm hover:border-blue-300"
+								onclick={() => startExpandEdit(col, expandedRow!)}
+							>
+								{#if urlVal}
+									<a
+										href={urlVal}
+										target="_blank"
+										rel="noopener noreferrer"
+										class="truncate text-sky-600 underline hover:text-sky-800"
+										onclick={(e) => e.stopPropagation()}
+										title={urlVal}>{urlVal}</a
+									>
+								{:else}
+									<span class="text-gray-400">—</span>
+								{/if}
+							</button>
+						{/if}
+					{:else if col.type === 'date'}
+						{#if expandEditField === col.id}
+							<input
+								type="date"
+								class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+								bind:value={expandEditVal}
+								onblur={() => commitExpandEdit(col)}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') commitExpandEdit(col);
+									if (e.key === 'Escape') expandEditField = null;
+								}}
+								autofocus
+							/>
+						{:else}
+							{@const dateVal = expandedRow.data[col.id]
+								? formatDate(String(expandedRow.data[col.id]))
+								: ''}
+							<button
+								class="flex min-h-[2.25rem] w-full items-center rounded-xl border border-gray-200 px-3 py-2 text-left font-mono text-sm hover:border-blue-300"
+								onclick={() => startExpandEdit(col, expandedRow!)}
+							>
+								{#if dateVal}
+									{dateVal}
+								{:else}
+									<span class="font-sans text-gray-400">—</span>
+								{/if}
+							</button>
+						{/if}
+					{:else if col.type === 'number'}
+						{#if expandEditField === col.id}
+							<input
+								type="number"
+								class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+								bind:value={expandEditVal}
+								onblur={() => commitExpandEdit(col)}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') commitExpandEdit(col);
+									if (e.key === 'Escape') expandEditField = null;
+								}}
+								autofocus
+							/>
+						{:else}
+							<button
+								class="flex min-h-[2.25rem] w-full items-center rounded-xl border border-gray-200 px-3 py-2 text-left text-sm hover:border-blue-300"
+								onclick={() => startExpandEdit(col, expandedRow!)}
+							>
+								{#if expandedRow.data[col.id] !== null && expandedRow.data[col.id] !== undefined}
+									<span class="text-gray-800">{String(expandedRow.data[col.id])}</span>
+								{:else}
+									<span class="text-gray-400">—</span>
+								{/if}
+							</button>
+						{/if}
+					{:else}
+						<!-- text / string -->
+						{#if expandEditField === col.id}
+							<textarea
+								class="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+								rows="3"
+								bind:value={expandEditVal}
+								onblur={() => commitExpandEdit(col)}
+								onkeydown={(e) => {
+									if (e.key === 'Enter' && !e.shiftKey) commitExpandEdit(col);
+									if (e.key === 'Escape') expandEditField = null;
+								}}
+								autofocus
+							></textarea>
+						{:else}
+							<button
+								class="flex min-h-[2.25rem] w-full items-start rounded-xl border border-gray-200 px-3 py-2 text-left text-sm hover:border-blue-300"
+								onclick={() => startExpandEdit(col, expandedRow!)}
+							>
+								{#if expandedRow.data[col.id] !== null && expandedRow.data[col.id] !== undefined && String(expandedRow.data[col.id]) !== ''}
+									<span class="break-words whitespace-pre-wrap text-gray-800"
+										>{String(expandedRow.data[col.id])}</span
+									>
+								{:else}
+									<span class="text-gray-400">—</span>
+								{/if}
+							</button>
+						{/if}
+					{/if}
+				</div>
+			{/each}
 		</div>
 	</div>
 {/if}
