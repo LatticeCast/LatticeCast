@@ -116,7 +116,7 @@
 	let showImportModal = $state(false);
 	let importPreviewHeaders = $state<string[]>([]);
 	let importPreviewRows = $state<Record<string, string>[]>([]);
-	let importNewColumns = $state<{ name: string; type: string }[]>([]);
+	let importNewColumns = $state<{ name: string; type: string; values?: string[] }[]>([]);
 	let importingData = $state(false);
 	let importError = $state<string | null>(null);
 	let groupConfig = $state<{ colId: string; granularity?: 'month' | 'day' } | null>(null);
@@ -820,6 +820,8 @@
 				return obj;
 			});
 			importNewColumns = [];
+			// Collect unique values per new select/tags column for auto-color assignment
+			const newColValueSets: Record<string, Set<string>> = {};
 			for (const h of headers) {
 				const m = h.match(/^(.+)\{\{(\w+)\}\}$/);
 				if (m) {
@@ -827,10 +829,36 @@
 					const colType = m[2].toLowerCase();
 					const exists = $columns.some((c) => c.name === colName);
 					if (!exists) {
+						newColValueSets[colName] = new Set<string>();
 						importNewColumns = [...importNewColumns, { name: colName, type: colType }];
 					}
 				}
 			}
+			const dataRows = parsed.slice(1);
+			for (const cells of dataRows) {
+				headers.forEach((h, i) => {
+					const m = h.match(/^(.+)\{\{(\w+)\}\}$/);
+					if (!m) return;
+					const colName = m[1].trim();
+					const colType = m[2].toLowerCase();
+					if (!newColValueSets[colName]) return;
+					const val = (cells[i] ?? '').trim();
+					if (!val) return;
+					if (colType === 'tags') {
+						val
+							.split(',')
+							.map((v) => v.trim())
+							.filter(Boolean)
+							.forEach((v) => newColValueSets[colName].add(v));
+					} else if (colType === 'select') {
+						newColValueSets[colName].add(val);
+					}
+				});
+			}
+			importNewColumns = importNewColumns.map((nc) => ({
+				...nc,
+				values: newColValueSets[nc.name] ? [...newColValueSets[nc.name]] : []
+			}));
 			importError = null;
 			showImportModal = true;
 		};
@@ -845,10 +873,17 @@
 		try {
 			for (let i = 0; i < importNewColumns.length; i++) {
 				const nc = importNewColumns[i];
+				const choices =
+					nc.values && nc.values.length > 0
+						? nc.values.map((v, vi) => ({
+								value: v,
+								color: TAG_COLORS[vi % TAG_COLORS.length].bg
+							}))
+						: [];
 				await createColumn(tableId, {
 					name: nc.name,
-					type: nc.type as 'text',
-					options: { choices: [] }
+					type: nc.type as ColumnType,
+					options: { choices }
 				});
 			}
 			await refreshColumns(tableId);
