@@ -1,6 +1,6 @@
 # LLM Context - Frontend
 
-> **Note:** For general project context, see `llm.md`. For deployment, see `llm.deploy.md`.
+> **Note:** For general project context, see `llm.root.md`. For deployment, see `llm.deploy.md`.
 
 ## Tech Stack
 
@@ -11,45 +11,64 @@
 | Tailwind CSS | 4.x | Utility-first styling |
 | TypeScript | 5.x | Type safety |
 | Vite | 7.x | Build tool |
-| Playwright | 1.50.x | Browser testing |
+| Playwright | 1.55.x | Browser testing |
+| Luxon | 3.x | Date/time utilities |
 
 ## Directory Structure
 
 ```
 frontend/src/
 ├── routes/                  # SvelteKit pages
-│   ├── +layout.svelte       # Global layout (menu, auth)
-│   ├── +page.svelte         # Home (activity tracker)
-│   ├── login/+page.svelte   # OAuth login
-│   ├── calendar/+page.svelte
-│   ├── config/+page.svelte  # Settings
-│   ├── debug/+page.svelte
+│   ├── +layout.svelte       # Global layout (sidebar nav, auth)
+│   ├── +page.svelte         # Home (redirects to /login or /tables)
+│   ├── login/+page.svelte   # OAuth login (Google, Authentik, simple ID)
+│   ├── tables/+page.svelte  # Tables list + create
+│   ├── tables/[id]/+page.svelte  # Table detail (grid, columns, rows)
+│   ├── config/+page.svelte  # Settings (language, notifications)
+│   ├── debug/+page.svelte   # Debug info (tokens, env)
 │   └── callback/            # OAuth callbacks
 │       ├── google/+page.svelte
 │       └── authentik/+page.svelte
 │
 ├── lib/
 │   ├── auth/                # OAuth, PKCE
-│   │   ├── auth.service.ts  # Login orchestration
+│   │   ├── auth.service.ts  # Login orchestration (startLogin, handleOAuthCallback)
 │   │   ├── pkce.ts          # Code generation
 │   │   └── providers/       # Provider configs (google.ts, authentik.ts, index.ts)
 │   │
 │   ├── stores/              # Svelte stores
-│   │   ├── auth.store.ts    # Auth state (localStorage)
-│   │   ├── settings.store.ts
-│   │   ├── calendarStore.ts
-│   │   ├── derivedCalendar.ts
-│   │   ├── meetingsStore.ts
-│   │   ├── profile.store.ts
-│   │   └── questionnaire.ts
+│   │   ├── auth.store.ts    # Auth state (localStorage, 'loginInfo' key)
+│   │   ├── settings.store.ts # Language, notification prefs
+│   │   └── tables.store.ts  # Tables, columns, rows state + loading
 │   │
 │   ├── backend/             # API clients
-│   │   ├── config.ts        # BACKEND_URL
-│   │   └── storage.ts       # loadJson, saveJson
+│   │   ├── config.ts        # BACKEND_URL from VITE_BACKEND_URL
+│   │   ├── auth.ts          # fetchAppConfig, exchangeCodeViaBackend, fetchMe
+│   │   ├── tables.ts        # Tables/columns/rows CRUD API
+│   │   └── storage.ts       # loadJson, saveJson (S3 storage)
 │   │
-│   ├── components/          # Reusable components
+│   ├── components/table/    # Table components
+│   │   ├── TableGrid.svelte      # Main grid with inline editing
+│   │   ├── TableHeader.svelte    # Column headers
+│   │   ├── TableToolbar.svelte   # Search, sort, group, filter, export, import
+│   │   ├── AddColumnModal.svelte # Add column modal
+│   │   ├── RowExpandPanel.svelte # Row detail panel
+│   │   ├── ImportTemplateModal.svelte  # Template import
+│   │   ├── ImportPreviewModal.svelte   # CSV/JSON import preview
+│   │   ├── ManageOptionsModal.svelte   # Select/tags options editor
+│   │   ├── ContextMenu.svelte         # Right-click menu
+│   │   └── table.utils.ts            # Column types, filters, grouping, CSV parsing
+│   │
 │   ├── types/               # TypeScript interfaces
+│   │   ├── auth.ts          # AuthProvider, LoginInfo, UserInfo, OAuthProviderConfig
+│   │   ├── table.ts         # Table, Column, Row, ColumnType, CRUD types
+│   │   └── json.ts          # Json recursive type
+│   │
 │   └── UI/                  # Base components
+│       ├── Button.svelte    # variant: primary, secondary, danger
+│       ├── Input.svelte     # Styled text input
+│       ├── Label.svelte     # Label wrapper
+│       └── theme.svelte.ts  # Light/dark theme tokens, TAG_COLORS
 │
 ├── app.css                  # Tailwind import
 └── app.html                 # HTML template
@@ -142,7 +161,6 @@ Use `data-testid` attributes for reliable element selection:
 ```svelte
 <button data-testid="menu-toggle">Menu</button>
 <button data-testid="login-google">Google</button>
-<button data-testid="continue-btn">Continue</button>
 ```
 
 ### Key Test IDs
@@ -150,24 +168,15 @@ Use `data-testid` attributes for reliable element selection:
 | Element | data-testid | Location |
 |---------|-------------|----------|
 | Menu toggle | `menu-toggle` | +layout.svelte |
-| Menu backdrop | `menu-backdrop` | +layout.svelte |
 | Menu nav | `menu-nav` | +layout.svelte |
 | Nav: Home | `nav-home` | +layout.svelte |
+| Nav: Tables | `nav-tables` | +layout.svelte |
 | Nav: Settings | `nav-settings` | +layout.svelte |
 | Nav: Debug | `nav-debug` | +layout.svelte |
-| Nav: App | `nav-open-app` | +layout.svelte |
-| Nav: Chat | `nav-chat` | +layout.svelte |
-| Nav: Calendar | `nav-calendar` | +layout.svelte |
 | Nav: Login | `nav-login` | +layout.svelte |
 | Nav: Logout | `nav-logout` | +layout.svelte |
 | Login: Authentik | `login-authentik` | login/+page.svelte |
 | Login: Google | `login-google` | login/+page.svelte |
-| Activity input | `activity-input` | +page.svelte |
-| Speak button | `btn-speak` | +page.svelte |
-| Continue button | `btn-continue` | +page.svelte |
-| Duration buttons | `duration-{value}` | +page.svelte |
-| Emotion buttons | `emotion-{label}` | +page.svelte |
-| Save button | `btn-save` | +page.svelte |
 
 ## Auth Flow
 
@@ -210,6 +219,24 @@ const response = await fetch(`${BACKEND_URL}/api/endpoint`, {
     'Content-Type': 'application/json'
   }
 });
+```
+
+## Tables API Client
+
+```typescript
+import { fetchTables, createTable, fetchColumns, createColumn, fetchRows, createRow } from '$lib/backend/tables';
+
+// Tables
+const tables = await fetchTables();
+const newTable = await createTable("My Table");
+
+// Columns
+const cols = await fetchColumns(tableId);
+const newCol = await createColumn(tableId, { name: "Status", type: "select", options: {}, position: 0 });
+
+// Rows
+const rows = await fetchRows(tableId);
+const newRow = await createRow(tableId, { data: { colId: "value" } });
 ```
 
 ## Storage API

@@ -1,6 +1,6 @@
 # LLM Context - API Endpoints
 
-> **Note:** For authentication endpoints, see `llm.user.md`. For storage endpoints, see `llm.storage.md`. For general project context, see `llm.md`.
+> **Note:** For authentication endpoints, see `llm.user.md`. For storage endpoints, see `llm.storage.md`. For general project context, see `llm.root.md`.
 
 ## OpenAPI Documentation
 
@@ -14,10 +14,109 @@
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/status` | None | Valkey & DB health check |
-| GET | `/settings` | None | Current settings (non-sensitive) |
-| GET | `/run-task/{seconds}` | None | Blocking task executor (debug) |
-| GET | `/openapi-export` | None | Export OpenAPI spec to file |
+| GET | `/api/status` | None | Valkey & DB health check |
+| GET | `/api/settings` | None | Current settings (non-sensitive) |
+| GET | `/api/run-task/{seconds}` | None | Blocking task executor (debug) |
+| GET | `/api/openapi-export` | None | Export OpenAPI spec to file |
+
+## Authentication
+
+See `llm.user.md` for full details.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/login/config` | None | App config (auth_required flag) |
+| POST | `/api/login/{provider}/token` | None | Exchange OAuth code for tokens |
+| GET | `/api/login/me` | Bearer | Get current user info |
+
+## Tables
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/tables` | User | Create new table |
+| GET | `/api/tables` | User | List user's tables |
+| GET | `/api/tables/{table_id}` | User | Get table by ID |
+| PUT | `/api/tables/{table_id}` | User | Update table name |
+| DELETE | `/api/tables/{table_id}` | User | Delete table |
+
+### Table Request/Response Examples
+
+```python
+# Create table
+POST /api/tables
+Authorization: Bearer {token}
+Content-Type: application/json
+{"name": "My Project"}
+
+# Response (201)
+{"id": "uuid", "user_id": "user@example.com", "name": "My Project", "created_at": "...", "updated_at": "..."}
+
+# List tables
+GET /api/tables
+Authorization: Bearer {token}
+
+# Response
+[{"id": "uuid", "user_id": "user@example.com", "name": "My Project", ...}]
+```
+
+## Columns
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/tables/{table_id}/columns` | User | List columns for table |
+| POST | `/api/tables/{table_id}/columns` | User | Create column |
+| PUT | `/api/columns/{column_id}` | User | Update column |
+| DELETE | `/api/columns/{column_id}` | User | Delete column |
+
+### Column Request/Response Examples
+
+```python
+# Create column
+POST /api/tables/{table_id}/columns
+Authorization: Bearer {token}
+Content-Type: application/json
+{"name": "Status", "type": "select", "options": {"choices": [{"value": "todo"}, {"value": "done"}]}, "position": 0}
+
+# Response (201)
+{"id": "uuid", "table_id": "uuid", "name": "Status", "type": "select", "options": {...}, "position": 0, "created_at": "..."}
+```
+
+### Column Types
+
+| Type | JSONB Value | Example |
+|------|-------------|---------|
+| `text` | string | `"hello world"` |
+| `number` | number | `42` |
+| `date` | string (ISO) | `"2026-03-20"` |
+| `select` | string | `"todo"` |
+| `checkbox` | boolean | `true` |
+| `url` | string | `"https://..."` |
+
+## Rows
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/tables/{table_id}/rows` | User | Create row |
+| GET | `/api/tables/{table_id}/rows` | User | List rows (paginated) |
+| PUT | `/api/rows/{row_id}` | User | Update row data |
+| DELETE | `/api/rows/{row_id}` | User | Delete row |
+
+### Row Request/Response Examples
+
+```python
+# Create row
+POST /api/tables/{table_id}/rows
+Authorization: Bearer {token}
+Content-Type: application/json
+{"data": {"col_uuid_1": "value", "col_uuid_2": 42}}
+
+# Response (201)
+{"id": "uuid", "table_id": "uuid", "data": {"col_uuid_1": "value", "col_uuid_2": 42}, "created_at": "...", "updated_at": "..."}
+
+# List rows (paginated)
+GET /api/tables/{table_id}/rows?offset=0&limit=100
+Authorization: Bearer {token}
+```
 
 ## Storage (S3-compatible)
 
@@ -67,9 +166,9 @@ Requires `admin` role. See `llm.user.md` for details.
 |--------|------|-------------|
 | POST | `/api/admin/users` | Create user |
 | GET | `/api/admin/users` | List users (paginated) |
-| GET | `/api/admin/users/{id}` | Get user by ID (email) |
-| PUT | `/api/admin/users/{id}` | Update user role |
-| DELETE | `/api/admin/users/{id}` | Delete user |
+| GET | `/api/admin/users/{user_id}` | Get user by ID (email) |
+| PUT | `/api/admin/users/{user_id}` | Update user role |
+| DELETE | `/api/admin/users/{user_id}` | Delete user |
 
 ### Admin Request/Response Examples
 
@@ -81,7 +180,7 @@ Content-Type: application/json
 {"id": "user@example.com", "role": "user"}
 
 # Response (201)
-{"uuid": "550e8400-...", "id": "user@example.com", "role": "user"}
+{"user_id": "user@example.com", "name": "", "role": "user"}
 
 # List users
 GET /api/admin/users?offset=0&limit=100
@@ -89,7 +188,7 @@ Authorization: Bearer {admin_token}
 
 # Response
 {
-  "users": [{"uuid": "...", "id": "user@example.com", "role": "user"}],
+  "users": [{"user_id": "user@example.com", "name": "", "role": "user"}],
   "total": 1,
   "offset": 0,
   "limit": 100
@@ -101,15 +200,6 @@ Authorization: Bearer {admin_token}
 Content-Type: application/json
 {"role": "admin"}
 ```
-
-## Authentication
-
-See `llm.user.md` for full details.
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/api/login/{provider}/token` | None | Exchange OAuth code for tokens |
-| GET | `/api/login/me` | Bearer | Get current user info |
 
 ## Error Responses
 
@@ -138,15 +228,15 @@ from models.user import User
 # Any registered user
 @router.get("/endpoint")
 async def endpoint(user: User = Depends(get_current_user)):
-    return {"email": user.id}
+    return {"email": user.user_id}
 
 # Admin only
 @router.post("/admin-endpoint")
 async def admin_endpoint(user: User = Depends(require_admin)):
-    return {"admin": user.id}
+    return {"admin": user.user_id}
 
 # Subscribed users only (role = "user")
 @router.get("/premium")
 async def premium(user: User = Depends(require_user)):
-    return {"subscriber": user.id}
+    return {"subscriber": user.user_id}
 ```

@@ -126,6 +126,24 @@ curl -X POST http://localhost:5000/api/admin/users \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"id": "user@example.com", "role": "user"}'
+
+# Tables - list tables
+curl http://localhost:5000/api/tables \
+  -H "Authorization: Bearer $TOKEN"
+
+# Tables - create table
+curl -X POST http://localhost:5000/api/tables \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Project"}'
+
+# Columns - list columns
+curl http://localhost:5000/api/tables/{table_id}/columns \
+  -H "Authorization: Bearer $TOKEN"
+
+# Rows - list rows
+curl http://localhost:5000/api/tables/{table_id}/rows \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ### FastAPI Patterns
@@ -316,5 +334,8 @@ All backend routes are under `/api`:
 | `/api/status` | Health check |
 | `/api/settings` | Current settings |
 | `/api/login/*` | OAuth endpoints |
+| `/api/tables/*` | Table CRUD |
+| `/api/columns/*` | Column update/delete |
+| `/api/rows/*` | Row update/delete |
 | `/api/storage/*` | File storage |
 | `/api/admin/users/*` | User management |

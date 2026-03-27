@@ -1,14 +1,24 @@
 # LLM Context - User Management
 
-> **Note:** For authentication architecture, see `llm.arch.auth.md`. For general project context, see `llm.md`.
+> **Note:** For authentication architecture, see `llm.arch.auth.md`. For general project context, see `llm.root.md`.
 
 ## Login API Endpoints
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
+| GET | `/api/login/config` | None | App config (auth_required flag) |
 | POST | `/api/login/google/token` | None | Exchange Google auth code for tokens |
 | POST | `/api/login/authentik/token` | None | Exchange Authentik auth code for tokens |
 | GET | `/api/login/me` | Bearer | Get current user info |
+
+### App Config
+
+```bash
+GET /api/login/config
+
+# Response
+{"auth_required": true}
+```
 
 ### Token Exchange Request/Response
 
@@ -61,9 +71,9 @@ All endpoints require admin role (Bearer token from admin user).
 |--------|------|-------------|
 | POST | `/api/admin/users` | Create user |
 | GET | `/api/admin/users` | List users (paginated) |
-| GET | `/api/admin/users/{id}` | Get user by ID (email) |
-| PUT | `/api/admin/users/{id}` | Update user role |
-| DELETE | `/api/admin/users/{id}` | Delete user |
+| GET | `/api/admin/users/{user_id}` | Get user by ID (email) |
+| PUT | `/api/admin/users/{user_id}` | Update user role |
+| DELETE | `/api/admin/users/{user_id}` | Delete user |
 
 ## Add User via curl
 
@@ -78,7 +88,7 @@ curl -X POST https://lattice-cast.posetmage.com/api/admin/users \
   -d '{"id": "user@example.com", "role": "user"}'
 
 # Response
-{"uuid": "xxx-xxx", "id": "user@example.com", "role": "user"}
+{"user_id": "user@example.com", "name": "", "role": "user"}
 ```
 
 ## Roles
@@ -115,18 +125,13 @@ curl -X DELETE https://lattice-cast.posetmage.com/api/admin/users/user@example.c
 
 ```sql
 -- users table
-uuid        UUID PRIMARY KEY DEFAULT gen_random_uuid()
-id          VARCHAR UNIQUE INDEX  -- email address
-role        VARCHAR DEFAULT 'user' INDEX  -- 'user' | 'admin'
-created_at  TIMESTAMP
-updated_at  TIMESTAMP
+user_id     VARCHAR PRIMARY KEY  -- email address
+name        VARCHAR NOT NULL DEFAULT ''
+role        VARCHAR NOT NULL DEFAULT 'user'  -- 'user' | 'admin'
+created_at  TIMESTAMP DEFAULT NOW()
+updated_at  TIMESTAMP DEFAULT NOW()
 ```
 
-## Seed Admin Users
+## Admin User Setup
 
-Admin users are seeded via SQL migration:
-
-```sql
--- migration/001_create_users.sql
-INSERT INTO users (id, role) VALUES ('posetmage@gmail.com', 'admin') ON CONFLICT (id) DO NOTHING;
-```
+Admin users are created via the admin API or directly in the database. No seed data is included in migrations.

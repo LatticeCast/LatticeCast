@@ -75,25 +75,6 @@ async function loadJson<T>(path: string): Promise<T | null>
 async function saveJson<T>(path: string, data: T): Promise<boolean>
 ```
 
-## Example: User Entries
-
-```typescript
-// routes/+page.svelte
-const ENTRIES_FILE = 'entries.json';
-
-// Load on mount
-onMount(async () => {
-  const stored = await loadJson<Entry[]>(ENTRIES_FILE);
-  if (stored) entries = stored;
-});
-
-// Save after update
-async function save() {
-  entries = [newEntry, ...entries];
-  await saveJson(ENTRIES_FILE, entries);
-}
-```
-
 ## Environment
 
 ```bash

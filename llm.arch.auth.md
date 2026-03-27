@@ -1,10 +1,10 @@
 # LLM Context - Authentication Architecture
 
-> **Note:** For login API endpoints, see `llm.user.md`. For general project context, see `llm.md`.
+> **Note:** For login API endpoints, see `llm.user.md`. For general project context, see `llm.root.md`.
 
 ## Overview
 
-Dual OAuth provider support (Google + Authentik) with PKCE flow. Backend validates tokens and checks user registration in database.
+Dual OAuth provider support (Google + Authentik) with PKCE flow. Backend validates tokens and checks user registration in database. Supports `AUTH_REQUIRED=false` mode for development (token treated as user_id directly).
 
 ## Architecture — Web Flow
 
@@ -42,7 +42,7 @@ sequenceDiagram
 | `middleware/token.py` | Token verification (Authentik JWT, Google userinfo) |
 | `middleware/auth.py` | User lookup + role checks (`get_current_user`, `require_admin`, `require_user`) |
 | `middleware/jwks.py` | JWKS fetching and Valkey caching |
-| `router/api/auth.py` | OAuth token exchange endpoints |
+| `router/api/auth.py` | OAuth token exchange endpoints + `/login/config` |
 | `config/settings.py` | OAuth provider configuration |
 
 ## Frontend Auth Files
@@ -53,6 +53,7 @@ sequenceDiagram
 | `lib/auth/auth.service.ts` | Login flow orchestration |
 | `lib/auth/pkce.ts` | PKCE code generation |
 | `lib/auth/providers/` | Provider-specific configs (google.ts, authentik.ts) |
+| `lib/backend/auth.ts` | API client (fetchAppConfig, exchangeCodeViaBackend, fetchMe) |
 | `lib/types/auth.ts` | TypeScript interfaces |
 | `routes/login/+page.svelte` | Login UI |
 | `routes/callback/google/+page.svelte` | Google OAuth callback |
@@ -63,15 +64,16 @@ sequenceDiagram
 ```python
 # middleware/token.py - verify_bearer_token()
 1. Extract token from "Authorization: Bearer <token>"
-2. Try Authentik (JWT verification via JWKS)
+2. If AUTH_REQUIRED=false: treat token as user_id, return {"email": token, "_provider": "none"}
+3. Try Authentik (JWT verification via JWKS)
    - Decode JWT with RS256
    - Validate audience = client_id
    - Validate issuer = authentik URL
-3. If Authentik fails, try Google (opaque token)
+4. If Authentik fails, try Google (opaque token)
    - Call Google userinfo endpoint
    - Return userinfo as payload
-4. Add "_provider" field to payload
-5. Return payload or raise 401
+5. Add "_provider" field to payload
+6. Return payload or raise 401
 ```
 
 ## User Authentication Middleware
@@ -82,7 +84,8 @@ sequenceDiagram
 # get_current_user - Basic auth (registered users only)
 async def get_current_user(token_payload, session) -> User:
     email = token_payload.get("email")
-    user = await session.execute(select(User).where(User.id == email))
+    # If AUTH_REQUIRED=false: auto-creates user via get_or_create
+    user = await UserRepository.get_by_id(email)
     if not user:
         raise 403 "User not registered"
     return user
@@ -93,7 +96,7 @@ async def require_admin(user: User) -> User:
         raise 403 "Admin access required"
     return user
 
-# require_user - Active subscription required
+# require_user - User role required
 async def require_user(user: User) -> User:
     if user.role != "user":
         raise 403 "Active subscription required"
@@ -104,8 +107,10 @@ async def require_user(user: User) -> User:
 
 ```typescript
 // lib/types/auth.ts
+type AuthProvider = 'authentik' | 'google' | 'none';
+
 interface LoginInfo {
-    provider: 'authentik' | 'google';
+    provider: AuthProvider;
     accessToken: string;
     refreshToken?: string;
     idToken?: string;
@@ -115,7 +120,7 @@ interface LoginInfo {
 }
 
 // lib/stores/auth.store.ts
-// - Writable store initialized from localStorage
+// - Writable store initialized from localStorage ('loginInfo' key)
 // - Auto-syncs to localStorage on changes
 // - logout() clears the store
 ```
@@ -147,6 +152,9 @@ GOOGLE_CLIENT_SECRET=xxx
 # Authentik OAuth (backend + frontend build)
 AUTHENTIK_URL=https://authentik.posetmage.com
 AUTHENTIK_CLIENT_ID=xxx
+
+# Auth mode
+AUTH_REQUIRED=true  # Set false for dev (skip OAuth, token = user_id)
 ```
 
 > **Note:** `vite.config.ts` automatically maps these env vars to `VITE_*` prefixed vars at build time. The `BACKEND_URL` is also set automatically based on build mode (development/production).
@@ -155,9 +163,9 @@ AUTHENTIK_CLIENT_ID=xxx
 
 ```sql
 -- users table (auth-relevant fields)
-uuid        UUID PRIMARY KEY DEFAULT gen_random_uuid()
-id          VARCHAR UNIQUE INDEX  -- email address (provider user id)
-role        VARCHAR DEFAULT 'user' INDEX  -- 'user' | 'admin'
+user_id     VARCHAR PRIMARY KEY  -- email address
+name        VARCHAR NOT NULL DEFAULT ''
+role        VARCHAR NOT NULL DEFAULT 'user'  -- 'user' | 'admin'
 ```
 
 ## Adding Auth to New Endpoints
@@ -170,17 +178,17 @@ from models.user import User
 # Any registered user
 @router.get("/protected")
 async def protected(user: User = Depends(get_current_user)):
-    return {"email": user.id}
+    return {"email": user.user_id}
 
 # Admin only
 @router.post("/admin-action")
 async def admin_action(user: User = Depends(require_admin)):
-    return {"admin": user.id}
+    return {"admin": user.user_id}
 
 # Subscribed users only
 @router.get("/premium-feature")
 async def premium(user: User = Depends(require_user)):
-    return {"subscriber": user.id}
+    return {"subscriber": user.user_id}
 ```
 
 ## Frontend Route Protection
