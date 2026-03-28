@@ -489,10 +489,10 @@
 						{@const rowIdx = item.rowIdx}
 						<tr
 							class="border-b border-gray-100 transition hover:bg-blue-50/50 {deletingRowId ===
-							row.id
+							row.row_id
 								? 'opacity-50'
 								: ''}"
-							oncontextmenu={(e) => onOpenContextMenu(e, 'row', row.id)}
+							oncontextmenu={(e) => onOpenContextMenu(e, 'row', row.row_id)}
 						>
 							<!-- Row number -->
 							<td
@@ -532,13 +532,13 @@
 										if (
 											col.type !== 'checkbox' &&
 											col.type !== 'tags' &&
-											!(editingCell?.rowId === row.id && editingCell?.colId === col.id)
+											!(editingCell?.rowId === row.row_id && editingCell?.colId === col.id)
 										) {
-											onStartEdit(row.id, col, row.data[col.id]);
+											onStartEdit(row.row_id, col, row.row_data[col.id]);
 										}
 									}}
 								>
-									{#if editingCell?.rowId === row.id && editingCell?.colId === col.id}
+									{#if editingCell?.rowId === row.row_id && editingCell?.colId === col.id}
 										{#if col.type === 'select'}
 											{@const choices = getChoices(col)}
 											<select
@@ -546,9 +546,9 @@
 												value={editValue}
 												onchange={(e) => {
 													onEditValueChange((e.currentTarget as HTMLSelectElement).value);
-													onCommitEdit(row.id, col);
+													onCommitEdit(row.row_id, col);
 												}}
-												onblur={() => onCommitEdit(row.id, col)}
+												onblur={() => onCommitEdit(row.row_id, col)}
 												autofocus
 											>
 												<option value="">—</option>
@@ -563,9 +563,9 @@
 												value={editValue}
 												oninput={(e) =>
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
-												onblur={() => onCommitEdit(row.id, col)}
+												onblur={() => onCommitEdit(row.row_id, col)}
 												onkeydown={(e) => {
-													if (e.key === 'Enter') onCommitEdit(row.id, col);
+													if (e.key === 'Enter') onCommitEdit(row.row_id, col);
 													if (e.key === 'Escape') onEditingCellChange(null);
 												}}
 												autofocus
@@ -577,9 +577,9 @@
 												value={editValue}
 												oninput={(e) =>
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
-												onblur={() => onCommitEdit(row.id, col)}
+												onblur={() => onCommitEdit(row.row_id, col)}
 												onkeydown={(e) => {
-													if (e.key === 'Enter') onCommitEdit(row.id, col);
+													if (e.key === 'Enter') onCommitEdit(row.row_id, col);
 													if (e.key === 'Escape') onEditingCellChange(null);
 												}}
 												autofocus
@@ -591,9 +591,9 @@
 												value={editValue}
 												oninput={(e) =>
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
-												onblur={() => onCommitEdit(row.id, col)}
+												onblur={() => onCommitEdit(row.row_id, col)}
 												onkeydown={(e) => {
-													if (e.key === 'Enter') onCommitEdit(row.id, col);
+													if (e.key === 'Enter') onCommitEdit(row.row_id, col);
 													if (e.key === 'Escape') onEditingCellChange(null);
 												}}
 												autofocus
@@ -602,26 +602,26 @@
 									{:else if col.type === 'checkbox'}
 										<button
 											class="relative inline-flex h-5 w-9 items-center rounded-full transition {row
-												.data[col.id]
+												.row_data[col.id]
 												? 'bg-blue-500'
 												: 'bg-gray-200'}"
 											onclick={(e) => {
 												e.stopPropagation();
-												onToggleCheckbox(row.id, col);
+												onToggleCheckbox(row.row_id, col);
 											}}
 											aria-label="Toggle"
 											role="switch"
-											aria-checked={!!row.data[col.id]}
+											aria-checked={!!row.row_data[col.id]}
 										>
 											<span
 												class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition {row
-													.data[col.id]
+													.row_data[col.id]
 													? 'translate-x-4'
 													: 'translate-x-1'}"
 											></span>
 										</button>
 									{:else if col.type === 'url'}
-										{@const urlVal = (row.data[col.id] as string) ?? ''}
+										{@const urlVal = (row.row_data[col.id] as string) ?? ''}
 										{#if urlVal}
 											<a
 												href={urlVal}
@@ -635,7 +635,7 @@
 											<span class="block min-h-[1.5rem] cursor-text py-1 text-gray-300">—</span>
 										{/if}
 									{:else if col.type === 'select'}
-										{@const selVal = (row.data[col.id] as string) ?? ''}
+										{@const selVal = (row.row_data[col.id] as string) ?? ''}
 										{#if selVal}
 											{@const color = getChoiceColor(col, selVal)}
 											<span
@@ -661,7 +661,7 @@
 													{tag}
 													<button
 														class="ml-0.5 rounded-full leading-none hover:opacity-60"
-														onclick={() => onRemoveTag(row.id, col, tag)}
+														onclick={() => onRemoveTag(row.row_id, col, tag)}
 														aria-label="Remove {tag}">×</button
 													>
 												</span>
@@ -672,12 +672,12 @@
 														class="rounded-full border border-gray-300 px-1.5 py-0.5 text-xs text-gray-400 hover:border-blue-400 hover:text-blue-600"
 														onclick={() =>
 															onTagsPopupChange(
-																tagsPopupCell?.rowId === row.id && tagsPopupCell?.colId === col.id
+																tagsPopupCell?.rowId === row.row_id && tagsPopupCell?.colId === col.id
 																	? null
-																	: { rowId: row.id, colId: col.id }
+																	: { rowId: row.row_id, colId: col.id }
 															)}>+</button
 													>
-													{#if tagsPopupCell?.rowId === row.id && tagsPopupCell?.colId === col.id}
+													{#if tagsPopupCell?.rowId === row.row_id && tagsPopupCell?.colId === col.id}
 														<div
 															class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border border-gray-100 bg-white py-1 shadow-xl"
 														>
@@ -686,7 +686,7 @@
 																	TAG_COLORS[choices.indexOf(choice) % TAG_COLORS.length]}
 																<button
 																	class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-50"
-																	onclick={() => onAddTag(row.id, col, choice.value)}
+																	onclick={() => onAddTag(row.row_id, col, choice.value)}
 																>
 																	<span
 																		class="inline-flex items-center rounded-full border px-2 py-0.5 font-medium {color.bg} {color.text} {color.border}"
@@ -700,10 +700,10 @@
 											{/if}
 										</div>
 									{:else if col.type === 'date'}
-										{@const raw = row.data[col.id]}
+										{@const raw = row.row_data[col.id]}
 										<span class="font-mono text-sm">{raw ? formatDate(String(raw)) : ''}</span>
 									{:else}
-										{@const cellVal = row.data[col.id]}
+										{@const cellVal = row.row_data[col.id]}
 										{#if cellVal !== null && cellVal !== undefined && String(cellVal) !== ''}
 											<span class="block truncate">{String(cellVal)}</span>
 										{:else}
@@ -716,8 +716,8 @@
 							<!-- Actions (delete) -->
 							<td class="px-1 py-1 text-center" style="width: 40px;">
 								<button
-									onclick={() => onDeleteRow(row.id)}
-									disabled={deletingRowId === row.id}
+									onclick={() => onDeleteRow(row.row_id)}
+									disabled={deletingRowId === row.row_id}
 									class="rounded p-1 text-gray-300 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
 									aria-label="Delete row"
 									title="Delete row"

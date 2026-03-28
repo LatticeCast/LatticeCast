@@ -33,7 +33,7 @@
 
 	function startEdit(col: Column) {
 		editField = col.id;
-		const val = localRow.data[col.id];
+		const val = localRow.row_data[col.id];
 		editVal = val === null || val === undefined ? '' : String(val);
 	}
 
@@ -44,35 +44,35 @@
 		if (col.type === 'number') parsed = editVal === '' ? null : Number(editVal);
 		else if (col.type === 'checkbox') parsed = editVal === 'true';
 		else if (editVal === '') parsed = null;
-		const newData = { ...localRow.data, [col.id]: parsed };
-		localRow = { ...localRow, data: newData };
-		await onUpdateRow(localRow.id, newData);
+		const newData = { ...localRow.row_data, [col.id]: parsed };
+		localRow = { ...localRow, row_data: newData };
+		await onUpdateRow(localRow.row_id, newData);
 		await onRefreshRows(tableId);
 	}
 
 	async function toggleCheckbox(col: Column) {
-		const current = !!localRow.data[col.id];
-		const newData = { ...localRow.data, [col.id]: !current };
-		localRow = { ...localRow, data: newData };
-		await onUpdateRow(localRow.id, newData);
+		const current = !!localRow.row_data[col.id];
+		const newData = { ...localRow.row_data, [col.id]: !current };
+		localRow = { ...localRow, row_data: newData };
+		await onUpdateRow(localRow.row_id, newData);
 		await onRefreshRows(tableId);
 	}
 
 	async function removeTag(col: Column, tag: string) {
 		const current = getTagValues(localRow, col.id);
-		const newData = { ...localRow.data, [col.id]: current.filter((t) => t !== tag) };
-		localRow = { ...localRow, data: newData };
-		await onUpdateRow(localRow.id, newData);
+		const newData = { ...localRow.row_data, [col.id]: current.filter((t) => t !== tag) };
+		localRow = { ...localRow, row_data: newData };
+		await onUpdateRow(localRow.row_id, newData);
 		await onRefreshRows(tableId);
 	}
 
 	async function addTag(col: Column, tag: string) {
 		const current = getTagValues(localRow, col.id);
 		if (current.includes(tag)) return;
-		const newData = { ...localRow.data, [col.id]: [...current, tag] };
+		const newData = { ...localRow.row_data, [col.id]: [...current, tag] };
 		tagsPopup = null;
-		localRow = { ...localRow, data: newData };
-		await onUpdateRow(localRow.id, newData);
+		localRow = { ...localRow, row_data: newData };
+		await onUpdateRow(localRow.row_id, newData);
 		await onRefreshRows(tableId);
 	}
 </script>
@@ -118,16 +118,16 @@
 				{#if col.type === 'checkbox'}
 					<button
 						class="relative inline-flex h-6 w-10 items-center rounded-full transition {localRow
-							.data[col.id]
+							.row_data[col.id]
 							? 'bg-blue-500'
 							: 'bg-gray-200'}"
 						onclick={() => toggleCheckbox(col)}
 						role="switch"
-						aria-checked={!!localRow.data[col.id]}
+						aria-checked={!!localRow.row_data[col.id]}
 					>
 						<span
 							class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition {localRow
-								.data[col.id]
+								.row_data[col.id]
 								? 'translate-x-5'
 								: 'translate-x-1'}"
 						></span>
@@ -148,7 +148,7 @@
 							{/each}
 						</select>
 					{:else}
-						{@const selVal = (localRow.data[col.id] as string) ?? ''}
+						{@const selVal = (localRow.row_data[col.id] as string) ?? ''}
 						<button
 							class="flex min-h-[2.25rem] w-full items-center rounded-xl border border-gray-200 px-3 py-2 text-left text-sm hover:border-blue-300"
 							onclick={() => startEdit(col)}
@@ -227,7 +227,7 @@
 							autofocus
 						/>
 					{:else}
-						{@const urlVal = (localRow.data[col.id] as string) ?? ''}
+						{@const urlVal = (localRow.row_data[col.id] as string) ?? ''}
 						<button
 							class="flex min-h-[2.25rem] w-full items-center rounded-xl border border-gray-200 px-3 py-2 text-left text-sm hover:border-blue-300"
 							onclick={() => startEdit(col)}
@@ -260,8 +260,8 @@
 							autofocus
 						/>
 					{:else}
-						{@const dateVal = localRow.data[col.id]
-							? formatDate(String(localRow.data[col.id]))
+						{@const dateVal = localRow.row_data[col.id]
+							? formatDate(String(localRow.row_data[col.id]))
 							: ''}
 						<button
 							class="flex min-h-[2.25rem] w-full items-center rounded-xl border border-gray-200 px-3 py-2 text-left font-mono text-sm hover:border-blue-300"
@@ -288,8 +288,8 @@
 							class="flex min-h-[2.25rem] w-full items-center rounded-xl border border-gray-200 px-3 py-2 text-left text-sm hover:border-blue-300"
 							onclick={() => startEdit(col)}
 						>
-							{#if localRow.data[col.id] !== null && localRow.data[col.id] !== undefined}
-								<span class="text-gray-800">{String(localRow.data[col.id])}</span>
+							{#if localRow.row_data[col.id] !== null && localRow.row_data[col.id] !== undefined}
+								<span class="text-gray-800">{String(localRow.row_data[col.id])}</span>
 							{:else}
 								<span class="text-gray-400">—</span>
 							{/if}
@@ -312,9 +312,9 @@
 						class="flex min-h-[2.25rem] w-full items-start rounded-xl border border-gray-200 px-3 py-2 text-left text-sm hover:border-blue-300"
 						onclick={() => startEdit(col)}
 					>
-						{#if localRow.data[col.id] !== null && localRow.data[col.id] !== undefined && String(localRow.data[col.id]) !== ''}
+						{#if localRow.row_data[col.id] !== null && localRow.row_data[col.id] !== undefined && String(localRow.row_data[col.id]) !== ''}
 							<span class="break-words whitespace-pre-wrap text-gray-800"
-								>{String(localRow.data[col.id])}</span
+								>{String(localRow.row_data[col.id])}</span
 							>
 						{:else}
 							<span class="text-gray-400">—</span>
