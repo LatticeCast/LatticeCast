@@ -76,6 +76,33 @@ class TableRepository:
         await self.session.refresh(table)
         return table
 
+    async def add_view(self, table: Table, view_dict: dict[str, Any]) -> Table:
+        table.views = [*table.views, view_dict]
+        table.updated_at = datetime.utcnow()
+        self.session.add(table)
+        await self.session.commit()
+        await self.session.refresh(table)
+        return table
+
+    async def update_view(self, table: Table, view_name: str, updates: dict[str, Any]) -> Table:
+        table.views = [
+            {**v, **updates} if v.get("name") == view_name else v
+            for v in table.views
+        ]
+        table.updated_at = datetime.utcnow()
+        self.session.add(table)
+        await self.session.commit()
+        await self.session.refresh(table)
+        return table
+
+    async def delete_view(self, table: Table, view_name: str) -> Table:
+        table.views = [v for v in table.views if v.get("name") != view_name]
+        table.updated_at = datetime.utcnow()
+        self.session.add(table)
+        await self.session.commit()
+        await self.session.refresh(table)
+        return table
+
     # ── Index management ─────────────────────────────────────────────────
 
     def _index_name(self, table_id: UUID, column_id: str) -> str:

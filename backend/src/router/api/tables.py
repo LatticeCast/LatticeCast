@@ -181,3 +181,76 @@ async def delete_column(
     table_repo = TableRepository(session)
     await table_repo.drop_column_index(table_id, column_id)
     await table_repo.delete_column(table, column_id)
+
+
+# --------------------------------------------------
+# VIEWS (stored in tables.views JSONB)
+# --------------------------------------------------
+
+
+@router.get("/{table_id}/views")
+async def list_views(
+    table_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[dict[str, Any]]:
+    """List views for a table"""
+    table = await _get_table_for_member(table_id, user, session)
+    return table.views
+
+
+@router.post("/{table_id}/views", status_code=status.HTTP_201_CREATED)
+async def create_view(
+    table_id: UUID,
+    data: dict[str, Any],
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Add a view to a table"""
+    table = await _get_table_for_member(table_id, user, session)
+    name = data.get("name", "")
+    if not name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="View name is required")
+    if any(v.get("name") == name for v in table.views):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="View name already exists")
+    view_dict: dict[str, Any] = {
+        "name": name,
+        "type": data.get("type", "table"),
+        "config": data.get("config", {}),
+    }
+    table_repo = TableRepository(session)
+    updated = await table_repo.add_view(table, view_dict)
+    return updated.views[-1]
+
+
+@router.put("/{table_id}/views/{view_name}")
+async def update_view(
+    table_id: UUID,
+    view_name: str,
+    data: dict[str, Any],
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Update a view's config in the table's views JSONB array"""
+    table = await _get_table_for_member(table_id, user, session)
+    if not any(v.get("name") == view_name for v in table.views):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
+    updates = {k: v for k, v in data.items() if k != "name"}
+    table_repo = TableRepository(session)
+    updated = await table_repo.update_view(table, view_name, updates)
+    return next(v for v in updated.views if v.get("name") == view_name)
+
+
+@router.delete("/{table_id}/views/{view_name}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_view(
+    table_id: UUID,
+    view_name: str,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Remove a view from the table's views JSONB array"""
+    table = await _get_table_for_member(table_id, user, session)
+    if not any(v.get("name") == view_name for v in table.views):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
+    table_repo = TableRepository(session)
+    await table_repo.delete_view(table, view_name)
