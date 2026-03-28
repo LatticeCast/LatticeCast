@@ -12,24 +12,28 @@ class Row(SQLModel, table=True):
 
     __tablename__ = "rows"
 
-    id: UUID = Field(default_factory=uuid4, primary_key=True, description="Unique identifier")
-    table_id: UUID = Field(foreign_key="tables.id", index=True, description="Parent table ID")
-    data: dict[str, Any] = Field(default_factory=dict, sa_type=JSON, description="Row data keyed by column UUID (JSONB)")
+    row_id: UUID = Field(default_factory=uuid4, primary_key=True, description="Unique identifier")
+    table_id: UUID = Field(foreign_key="tables.table_id", index=True, description="Parent table ID")
+    row_data: dict[str, Any] = Field(default_factory=dict, sa_type=JSON, description="Row data keyed by column UUID (JSONB)")
+    created_by: str = Field(default="", description="User ID who created the row")
+    updated_by: str = Field(default="", description="User ID who last updated the row")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
 
 
 class RowCreate(SQLModel):
-    data: dict[str, Any] = Field(default_factory=dict, description="Row data keyed by column UUID")
+    row_data: dict[str, Any] = Field(default_factory=dict, description="Row data keyed by column UUID")
 
 
 class RowUpdate(SQLModel):
-    data: dict[str, Any] = Field(..., description="Row data keyed by column UUID (full replace)")
+    row_data: dict[str, Any] = Field(..., description="Row data keyed by column UUID (full replace)")
 
 
 class RowResponse(SQLModel):
-    id: UUID = Field(..., description="Unique identifier")
+    row_id: UUID = Field(..., description="Unique identifier")
     table_id: UUID = Field(..., description="Parent table ID")
-    data: dict[str, Any] = Field(..., description="Row data keyed by column UUID")
+    row_data: dict[str, Any] = Field(..., description="Row data keyed by column UUID")
+    created_by: str = Field(..., description="User ID who created the row")
+    updated_by: str = Field(..., description="User ID who last updated the row")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
