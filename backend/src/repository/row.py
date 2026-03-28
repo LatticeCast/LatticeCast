@@ -15,15 +15,15 @@ class RowRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, table_id: UUID, data: dict[str, Any] | None = None) -> Row:
-        row = Row(table_id=table_id, data=data or {})
+    async def create(self, table_id: UUID, row_data: dict[str, Any] | None = None, created_by: str = "", updated_by: str = "") -> Row:
+        row = Row(table_id=table_id, row_data=row_data or {}, created_by=created_by, updated_by=updated_by)
         self.session.add(row)
         await self.session.commit()
         await self.session.refresh(row)
         return row
 
-    async def get_by_id(self, id: UUID) -> Row | None:
-        return await self.session.get(Row, id)
+    async def get_by_id(self, row_id: UUID) -> Row | None:
+        return await self.session.get(Row, row_id)
 
     async def list_by_table(self, table_id: UUID, offset: int = 0, limit: int = 100) -> list[Row]:
         statement = (
@@ -36,8 +36,9 @@ class RowRepository:
         result = await self.session.execute(statement)
         return list(result.scalars().all())
 
-    async def update(self, row: Row, data: RowUpdate) -> Row:
-        row.data = data.data
+    async def update(self, row: Row, data: RowUpdate, updated_by: str = "") -> Row:
+        row.row_data = data.row_data
+        row.updated_by = updated_by
         row.updated_at = datetime.utcnow()
         self.session.add(row)
         await self.session.commit()
@@ -49,11 +50,11 @@ class RowRepository:
         await self.session.commit()
 
     async def filter_by_jsonb(self, table_id: UUID, contains: dict[str, Any], offset: int = 0, limit: int = 100) -> list[Row]:
-        """Filter rows where data @> contains (JSONB containment query using GIN index)."""
+        """Filter rows where row_data @> contains (JSONB containment query using GIN index)."""
         statement = (
             select(Row)
             .where(Row.table_id == table_id)
-            .where(text("data @> cast(:contains as jsonb)").bindparams(contains=json.dumps(contains)))
+            .where(text("row_data @> cast(:contains as jsonb)").bindparams(contains=json.dumps(contains)))
             .order_by(Row.created_at)
             .offset(offset)
             .limit(limit)
