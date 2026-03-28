@@ -3,10 +3,15 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.table import Table
+
+# Column types that get B-tree expression indexes (sortable/range queries)
+BTREE_TYPES = {"number", "date"}
+# Column types that get GIN indexes (containment/grouping queries)
+GIN_TYPES = {"select", "tags", "text", "string", "url", "checkbox"}
 
 
 class TableRepository:
@@ -70,3 +75,44 @@ class TableRepository:
         await self.session.commit()
         await self.session.refresh(table)
         return table
+
+    # ── Index management ─────────────────────────────────────────────────
+
+    def _index_name(self, table_id: UUID, column_id: str) -> str:
+        """Generate a deterministic index name from table_id + column_id."""
+        tid = str(table_id).replace("-", "")[:12]
+        cid = column_id.replace("-", "")[:12]
+        return f"idx_rd_{tid}_{cid}"
+
+    async def create_column_index(self, table_id: UUID, column_id: str, col_type: str) -> None:
+        """Create a PG index on row_data->column_id based on column type."""
+        idx_name = self._index_name(table_id, column_id)
+        table_id_str = str(table_id)
+
+        if col_type in BTREE_TYPES:
+            if col_type == "number":
+                expr = f"((row_data->>'{column_id}')::numeric)"
+            else:  # date → B-tree on text (ISO dates sort correctly as text)
+                expr = f"((row_data->>'{column_id}'))"
+            sql = (
+                f"CREATE INDEX IF NOT EXISTS {idx_name} "
+                f"ON rows ({expr}) "
+                f"WHERE table_id = '{table_id_str}'"
+            )
+        elif col_type in GIN_TYPES:
+            sql = (
+                f"CREATE INDEX IF NOT EXISTS {idx_name} "
+                f"ON rows USING GIN ((row_data->'{column_id}')) "
+                f"WHERE table_id = '{table_id_str}'"
+            )
+        else:
+            return
+
+        await self.session.execute(text(sql))
+        await self.session.commit()
+
+    async def drop_column_index(self, table_id: UUID, column_id: str) -> None:
+        """Drop the PG index for a column if it exists."""
+        idx_name = self._index_name(table_id, column_id)
+        await self.session.execute(text(f"DROP INDEX IF EXISTS {idx_name}"))
+        await self.session.commit()

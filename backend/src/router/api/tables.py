@@ -137,6 +137,7 @@ async def create_column(
     }
     table_repo = TableRepository(session)
     updated = await table_repo.add_column(table, column_dict)
+    await table_repo.create_column_index(table_id, column_dict["column_id"], column_dict["type"])
     return updated.columns[-1]
 
 
@@ -155,6 +156,12 @@ async def update_column(
     # strip immutable fields from updates
     updates = {k: v for k, v in data.items() if k not in ("column_id", "created_at")}
     table_repo = TableRepository(session)
+    # If type changed, recreate index
+    if "type" in updates:
+        old_col = next(c for c in table.columns if c.get("column_id") == column_id)
+        if updates["type"] != old_col.get("type"):
+            await table_repo.drop_column_index(table_id, column_id)
+            await table_repo.create_column_index(table_id, column_id, updates["type"])
     updated = await table_repo.update_column(table, column_id, updates)
     col = next(c for c in updated.columns if c.get("column_id") == column_id)
     return col
@@ -172,4 +179,5 @@ async def delete_column(
     if not any(c.get("column_id") == column_id for c in table.columns):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found")
     table_repo = TableRepository(session)
+    await table_repo.drop_column_index(table_id, column_id)
     await table_repo.delete_column(table, column_id)
