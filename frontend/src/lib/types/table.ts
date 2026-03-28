@@ -20,10 +20,24 @@ export interface ColumnOptions {
 	width?: number;
 }
 
-export interface Table {
-	id: string;
-	user_id: string;
+export interface Workspace {
+	workspace_id: string;
 	name: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface WorkspaceMember {
+	workspace_id: string;
+	user_id: string;
+	role: string;
+}
+
+export interface Table {
+	table_id: string;
+	workspace_id: string;
+	name: string;
+	columns: Column[];
 	created_at: string;
 	updated_at: string;
 }
@@ -39,15 +53,18 @@ export interface Column {
 }
 
 export interface Row {
-	id: string;
+	row_id: string;
 	table_id: string;
-	data: Record<string, unknown>;
+	row_data: Record<string, unknown>;
+	created_by: string;
+	updated_by: string;
 	created_at: string;
 	updated_at: string;
 }
 
 export interface CreateTable {
 	name: string;
+	workspace_id: string;
 }
 
 export interface CreateColumn {
@@ -58,7 +75,7 @@ export interface CreateColumn {
 }
 
 export interface CreateRow {
-	data: Record<string, unknown>;
+	row_data: Record<string, unknown>;
 }
 
 export interface UpdateTable {
@@ -73,5 +90,5 @@ export interface UpdateColumn {
 }
 
 export interface UpdateRow {
-	data: Record<string, unknown>;
+	row_data: Record<string, unknown>;
 }
