@@ -4,7 +4,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth.store';
-	import { fetchTables, createTable, deleteTable } from '$lib/backend/tables';
+	import { fetchTables, createTable, deleteTable, createPmTemplate } from '$lib/backend/tables';
 	import { fetchWorkspaces } from '$lib/backend/workspaces';
 	import type { Table, Workspace } from '$lib/types/table';
 
@@ -15,6 +15,9 @@
 	let error = $state('');
 	let creating = $state(false);
 	let newTableName = $state('');
+	let showTemplateModal = $state(false);
+	let templateName = $state('');
+	let creatingTemplate = $state(false);
 
 	const filteredTables = $derived(
 		currentWorkspace
@@ -76,6 +79,24 @@
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Enter') handleCreate();
 	}
+
+	async function handlePmTemplate() {
+		const name = templateName.trim();
+		if (!name || !currentWorkspace) return;
+		creatingTemplate = true;
+		error = '';
+		try {
+			const table = await createPmTemplate(name, currentWorkspace.workspace_id);
+			tables = [...tables, table];
+			showTemplateModal = false;
+			templateName = '';
+			goto(`/${table.workspace_id}/${table.table_id}`);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to create template';
+		} finally {
+			creatingTemplate = false;
+		}
+	}
 </script>
 
 <div class="min-h-screen bg-gray-50 p-6">
@@ -115,6 +136,13 @@
 				class="rounded-2xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
 			>
 				{creating ? 'Creating...' : 'Create'}
+			</button>
+			<button
+				onclick={() => { showTemplateModal = true; templateName = ''; }}
+				disabled={!currentWorkspace}
+				class="rounded-2xl border-2 border-blue-200 bg-white px-4 py-3 font-semibold text-blue-600 transition hover:bg-blue-50 disabled:opacity-50"
+			>
+				From Template
 			</button>
 		</div>
 
@@ -161,3 +189,53 @@
 		{/if}
 	</div>
 </div>
+
+<!-- Template Gallery Modal -->
+{#if showTemplateModal}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+		onclick={() => (showTemplateModal = false)}
+		role="dialog"
+		aria-modal="true"
+	>
+		<div
+			class="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<h2 class="mb-4 text-xl font-bold text-gray-900">New from Template</h2>
+
+			<!-- PM Project Option -->
+			<div class="mb-5 rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
+				<div class="mb-1 flex items-center gap-2">
+					<span class="text-lg">📋</span>
+					<span class="font-semibold text-blue-800">PM Project</span>
+				</div>
+				<p class="mb-3 text-sm text-blue-700">
+					Project management with Key, Title, Status, Priority, Assignee, dates, and Sprint Board + Roadmap views.
+				</p>
+				<input
+					type="text"
+					bind:value={templateName}
+					placeholder="Project name..."
+					class="w-full rounded-xl border-2 border-blue-200 bg-white px-3 py-2 text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+				/>
+			</div>
+
+			<div class="flex justify-end gap-2">
+				<button
+					onclick={() => (showTemplateModal = false)}
+					class="rounded-2xl px-4 py-2 text-gray-600 hover:bg-gray-100"
+				>
+					Cancel
+				</button>
+				<button
+					onclick={handlePmTemplate}
+					disabled={creatingTemplate || !templateName.trim()}
+					class="rounded-2xl bg-linear-to-r from-blue-600 to-blue-500 px-5 py-2 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+				>
+					{creatingTemplate ? 'Creating...' : 'Create PM Project'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}

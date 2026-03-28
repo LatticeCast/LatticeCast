@@ -153,3 +153,16 @@ export async function deleteRow(rowId: string): Promise<void> {
 	});
 	if (!response.ok) throw new Error(`Failed to delete row: ${response.statusText}`);
 }
+
+// Templates
+
+export async function createPmTemplate(name: string, workspaceId: string): Promise<Table> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/tables/template/pm`, {
+		method: 'POST',
+		headers,
+		body: JSON.stringify({ name, workspace_id: workspaceId })
+	});
+	if (!response.ok) throw new Error(`Failed to create PM template: ${response.statusText}`);
+	return response.json();
+}
