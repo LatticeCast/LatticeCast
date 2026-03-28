@@ -38,6 +38,7 @@ export interface Table {
 	workspace_id: string;
 	name: string;
 	columns: Column[];
+	views: ViewConfig[];
 	created_at: string;
 	updated_at: string;
 }
@@ -91,4 +92,10 @@ export interface UpdateColumn {
 
 export interface UpdateRow {
 	row_data: Record<string, unknown>;
+}
+
+export interface ViewConfig {
+	name: string;
+	type: 'table' | 'kanban' | 'timeline';
+	config: Record<string, unknown>;
 }
