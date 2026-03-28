@@ -16,6 +16,7 @@ class Table(SQLModel, table=True):
     workspace_id: str = Field(index=True, foreign_key="workspaces.workspace_id", description="Workspace ID (FK)")
     name: str = Field(description="Table name")
     columns: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="Column definitions")
+    views: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="View configurations")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
 
@@ -33,6 +34,7 @@ class TableResponse(SQLModel):
     workspace_id: str = Field(..., description="Workspace ID")
     name: str = Field(..., description="Table name")
     columns: list[dict[str, Any]] = Field(default_factory=list, description="Column definitions")
+    views: list[dict[str, Any]] = Field(default_factory=list, description="View configurations")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
