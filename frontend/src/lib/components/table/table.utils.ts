@@ -48,12 +48,12 @@ export interface GroupAddItem {
 export type RenderItem = GroupHeaderItem | DataRowItem | GroupAddItem;
 
 export function getItemKey(item: RenderItem): string {
-	if (item.type === 'row') return 'row-' + item.row.id;
+	if (item.type === 'row') return 'row-' + item.row.row_id;
 	return item.type + '-' + item.key;
 }
 
-export function getCellValue(row: { data: Record<string, unknown> }, colId: string): string {
-	const val = row.data[colId];
+export function getCellValue(row: { row_data: Record<string, unknown> }, colId: string): string {
+	const val = row.row_data[colId];
 	if (val === null || val === undefined) return '';
 	if (typeof val === 'boolean') return val ? '✓' : '';
 	return String(val);
@@ -71,8 +71,8 @@ export function getChoiceColor(col: Column, value: string): (typeof TAG_COLORS)[
 	return TAG_COLORS[idx >= 0 ? idx % TAG_COLORS.length : 0];
 }
 
-export function getTagValues(row: { data: Record<string, unknown> }, colId: string): string[] {
-	const val = row.data[colId];
+export function getTagValues(row: { row_data: Record<string, unknown> }, colId: string): string[] {
+	const val = row.row_data[colId];
 	return Array.isArray(val) ? (val as string[]) : [];
 }
 

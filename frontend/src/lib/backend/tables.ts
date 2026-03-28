@@ -1,5 +1,5 @@
 // lib/backend/tables.ts
-// API client for tables/columns/rows CRUD
+// API client for tables/rows CRUD (columns come from table.columns)
 
 import { get } from 'svelte/store';
 import { authStore } from '$lib/stores/auth.store';
@@ -47,9 +47,16 @@ export async function createTable(data: CreateTable): Promise<Table> {
 	return response.json();
 }
 
-export async function updateTable(id: string, data: UpdateTable): Promise<Table> {
+export async function fetchTable(tableId: string): Promise<Table> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables/${id}`, {
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}`, { headers });
+	if (!response.ok) throw new Error(`Failed to fetch table: ${response.statusText}`);
+	return response.json();
+}
+
+export async function updateTable(tableId: string, data: UpdateTable): Promise<Table> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}`, {
 		method: 'PUT',
 		headers,
 		body: JSON.stringify(data)
@@ -58,23 +65,16 @@ export async function updateTable(id: string, data: UpdateTable): Promise<Table>
 	return response.json();
 }
 
-export async function deleteTable(id: string): Promise<void> {
+export async function deleteTable(tableId: string): Promise<void> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables/${id}`, {
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}`, {
 		method: 'DELETE',
 		headers
 	});
 	if (!response.ok) throw new Error(`Failed to delete table: ${response.statusText}`);
 }
 
-// Columns
-
-export async function fetchColumns(tableId: string): Promise<Column[]> {
-	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/columns`, { headers });
-	if (!response.ok) throw new Error(`Failed to fetch columns: ${response.statusText}`);
-	return response.json();
-}
+// Columns (mutations only — column list comes from table.columns)
 
 export async function createColumn(tableId: string, data: CreateColumn): Promise<Column> {
 	const headers = await getAuthHeaders();
@@ -87,9 +87,13 @@ export async function createColumn(tableId: string, data: CreateColumn): Promise
 	return response.json();
 }
 
-export async function updateColumn(id: string, data: UpdateColumn): Promise<Column> {
+export async function updateColumn(
+	tableId: string,
+	columnId: string,
+	data: UpdateColumn
+): Promise<Column> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/columns/${id}`, {
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/columns/${columnId}`, {
 		method: 'PUT',
 		headers,
 		body: JSON.stringify(data)
@@ -98,9 +102,9 @@ export async function updateColumn(id: string, data: UpdateColumn): Promise<Colu
 	return response.json();
 }
 
-export async function deleteColumn(id: string): Promise<void> {
+export async function deleteColumn(tableId: string, columnId: string): Promise<void> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/columns/${id}`, {
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/columns/${columnId}`, {
 		method: 'DELETE',
 		headers
 	});
@@ -130,9 +134,9 @@ export async function createRow(tableId: string, data: CreateRow): Promise<Row> 
 	return response.json();
 }
 
-export async function updateRow(id: string, data: UpdateRow): Promise<Row> {
+export async function updateRow(rowId: string, data: UpdateRow): Promise<Row> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/rows/${id}`, {
+	const response = await fetch(`${BACKEND_URL}/api/rows/${rowId}`, {
 		method: 'PUT',
 		headers,
 		body: JSON.stringify(data)
@@ -141,9 +145,9 @@ export async function updateRow(id: string, data: UpdateRow): Promise<Row> {
 	return response.json();
 }
 
-export async function deleteRow(id: string): Promise<void> {
+export async function deleteRow(rowId: string): Promise<void> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/rows/${id}`, {
+	const response = await fetch(`${BACKEND_URL}/api/rows/${rowId}`, {
 		method: 'DELETE',
 		headers
 	});

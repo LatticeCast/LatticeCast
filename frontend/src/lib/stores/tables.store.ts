@@ -2,7 +2,7 @@
 
 import { writable } from 'svelte/store';
 import type { Table, Column, Row } from '$lib/types/table';
-import { fetchTables, fetchColumns, fetchRows } from '$lib/backend/tables';
+import { fetchTables, fetchTable, fetchRows } from '$lib/backend/tables';
 
 export const tables = writable<Table[]>([]);
 export const currentTable = writable<Table | null>(null);
@@ -29,7 +29,8 @@ export async function loadTable(table: Table): Promise<void> {
 	loading.set(true);
 	error.set(null);
 	try {
-		const [cols, rws] = await Promise.all([fetchColumns(table.id), fetchRows(table.id)]);
+		const cols: Column[] = table.columns ?? [];
+		const rws = await fetchRows(table.table_id);
 		columns.set(cols);
 		rows.set(rws);
 	} catch (e) {
@@ -41,8 +42,8 @@ export async function loadTable(table: Table): Promise<void> {
 
 export async function refreshColumns(tableId: string): Promise<void> {
 	try {
-		const result = await fetchColumns(tableId);
-		columns.set(result);
+		const table = await fetchTable(tableId);
+		columns.set(table.columns ?? []);
 	} catch (e) {
 		error.set(e instanceof Error ? e.message : 'Failed to refresh columns');
 	}
