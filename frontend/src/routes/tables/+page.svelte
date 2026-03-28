@@ -136,7 +136,7 @@
 						class="flex items-center gap-3 rounded-2xl bg-white px-4 py-4 shadow-sm transition hover:bg-blue-50"
 					>
 						<button
-							onclick={() => goto(`/tables/${table.table_id}`)}
+							onclick={() => goto(`/${table.workspace_id}/${table.table_id}`)}
 							class="flex-1 text-left font-medium text-gray-800"
 						>
 							{table.name}

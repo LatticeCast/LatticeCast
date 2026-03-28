@@ -1,4 +1,4 @@
-<!-- routes/tables/[id]/+page.svelte -->
+<!-- routes/[workspace_id]/[table_id]/+page.svelte -->
 
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -216,7 +216,7 @@
 				goto('/login');
 				return;
 			}
-			const tableId = $page.params.id!;
+			const tableId = $page.params.table_id!;
 			try {
 				const [all] = await Promise.all([fetchTables(), loadWorkspaces()]);
 				const table = all.find((t) => t.table_id === tableId);
@@ -246,8 +246,8 @@
 			const col = get(columns).find((c) => c.id === colId);
 			if (!col) return;
 			try {
-				await updateColumn(get(page).params.id!, colId, { options: { ...col.options, width: newWidth } });
-				await refreshTable(get(page).params.id!);
+				await updateColumn(get(page).params.table_id!, colId, { options: { ...col.options, width: newWidth } });
+				await refreshTable(get(page).params.table_id!);
 			} catch (err) {
 				error.set(err instanceof Error ? err.message : 'Failed to resize column');
 			}
@@ -271,7 +271,7 @@
 	// ─── Handlers ────────────────────────────────────────────────────────────────
 
 	async function handleAddRow() {
-		const tableId = $page.params.id!;
+		const tableId = $page.params.table_id!;
 		addingRow = true;
 		error.set(null);
 		try {
@@ -285,7 +285,7 @@
 	}
 
 	async function handleAddRowInGroup(groupKey: string, col: Column) {
-		const tableId = $page.params.id!;
+		const tableId = $page.params.table_id!;
 		addingRow = true;
 		error.set(null);
 		try {
@@ -300,7 +300,7 @@
 	}
 
 	async function handleDeleteRow(rowId: string) {
-		const tableId = $page.params.id!;
+		const tableId = $page.params.table_id!;
 		deletingRowId = rowId;
 		error.set(null);
 		try {
@@ -314,7 +314,7 @@
 	}
 
 	async function handleAddColumn(name: string, type: string) {
-		const tableId = $page.params.id!;
+		const tableId = $page.params.table_id!;
 		error.set(null);
 		try {
 			await createColumn(tableId, { name, type: type as ColumnType });
@@ -326,7 +326,7 @@
 	}
 
 	async function handleDeleteColumn(colId: string) {
-		const tableId = $page.params.id!;
+		const tableId = $page.params.table_id!;
 		error.set(null);
 		try {
 			await deleteColumn(tableId, colId);
@@ -337,7 +337,7 @@
 	}
 
 	async function handleMoveColumn(col: Column, direction: 'up' | 'down') {
-		const tableId = $page.params.id!;
+		const tableId = $page.params.table_id!;
 		const sorted = [...$columns].sort((a, b) => a.position - b.position);
 		const idx = sorted.findIndex((c) => c.id === col.id);
 		const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
@@ -365,7 +365,7 @@
 			renamingColId = null;
 			return;
 		}
-		const tableId = $page.params.id!;
+		const tableId = $page.params.table_id!;
 		error.set(null);
 		try {
 			await updateColumn(tableId, colId, { name: renameValue.trim() });
@@ -395,7 +395,7 @@
 		error.set(null);
 		try {
 			await updateRow(rowId, { row_data: newData });
-			await refreshRows($page.params.id!);
+			await refreshRows($page.params.table_id!);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
 		}
@@ -408,7 +408,7 @@
 		error.set(null);
 		try {
 			await updateRow(rowId, { row_data: newData });
-			await refreshRows($page.params.id!);
+			await refreshRows($page.params.table_id!);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
 		}
@@ -421,7 +421,7 @@
 		const newData = { ...row.row_data, [col.id]: current.filter((t) => t !== tag) };
 		try {
 			await updateRow(rowId, { row_data: newData });
-			await refreshRows($page.params.id!);
+			await refreshRows($page.params.table_id!);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');
 		}
@@ -436,7 +436,7 @@
 		tagsPopupCell = null;
 		try {
 			await updateRow(rowId, { row_data: newData });
-			await refreshRows($page.params.id!);
+			await refreshRows($page.params.table_id!);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');
 		}
@@ -464,7 +464,7 @@
 	async function handleDuplicateRow(rowId: string) {
 		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
-		const tableId = $page.params.id!;
+		const tableId = $page.params.table_id!;
 		error.set(null);
 		try {
 			await createRow(tableId, { row_data: { ...row.row_data } });
@@ -476,7 +476,7 @@
 	}
 
 	async function handleSaveOptions(colId: string, choices: import('$lib/types/table').ColumnChoice[]) {
-		const tableId = $page.params.id!;
+		const tableId = $page.params.table_id!;
 		const col = $columns.find((c) => c.id === colId);
 		if (!col) return;
 		error.set(null);
@@ -549,7 +549,7 @@
 	}
 
 	async function handleImportTemplate(file: File) {
-		const tableId = $page.params.id!;
+		const tableId = $page.params.table_id!;
 		const text = await file.text();
 		const template = JSON.parse(text) as Array<{
 			name: string;
@@ -678,7 +678,7 @@
 	async function commitImport() {
 		importingData = true;
 		importError = null;
-		const tableId = $page.params.id!;
+		const tableId = $page.params.table_id!;
 		try {
 			for (let i = 0; i < importNewColumns.length; i++) {
 				const nc = importNewColumns[i];
@@ -854,7 +854,7 @@
 		onClose={() => (expandedRow = null)}
 		onUpdateRow={handleUpdateRow}
 		onRefreshRows={handleRefreshRows}
-		tableId={$page.params.id!}
+		tableId={$page.params.table_id!}
 	/>
 {/if}
 

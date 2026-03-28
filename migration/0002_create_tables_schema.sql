@@ -1,33 +1,39 @@
 -- 0002_create_tables_schema.sql
--- Airtable-like flexible schema: tables, columns, rows with JSONB + GIN
+-- Workspace-based schema: workspaces, tables (columns JSONB), rows (row_data JSONB)
 
-CREATE TABLE IF NOT EXISTS tables (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     VARCHAR NOT NULL REFERENCES users(user_id),
-    name        VARCHAR NOT NULL,
-    created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMP NOT NULL DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS workspaces (
+    workspace_id VARCHAR PRIMARY KEY,
+    name         VARCHAR NOT NULL,
+    created_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at   TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS columns (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    table_id    UUID NOT NULL REFERENCES tables(id) ON DELETE CASCADE,
-    name        VARCHAR NOT NULL,
-    type        VARCHAR NOT NULL,
-    options     JSONB NOT NULL DEFAULT '{}',
-    position    INTEGER NOT NULL DEFAULT 0,
-    created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS workspace_members (
+    workspace_id VARCHAR NOT NULL REFERENCES workspaces(workspace_id) ON DELETE CASCADE,
+    user_id      VARCHAR NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    role         VARCHAR NOT NULL DEFAULT 'member',
+    PRIMARY KEY (workspace_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS tables (
+    table_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id  VARCHAR NOT NULL REFERENCES workspaces(workspace_id) ON DELETE CASCADE,
+    name          VARCHAR NOT NULL,
+    columns       JSONB NOT NULL DEFAULT '[]',
+    created_at    TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS rows (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    table_id    UUID NOT NULL REFERENCES tables(id) ON DELETE CASCADE,
-    data        JSONB NOT NULL DEFAULT '{}',
+    row_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    table_id    UUID NOT NULL REFERENCES tables(table_id) ON DELETE CASCADE,
+    row_data    JSONB NOT NULL DEFAULT '{}',
+    created_by  VARCHAR NOT NULL DEFAULT '',
+    updated_by  VARCHAR NOT NULL DEFAULT '',
     created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_rows_data ON rows USING GIN (data);
 CREATE INDEX IF NOT EXISTS idx_rows_table_id ON rows(table_id);
-CREATE INDEX IF NOT EXISTS idx_columns_table_id ON columns(table_id);
-CREATE INDEX IF NOT EXISTS idx_tables_user_id ON tables(user_id);
+CREATE INDEX IF NOT EXISTS idx_tables_workspace_id ON tables(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_members_user_id ON workspace_members(user_id);
