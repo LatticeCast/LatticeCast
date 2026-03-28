@@ -2,20 +2,49 @@
 	import type { Column, Row, ViewConfig } from '$lib/types/table';
 	import { getChoices, getChoiceColor, getTagValues, formatDate } from './table.utils';
 	import { updateRow } from '$lib/backend/tables';
+	import { updateView } from '$lib/backend/views';
 
 	let {
+		tableId,
 		columns,
 		rows,
 		viewConfig,
 		onOpenExpand,
-		onRowsRefresh = () => {}
+		onRowsRefresh = () => {},
+		onViewUpdate = () => {}
 	}: {
+		tableId: string;
 		columns: Column[];
 		rows: Row[];
 		viewConfig: ViewConfig;
 		onOpenExpand: (row: Row) => void;
 		onRowsRefresh?: () => void;
+		onViewUpdate?: (updated: ViewConfig) => void;
 	} = $props();
+
+	// Config panel state
+	let showCardFields = $state(false);
+
+	async function saveConfig(patch: Record<string, unknown>) {
+		const newConfig = { ...viewConfig.config, ...patch };
+		const updated = await updateView(tableId, viewConfig.name, newConfig);
+		onViewUpdate(updated);
+	}
+
+	async function handleGroupByChange(e: Event) {
+		const val = (e.target as HTMLSelectElement).value;
+		await saveConfig({ group_by: val || undefined, card_fields: [] });
+	}
+
+	async function toggleCardField(colId: string) {
+		const current = (viewConfig.config.card_fields as string[]) ?? [];
+		const next = current.includes(colId)
+			? current.filter((id) => id !== colId)
+			: [...current, colId];
+		await saveConfig({ card_fields: next });
+	}
+
+	const selectColumns = $derived(columns.filter((c) => c.type === 'select'));
 
 	// Drag state
 	let dragRowId = $state<string | null>(null);
@@ -122,11 +151,75 @@
 
 </script>
 
+<!-- Config bar -->
+<div
+	class="flex items-center gap-4 border-b border-gray-200 bg-white px-4 py-2"
+	onclick={(e) => {
+		if (!(e.target as HTMLElement).closest('.card-fields-panel')) showCardFields = false;
+	}}
+>
+	<!-- Group by -->
+	<div class="flex items-center gap-2">
+		<span class="text-xs font-medium text-gray-500">Group by</span>
+		<select
+			class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-blue-500 focus:outline-none"
+			value={groupByColId ?? ''}
+			onchange={handleGroupByChange}
+		>
+			<option value="">— none —</option>
+			{#each selectColumns as col (col.id)}
+				<option value={col.id}>{col.name}</option>
+			{/each}
+		</select>
+	</div>
+
+	<!-- Card fields -->
+	<div class="relative card-fields-panel">
+		<button
+			class="flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+			onclick={(e) => {
+				e.stopPropagation();
+				showCardFields = !showCardFields;
+			}}
+		>
+			<svg class="h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+			</svg>
+			Card fields
+			{#if cardFields.length > 0}
+				<span class="ml-0.5 rounded-full bg-blue-100 px-1.5 text-blue-700">{cardFields.length}</span>
+			{/if}
+		</button>
+		{#if showCardFields}
+			<div
+				class="card-fields-panel absolute top-full left-0 z-30 mt-1 min-w-[200px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+				onclick={(e) => e.stopPropagation()}
+				role="menu"
+			>
+				<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">
+					Show on cards
+				</div>
+				{#each columns as col (col.id)}
+					<label class="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-gray-50">
+						<input
+							type="checkbox"
+							class="accent-blue-500"
+							checked={cardFields.includes(col.id)}
+							onchange={() => toggleCardField(col.id)}
+						/>
+						<span class="text-sm text-gray-700">{col.name}</span>
+						<span class="ml-auto text-xs text-gray-400">{col.type}</span>
+					</label>
+				{/each}
+			</div>
+		{/if}
+	</div>
+</div>
+
 {#if !groupByColId || !groupCol}
 	<div class="flex h-64 items-center justify-center text-gray-400">
 		<div class="text-center">
-			<p class="text-sm">No group-by column configured.</p>
-			<p class="mt-1 text-xs">Edit this view's config to set a group-by column.</p>
+			<p class="text-sm">Select a "Group by" column above to activate the Kanban view.</p>
 		</div>
 	</div>
 {:else}
