@@ -1,18 +1,65 @@
 <script lang="ts">
 	import type { Column, Row, ViewConfig } from '$lib/types/table';
 	import { getChoices, getChoiceColor, getTagValues, formatDate } from './table.utils';
+	import { updateRow } from '$lib/backend/tables';
 
 	let {
 		columns,
 		rows,
 		viewConfig,
-		onOpenExpand
+		onOpenExpand,
+		onRowsRefresh = () => {}
 	}: {
 		columns: Column[];
 		rows: Row[];
 		viewConfig: ViewConfig;
 		onOpenExpand: (row: Row) => void;
+		onRowsRefresh?: () => void;
 	} = $props();
+
+	// Drag state
+	let dragRowId = $state<string | null>(null);
+	let dragOverLane = $state<string | null>(null);
+
+	function onDragStart(e: DragEvent, row: Row) {
+		dragRowId = row.row_id;
+		if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+	}
+
+	function onDragEnd() {
+		dragRowId = null;
+		dragOverLane = null;
+	}
+
+	function onDragOver(e: DragEvent, laneValue: string) {
+		e.preventDefault();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+		dragOverLane = laneValue;
+	}
+
+	function onDragLeave(e: DragEvent) {
+		const target = e.currentTarget as HTMLElement;
+		const related = e.relatedTarget as Node | null;
+		if (!related || !target.contains(related)) dragOverLane = null;
+	}
+
+	async function onDrop(e: DragEvent, laneValue: string) {
+		e.preventDefault();
+		dragOverLane = null;
+		if (!dragRowId || !groupByColId) return;
+
+		const row = rows.find((r) => r.row_id === dragRowId);
+		dragRowId = null;
+		if (!row) return;
+
+		const currentVal = String(row.row_data[groupByColId] ?? '');
+		if (currentVal === laneValue) return;
+
+		await updateRow(row.row_id, {
+			row_data: { ...row.row_data, [groupByColId]: laneValue }
+		});
+		onRowsRefresh();
+	}
 
 	const groupByColId = $derived(viewConfig.config.group_by as string | undefined);
 	const cardFields = $derived((viewConfig.config.card_fields as string[]) ?? []);
@@ -86,7 +133,14 @@
 	<div class="flex h-full gap-4 overflow-x-auto p-4">
 		{#each lanes as lane (lane.value)}
 			{@const color = getLaneColor(lane.value)}
-			<div class="flex w-72 shrink-0 flex-col rounded-xl border border-gray-200 bg-gray-50">
+			<div
+				role="group"
+				aria-label="{lane.value || 'Uncategorized'} lane"
+				class="flex w-72 shrink-0 flex-col rounded-xl border border-gray-200 bg-gray-50 transition-shadow {dragOverLane === lane.value ? 'ring-2 ring-blue-400 ring-offset-1' : ''}"
+				ondragover={(e) => onDragOver(e, lane.value)}
+				ondragleave={onDragLeave}
+				ondrop={(e) => onDrop(e, lane.value)}
+			>
 				<!-- Lane header -->
 				<div class="flex items-center gap-2 border-b border-gray-200 px-3 py-2.5">
 					<span
@@ -106,7 +160,10 @@
 					{:else}
 						{#each lane.rows as row (row.row_id)}
 							<button
-								class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left shadow-sm transition hover:shadow-md"
+								draggable="true"
+								ondragstart={(e) => onDragStart(e, row)}
+								ondragend={onDragEnd}
+								class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left shadow-sm transition hover:shadow-md {dragRowId === row.row_id ? 'opacity-40' : ''}"
 								style={getCardBorderStyle(row)}
 								onclick={() => onOpenExpand(row)}
 							>
