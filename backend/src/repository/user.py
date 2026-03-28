@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlmodel import Session, select
 
 from models.user import User
+from models.workspace import Workspace, WorkspaceMember
 
 
 class UserRepository:
@@ -17,6 +18,10 @@ class UserRepository:
     def create(self, user_id: str, role: str = "user") -> User:
         user = User(user_id=user_id, role=role)
         self.session.add(user)
+        workspace = Workspace(workspace_id=user_id, name=user_id)
+        self.session.add(workspace)
+        member = WorkspaceMember(workspace_id=user_id, user_id=user_id, role="owner")
+        self.session.add(member)
         self.session.commit()
         self.session.refresh(user)
         return user
