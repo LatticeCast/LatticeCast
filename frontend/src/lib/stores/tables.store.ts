@@ -1,15 +1,48 @@
 // src/lib/stores/tables.store.ts
 
 import { writable } from 'svelte/store';
-import type { Table, Column, Row } from '$lib/types/table';
+import type { Workspace, Table, Column, Row } from '$lib/types/table';
 import { fetchTables, fetchTable, fetchRows } from '$lib/backend/tables';
+import { fetchWorkspaces } from '$lib/backend/workspaces';
 
+export const workspaces = writable<Workspace[]>([]);
+export const currentWorkspace = writable<Workspace | null>(null);
 export const tables = writable<Table[]>([]);
 export const currentTable = writable<Table | null>(null);
 export const columns = writable<Column[]>([]);
 export const rows = writable<Row[]>([]);
 export const loading = writable(false);
 export const error = writable<string | null>(null);
+
+export async function loadWorkspaces(): Promise<void> {
+	loading.set(true);
+	error.set(null);
+	try {
+		const result = await fetchWorkspaces();
+		workspaces.set(result);
+	} catch (e) {
+		error.set(e instanceof Error ? e.message : 'Failed to load workspaces');
+	} finally {
+		loading.set(false);
+	}
+}
+
+export async function switchWorkspace(workspace: Workspace): Promise<void> {
+	currentWorkspace.set(workspace);
+	currentTable.set(null);
+	columns.set([]);
+	rows.set([]);
+	loading.set(true);
+	error.set(null);
+	try {
+		const result = await fetchTables();
+		tables.set(result.filter((t) => t.workspace_id === workspace.workspace_id));
+	} catch (e) {
+		error.set(e instanceof Error ? e.message : 'Failed to load tables for workspace');
+	} finally {
+		loading.set(false);
+	}
+}
 
 export async function loadTables(): Promise<void> {
 	loading.set(true);
@@ -40,12 +73,13 @@ export async function loadTable(table: Table): Promise<void> {
 	}
 }
 
-export async function refreshColumns(tableId: string): Promise<void> {
+export async function refreshTable(tableId: string): Promise<void> {
 	try {
 		const table = await fetchTable(tableId);
+		currentTable.set(table);
 		columns.set(table.columns ?? []);
 	} catch (e) {
-		error.set(e instanceof Error ? e.message : 'Failed to refresh columns');
+		error.set(e instanceof Error ? e.message : 'Failed to refresh table');
 	}
 }
 

@@ -14,7 +14,7 @@
 		error,
 		loadTable,
 		refreshRows,
-		refreshColumns
+		refreshTable
 	} from '$lib/stores/tables.store';
 	import {
 		fetchTables,
@@ -241,7 +241,7 @@
 			if (!col) return;
 			try {
 				await updateColumn(colId, { options: { ...col.options, width: newWidth } });
-				await refreshColumns(get(page).params.id);
+				await refreshTable(get(page).params.id);
 			} catch (err) {
 				error.set(err instanceof Error ? err.message : 'Failed to resize column');
 			}
@@ -312,7 +312,7 @@
 		error.set(null);
 		try {
 			await createColumn(tableId, { name, type });
-			await refreshColumns(tableId);
+			await refreshTable(tableId);
 			showAddColumn = false;
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to add column');
@@ -324,7 +324,7 @@
 		error.set(null);
 		try {
 			await deleteColumn(colId);
-			await refreshColumns(tableId);
+			await refreshTable(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to delete column');
 		}
@@ -343,7 +343,7 @@
 				updateColumn(col.id, { position: swapCol.position }),
 				updateColumn(swapCol.id, { position: col.position })
 			]);
-			await refreshColumns(tableId);
+			await refreshTable(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to reorder column');
 		}
@@ -363,7 +363,7 @@
 		error.set(null);
 		try {
 			await updateColumn(colId, { name: renameValue.trim() });
-			await refreshColumns(tableId);
+			await refreshTable(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to rename column');
 		} finally {
@@ -476,7 +476,7 @@
 		error.set(null);
 		try {
 			await updateColumn(colId, { options: { ...col.options, choices } });
-			await refreshColumns(tableId);
+			await refreshTable(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update options');
 		}
@@ -561,7 +561,7 @@
 				position: col.position ?? 0
 			});
 		}
-		await refreshColumns(tableId);
+		await refreshTable(tableId);
 		showImportTemplateModal = false;
 	}
 
@@ -686,7 +686,7 @@
 					options: { choices }
 				});
 			}
-			await refreshColumns(tableId);
+			await refreshTable(tableId);
 			const currentCols = get(columns);
 			function headerColName(h: string): string {
 				const m = h.match(/^(.+)\{\{(\w+)\}\}$/);
