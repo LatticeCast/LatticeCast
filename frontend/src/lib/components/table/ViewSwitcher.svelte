@@ -1,13 +1,15 @@
 <script lang="ts">
+	import type { ViewConfig } from '$lib/types/table';
+
 	let {
 		views,
 		activeViewName,
 		onViewChange,
 		onAddView
 	}: {
-		views: { name: string; type: string; config: Record<string, unknown> }[];
+		views: ViewConfig[];
 		activeViewName: string;
-		onViewChange: (view: { name: string; type: string; config: Record<string, unknown> }) => void;
+		onViewChange: (view: ViewConfig) => void;
 		onAddView: (type: string, name: string) => void;
 	} = $props();
 

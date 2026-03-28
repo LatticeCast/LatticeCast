@@ -28,8 +28,9 @@
 		updateRow,
 		deleteRow
 	} from '$lib/backend/tables';
-	import type { Column, ColumnChoice, ColumnOptions, ColumnType, Row } from '$lib/types/table';
+	import type { Column, ColumnChoice, ColumnOptions, ColumnType, Row, ViewConfig } from '$lib/types/table';
 	import { TAG_COLORS } from '$lib/UI/theme.svelte';
+	import { createView } from '$lib/backend/views';
 	import { SvelteSet } from 'svelte/reactivity';
 	import {
 		type FilterCondition,
@@ -47,6 +48,9 @@
 	import TableHeader from '$lib/components/table/TableHeader.svelte';
 	import TableToolbar from '$lib/components/table/TableToolbar.svelte';
 	import TableGrid from '$lib/components/table/TableGrid.svelte';
+	import ViewSwitcher from '$lib/components/table/ViewSwitcher.svelte';
+	import KanbanBoard from '$lib/components/table/KanbanBoard.svelte';
+	import TimelineView from '$lib/components/table/TimelineView.svelte';
 	import ContextMenu from '$lib/components/table/ContextMenu.svelte';
 	import AddColumnModal from '$lib/components/table/AddColumnModal.svelte';
 	import RowExpandPanel from '$lib/components/table/RowExpandPanel.svelte';
@@ -82,6 +86,9 @@
 	let importingData = $state(false);
 	let importError = $state<string | null>(null);
 	let managingOptionsCol = $state<Column | null>(null);
+
+	// View state
+	let activeViewName = $state('');
 
 	// Column resize
 	let resizingColId = $state<string | null>(null);
@@ -150,6 +157,12 @@
 
 	const tableMinWidth = $derived(
 		48 + sortedColumns.reduce((sum, col) => sum + getColWidth(col), 0) + 40 + 40
+	);
+
+	const activeView = $derived(
+		($currentTable?.views ?? []).find((v) => v.name === activeViewName) ??
+			($currentTable?.views ?? [])[0] ??
+			({ name: 'Table', type: 'table', config: {} } satisfies ViewConfig)
 	);
 
 	function getGroupKey(row: Row, colId: string, col: Column): string {
@@ -227,6 +240,14 @@
 				await loadTable(table);
 				const ws = get(workspaces).find((w) => w.workspace_id === table.workspace_id);
 				if (ws) currentWorkspace.set(ws);
+				// Restore active view from URL param or localStorage
+				const urlView = new URL(window.location.href).searchParams.get('view');
+				const savedView = urlView ?? localStorage.getItem(`view:${tableId}`);
+				if (savedView && table.views.some((v) => v.name === savedView)) {
+					activeViewName = savedView;
+				} else if (table.views.length > 0) {
+					activeViewName = table.views[0].name;
+				}
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to load table');
 			}
@@ -529,6 +550,32 @@
 		showFilterPanel = true;
 	}
 
+	// View handlers
+	function handleViewChange(view: ViewConfig) {
+		activeViewName = view.name;
+		const tableId = $page.params.table_id!;
+		localStorage.setItem(`view:${tableId}`, view.name);
+		const url = new URL(window.location.href);
+		url.searchParams.set('view', view.name);
+		history.replaceState(history.state, '', url.toString());
+	}
+
+	async function handleAddView(type: string, name: string) {
+		const tableId = $page.params.table_id!;
+		error.set(null);
+		try {
+			await createView(tableId, { name, type, config: {} });
+			await refreshTable(tableId);
+			activeViewName = name;
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to create view');
+		}
+	}
+
+	async function handleViewUpdate(_updated: ViewConfig) {
+		await refreshTable($page.params.table_id!);
+	}
+
 	// Export / Import
 	function handleExportTemplate() {
 		const template = [...$columns]
@@ -745,80 +792,109 @@
 		onAddColumn={() => (showAddColumn = true)}
 	/>
 
-	<TableToolbar
-		columns={$columns}
-		{sortConfig}
-		{groupConfig}
-		{hiddenCols}
-		{filterConditions}
-		{showFilterPanel}
-		{searchQuery}
-		onSortChange={(c) => (sortConfig = c)}
-		onGroupChange={(c) => (groupConfig = c)}
-		onToggleHideCol={toggleHideCol}
-		onClearHiddenCols={() => hiddenCols.clear()}
-		onFilterConditionsChange={(c) => (filterConditions = c)}
-		onShowFilterPanelChange={(s) => (showFilterPanel = s)}
-		onSearchQueryChange={(q) => (searchQuery = q)}
-		onExportTemplate={handleExportTemplate}
-		onShowImportTemplate={() => (showImportTemplateModal = true)}
-		onExportCSV={exportCSV}
-		onExportJSON={exportJSON}
-		onImportFile={handleImportFile}
-		onAddFilterCondition={addFilterCondition}
-		onRemoveFilterCondition={removeFilterCondition}
-		onClearAllFilters={() => (filterConditions = [])}
+	<ViewSwitcher
+		views={$currentTable?.views ?? []}
+		activeViewName={activeView.name}
+		onViewChange={handleViewChange}
+		onAddView={handleAddView}
 	/>
 
-	<TableGrid
-		columns={$columns}
-		{sortedColumns}
-		{renderItems}
-		loading={$loading}
-		{tableMinWidth}
-		{addingRow}
-		{deletingRowId}
-		{editingCell}
-		{editValue}
-		{renamingColId}
-		{renameValue}
-		{colMenuId}
-		{tagsPopupCell}
-		{sortConfig}
-		{filterConditions}
-		{resizingColId}
-		{hiddenCols}
-		{collapsedGroups}
-		{localWidths}
-		onStartEdit={startEdit}
-		onCommitEdit={commitEdit}
-		onEditValueChange={(v) => (editValue = v)}
-		onEditingCellChange={(c) => (editingCell = c)}
-		onToggleCheckbox={toggleCheckbox}
-		onRemoveTag={removeTag}
-		onAddTag={addTag}
-		onTagsPopupChange={(c) => (tagsPopupCell = c)}
-		onDeleteRow={handleDeleteRow}
-		onOpenExpand={openExpand}
-		onOpenContextMenu={openContextMenu}
-		onStartRename={startRename}
-		onCommitRename={commitRename}
-		onRenameValueChange={(v) => (renameValue = v)}
-		onRenamingColIdChange={(id) => (renamingColId = id)}
-		onColMenuChange={(id) => (colMenuId = id)}
-		onSortChange={(c) => (sortConfig = c)}
-		onFilterAdd={addFilterForColumn}
-		onShowFilterPanel={() => (showFilterPanel = true)}
-		onHideCol={(id) => hiddenCols.add(id)}
-		onDeleteColumn={handleDeleteColumn}
-		onMoveColumn={handleMoveColumn}
-		onResizeStart={handleResizeStart}
-		onShowAddColumn={() => (showAddColumn = true)}
-		onAddRow={handleAddRow}
-		onAddRowInGroup={handleAddRowInGroup}
-		onToggleCollapseGroup={toggleCollapseGroup}
-		onManageOptions={(col) => (managingOptionsCol = col)}
-	/>
+	{#if activeView.type === 'table'}
+		<TableToolbar
+			columns={$columns}
+			{sortConfig}
+			{groupConfig}
+			{hiddenCols}
+			{filterConditions}
+			{showFilterPanel}
+			{searchQuery}
+			onSortChange={(c) => (sortConfig = c)}
+			onGroupChange={(c) => (groupConfig = c)}
+			onToggleHideCol={toggleHideCol}
+			onClearHiddenCols={() => hiddenCols.clear()}
+			onFilterConditionsChange={(c) => (filterConditions = c)}
+			onShowFilterPanelChange={(s) => (showFilterPanel = s)}
+			onSearchQueryChange={(q) => (searchQuery = q)}
+			onExportTemplate={handleExportTemplate}
+			onShowImportTemplate={() => (showImportTemplateModal = true)}
+			onExportCSV={exportCSV}
+			onExportJSON={exportJSON}
+			onImportFile={handleImportFile}
+			onAddFilterCondition={addFilterCondition}
+			onRemoveFilterCondition={removeFilterCondition}
+			onClearAllFilters={() => (filterConditions = [])}
+		/>
+
+		<TableGrid
+			columns={$columns}
+			{sortedColumns}
+			{renderItems}
+			loading={$loading}
+			{tableMinWidth}
+			{addingRow}
+			{deletingRowId}
+			{editingCell}
+			{editValue}
+			{renamingColId}
+			{renameValue}
+			{colMenuId}
+			{tagsPopupCell}
+			{sortConfig}
+			{filterConditions}
+			{resizingColId}
+			{hiddenCols}
+			{collapsedGroups}
+			{localWidths}
+			onStartEdit={startEdit}
+			onCommitEdit={commitEdit}
+			onEditValueChange={(v) => (editValue = v)}
+			onEditingCellChange={(c) => (editingCell = c)}
+			onToggleCheckbox={toggleCheckbox}
+			onRemoveTag={removeTag}
+			onAddTag={addTag}
+			onTagsPopupChange={(c) => (tagsPopupCell = c)}
+			onDeleteRow={handleDeleteRow}
+			onOpenExpand={openExpand}
+			onOpenContextMenu={openContextMenu}
+			onStartRename={startRename}
+			onCommitRename={commitRename}
+			onRenameValueChange={(v) => (renameValue = v)}
+			onRenamingColIdChange={(id) => (renamingColId = id)}
+			onColMenuChange={(id) => (colMenuId = id)}
+			onSortChange={(c) => (sortConfig = c)}
+			onFilterAdd={addFilterForColumn}
+			onShowFilterPanel={() => (showFilterPanel = true)}
+			onHideCol={(id) => hiddenCols.add(id)}
+			onDeleteColumn={handleDeleteColumn}
+			onMoveColumn={handleMoveColumn}
+			onResizeStart={handleResizeStart}
+			onShowAddColumn={() => (showAddColumn = true)}
+			onAddRow={handleAddRow}
+			onAddRowInGroup={handleAddRowInGroup}
+			onToggleCollapseGroup={toggleCollapseGroup}
+			onManageOptions={(col) => (managingOptionsCol = col)}
+		/>
+	{:else if activeView.type === 'kanban'}
+		<KanbanBoard
+			tableId={$page.params.table_id!}
+			columns={$columns}
+			rows={$rows}
+			viewConfig={activeView}
+			onOpenExpand={openExpand}
+			onRowsRefresh={() => refreshRows($page.params.table_id!)}
+			onViewUpdate={handleViewUpdate}
+		/>
+	{:else if activeView.type === 'timeline'}
+		<TimelineView
+			tableId={$page.params.table_id!}
+			columns={$columns}
+			rows={$rows}
+			viewConfig={activeView}
+			onOpenExpand={openExpand}
+			onRowsRefresh={() => refreshRows($page.params.table_id!)}
+			onViewUpdate={handleViewUpdate}
+		/>
+	{/if}
 </div>
 
 <!-- Overlays -->
