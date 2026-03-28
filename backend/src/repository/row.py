@@ -49,6 +49,13 @@ class RowRepository:
         await self.session.delete(row)
         await self.session.commit()
 
+    async def count_by_table(self, table_id: UUID) -> int:
+        """Return total number of rows in a table."""
+        from sqlalchemy import func
+        statement = select(func.count()).where(Row.table_id == table_id)
+        result = await self.session.execute(statement)
+        return result.scalar_one()
+
     async def filter_by_jsonb(self, table_id: UUID, contains: dict[str, Any], offset: int = 0, limit: int = 100) -> list[Row]:
         """Filter rows where row_data @> contains (JSONB containment query using GIN index)."""
         statement = (

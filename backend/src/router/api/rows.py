@@ -41,10 +41,22 @@ async def create_row(
     session: AsyncSession = Depends(get_session),
 ):
     """Create a new row in a table (user must be a workspace member)"""
-    await _get_table_for_member(table_id, user, session)
+    table = await _get_table_for_member(table_id, user, session)
 
     repo = RowRepository(session)
-    return await repo.create(table_id=table_id, row_data=data.row_data, created_by=user.user_id, updated_by=user.user_id)
+    row = await repo.create(table_id=table_id, row_data=data.row_data, created_by=user.user_id, updated_by=user.user_id)
+
+    # Auto-generate Key if table has a "Key" column
+    key_col = next((c for c in table.columns if c.get("name") == "Key"), None)
+    if key_col:
+        prefix = "".join(w[0].upper() for w in table.name.split() if w)[:4]
+        row_count = await repo.count_by_table(table_id)
+        key_value = f"{prefix}-{row_count}"
+        from models.row import RowUpdate
+        updated_data = {**row.row_data, key_col["column_id"]: key_value}
+        row = await repo.update(row=row, data=RowUpdate(row_data=updated_data), updated_by=user.user_id)
+
+    return row
 
 
 @router.get("/tables/{table_id}/rows", response_model=list[RowResponse])
