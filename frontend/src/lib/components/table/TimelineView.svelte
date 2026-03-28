@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Column, Row, ViewConfig } from '$lib/types/table';
 	import { getChoices, getChoiceColor, formatDate } from './table.utils';
+	import { updateRow } from '$lib/backend/tables';
 	import { updateView } from '$lib/backend/views';
 
 	let {
@@ -9,6 +10,7 @@
 		rows,
 		viewConfig,
 		onOpenExpand,
+		onRowsRefresh = () => {},
 		onViewUpdate = () => {}
 	}: {
 		tableId: string;
@@ -16,6 +18,7 @@
 		rows: Row[];
 		viewConfig: ViewConfig;
 		onOpenExpand: (row: Row) => void;
+		onRowsRefresh?: () => void;
 		onViewUpdate?: (updated: ViewConfig) => void;
 	} = $props();
 
@@ -208,6 +211,83 @@
 	const HEADER_HEIGHT = 36;
 
 	const GRANULARITIES: Granularity[] = ['day', 'week', 'month'];
+
+	// ── Drag resize ───────────────────────────────────────────────────────
+
+	let dragState = $state<{
+		rowId: string;
+		handle: 'start' | 'end';
+		startX: number;
+		origDateStr: string;
+		colId: string;
+	} | null>(null);
+	let dragDeltaDays = $state(0);
+
+	function onResizeMouseDown(e: MouseEvent, row: Row, handle: 'start' | 'end') {
+		e.stopPropagation();
+		e.preventDefault();
+		const colId = handle === 'start' ? startColId! : endColId!;
+		const rawVal = row.row_data[colId];
+		const origDateStr = rawVal ? formatDate(String(rawVal)).slice(0, 10) : '';
+		dragState = { rowId: row.row_id, handle, startX: e.clientX, origDateStr, colId };
+		dragDeltaDays = 0;
+	}
+
+	$effect(() => {
+		if (!dragState) return;
+
+		function onMove(e: MouseEvent) {
+			if (!dragState) return;
+			dragDeltaDays = Math.round((e.clientX - dragState.startX) / cellWidth);
+		}
+
+		async function onUp(e: MouseEvent) {
+			window.removeEventListener('mousemove', onMove);
+			window.removeEventListener('mouseup', onUp);
+			if (!dragState) return;
+			const delta = Math.round((e.clientX - dragState.startX) / cellWidth);
+			if (delta !== 0 && dragState.origDateStr) {
+				const orig = new Date(dragState.origDateStr + 'T00:00:00Z');
+				if (!isNaN(orig.getTime())) {
+					const newDate = new Date(orig);
+					newDate.setUTCDate(newDate.getUTCDate() + delta);
+					const newDateStr = newDate.toISOString().slice(0, 10);
+					const row = rows.find((r) => r.row_id === dragState!.rowId);
+					if (row) {
+						await updateRow(row.row_id, {
+							row_data: { ...row.row_data, [dragState.colId]: newDateStr }
+						});
+						onRowsRefresh();
+					}
+				}
+			}
+			dragState = null;
+			dragDeltaDays = 0;
+		}
+
+		window.addEventListener('mousemove', onMove);
+		window.addEventListener('mouseup', onUp);
+		return () => {
+			window.removeEventListener('mousemove', onMove);
+			window.removeEventListener('mouseup', onUp);
+		};
+	});
+
+	function getEffectiveDates(
+		row: Row,
+		startDate: Date,
+		endDate: Date
+	): { startDate: Date; endDate: Date } {
+		if (!dragState || dragState.rowId !== row.row_id || dragDeltaDays === 0) {
+			return { startDate, endDate };
+		}
+		const orig = new Date(dragState.origDateStr + 'T00:00:00Z');
+		if (isNaN(orig.getTime())) return { startDate, endDate };
+		const shifted = new Date(orig);
+		shifted.setUTCDate(shifted.getUTCDate() + dragDeltaDays);
+		if (dragState.handle === 'start') return { startDate: shifted, endDate };
+		return { startDate, endDate: shifted };
+	}
 </script>
 
 <!-- Config bar -->
@@ -347,7 +427,8 @@
 				{/if}
 
 				<!-- Rows -->
-				{#each group.rows as { row, startDate, endDate } (row.row_id)}
+				{#each group.rows as { row, startDate: rawStart, endDate: rawEnd } (row.row_id)}
+					{@const { startDate, endDate } = getEffectiveDates(row, rawStart, rawEnd)}
 					<div
 						class="flex border-b border-gray-100 hover:bg-gray-50"
 						style="height: {ROW_HEIGHT}px"
@@ -378,20 +459,35 @@
 							{/each}
 
 							<!-- Bar -->
-							<button
-								class="absolute top-2 bottom-2 flex cursor-pointer items-center overflow-hidden rounded px-2 text-xs font-medium shadow-sm transition hover:brightness-95 {getBarColorClasses(
-									row
-								)}"
+							<div
+								class="absolute top-2 bottom-2 flex cursor-pointer items-center overflow-hidden rounded text-xs font-medium shadow-sm {getBarColorClasses(row)} {dragState?.rowId === row.row_id ? 'opacity-80' : ''}"
 								style="left: {getBarLeft(startDate)}px; width: {getBarWidth(startDate, endDate)}px"
+								title="{labelCol ? String(row.row_data[labelCol.id] ?? '') : ''} ({formatDate(String(startDate.toISOString().slice(0, 10)))} → {formatDate(String(endDate.toISOString().slice(0, 10)))})"
+								role="button"
+								tabindex="0"
 								onclick={() => onOpenExpand(row)}
-								title="{labelCol ? String(row.row_data[labelCol.id] ?? '') : ''} ({formatDate(
-									String(startDate.toISOString().slice(0, 10))
-								)} → {formatDate(String(endDate.toISOString().slice(0, 10)))})"
+								onkeydown={(e) => e.key === 'Enter' && onOpenExpand(row)}
 							>
-								<span class="truncate">
+								<!-- Left resize handle -->
+								{#if startColId}
+									<button
+										class="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/10 focus:outline-none"
+										onmousedown={(e) => onResizeMouseDown(e, row, 'start')}
+										aria-label="Resize start date"
+									></button>
+								{/if}
+								<span class="flex-1 truncate px-2">
 									{labelCol ? String(row.row_data[labelCol.id] ?? '') || '—' : '—'}
 								</span>
-							</button>
+								<!-- Right resize handle -->
+								{#if endColId}
+									<button
+										class="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/10 focus:outline-none"
+										onmousedown={(e) => onResizeMouseDown(e, row, 'end')}
+										aria-label="Resize end date"
+									></button>
+								{/if}
+							</div>
 						</div>
 					</div>
 				{/each}
