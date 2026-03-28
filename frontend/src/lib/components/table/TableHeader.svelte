@@ -1,12 +1,14 @@
 <script lang="ts">
 	let {
 		tableName,
+		workspaceName,
 		loading,
 		error,
 		onBack,
 		onAddColumn
 	}: {
 		tableName: string;
+		workspaceName?: string;
 		loading: boolean;
 		error: string | null;
 		onBack: () => void;
@@ -25,6 +27,10 @@
 			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
 		</svg>
 	</button>
+	{#if workspaceName}
+		<span class="text-sm text-white/60">{workspaceName}</span>
+		<span class="text-white/40">/</span>
+	{/if}
 	<h1 class="text-lg font-semibold text-white">
 		{tableName}
 	</h1>

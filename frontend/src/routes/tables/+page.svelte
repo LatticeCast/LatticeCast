@@ -5,29 +5,43 @@
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth.store';
 	import { fetchTables, createTable, deleteTable } from '$lib/backend/tables';
-	import type { Table } from '$lib/types/table';
+	import { fetchWorkspaces } from '$lib/backend/workspaces';
+	import type { Table, Workspace } from '$lib/types/table';
 
 	let tables = $state<Table[]>([]);
+	let workspaces = $state<Workspace[]>([]);
+	let currentWorkspace = $state<Workspace | null>(null);
 	let loading = $state(true);
 	let error = $state('');
 	let creating = $state(false);
 	let newTableName = $state('');
+
+	const filteredTables = $derived(
+		currentWorkspace
+			? tables.filter((t) => t.workspace_id === currentWorkspace!.workspace_id)
+			: tables
+	);
 
 	onMount(async () => {
 		if (!$authStore?.role) {
 			goto('/login');
 			return;
 		}
-		await loadTables();
+		await loadData();
 	});
 
-	async function loadTables() {
+	async function loadData() {
 		loading = true;
 		error = '';
 		try {
-			tables = await fetchTables();
+			const [ws, tbls] = await Promise.all([fetchWorkspaces(), fetchTables()]);
+			workspaces = ws;
+			tables = tbls;
+			if (ws.length > 0 && !currentWorkspace) {
+				currentWorkspace = ws[0];
+			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load tables';
+			error = e instanceof Error ? e.message : 'Failed to load data';
 		} finally {
 			loading = false;
 		}
@@ -35,11 +49,11 @@
 
 	async function handleCreate() {
 		const name = newTableName.trim();
-		if (!name) return;
+		if (!name || !currentWorkspace) return;
 		creating = true;
 		error = '';
 		try {
-			const table = await createTable({ name });
+			const table = await createTable({ name, workspace_id: currentWorkspace.workspace_id });
 			tables = [...tables, table];
 			newTableName = '';
 		} catch (e) {
@@ -49,11 +63,11 @@
 		}
 	}
 
-	async function handleDelete(id: string) {
+	async function handleDelete(tableId: string) {
 		error = '';
 		try {
-			await deleteTable(id);
-			tables = tables.filter((t) => t.id !== id);
+			await deleteTable(tableId);
+			tables = tables.filter((t) => t.table_id !== tableId);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to delete table';
 		}
@@ -70,6 +84,22 @@
 			<h1 class="text-3xl font-bold text-white">Tables</h1>
 		</div>
 
+		<!-- Workspace Selector -->
+		{#if workspaces.length > 0}
+			<div class="mb-4 flex flex-wrap gap-2">
+				{#each workspaces as ws (ws.workspace_id)}
+					<button
+						onclick={() => (currentWorkspace = ws)}
+						class="rounded-xl px-4 py-2 text-sm font-medium shadow-sm transition {currentWorkspace?.workspace_id === ws.workspace_id
+							? 'bg-blue-600 text-white'
+							: 'bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-600'}"
+					>
+						{ws.name}
+					</button>
+				{/each}
+			</div>
+		{/if}
+
 		<!-- Create Table -->
 		<div class="mb-6 flex gap-2">
 			<input
@@ -81,7 +111,7 @@
 			/>
 			<button
 				onclick={handleCreate}
-				disabled={creating || !newTableName.trim()}
+				disabled={creating || !newTableName.trim() || !currentWorkspace}
 				class="rounded-2xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
 			>
 				{creating ? 'Creating...' : 'Create'}
@@ -95,24 +125,24 @@
 		<!-- Tables List -->
 		{#if loading}
 			<div class="text-center text-gray-500">Loading...</div>
-		{:else if tables.length === 0}
+		{:else if filteredTables.length === 0}
 			<div class="rounded-3xl bg-white p-8 text-center text-gray-400 shadow-sm">
 				No tables yet. Create one above.
 			</div>
 		{:else}
 			<div class="space-y-2">
-				{#each tables as table (table.id)}
+				{#each filteredTables as table (table.table_id)}
 					<div
 						class="flex items-center gap-3 rounded-2xl bg-white px-4 py-4 shadow-sm transition hover:bg-blue-50"
 					>
 						<button
-							onclick={() => goto(`/tables/${table.id}`)}
+							onclick={() => goto(`/tables/${table.table_id}`)}
 							class="flex-1 text-left font-medium text-gray-800"
 						>
 							{table.name}
 						</button>
 						<button
-							onclick={() => handleDelete(table.id)}
+							onclick={() => handleDelete(table.table_id)}
 							class="rounded-xl p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
 							aria-label="Delete table"
 						>

@@ -8,11 +8,14 @@
 	import { authStore } from '$lib/stores/auth.store';
 	import {
 		currentTable,
+		currentWorkspace,
+		workspaces,
 		columns,
 		rows,
 		loading,
 		error,
 		loadTable,
+		loadWorkspaces,
 		refreshRows,
 		refreshTable
 	} from '$lib/stores/tables.store';
@@ -102,7 +105,7 @@
 			if (searchQuery.trim()) {
 				const q = searchQuery.trim().toLowerCase();
 				result = result.filter((r) =>
-					Object.values(r.data).some((v) => {
+					Object.values(r.row_data).some((v) => {
 						if (v === null || v === undefined) return false;
 						if (Array.isArray(v)) return v.some((item) => String(item).toLowerCase().includes(q));
 						return String(v).toLowerCase().includes(q);
@@ -115,7 +118,7 @@
 					continue;
 				const lv = cond.value.toLowerCase();
 				result = result.filter((r) => {
-					const cell = r.data[cond.colId];
+					const cell = r.row_data[cond.colId];
 					const isEmpty =
 						cell === null ||
 						cell === undefined ||
@@ -135,8 +138,8 @@
 			if (!sortConfig) return result;
 			const { colId, dir } = sortConfig;
 			return [...result].sort((a, b) => {
-				const av = a.data[colId];
-				const bv = b.data[colId];
+				const av = a.row_data[colId];
+				const bv = b.row_data[colId];
 				const as = av === null || av === undefined ? '' : String(av);
 				const bs = bv === null || bv === undefined ? '' : String(bv);
 				const cmp = as.localeCompare(bs, undefined, { numeric: true, sensitivity: 'base' });
@@ -150,7 +153,7 @@
 	);
 
 	function getGroupKey(row: Row, colId: string, col: Column): string {
-		const val = row.data[colId];
+		const val = row.row_data[colId];
 		if (val === null || val === undefined || val === '') return '(empty)';
 		if (col.type === 'date') {
 			const normalized = formatDate(String(val));
@@ -164,7 +167,8 @@
 	const groupedRows = $derived(
 		(() => {
 			if (!groupConfig) return null;
-			const col = $columns.find((c) => c.id === groupConfig.colId);
+			const { colId: gcColId, granularity: gcGranularity } = groupConfig;
+			const col = $columns.find((c) => c.id === gcColId);
 			if (!col) return null;
 			const keyOrder: string[] = [];
 			const keyMap: Record<string, Row[]> = {};
@@ -212,15 +216,17 @@
 				goto('/login');
 				return;
 			}
-			const tableId = $page.params.id;
+			const tableId = $page.params.id!;
 			try {
-				const all = await fetchTables();
-				const table = all.find((t) => t.id === tableId);
+				const [all] = await Promise.all([fetchTables(), loadWorkspaces()]);
+				const table = all.find((t) => t.table_id === tableId);
 				if (!table) {
 					goto('/tables');
 					return;
 				}
 				await loadTable(table);
+				const ws = get(workspaces).find((w) => w.workspace_id === table.workspace_id);
+				if (ws) currentWorkspace.set(ws);
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to load table');
 			}
@@ -240,8 +246,8 @@
 			const col = get(columns).find((c) => c.id === colId);
 			if (!col) return;
 			try {
-				await updateColumn(colId, { options: { ...col.options, width: newWidth } });
-				await refreshTable(get(page).params.id);
+				await updateColumn(get(page).params.id!, colId, { options: { ...col.options, width: newWidth } });
+				await refreshTable(get(page).params.id!);
 			} catch (err) {
 				error.set(err instanceof Error ? err.message : 'Failed to resize column');
 			}
@@ -265,11 +271,11 @@
 	// ─── Handlers ────────────────────────────────────────────────────────────────
 
 	async function handleAddRow() {
-		const tableId = $page.params.id;
+		const tableId = $page.params.id!;
 		addingRow = true;
 		error.set(null);
 		try {
-			await createRow(tableId, { data: {} });
+			await createRow(tableId, { row_data: {} });
 			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
@@ -279,12 +285,12 @@
 	}
 
 	async function handleAddRowInGroup(groupKey: string, col: Column) {
-		const tableId = $page.params.id;
+		const tableId = $page.params.id!;
 		addingRow = true;
 		error.set(null);
 		try {
 			const val: unknown = groupKey === '(empty)' ? null : groupKey;
-			await createRow(tableId, { data: { [col.id]: val } });
+			await createRow(tableId, { row_data: { [col.id]: val } });
 			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
@@ -294,7 +300,7 @@
 	}
 
 	async function handleDeleteRow(rowId: string) {
-		const tableId = $page.params.id;
+		const tableId = $page.params.id!;
 		deletingRowId = rowId;
 		error.set(null);
 		try {
@@ -308,10 +314,10 @@
 	}
 
 	async function handleAddColumn(name: string, type: string) {
-		const tableId = $page.params.id;
+		const tableId = $page.params.id!;
 		error.set(null);
 		try {
-			await createColumn(tableId, { name, type });
+			await createColumn(tableId, { name, type: type as ColumnType });
 			await refreshTable(tableId);
 			showAddColumn = false;
 		} catch (e) {
@@ -320,10 +326,10 @@
 	}
 
 	async function handleDeleteColumn(colId: string) {
-		const tableId = $page.params.id;
+		const tableId = $page.params.id!;
 		error.set(null);
 		try {
-			await deleteColumn(colId);
+			await deleteColumn(tableId, colId);
 			await refreshTable(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to delete column');
@@ -331,7 +337,7 @@
 	}
 
 	async function handleMoveColumn(col: Column, direction: 'up' | 'down') {
-		const tableId = $page.params.id;
+		const tableId = $page.params.id!;
 		const sorted = [...$columns].sort((a, b) => a.position - b.position);
 		const idx = sorted.findIndex((c) => c.id === col.id);
 		const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
@@ -340,8 +346,8 @@
 		error.set(null);
 		try {
 			await Promise.all([
-				updateColumn(col.id, { position: swapCol.position }),
-				updateColumn(swapCol.id, { position: col.position })
+				updateColumn(tableId, col.id, { position: swapCol.position }),
+				updateColumn(tableId, swapCol.id, { position: col.position })
 			]);
 			await refreshTable(tableId);
 		} catch (e) {
@@ -359,10 +365,10 @@
 			renamingColId = null;
 			return;
 		}
-		const tableId = $page.params.id;
+		const tableId = $page.params.id!;
 		error.set(null);
 		try {
-			await updateColumn(colId, { name: renameValue.trim() });
+			await updateColumn(tableId, colId, { name: renameValue.trim() });
 			await refreshTable(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to rename column');
@@ -379,65 +385,65 @@
 	async function commitEdit(rowId: string, col: Column) {
 		if (!editingCell) return;
 		editingCell = null;
-		const row = $rows.find((r) => r.id === rowId);
+		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
 		let parsed: unknown = editValue;
 		if (col.type === 'number') parsed = editValue === '' ? null : Number(editValue);
 		else if (col.type === 'checkbox') parsed = editValue === 'true';
 		else if (editValue === '') parsed = null;
-		const newData = { ...row.data, [col.id]: parsed };
+		const newData = { ...row.row_data, [col.id]: parsed };
 		error.set(null);
 		try {
-			await updateRow(rowId, { data: newData });
-			await refreshRows($page.params.id);
+			await updateRow(rowId, { row_data: newData });
+			await refreshRows($page.params.id!);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
 		}
 	}
 
 	async function toggleCheckbox(rowId: string, col: Column) {
-		const row = $rows.find((r) => r.id === rowId);
+		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
-		const newData = { ...row.data, [col.id]: !row.data[col.id] };
+		const newData = { ...row.row_data, [col.id]: !row.row_data[col.id] };
 		error.set(null);
 		try {
-			await updateRow(rowId, { data: newData });
-			await refreshRows($page.params.id);
+			await updateRow(rowId, { row_data: newData });
+			await refreshRows($page.params.id!);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
 		}
 	}
 
 	async function removeTag(rowId: string, col: Column, tag: string) {
-		const row = $rows.find((r) => r.id === rowId);
+		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
 		const current = getTagValues(row, col.id);
-		const newData = { ...row.data, [col.id]: current.filter((t) => t !== tag) };
+		const newData = { ...row.row_data, [col.id]: current.filter((t) => t !== tag) };
 		try {
-			await updateRow(rowId, { data: newData });
-			await refreshRows($page.params.id);
+			await updateRow(rowId, { row_data: newData });
+			await refreshRows($page.params.id!);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');
 		}
 	}
 
 	async function addTag(rowId: string, col: Column, tag: string) {
-		const row = $rows.find((r) => r.id === rowId);
+		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
 		const current = getTagValues(row, col.id);
 		if (current.includes(tag)) return;
-		const newData = { ...row.data, [col.id]: [...current, tag] };
+		const newData = { ...row.row_data, [col.id]: [...current, tag] };
 		tagsPopupCell = null;
 		try {
-			await updateRow(rowId, { data: newData });
-			await refreshRows($page.params.id);
+			await updateRow(rowId, { row_data: newData });
+			await refreshRows($page.params.id!);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');
 		}
 	}
 
 	async function handleUpdateRow(rowId: string, data: Record<string, unknown>) {
-		await updateRow(rowId, { data });
+		await updateRow(rowId, { row_data: data });
 	}
 
 	async function handleRefreshRows(tableId: string) {
@@ -456,12 +462,12 @@
 	}
 
 	async function handleDuplicateRow(rowId: string) {
-		const row = $rows.find((r) => r.id === rowId);
+		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
-		const tableId = $page.params.id;
+		const tableId = $page.params.id!;
 		error.set(null);
 		try {
-			await createRow(tableId, { data: { ...row.data } });
+			await createRow(tableId, { row_data: { ...row.row_data } });
 			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to duplicate row');
@@ -470,12 +476,12 @@
 	}
 
 	async function handleSaveOptions(colId: string, choices: import('$lib/types/table').ColumnChoice[]) {
-		const tableId = $page.params.id;
+		const tableId = $page.params.id!;
 		const col = $columns.find((c) => c.id === colId);
 		if (!col) return;
 		error.set(null);
 		try {
-			await updateColumn(colId, { options: { ...col.options, choices } });
+			await updateColumn(tableId, colId, { options: { ...col.options, choices } });
 			await refreshTable(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update options');
@@ -543,7 +549,7 @@
 	}
 
 	async function handleImportTemplate(file: File) {
-		const tableId = $page.params.id;
+		const tableId = $page.params.id!;
 		const text = await file.text();
 		const template = JSON.parse(text) as Array<{
 			name: string;
@@ -552,7 +558,7 @@
 			position?: number;
 		}>;
 		if (!Array.isArray(template)) throw new Error('Invalid template: expected an array');
-		await Promise.all([...$columns].map((col) => deleteColumn(col.id)));
+		await Promise.all([...$columns].map((col) => deleteColumn(tableId, col.id)));
 		for (const col of template) {
 			await createColumn(tableId, {
 				name: col.name,
@@ -574,7 +580,7 @@
 			...$rows.map((row) =>
 				cols
 					.map((col) => {
-						const val = row.data[col.id];
+						const val = row.row_data[col.id];
 						if (val === null || val === undefined) return '';
 						if (Array.isArray(val)) return escapeCSV(val.join(','));
 						return escapeCSV(String(val));
@@ -595,7 +601,7 @@
 		const cols = [...$columns].sort((a, b) => a.position - b.position);
 		const data = $rows.map((row) => {
 			const obj: Record<string, unknown> = {};
-			for (const col of cols) obj[col.name] = row.data[col.id] ?? null;
+			for (const col of cols) obj[col.name] = row.row_data[col.id] ?? null;
 			return obj;
 		});
 		const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -672,7 +678,7 @@
 	async function commitImport() {
 		importingData = true;
 		importError = null;
-		const tableId = $page.params.id;
+		const tableId = $page.params.id!;
 		try {
 			for (let i = 0; i < importNewColumns.length; i++) {
 				const nc = importNewColumns[i];
@@ -712,7 +718,7 @@
 						data[col.id] = isNaN(n) ? null : n;
 					} else data[col.id] = rawVal;
 				}
-				await createRow(tableId, { data });
+				await createRow(tableId, { row_data: data });
 			}
 			await refreshRows(tableId);
 			showImportModal = false;
@@ -732,6 +738,7 @@
 >
 	<TableHeader
 		tableName={$currentTable?.name ?? 'Loading...'}
+		workspaceName={$currentWorkspace?.name}
 		loading={$loading}
 		error={$error}
 		onBack={() => goto('/tables')}
@@ -847,7 +854,7 @@
 		onClose={() => (expandedRow = null)}
 		onUpdateRow={handleUpdateRow}
 		onRefreshRows={handleRefreshRows}
-		tableId={$page.params.id}
+		tableId={$page.params.id!}
 	/>
 {/if}
 
