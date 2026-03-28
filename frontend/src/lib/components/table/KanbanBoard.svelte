@@ -19,6 +19,11 @@
 
 	const groupCol = $derived(groupByColId ? columns.find((c) => c.id === groupByColId) : undefined);
 
+	// Prefer a column named "Priority" (select type) for card accent color; fall back to group col
+	const priorityCol = $derived(
+		columns.find((c) => c.name.toLowerCase() === 'priority' && c.type === 'select')
+	);
+
 	const choices = $derived(groupCol ? getChoices(groupCol) : []);
 
 	const lanes = $derived.by(() => {
@@ -52,19 +57,22 @@
 			: (columns.slice(0, 3) as Column[])
 	);
 
+	function getCardBorderStyle(row: Row): string {
+		const accentCol = priorityCol ?? groupCol;
+		if (!accentCol) return '';
+		const val = row.row_data[accentCol.id];
+		if (val === null || val === undefined || val === '') return '';
+		const color = getChoiceColor(accentCol, String(val));
+		// TAG_COLORS border class format: 'border-blue-200' → CSS var '--color-blue-200'
+		const colorName = color.border.replace('border-', '');
+		return `border-left: 4px solid var(--color-${colorName})`;
+	}
+
 	function getLaneColor(value: string) {
 		if (!groupCol || !value) return { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200' };
 		return getChoiceColor(groupCol, value);
 	}
 
-	function renderFieldValue(col: Column, row: Row): string {
-		const val = row.row_data[col.id];
-		if (val === null || val === undefined) return '';
-		if (col.type === 'checkbox') return val ? '✓' : '✗';
-		if (col.type === 'date') return formatDate(String(val));
-		if (col.type === 'tags') return getTagValues(row, col.id).join(', ');
-		return String(val);
-	}
 </script>
 
 {#if !groupByColId || !groupCol}
@@ -98,7 +106,8 @@
 					{:else}
 						{#each lane.rows as row (row.row_id)}
 							<button
-								class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left shadow-sm transition hover:border-blue-300 hover:shadow-md"
+								class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left shadow-sm transition hover:shadow-md"
+								style={getCardBorderStyle(row)}
 								onclick={() => onOpenExpand(row)}
 							>
 								{#each cardColumns as col (col!.id)}
