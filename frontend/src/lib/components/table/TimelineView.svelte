@@ -206,6 +206,8 @@
 	const SIDEBAR_WIDTH = 180;
 	const ROW_HEIGHT = 44;
 	const HEADER_HEIGHT = 36;
+
+	const GRANULARITIES: Granularity[] = ['day', 'week', 'month'];
 </script>
 
 <!-- Config bar -->
@@ -273,7 +275,7 @@
 
 	<!-- Granularity toggle -->
 	<div class="ml-auto flex items-center gap-0.5 rounded-lg border border-gray-200 bg-gray-50 p-0.5">
-		{#each ['day', 'week', 'month'] as Granularity[] as g (g)}
+		{#each GRANULARITIES as g (g)}
 			<button
 				class="rounded-md px-2.5 py-1 text-xs font-medium capitalize transition {granularity === g
 					? 'bg-white text-blue-600 shadow-sm'
