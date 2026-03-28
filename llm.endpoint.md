@@ -29,15 +29,60 @@ See `llm.user.md` for full details.
 | POST | `/api/login/{provider}/token` | None | Exchange OAuth code for tokens |
 | GET | `/api/login/me` | Bearer | Get current user info |
 
+## Workspaces
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/workspaces` | User | Create workspace |
+| GET | `/api/workspaces` | User | List user's workspaces |
+| GET | `/api/workspaces/{workspace_id}` | User | Get workspace |
+| PUT | `/api/workspaces/{workspace_id}` | Owner | Update workspace name |
+| DELETE | `/api/workspaces/{workspace_id}` | Owner | Delete workspace |
+| POST | `/api/workspaces/{workspace_id}/members` | Owner | Add member |
+| DELETE | `/api/workspaces/{workspace_id}/members/{user_id}` | Owner | Remove member |
+| GET | `/api/workspaces/{workspace_id}/members` | User | List members |
+
+### Workspace Request/Response Examples
+
+```python
+# Create workspace
+POST /api/workspaces
+Authorization: Bearer {token}
+Content-Type: application/json
+{"name": "My Workspace"}
+
+# Response (201)
+{"workspace_id": "...", "name": "My Workspace", "created_at": "...", "updated_at": "..."}
+
+# List workspaces
+GET /api/workspaces
+Authorization: Bearer {token}
+
+# Response
+[{"workspace_id": "user@example.com", "name": "user@example.com", ...}]
+
+# Add member
+POST /api/workspaces/{workspace_id}/members
+Authorization: Bearer {token}
+Content-Type: application/json
+{"user_id": "other@example.com", "role": "member"}
+```
+
+> **Note:** A default workspace (workspace_id = user email) is auto-created when a user registers.
+
 ## Tables
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | POST | `/api/tables` | User | Create new table |
-| GET | `/api/tables` | User | List user's tables |
-| GET | `/api/tables/{table_id}` | User | Get table by ID |
-| PUT | `/api/tables/{table_id}` | User | Update table name |
-| DELETE | `/api/tables/{table_id}` | User | Delete table |
+| GET | `/api/tables` | User | List user's tables (all workspaces) |
+| GET | `/api/tables/{table_id}` | Member | Get table by ID |
+| PUT | `/api/tables/{table_id}` | Member | Update table name |
+| DELETE | `/api/tables/{table_id}` | Member | Delete table |
+| GET | `/api/tables/{table_id}/columns` | Member | List columns (from table.columns) |
+| POST | `/api/tables/{table_id}/columns` | Member | Add column |
+| PUT | `/api/tables/{table_id}/columns/{column_id}` | Member | Update column |
+| DELETE | `/api/tables/{table_id}/columns/{column_id}` | Member | Delete column |
 
 ### Table Request/Response Examples
 
@@ -46,40 +91,33 @@ See `llm.user.md` for full details.
 POST /api/tables
 Authorization: Bearer {token}
 Content-Type: application/json
-{"name": "My Project"}
+{"name": "My Project", "workspace_id": "user@example.com"}
 
 # Response (201)
-{"id": "uuid", "user_id": "user@example.com", "name": "My Project", "created_at": "...", "updated_at": "..."}
+{"table_id": "uuid", "workspace_id": "user@example.com", "name": "My Project", "columns": [], "created_at": "...", "updated_at": "..."}
 
 # List tables
 GET /api/tables
 Authorization: Bearer {token}
 
 # Response
-[{"id": "uuid", "user_id": "user@example.com", "name": "My Project", ...}]
+[{"table_id": "uuid", "workspace_id": "user@example.com", "name": "My Project", "columns": [...], ...}]
 ```
-
-## Columns
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/api/tables/{table_id}/columns` | User | List columns for table |
-| POST | `/api/tables/{table_id}/columns` | User | Create column |
-| PUT | `/api/columns/{column_id}` | User | Update column |
-| DELETE | `/api/columns/{column_id}` | User | Delete column |
 
 ### Column Request/Response Examples
 
 ```python
-# Create column
+# Add column
 POST /api/tables/{table_id}/columns
 Authorization: Bearer {token}
 Content-Type: application/json
-{"name": "Status", "type": "select", "options": {"choices": [{"value": "todo"}, {"value": "done"}]}, "position": 0}
+{"name": "Status", "type": "select", "options": {"choices": [{"value": "todo", "color": "..."}, {"value": "done", "color": "..."}]}, "position": 0}
 
 # Response (201)
 {"id": "uuid", "table_id": "uuid", "name": "Status", "type": "select", "options": {...}, "position": 0, "created_at": "..."}
 ```
+
+> **Note:** Columns are stored in `tables.columns` JSONB — there is no separate `columns` SQL table.
 
 ### Column Types
 
@@ -89,6 +127,7 @@ Content-Type: application/json
 | `number` | number | `42` |
 | `date` | string (ISO) | `"2026-03-20"` |
 | `select` | string | `"todo"` |
+| `tags` | array of strings | `["tag1", "tag2"]` |
 | `checkbox` | boolean | `true` |
 | `url` | string | `"https://..."` |
 
@@ -96,10 +135,10 @@ Content-Type: application/json
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/api/tables/{table_id}/rows` | User | Create row |
-| GET | `/api/tables/{table_id}/rows` | User | List rows (paginated) |
-| PUT | `/api/rows/{row_id}` | User | Update row data |
-| DELETE | `/api/rows/{row_id}` | User | Delete row |
+| POST | `/api/tables/{table_id}/rows` | Member | Create row |
+| GET | `/api/tables/{table_id}/rows` | Member | List rows (paginated) |
+| PUT | `/api/rows/{row_id}` | Member | Update row data |
+| DELETE | `/api/rows/{row_id}` | Member | Delete row |
 
 ### Row Request/Response Examples
 
@@ -108,10 +147,10 @@ Content-Type: application/json
 POST /api/tables/{table_id}/rows
 Authorization: Bearer {token}
 Content-Type: application/json
-{"data": {"col_uuid_1": "value", "col_uuid_2": 42}}
+{"row_data": {"col_uuid_1": "value", "col_uuid_2": 42}}
 
 # Response (201)
-{"id": "uuid", "table_id": "uuid", "data": {"col_uuid_1": "value", "col_uuid_2": 42}, "created_at": "...", "updated_at": "..."}
+{"row_id": "uuid", "table_id": "uuid", "row_data": {"col_uuid_1": "value", "col_uuid_2": 42}, "created_by": "user@example.com", "updated_by": "user@example.com", "created_at": "...", "updated_at": "..."}
 
 # List rows (paginated)
 GET /api/tables/{table_id}/rows?offset=0&limit=100

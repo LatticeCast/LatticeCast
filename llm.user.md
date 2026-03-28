@@ -132,6 +132,13 @@ created_at  TIMESTAMP DEFAULT NOW()
 updated_at  TIMESTAMP DEFAULT NOW()
 ```
 
+## Auto-created Workspace
+
+When a user is created (via admin API or `get_or_create` on first login), a default workspace is automatically created:
+- `workspace_id` = user's email (same as `user_id`)
+- `name` = user's email
+- User is added to `workspace_members` with `role = 'owner'`
+
 ## Admin User Setup
 
 Admin users are created via the admin API or directly in the database. No seed data is included in migrations.

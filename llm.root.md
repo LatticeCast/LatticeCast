@@ -49,9 +49,9 @@ lattice-cast/
 │       ├── core/             # db.py (async engine, migrations)
 │       ├── config/           # settings.py, redis.py, storage.py
 │       ├── middleware/       # auth.py, token.py, jwks.py
-│       ├── models/           # SQLModel schemas (user, table, column, row)
-│       ├── repository/       # CRUD operations (user, table, column, row)
-│       ├── router/api/       # auth.py, storage.py, tables.py, columns.py, rows.py
+│       ├── models/           # SQLModel schemas (user, workspace, table, row)
+│       ├── repository/       # CRUD operations (user, workspace, table, row)
+│       ├── router/api/       # auth.py, storage.py, workspaces.py, tables.py, rows.py
 │       ├── router/api/admin/ # users.py
 │       ├── util/             # security.py, logger.py
 │       └── log/              # Auto-created daily log files
@@ -93,37 +93,44 @@ created_at  TIMESTAMP DEFAULT NOW()
 updated_at  TIMESTAMP DEFAULT NOW()
 ```
 
-### tables
+### workspaces
 ```sql
-id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
-user_id     VARCHAR NOT NULL REFERENCES users(user_id)
-name        VARCHAR NOT NULL
-created_at  TIMESTAMP DEFAULT NOW()
-updated_at  TIMESTAMP DEFAULT NOW()
+workspace_id  VARCHAR PRIMARY KEY  -- email (auto-created = owner's user_id)
+name          VARCHAR NOT NULL
+created_at    TIMESTAMP DEFAULT NOW()
+updated_at    TIMESTAMP DEFAULT NOW()
 ```
 
-### columns
+### workspace_members
 ```sql
-id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
-table_id    UUID NOT NULL REFERENCES tables(id) ON DELETE CASCADE
-name        VARCHAR NOT NULL
-type        VARCHAR NOT NULL  -- text, number, date, select, checkbox, url
-options     JSONB NOT NULL DEFAULT '{}'
-position    INTEGER NOT NULL DEFAULT 0
-created_at  TIMESTAMP DEFAULT NOW()
+workspace_id  VARCHAR REFERENCES workspaces(workspace_id)
+user_id       VARCHAR REFERENCES users(user_id)
+role          VARCHAR NOT NULL DEFAULT 'member'  -- 'owner' | 'member'
+PRIMARY KEY (workspace_id, user_id)
+```
+
+### tables
+```sql
+table_id      UUID PRIMARY KEY DEFAULT gen_random_uuid()
+workspace_id  VARCHAR NOT NULL REFERENCES workspaces(workspace_id)
+name          VARCHAR NOT NULL
+columns       JSONB NOT NULL DEFAULT '[]'  -- [{id, name, type, options, position}]
+created_at    TIMESTAMP DEFAULT NOW()
+updated_at    TIMESTAMP DEFAULT NOW()
 ```
 
 ### rows
 ```sql
-id          UUID PRIMARY KEY DEFAULT gen_random_uuid()
-table_id    UUID NOT NULL REFERENCES tables(id) ON DELETE CASCADE
-data        JSONB NOT NULL DEFAULT '{}'  -- {"col_id": "value", ...}
+row_id      UUID PRIMARY KEY DEFAULT gen_random_uuid()
+table_id    UUID NOT NULL REFERENCES tables(table_id) ON DELETE CASCADE
+row_data    JSONB NOT NULL DEFAULT '{}'  -- {"col_id": "value", ...}
+created_by  VARCHAR NOT NULL DEFAULT ''
+updated_by  VARCHAR NOT NULL DEFAULT ''
 created_at  TIMESTAMP DEFAULT NOW()
 updated_at  TIMESTAMP DEFAULT NOW()
-
--- GIN index for fast JSONB queries
-CREATE INDEX idx_rows_data ON rows USING GIN (data);
 ```
+
+> **Note:** The `columns` SQL table has been removed. Column definitions are stored as JSONB in `tables.columns`. No GIN index on `row_data` — filtering is done at the application level.
 
 ## Key Patterns
 
@@ -134,7 +141,7 @@ CREATE INDEX idx_rows_data ON rows USING GIN (data);
 - **Async everywhere**: asyncpg, httpx, redis-py
 - **OpenAPI**: Auto-generated at `/docs`, `/redoc`
 - **Repository pattern**: All DB operations in `repository/` layer
-- **JSONB + GIN**: Flexible row data with fast filtering
+- **JSONB row data**: Flexible `row_data` in rows; columns stored as JSONB array in `tables.columns` — no separate columns table
 
 ### Frontend
 See `llm.frontend.md` for details on Svelte 5, Tailwind CSS 4, and Playwright testing.

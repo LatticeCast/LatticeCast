@@ -39,12 +39,13 @@ frontend/src/
 │   ├── stores/              # Svelte stores
 │   │   ├── auth.store.ts    # Auth state (localStorage, 'loginInfo' key)
 │   │   ├── settings.store.ts # Language, notification prefs
-│   │   └── tables.store.ts  # Tables, columns, rows state + loading
+│   │   └── tables.store.ts  # Workspaces, tables, columns, rows state + loading
 │   │
 │   ├── backend/             # API clients
 │   │   ├── config.ts        # BACKEND_URL from VITE_BACKEND_URL
 │   │   ├── auth.ts          # fetchAppConfig, exchangeCodeViaBackend, fetchMe
-│   │   ├── tables.ts        # Tables/columns/rows CRUD API
+│   │   ├── tables.ts        # Tables/columns/rows CRUD API (columns from table.columns)
+│   │   ├── workspaces.ts    # Workspace CRUD + member management API
 │   │   └── storage.ts       # loadJson, saveJson (S3 storage)
 │   │
 │   ├── components/table/    # Table components
@@ -224,19 +225,27 @@ const response = await fetch(`${BACKEND_URL}/api/endpoint`, {
 ## Tables API Client
 
 ```typescript
-import { fetchTables, createTable, fetchColumns, createColumn, fetchRows, createRow } from '$lib/backend/tables';
+import { fetchTables, createTable, createColumn, updateColumn, deleteColumn, fetchRows, createRow, updateRow, deleteRow } from '$lib/backend/tables';
+import { fetchWorkspaces, createWorkspace, fetchMembers, addMember, removeMember } from '$lib/backend/workspaces';
 
-// Tables
+// Workspaces
+const workspaces = await fetchWorkspaces();
+const ws = await createWorkspace({ name: "My Workspace" });
+
+// Tables (columns come from table.columns — no fetchColumns)
 const tables = await fetchTables();
-const newTable = await createTable("My Table");
+const newTable = await createTable({ name: "My Project", workspace_id: "user@example.com" });
+// table.columns contains the column definitions
 
-// Columns
-const cols = await fetchColumns(tableId);
+// Columns (mutations only — column list is in table.columns)
 const newCol = await createColumn(tableId, { name: "Status", type: "select", options: {}, position: 0 });
+await updateColumn(tableId, columnId, { name: "State" });
+await deleteColumn(tableId, columnId);
 
-// Rows
+// Rows (row_data not data, row_id not id)
 const rows = await fetchRows(tableId);
-const newRow = await createRow(tableId, { data: { colId: "value" } });
+const newRow = await createRow(tableId, { row_data: { colId: "value" } });
+await updateRow(rowId, { row_data: { colId: "updated" } });
 ```
 
 ## Storage API
