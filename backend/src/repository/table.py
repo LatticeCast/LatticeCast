@@ -1,38 +1,72 @@
 # src/repository/table.py
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
-from sqlmodel import Session, select
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.table import Table
 
 
 class TableRepository:
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
 
-    def create(self, user_id: str, name: str) -> Table:
-        table = Table(user_id=user_id, name=name)
+    async def create(self, workspace_id: str, name: str) -> Table:
+        table = Table(workspace_id=workspace_id, name=name)
         self.session.add(table)
-        self.session.commit()
-        self.session.refresh(table)
+        await self.session.commit()
+        await self.session.refresh(table)
         return table
 
-    def get_by_id(self, table_id: UUID) -> Table | None:
-        return self.session.get(Table, table_id)
+    async def get_by_id(self, table_id: UUID) -> Table | None:
+        result = await self.session.execute(
+            select(Table).where(Table.table_id == table_id)
+        )
+        return result.scalar_one_or_none()
 
-    def list_by_user(self, user_id: str) -> list[Table]:
-        statement = select(Table).where(Table.user_id == user_id)
-        return list(self.session.exec(statement).all())
+    async def list_by_workspace(self, workspace_id: str) -> list[Table]:
+        result = await self.session.execute(
+            select(Table).where(Table.workspace_id == workspace_id)
+        )
+        return list(result.scalars().all())
 
-    def update(self, table: Table, name: str) -> Table:
+    async def update(self, table: Table, name: str) -> Table:
         table.name = name
         table.updated_at = datetime.utcnow()
         self.session.add(table)
-        self.session.commit()
-        self.session.refresh(table)
+        await self.session.commit()
+        await self.session.refresh(table)
         return table
 
-    def delete(self, table: Table) -> None:
-        self.session.delete(table)
-        self.session.commit()
+    async def delete(self, table: Table) -> None:
+        await self.session.delete(table)
+        await self.session.commit()
+
+    async def add_column(self, table: Table, column_dict: dict[str, Any]) -> Table:
+        table.columns = [*table.columns, column_dict]
+        table.updated_at = datetime.utcnow()
+        self.session.add(table)
+        await self.session.commit()
+        await self.session.refresh(table)
+        return table
+
+    async def update_column(self, table: Table, column_id: str, updates: dict[str, Any]) -> Table:
+        table.columns = [
+            {**col, **updates} if col.get("column_id") == column_id else col
+            for col in table.columns
+        ]
+        table.updated_at = datetime.utcnow()
+        self.session.add(table)
+        await self.session.commit()
+        await self.session.refresh(table)
+        return table
+
+    async def delete_column(self, table: Table, column_id: str) -> Table:
+        table.columns = [col for col in table.columns if col.get("column_id") != column_id]
+        table.updated_at = datetime.utcnow()
+        self.session.add(table)
+        await self.session.commit()
+        await self.session.refresh(table)
+        return table
