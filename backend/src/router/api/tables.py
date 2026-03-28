@@ -254,3 +254,100 @@ async def delete_view(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
     table_repo = TableRepository(session)
     await table_repo.delete_view(table, view_name)
+
+
+# --------------------------------------------------
+# PM TEMPLATE
+# --------------------------------------------------
+
+_PM_COLUMNS: list[dict[str, Any]] = [
+    {"name": "Key",         "type": "text"},
+    {"name": "Title",       "type": "text"},
+    {"name": "Type",        "type": "select", "options": {"choices": [
+        {"value": "epic",  "color": "bg-purple-100 text-purple-700"},
+        {"value": "story", "color": "bg-blue-100 text-blue-700"},
+        {"value": "task",  "color": "bg-green-100 text-green-700"},
+        {"value": "bug",   "color": "bg-red-100 text-red-700"},
+    ]}},
+    {"name": "Status",      "type": "select", "options": {"choices": [
+        {"value": "todo",        "color": "bg-gray-100 text-gray-700"},
+        {"value": "in_progress", "color": "bg-blue-100 text-blue-700"},
+        {"value": "review",      "color": "bg-yellow-100 text-yellow-700"},
+        {"value": "done",        "color": "bg-green-100 text-green-700"},
+    ]}},
+    {"name": "Priority",    "type": "select", "options": {"choices": [
+        {"value": "critical", "color": "bg-red-100 text-red-700"},
+        {"value": "high",     "color": "bg-orange-100 text-orange-700"},
+        {"value": "medium",   "color": "bg-yellow-100 text-yellow-700"},
+        {"value": "low",      "color": "bg-gray-100 text-gray-700"},
+    ]}},
+    {"name": "Assignee",    "type": "text"},
+    {"name": "Start Date",  "type": "date"},
+    {"name": "Due Date",    "type": "date"},
+    {"name": "Estimate",    "type": "number"},
+    {"name": "Tags",        "type": "tags"},
+    {"name": "Description", "type": "text"},
+    {"name": "Parent",      "type": "text"},
+]
+
+
+@router.post("/template/pm", response_model=TableResponse, status_code=status.HTTP_201_CREATED)
+async def create_pm_template(
+    data: dict[str, Any],
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Create a PM project table with pre-configured columns and default views"""
+    name = data.get("name", "")
+    if not name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="name is required")
+    workspace_id = data.get("workspace_id", user.user_id)
+    ws_repo = WorkspaceRepository(session)
+    if not await ws_repo.is_member(workspace_id, user.user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of that workspace")
+
+    table_repo = TableRepository(session)
+    table = await table_repo.create(workspace_id=workspace_id, name=name)
+
+    # Add columns and collect their generated IDs for view config
+    col_ids: dict[str, str] = {}
+    for pos, col_def in enumerate(_PM_COLUMNS):
+        column_dict: dict[str, Any] = {
+            "column_id": str(uuid4()),
+            "name": col_def["name"],
+            "type": col_def["type"],
+            "options": col_def.get("options", {}),
+            "position": pos,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        table = await table_repo.add_column(table, column_dict)
+        await table_repo.create_column_index(table.table_id, column_dict["column_id"], column_dict["type"])
+        col_ids[col_def["name"]] = column_dict["column_id"]
+
+    # Default views
+    status_col_id = col_ids.get("Status", "")
+    start_col_id = col_ids.get("Start Date", "")
+    due_col_id = col_ids.get("Due Date", "")
+
+    default_views: list[dict[str, Any]] = [
+        {"name": "Table", "type": "table", "config": {}},
+        {"name": "Sprint Board", "type": "kanban", "config": {
+            "group_by": status_col_id,
+            "card_fields": [
+                col_ids.get("Key", ""),
+                col_ids.get("Title", ""),
+                col_ids.get("Priority", ""),
+                col_ids.get("Assignee", ""),
+            ],
+        }},
+        {"name": "Roadmap", "type": "timeline", "config": {
+            "start_col": start_col_id,
+            "end_col": due_col_id,
+            "color_by": status_col_id,
+            "group_by": col_ids.get("Type", ""),
+        }},
+    ]
+    for view_dict in default_views:
+        table = await table_repo.add_view(table, view_dict)
+
+    return table
