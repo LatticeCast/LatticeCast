@@ -1,7 +1,9 @@
 # src/models/table.py
 from datetime import datetime
+from typing import Any
 from uuid import UUID, uuid4
 
+from sqlalchemy import JSON
 from sqlmodel import Field, SQLModel
 
 
@@ -10,9 +12,10 @@ class Table(SQLModel, table=True):
 
     __tablename__ = "tables"
 
-    id: UUID = Field(default_factory=uuid4, primary_key=True, description="Unique identifier")
-    user_id: str = Field(index=True, description="Owner user ID (email)")
+    table_id: UUID = Field(default_factory=uuid4, primary_key=True, description="Unique identifier")
+    workspace_id: str = Field(index=True, foreign_key="workspaces.workspace_id", description="Workspace ID (FK)")
     name: str = Field(description="Table name")
+    columns: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="Column definitions")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
 
@@ -26,9 +29,10 @@ class TableCreate(SQLModel):
 class TableResponse(SQLModel):
     """Table response model for API"""
 
-    id: UUID = Field(..., description="Unique identifier")
-    user_id: str = Field(..., description="Owner user ID (email)")
+    table_id: UUID = Field(..., description="Unique identifier")
+    workspace_id: str = Field(..., description="Workspace ID")
     name: str = Field(..., description="Table name")
+    columns: list[dict[str, Any]] = Field(default_factory=list, description="Column definitions")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
