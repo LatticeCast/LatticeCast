@@ -115,7 +115,7 @@ async def get_row_doc(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
     workspace_id = table.workspace_id
-    key = f"{workspace_id}/{workspace_id}/{table_id}/{row_id}.md"
+    key = f"{user.user_id}/{workspace_id}/{table_id}/{row_id}.md"
     client = get_s3_client()
     try:
         response = client.get_object(Bucket=settings.minio.bucket, Key=key)
@@ -141,7 +141,7 @@ async def put_row_doc(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
     workspace_id = table.workspace_id
-    key = f"{workspace_id}/{workspace_id}/{table_id}/{row_id}.md"
+    key = f"{user.user_id}/{workspace_id}/{table_id}/{row_id}.md"
     client = get_s3_client()
     try:
         client.put_object(
