@@ -154,6 +154,33 @@ export async function deleteRow(rowId: string): Promise<void> {
 	if (!response.ok) throw new Error(`Failed to delete row: ${response.statusText}`);
 }
 
+// Docs
+
+export async function fetchDoc(tableId: string, rowId: string): Promise<string> {
+	const auth = get(authStore);
+	if (!auth?.accessToken) throw new Error('Not authenticated');
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowId}/doc`, {
+		headers: { Authorization: `Bearer ${auth.accessToken}` }
+	});
+	if (!response.ok) throw new Error(`Failed to fetch doc: ${response.statusText}`);
+	return response.text();
+}
+
+export async function saveDoc(tableId: string, rowId: string, content: string): Promise<string> {
+	const auth = get(authStore);
+	if (!auth?.accessToken) throw new Error('Not authenticated');
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowId}/doc`, {
+		method: 'PUT',
+		headers: {
+			Authorization: `Bearer ${auth.accessToken}`,
+			'Content-Type': 'text/plain'
+		},
+		body: content
+	});
+	if (!response.ok) throw new Error(`Failed to save doc: ${response.statusText}`);
+	return response.text();
+}
+
 // Templates
 
 export async function createPmTemplate(name: string, workspaceId: string): Promise<Table> {
