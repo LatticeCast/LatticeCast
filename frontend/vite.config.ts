@@ -10,13 +10,14 @@ import { sveltekit } from '@sveltejs/kit/vite';
 const backendPort = process.env.BACKEND_PORT ?? '13491';
 const frontendPort = process.env.FRONTEND_PORT ?? '13492';
 
+// Same origin via nginx — use relative /api/ in dev, full URL in prod
 const backendUrls = {
 	development: `http://localhost:${backendPort}`,
 	production: 'https://lattice-cast.posetmage.com'
 } as const;
 
 const frontendUrls = {
-	development: `http://localhost:${frontendPort}`,
+	development: `http://localhost:${backendPort}`,
 	production: 'https://lattice-cast.posetmage.com'
 } as const;
 

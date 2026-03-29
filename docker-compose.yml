@@ -1,4 +1,20 @@
 services:
+  lattice-cast:
+    image: nginx:alpine
+    ports:
+      - "${BACKEND_PORT}:${BACKEND_PORT}"
+    volumes:
+      - ./nginx/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+    environment:
+      LISTEN_PORT: ${BACKEND_PORT}
+      BACKEND_PORT: ${BACKEND_PORT}
+      FRONTEND_PORT: ${FRONTEND_PORT}
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - shared-network
+
   frontend:
     build:
       context: ./frontend
@@ -6,8 +22,6 @@ services:
         - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
         - AUTHENTIK_URL=${AUTHENTIK_URL}
         - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID}
-    ports:
-      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     volumes:
       - ./frontend/:/app/
     env_file:
@@ -21,8 +35,6 @@ services:
   backend:
     build:
       context: ./backend
-    ports:
-      - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
       - ./backend/:/app/
       - ./migration/:/migration/:ro
@@ -62,8 +74,6 @@ services:
   valkey:
     image: valkey/valkey:8-alpine
     restart: always
-    ports:
-      - "127.0.0.1:6379:6379"
     volumes:
       - valkey_data:/data
     command: valkey-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
@@ -78,9 +88,6 @@ services:
   minio:
     image: minio/minio:latest
     restart: always
-    ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
     volumes:
       - .minio_data:/data
     env_file:
@@ -100,16 +107,15 @@ services:
     build:
       context: ./backend
     volumes:
-      # Mount tests directory (includes tokens.json for auth)
       - ./backend/tests:/app/tests:ro
     env_file:
       - .env
     environment:
-      BASE_URL: http://backend:${BACKEND_PORT}
+      BASE_URL: http://lattice-cast:${BACKEND_PORT}
     depends_on:
-      - backend
+      - lattice-cast
     networks:
-      - app-network
+      - shared-network
     command: ["python", "tests/run_all_tests.py"]
 
   browser:
