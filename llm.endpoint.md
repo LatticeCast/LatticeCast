@@ -83,6 +83,22 @@ Content-Type: application/json
 | POST | `/api/tables/{table_id}/columns` | Member | Add column |
 | PUT | `/api/tables/{table_id}/columns/{column_id}` | Member | Update column |
 | DELETE | `/api/tables/{table_id}/columns/{column_id}` | Member | Delete column |
+| GET | `/api/tables/{table_id}/views` | Member | List views |
+| POST | `/api/tables/{table_id}/views` | Member | Create view |
+| PUT | `/api/tables/{table_id}/views/{view_name}` | Member | Update view config |
+| DELETE | `/api/tables/{table_id}/views/{view_name}` | Member | Delete view |
+| POST | `/api/tables/template/pm` | User | Create PM template table |
+
+## Rows
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/tables/{table_id}/rows` | Member | Create row (auto-generates Key if PM table) |
+| GET | `/api/tables/{table_id}/rows` | Member | List rows (paginated) |
+| PUT | `/api/rows/{row_id}` | Member | Update row data |
+| DELETE | `/api/rows/{row_id}` | Member | Delete row |
+| GET | `/api/tables/{table_id}/rows/{row_id}/doc` | Member | Get ticket doc (markdown from MinIO) |
+| PUT | `/api/tables/{table_id}/rows/{row_id}/doc` | Member | Save ticket doc (markdown to MinIO) |
 
 ### Table Request/Response Examples
 
@@ -130,32 +146,6 @@ Content-Type: application/json
 | `tags` | array of strings | `["tag1", "tag2"]` |
 | `checkbox` | boolean | `true` |
 | `url` | string | `"https://..."` |
-
-## Rows
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/api/tables/{table_id}/rows` | Member | Create row |
-| GET | `/api/tables/{table_id}/rows` | Member | List rows (paginated) |
-| PUT | `/api/rows/{row_id}` | Member | Update row data |
-| DELETE | `/api/rows/{row_id}` | Member | Delete row |
-
-### Row Request/Response Examples
-
-```python
-# Create row
-POST /api/tables/{table_id}/rows
-Authorization: Bearer {token}
-Content-Type: application/json
-{"row_data": {"col_uuid_1": "value", "col_uuid_2": 42}}
-
-# Response (201)
-{"row_id": "uuid", "table_id": "uuid", "row_data": {"col_uuid_1": "value", "col_uuid_2": 42}, "created_by": "user@example.com", "updated_by": "user@example.com", "created_at": "...", "updated_at": "..."}
-
-# List rows (paginated)
-GET /api/tables/{table_id}/rows?offset=0&limit=100
-Authorization: Bearer {token}
-```
 
 ## Storage (S3-compatible)
 

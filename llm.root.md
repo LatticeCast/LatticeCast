@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Airtable-like project management system with flexible, user-defined schemas. All row data stored as PostgreSQL JSONB with GIN indexes.
+Self-hosted Airtable + Jira. Flexible tables with JSONB, customizable views (Table, Kanban, Timeline), built-in PM with ticket docs in MinIO.
 
 **Domain:** `lattice-cast.posetmage.com`
 
@@ -114,7 +114,8 @@ PRIMARY KEY (workspace_id, user_id)
 table_id      UUID PRIMARY KEY DEFAULT gen_random_uuid()
 workspace_id  VARCHAR NOT NULL REFERENCES workspaces(workspace_id)
 name          VARCHAR NOT NULL
-columns       JSONB NOT NULL DEFAULT '[]'  -- [{id, name, type, options, position}]
+columns       JSONB NOT NULL DEFAULT '[]'  -- [{column_id, name, type, options, position}]
+views         JSONB NOT NULL DEFAULT '[]'  -- [{name, type, config}]
 created_at    TIMESTAMP DEFAULT NOW()
 updated_at    TIMESTAMP DEFAULT NOW()
 ```
@@ -130,7 +131,12 @@ created_at  TIMESTAMP DEFAULT NOW()
 updated_at  TIMESTAMP DEFAULT NOW()
 ```
 
-> **Note:** The `columns` SQL table has been removed. Column definitions are stored as JSONB in `tables.columns`. No GIN index on `row_data` — filtering is done at the application level.
+> **Notes:**
+> - Column definitions in `tables.columns` JSONB (no separate SQL table)
+> - View configs in `tables.views` JSONB (Table, Kanban, Timeline)
+> - Per-column auto-managed PG indexes: B-tree (number/date), GIN (select/tags/text)
+> - Ticket docs stored in MinIO at `{user_id}/{workspace_id}/{table_id}/{row_id}.md`
+> - Auto-cascade: all children merged → parent auto-merged
 
 ## Key Patterns
 
@@ -141,7 +147,9 @@ updated_at  TIMESTAMP DEFAULT NOW()
 - **Async everywhere**: asyncpg, httpx, redis-py
 - **OpenAPI**: Auto-generated at `/docs`, `/redoc`
 - **Repository pattern**: All DB operations in `repository/` layer
-- **JSONB row data**: Flexible `row_data` in rows; columns stored as JSONB array in `tables.columns` — no separate columns table
+- **JSONB row data**: Flexible `row_data` in rows; columns in `tables.columns`, views in `tables.views`
+- **Per-column indexes**: Auto-created B-tree/GIN on column create, dropped on delete
+- **Ticket docs**: MinIO-backed markdown per ticket at `{user}/{workspace}/{table}/{row}.md`
 
 ### Frontend
 See `llm.frontend.md` for details on Svelte 5, Tailwind CSS 4, and Playwright testing.
