@@ -20,6 +20,52 @@ from repository.workspace import WorkspaceRepository
 router = APIRouter(tags=["rows"])
 
 
+def _build_doc_template(row_type: str, key: str, title: str) -> str:
+    """Generate a markdown doc template based on ticket type."""
+    heading = f"# {key}: {title}" if key else f"# {title}"
+    if row_type == "epic":
+        return f"""{heading}
+
+## Overview
+<!-- High-level description of this epic -->
+
+## Stories
+<!-- Links to child stories -->
+
+## Acceptance Criteria
+- [ ] ...
+
+## Notes
+"""
+    if row_type == "story":
+        return f"""{heading}
+
+## Parent
+<!-- [PARENT-KEY] parent title -->
+
+## Description
+<!-- What needs to be done -->
+
+## Tasks
+<!-- Links to child tasks -->
+
+## Technical Notes
+"""
+    # task / bug (default)
+    steps = "\n## Steps to Reproduce\n1. ...\n" if row_type == "bug" else ""
+    return f"""{heading}
+
+## Parent
+<!-- [PARENT-KEY] parent title -->
+
+## Description
+<!-- Implementation details -->
+{steps}
+## Solution
+<!-- How it was solved -->
+"""
+
+
 async def _get_table_for_member(table_id: UUID, user: User, session: AsyncSession):
     """Fetch table and verify the current user is a member of its workspace."""
     table_repo = TableRepository(session)
@@ -59,6 +105,25 @@ async def create_row(
         from models.row import RowUpdate
         updated_data = {**row.row_data, key_col["column_id"]: key_value}
         row = await repo.update(row=row, data=RowUpdate(row_data=updated_data), updated_by=user.user_id)
+
+    # Auto-create doc template in MinIO based on Type column
+    type_col = next((c for c in table.columns if c.get("name") == "Type"), None)
+    title_col = next((c for c in table.columns if c.get("name") == "Title"), None)
+    row_type = row.row_data.get(type_col["column_id"], "") if type_col else ""
+    row_key = row.row_data.get(key_col["column_id"], "") if key_col else ""
+    row_title = row.row_data.get(title_col["column_id"], "") if title_col else ""
+    if row_type in ("epic", "story", "task", "bug"):
+        doc_content = _build_doc_template(row_type, row_key, row_title)
+        minio_key = f"{user.user_id}/{table.workspace_id}/{table_id}/{row.row_id}.md"
+        try:
+            get_s3_client().put_object(
+                Bucket=settings.minio.bucket,
+                Key=minio_key,
+                Body=doc_content.encode("utf-8"),
+                ContentType="text/markdown",
+            )
+        except Exception:
+            pass  # doc creation is best-effort; don't fail row creation
 
     return row
 
