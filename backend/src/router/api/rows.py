@@ -1,5 +1,6 @@
 # router/api/rows.py
 
+import re
 from uuid import UUID
 
 from botocore.exceptions import ClientError
@@ -64,6 +65,50 @@ def _build_doc_template(row_type: str, key: str, title: str) -> str:
 ## Solution
 <!-- How it was solved -->
 """
+
+
+async def _inject_hierarchy(content: str, table, row: Row, session: AsyncSession) -> str:
+    """Replace placeholder comments in doc with live parent/children links."""
+    cols = {c["name"]: c["column_id"] for c in table.columns}
+    key_col_id = cols.get("Key", "")
+    title_col_id = cols.get("Title", "")
+    parent_col_id = cols.get("Parent", "")
+    status_col_id = cols.get("Status", "")
+
+    # Inject parent link
+    if parent_col_id and re.search(r'<!--\s*\[PARENT-KEY\]', content):
+        parent_row_id_str = row.row_data.get(parent_col_id)
+        parent_link = ""
+        if parent_row_id_str:
+            try:
+                parent_row = await session.get(Row, UUID(str(parent_row_id_str)))
+                if parent_row:
+                    p_key = parent_row.row_data.get(key_col_id, "") if key_col_id else ""
+                    p_title = parent_row.row_data.get(title_col_id, "") if title_col_id else str(parent_row_id_str)
+                    parent_link = f"[{p_key}] {p_title}" if p_key else p_title
+            except (ValueError, Exception):
+                pass
+        if parent_link:
+            content = re.sub(r'<!--\s*\[PARENT-KEY\][^>]*-->', parent_link, content)
+
+    # Inject children links
+    if parent_col_id and re.search(r'<!--\s*Links to child', content):
+        repo = RowRepository(session)
+        children = await repo.filter_by_jsonb(table.table_id, {parent_col_id: str(row.row_id)})
+        if children:
+            lines = []
+            for child in children:
+                c_key = child.row_data.get(key_col_id, "") if key_col_id else ""
+                c_title = child.row_data.get(title_col_id, "") if title_col_id else ""
+                c_status = child.row_data.get(status_col_id, "") if status_col_id else ""
+                line = f"- [{c_key}] {c_title}"
+                if c_status:
+                    line += f" — {c_status}"
+                lines.append(line)
+            children_text = "\n".join(lines)
+            content = re.sub(r'<!--\s*Links to child[^>]*-->', children_text, content)
+
+    return content
 
 
 async def _get_table_for_member(table_id: UUID, user: User, session: AsyncSession):
@@ -184,11 +229,16 @@ async def get_row_doc(
     client = get_s3_client()
     try:
         response = client.get_object(Bucket=settings.minio.bucket, Key=key)
-        return response["Body"].read().decode("utf-8")
+        content = response["Body"].read().decode("utf-8")
     except ClientError as e:
         if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
             return ""
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
+
+    if content and (re.search(r'<!--\s*\[PARENT-KEY\]', content) or re.search(r'<!--\s*Links to child', content)):
+        content = await _inject_hierarchy(content, table, row, session)
+
+    return content
 
 
 @router.put("/tables/{table_id}/rows/{row_id}/doc", response_class=PlainTextResponse)
