@@ -2,6 +2,7 @@
 	import type { Column, Row } from '$lib/types/table';
 	import { TAG_COLORS } from '$lib/UI/theme.svelte';
 	import { getChoices, getChoiceColor, getTagValues, formatDate } from './table.utils';
+	import { fetchDoc, saveDoc } from '$lib/backend/tables';
 
 	let {
 		row,
@@ -22,12 +23,59 @@
 	let editField = $state<string | null>(null);
 	let editVal = $state('');
 	let tagsPopup = $state<string | null>(null);
+	let activeTab = $state<'fields' | 'doc'>('fields');
+	let docContent = $state('');
+	let docLoading = $state(false);
+	let docSaving = $state(false);
+	let showPreview = $state(false);
 
 	// Local copy so we can update inline
 	let localRow = $state<Row>(row);
 	$effect(() => {
 		localRow = row;
 	});
+
+	$effect(() => {
+		if (activeTab === 'doc' && !docContent && !docLoading) {
+			docLoading = true;
+			fetchDoc(tableId, row.row_id)
+				.then((content) => { docContent = content; })
+				.catch(() => {})
+				.finally(() => { docLoading = false; });
+		}
+	});
+
+	async function handleDocBlur() {
+		if (docSaving) return;
+		docSaving = true;
+		try {
+			await saveDoc(tableId, row.row_id, docContent);
+		} catch {
+			// best-effort
+		} finally {
+			docSaving = false;
+		}
+	}
+
+	function renderMarkdown(md: string): string {
+		// Simple markdown rendering: headings, bold, italic, lists, code
+		return md
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/^### (.+)$/gm, '<h3 class="text-base font-semibold mt-3 mb-1">$1</h3>')
+			.replace(/^## (.+)$/gm, '<h2 class="text-lg font-semibold mt-4 mb-1">$1</h2>')
+			.replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold mt-4 mb-2">$1</h1>')
+			.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+			.replace(/\*(.+?)\*/g, '<em>$1</em>')
+			.replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1 rounded text-xs font-mono">$1</code>')
+			.replace(/^- \[ \] (.+)$/gm, '<div class="flex items-start gap-1.5 my-0.5"><input type="checkbox" disabled class="mt-0.5"/> <span>$1</span></div>')
+			.replace(/^- \[x\] (.+)$/gm, '<div class="flex items-start gap-1.5 my-0.5"><input type="checkbox" checked disabled class="mt-0.5"/> <span>$1</span></div>')
+			.replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
+			.replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 list-decimal">$2</li>')
+			.replace(/\n\n/g, '</p><p class="mb-2">')
+			.replace(/\n/g, '<br>');
+	}
 
 	const sortedCols = $derived([...columns].sort((a, b) => a.position - b.position));
 
@@ -106,6 +154,51 @@
 		</button>
 	</div>
 
+	<!-- Tabs -->
+	<div class="flex border-b border-gray-200">
+		<button
+			class="px-5 py-2.5 text-sm font-medium transition {activeTab === 'fields' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-800'}"
+			onclick={() => (activeTab = 'fields')}
+		>
+			Fields
+		</button>
+		<button
+			class="px-5 py-2.5 text-sm font-medium transition {activeTab === 'doc' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-800'}"
+			onclick={() => (activeTab = 'doc')}
+		>
+			Doc
+		</button>
+	</div>
+
+	{#if activeTab === 'doc'}
+		<!-- Doc tab -->
+		<div class="flex flex-1 flex-col overflow-hidden">
+			<div class="flex items-center justify-between border-b border-gray-100 px-4 py-2">
+				<span class="text-xs text-gray-400">Markdown {docSaving ? '· saving…' : ''}</span>
+				<button
+					class="rounded px-2 py-1 text-xs font-medium transition {showPreview ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:text-gray-800'}"
+					onclick={() => (showPreview = !showPreview)}
+				>
+					{showPreview ? 'Edit' : 'Preview'}
+				</button>
+			</div>
+			{#if docLoading}
+				<div class="flex flex-1 items-center justify-center text-sm text-gray-400">Loading…</div>
+			{:else if showPreview}
+				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+				<div class="prose prose-sm flex-1 overflow-y-auto px-5 py-4 text-sm text-gray-800">
+					{@html renderMarkdown(docContent)}
+				</div>
+			{:else}
+				<textarea
+					class="flex-1 resize-none border-none px-5 py-4 font-mono text-sm text-gray-800 outline-none"
+					placeholder="Write markdown here…"
+					bind:value={docContent}
+					onblur={handleDocBlur}
+				></textarea>
+			{/if}
+		</div>
+	{:else}
 	<!-- Fields list -->
 	<div class="flex-1 overflow-y-auto px-6 py-4">
 		{#each sortedCols as col (col.column_id)}
@@ -324,4 +417,5 @@
 			</div>
 		{/each}
 	</div>
+	{/if}
 </div>
