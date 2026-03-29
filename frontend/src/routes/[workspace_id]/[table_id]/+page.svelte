@@ -26,7 +26,8 @@
 		deleteColumn,
 		updateColumn,
 		updateRow,
-		deleteRow
+		deleteRow,
+		checkDocExists
 	} from '$lib/backend/tables';
 	import type { Column, ColumnChoice, ColumnOptions, ColumnType, Row, ViewConfig } from '$lib/types/table';
 	import { TAG_COLORS } from '$lib/UI/theme.svelte';
@@ -86,6 +87,7 @@
 	let importingData = $state(false);
 	let importError = $state<string | null>(null);
 	let managingOptionsCol = $state<Column | null>(null);
+	let rowsWithDocs = new SvelteSet<string>();
 
 	// View state
 	let activeViewName = $state('');
@@ -238,6 +240,7 @@
 					return;
 				}
 				await loadTable(table);
+				loadDocFlags(table.table_id, get(rows));
 				const ws = get(workspaces).find((w) => w.workspace_id === table.workspace_id);
 				if (ws) currentWorkspace.set(ws);
 				// Restore active view from URL param or localStorage
@@ -467,8 +470,19 @@
 		await updateRow(rowId, { row_data: data });
 	}
 
+	async function loadDocFlags(tableId: string, rowList: import('$lib/types/table').Row[]) {
+		const results = await Promise.all(
+			rowList.map((r) => checkDocExists(tableId, r.row_id).then((has) => ({ rowId: r.row_id, has })))
+		);
+		rowsWithDocs.clear();
+		for (const { rowId, has } of results) {
+			if (has) rowsWithDocs.add(rowId);
+		}
+	}
+
 	async function handleRefreshRows(tableId: string) {
 		await refreshRows(tableId);
+		loadDocFlags(tableId, get(rows));
 	}
 
 	function openExpand(row: Row) {
@@ -833,6 +847,7 @@
 			{tableMinWidth}
 			{addingRow}
 			{deletingRowId}
+			{rowsWithDocs}
 			{editingCell}
 			{editValue}
 			{renamingColId}

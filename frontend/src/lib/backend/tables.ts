@@ -181,6 +181,22 @@ export async function saveDoc(tableId: string, rowId: string, content: string): 
 	return response.text();
 }
 
+export async function checkDocExists(tableId: string, rowId: string): Promise<boolean> {
+	const auth = get(authStore);
+	if (!auth?.accessToken) return false;
+	try {
+		const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowId}/doc`, {
+			method: 'HEAD',
+			headers: { Authorization: `Bearer ${auth.accessToken}` }
+		});
+		if (!response.ok) return false;
+		const length = response.headers.get('content-length');
+		return length !== null && parseInt(length, 10) > 0;
+	} catch {
+		return false;
+	}
+}
+
 // Templates
 
 export async function createPmTemplate(name: string, workspaceId: string): Promise<Table> {

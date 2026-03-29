@@ -19,6 +19,7 @@
 		tableMinWidth,
 		addingRow,
 		deletingRowId,
+		rowsWithDocs,
 		editingCell,
 		editValue,
 		renamingColId,
@@ -67,6 +68,7 @@
 		tableMinWidth: number;
 		addingRow: boolean;
 		deletingRowId: string | null;
+		rowsWithDocs: SvelteSet<string>;
 		editingCell: { rowId: string; colId: string } | null;
 		editValue: string;
 		renamingColId: string | null;
@@ -505,6 +507,20 @@
 									title="Expand row"
 								>
 									{rowIdx + 1}
+									{#if rowsWithDocs.has(row.row_id)}
+										<svg
+											class="absolute left-0.5 h-3 w-3 text-blue-400 group-hover:hidden"
+											fill="currentColor"
+											viewBox="0 0 20 20"
+											aria-label="Has doc"
+										>
+											<path
+												fill-rule="evenodd"
+												d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
+												clip-rule="evenodd"
+											/>
+										</svg>
+									{/if}
 									<svg
 										class="absolute right-0.5 hidden h-3 w-3 group-hover:block"
 										fill="none"
