@@ -7,7 +7,7 @@ services:
         - AUTHENTIK_URL=${AUTHENTIK_URL}
         - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID}
     ports:
-      - "13492:13492"
+      - "${FRONTEND_PORT}:${FRONTEND_PORT}"
     volumes:
       - ./frontend/:/app/
     env_file:

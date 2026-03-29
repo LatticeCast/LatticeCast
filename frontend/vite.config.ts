@@ -8,6 +8,7 @@ import { defineConfig } from 'vitest/config';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 const backendPort = process.env.BACKEND_PORT ?? '13491';
+const frontendPort = process.env.FRONTEND_PORT ?? '13492';
 
 const backendUrls = {
 	development: `http://localhost:${backendPort}`,
@@ -15,7 +16,7 @@ const backendUrls = {
 } as const;
 
 const frontendUrls = {
-	development: 'http://localhost:13492',
+	development: `http://localhost:${frontendPort}`,
 	production: 'https://lattice-cast.posetmage.com'
 } as const;
 
@@ -40,7 +41,7 @@ export default defineConfig(({ mode }) => {
 		},
 		server: {
 			host: '0.0.0.0',
-			port: 3000,
+			port: parseInt(frontendPort),
 			allowedHosts
 		},
 		define: {
