@@ -7,13 +7,15 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 import { sveltekit } from '@sveltejs/kit/vite';
 
+const backendPort = process.env.BACKEND_PORT ?? '13491';
+
 const backendUrls = {
-	development: 'http://localhost:5000',
+	development: `http://localhost:${backendPort}`,
 	production: 'https://lattice-cast.posetmage.com'
 } as const;
 
 const frontendUrls = {
-	development: 'http://localhost:3000',
+	development: 'http://localhost:13492',
 	production: 'https://lattice-cast.posetmage.com'
 } as const;
 

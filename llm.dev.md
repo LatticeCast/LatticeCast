@@ -97,52 +97,52 @@ docker compose down
 docker compose up backend -d
 
 # 4. Test with curl
-curl http://localhost:5000/api/status
+curl http://localhost:13491/api/status
 ```
 
 ### Testing Endpoints with curl
 
 ```bash
 # Health check
-curl http://localhost:5000/api/status
+curl http://localhost:13491/api/status
 
 # Get settings
-curl http://localhost:5000/api/settings
+curl http://localhost:13491/api/settings
 
 # Login (need OAuth flow first, then use token)
-curl http://localhost:5000/api/login/me \
+curl http://localhost:13491/api/login/me \
   -H "Authorization: Bearer $TOKEN"
 
 # Storage - list files
-curl http://localhost:5000/api/storage/files \
+curl http://localhost:13491/api/storage/files \
   -H "Authorization: Bearer $TOKEN"
 
 # Admin - list users (admin token required)
-curl http://localhost:5000/api/admin/users \
+curl http://localhost:13491/api/admin/users \
   -H "Authorization: Bearer $TOKEN"
 
 # Admin - add user
-curl -X POST http://localhost:5000/api/admin/users \
+curl -X POST http://localhost:13491/api/admin/users \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"id": "user@example.com", "role": "user"}'
 
 # Tables - list tables
-curl http://localhost:5000/api/tables \
+curl http://localhost:13491/api/tables \
   -H "Authorization: Bearer $TOKEN"
 
 # Tables - create table
-curl -X POST http://localhost:5000/api/tables \
+curl -X POST http://localhost:13491/api/tables \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "My Project"}'
 
 # Columns - list columns
-curl http://localhost:5000/api/tables/{table_id}/columns \
+curl http://localhost:13491/api/tables/{table_id}/columns \
   -H "Authorization: Bearer $TOKEN"
 
 # Rows - list rows
-curl http://localhost:5000/api/tables/{table_id}/rows \
+curl http://localhost:13491/api/tables/{table_id}/rows \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -254,8 +254,8 @@ docker compose down
 docker compose up backend -d
 
 # Test
-curl http://localhost:5000/api/status
-curl http://localhost:5000/api/your-new-endpoint
+curl http://localhost:13491/api/status
+curl http://localhost:13491/api/your-new-endpoint
 ```
 
 ### Both Frontend + Backend
@@ -274,7 +274,7 @@ docker compose exec frontend npm run build
 docker compose restart backend
 
 # Test backend
-curl http://localhost:5000/api/status
+curl http://localhost:13491/api/status
 ```
 
 ## K8s Deployment

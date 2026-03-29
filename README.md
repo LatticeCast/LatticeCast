@@ -39,9 +39,9 @@ MinIO            → ticket docs as {user}/{workspace}/{table}/{row}.md
 
 ```bash
 docker compose up -d
-# Frontend: http://localhost:3000
-# Backend:  http://localhost:5000
-# API docs: http://localhost:5000/docs
+# Frontend: http://localhost:13492
+# Backend:  http://localhost:13491
+# API docs: http://localhost:13491/docs
 ```
 
 ## URL Pattern

@@ -19,7 +19,8 @@ import httpx
 import pytest
 from pathlib import Path
 
-BASE_URL = os.environ.get("BASE_URL", "http://localhost:5000")
+BACKEND_PORT = os.environ.get("BACKEND_PORT", "13491")
+BASE_URL = os.environ.get("BASE_URL", f"http://localhost:{BACKEND_PORT}")
 TOKENS_FILE = Path(__file__).parent / "tokens.json"
 
 
