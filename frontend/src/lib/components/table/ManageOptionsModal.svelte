@@ -29,7 +29,7 @@
 	}
 
 	function handleSave() {
-		onSave(col.id, choices);
+		onSave(col.column_id, choices);
 		onClose();
 	}
 </script>

@@ -35,7 +35,7 @@
 	} = $props();
 
 	const ctxCol = $derived(
-		contextMenu.type === 'col' ? columns.find((c) => c.id === contextMenu.id) : null
+		contextMenu.type === 'col' ? columns.find((c) => c.column_id === contextMenu.id) : null
 	);
 </script>
 
@@ -103,7 +103,7 @@
 		<button
 			class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
 			onclick={() => {
-				onRenameColumn(ctxCol.id, ctxCol.name);
+				onRenameColumn(ctxCol.column_id, ctxCol.name);
 				onClose();
 			}}
 			role="menuitem"
@@ -121,11 +121,11 @@
 		<hr class="my-1 border-gray-100" />
 		<button
 			class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
-				ctxCol.id && sortConfig?.dir === 'asc'
+				ctxCol.column_id && sortConfig?.dir === 'asc'
 				? 'font-semibold text-blue-600'
 				: ''}"
 			onclick={() => {
-				onSortChange({ colId: ctxCol.id, dir: 'asc' });
+				onSortChange({ colId: ctxCol.column_id, dir: 'asc' });
 				onClose();
 			}}
 			role="menuitem"
@@ -142,11 +142,11 @@
 		</button>
 		<button
 			class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
-				ctxCol.id && sortConfig?.dir === 'desc'
+				ctxCol.column_id && sortConfig?.dir === 'desc'
 				? 'font-semibold text-blue-600'
 				: ''}"
 			onclick={() => {
-				onSortChange({ colId: ctxCol.id, dir: 'desc' });
+				onSortChange({ colId: ctxCol.column_id, dir: 'desc' });
 				onClose();
 			}}
 			role="menuitem"
@@ -163,12 +163,12 @@
 		</button>
 		<button
 			class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {filterConditions.some(
-				(c) => c.colId === ctxCol.id
+				(c) => c.colId === ctxCol.column_id
 			)
 				? 'font-semibold text-blue-600'
 				: ''}"
 			onclick={() => {
-				onAddFilter(ctxCol.id);
+				onAddFilter(ctxCol.column_id);
 				onClose();
 			}}
 			role="menuitem"
@@ -187,7 +187,7 @@
 		<button
 			class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50"
 			onclick={() => {
-				onHideColumn(ctxCol.id);
+				onHideColumn(ctxCol.column_id);
 				onClose();
 			}}
 			role="menuitem"
@@ -206,7 +206,7 @@
 		<button
 			class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
 			onclick={() => {
-				onDeleteColumn(ctxCol.id);
+				onDeleteColumn(ctxCol.column_id);
 				onClose();
 			}}
 			role="menuitem"

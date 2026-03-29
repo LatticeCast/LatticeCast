@@ -35,10 +35,10 @@
 	const selectColumns = $derived(columns.filter((c) => c.type === 'select'));
 
 	const colorByCol = $derived(
-		colorByColId ? columns.find((c) => c.id === colorByColId) : undefined
+		colorByColId ? columns.find((c) => c.column_id === colorByColId) : undefined
 	);
 	const groupByCol = $derived(
-		groupByColId ? columns.find((c) => c.id === groupByColId) : undefined
+		groupByColId ? columns.find((c) => c.column_id === groupByColId) : undefined
 	);
 	const labelCol = $derived(columns.find((c) => c.type === 'text' || c.type === 'string'));
 
@@ -302,8 +302,8 @@
 				saveConfig({ start_col: (e.target as HTMLSelectElement).value || undefined })}
 		>
 			<option value="">— none —</option>
-			{#each dateColumns as col (col.id)}
-				<option value={col.id}>{col.name}</option>
+			{#each dateColumns as col (col.column_id)}
+				<option value={col.column_id}>{col.name}</option>
 			{/each}
 		</select>
 	</div>
@@ -317,8 +317,8 @@
 			onchange={(e) => saveConfig({ end_col: (e.target as HTMLSelectElement).value || undefined })}
 		>
 			<option value="">— none —</option>
-			{#each dateColumns as col (col.id)}
-				<option value={col.id}>{col.name}</option>
+			{#each dateColumns as col (col.column_id)}
+				<option value={col.column_id}>{col.name}</option>
 			{/each}
 		</select>
 	</div>
@@ -332,8 +332,8 @@
 			onchange={(e) => saveConfig({ color_by: (e.target as HTMLSelectElement).value || undefined })}
 		>
 			<option value="">— none —</option>
-			{#each selectColumns as col (col.id)}
-				<option value={col.id}>{col.name}</option>
+			{#each selectColumns as col (col.column_id)}
+				<option value={col.column_id}>{col.name}</option>
 			{/each}
 		</select>
 	</div>
@@ -347,8 +347,8 @@
 			onchange={(e) => saveConfig({ group_by: (e.target as HTMLSelectElement).value || undefined })}
 		>
 			<option value="">— none —</option>
-			{#each columns as col (col.id)}
-				<option value={col.id}>{col.name}</option>
+			{#each columns as col (col.column_id)}
+				<option value={col.column_id}>{col.name}</option>
 			{/each}
 		</select>
 	</div>
@@ -439,7 +439,7 @@
 							style="width: {SIDEBAR_WIDTH}px"
 						>
 							<span class="truncate text-xs text-gray-700">
-								{labelCol ? String(row.row_data[labelCol.id] ?? '') || '—' : '—'}
+								{labelCol ? String(row.row_data[labelCol.column_id] ?? '') || '—' : '—'}
 							</span>
 						</div>
 
@@ -462,7 +462,7 @@
 							<div
 								class="absolute top-2 bottom-2 flex cursor-pointer items-center overflow-hidden rounded text-xs font-medium shadow-sm {getBarColorClasses(row)} {dragState?.rowId === row.row_id ? 'opacity-80' : ''}"
 								style="left: {getBarLeft(startDate)}px; width: {getBarWidth(startDate, endDate)}px"
-								title="{labelCol ? String(row.row_data[labelCol.id] ?? '') : ''} ({formatDate(String(startDate.toISOString().slice(0, 10)))} → {formatDate(String(endDate.toISOString().slice(0, 10)))})"
+								title="{labelCol ? String(row.row_data[labelCol.column_id] ?? '') : ''} ({formatDate(String(startDate.toISOString().slice(0, 10)))} → {formatDate(String(endDate.toISOString().slice(0, 10)))})"
 								role="button"
 								tabindex="0"
 								onclick={() => onOpenExpand(row)}
@@ -477,7 +477,7 @@
 									></button>
 								{/if}
 								<span class="flex-1 truncate px-2">
-									{labelCol ? String(row.row_data[labelCol.id] ?? '') || '—' : '—'}
+									{labelCol ? String(row.row_data[labelCol.column_id] ?? '') || '—' : '—'}
 								</span>
 								<!-- Right resize handle -->
 								{#if endColId}

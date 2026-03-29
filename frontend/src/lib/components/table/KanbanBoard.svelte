@@ -93,7 +93,7 @@
 	const groupByColId = $derived(viewConfig.config.group_by as string | undefined);
 	const cardFields = $derived((viewConfig.config.card_fields as string[]) ?? []);
 
-	const groupCol = $derived(groupByColId ? columns.find((c) => c.id === groupByColId) : undefined);
+	const groupCol = $derived(groupByColId ? columns.find((c) => c.column_id === groupByColId) : undefined);
 
 	// Prefer a column named "Priority" (select type) for card accent color; fall back to group col
 	const priorityCol = $derived(
@@ -129,14 +129,14 @@
 
 	const cardColumns = $derived(
 		cardFields.length > 0
-			? cardFields.map((id) => columns.find((c) => c.id === id)).filter(Boolean)
+			? cardFields.map((id) => columns.find((c) => c.column_id === id)).filter(Boolean)
 			: (columns.slice(0, 3) as Column[])
 	);
 
 	function getCardBorderStyle(row: Row): string {
 		const accentCol = priorityCol ?? groupCol;
 		if (!accentCol) return '';
-		const val = row.row_data[accentCol.id];
+		const val = row.row_data[accentCol.column_id];
 		if (val === null || val === undefined || val === '') return '';
 		const color = getChoiceColor(accentCol, String(val));
 		// TAG_COLORS border class format: 'border-blue-200' → CSS var '--color-blue-200'
@@ -167,8 +167,8 @@
 			onchange={handleGroupByChange}
 		>
 			<option value="">— none —</option>
-			{#each selectColumns as col (col.id)}
-				<option value={col.id}>{col.name}</option>
+			{#each selectColumns as col (col.column_id)}
+				<option value={col.column_id}>{col.name}</option>
 			{/each}
 		</select>
 	</div>
@@ -199,13 +199,13 @@
 				<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">
 					Show on cards
 				</div>
-				{#each columns as col (col.id)}
+				{#each columns as col (col.column_id)}
 					<label class="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-gray-50">
 						<input
 							type="checkbox"
 							class="accent-blue-500"
-							checked={cardFields.includes(col.id)}
-							onchange={() => toggleCardField(col.id)}
+							checked={cardFields.includes(col.column_id)}
+							onchange={() => toggleCardField(col.column_id)}
 						/>
 						<span class="text-sm text-gray-700">{col.name}</span>
 						<span class="ml-auto text-xs text-gray-400">{col.type}</span>
@@ -260,8 +260,8 @@
 								style={getCardBorderStyle(row)}
 								onclick={() => onOpenExpand(row)}
 							>
-								{#each cardColumns as col (col!.id)}
-									{@const val = row.row_data[col!.id]}
+								{#each cardColumns as col (col!.column_id)}
+									{@const val = row.row_data[col!.column_id]}
 									<div class="mb-1 last:mb-0">
 										{#if col!.type === 'select' && val}
 											{@const choiceColor = getChoiceColor(col!, String(val))}
@@ -272,7 +272,7 @@
 											</span>
 										{:else if col!.type === 'tags'}
 											<div class="flex flex-wrap gap-1">
-												{#each getTagValues(row, col!.id) as tag, i (tag)}
+												{#each getTagValues(row, col!.column_id) as tag, i (tag)}
 													{@const tc = getChoiceColor(col!, tag)}
 													<span
 														class="inline-flex items-center rounded-full border px-1.5 py-0.5 text-xs {tc.bg} {tc.text} {tc.border}"

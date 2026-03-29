@@ -44,8 +44,7 @@ export interface Table {
 }
 
 export interface Column {
-	id: string;
-	table_id: string;
+	column_id: string;
 	name: string;
 	type: ColumnType;
 	options: ColumnOptions;

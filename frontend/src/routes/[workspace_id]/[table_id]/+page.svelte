@@ -97,13 +97,13 @@
 	let localWidths = $state<Record<string, number>>({});
 
 	function getColWidth(col: Column): number {
-		return localWidths[col.id] ?? col.options?.width ?? 150;
+		return localWidths[col.column_id] ?? col.options?.width ?? 150;
 	}
 
 	// ─── Derived ─────────────────────────────────────────────────────────────────
 
 	const sortedColumns = $derived(
-		[...$columns].sort((a, b) => a.position - b.position).filter((c) => !hiddenCols.has(c.id))
+		[...$columns].sort((a, b) => a.position - b.position).filter((c) => !hiddenCols.has(c.column_id))
 	);
 
 	const sortedRows = $derived(
@@ -181,12 +181,12 @@
 		(() => {
 			if (!groupConfig) return null;
 			const { colId: gcColId, granularity: gcGranularity } = groupConfig;
-			const col = $columns.find((c) => c.id === gcColId);
+			const col = $columns.find((c) => c.column_id === gcColId);
 			if (!col) return null;
 			const keyOrder: string[] = [];
 			const keyMap: Record<string, Row[]> = {};
 			for (const row of sortedRows) {
-				const key = getGroupKey(row, col.id, col);
+				const key = getGroupKey(row, col.column_id, col);
 				if (!keyMap[key]) {
 					keyMap[key] = [];
 					keyOrder.push(key);
@@ -264,7 +264,7 @@
 			const colId = resizingColId;
 			const newWidth = localWidths[colId] ?? resizeStartWidth;
 			resizingColId = null;
-			const col = get(columns).find((c) => c.id === colId);
+			const col = get(columns).find((c) => c.column_id === colId);
 			if (!col) return;
 			try {
 				await updateColumn(get(page).params.table_id!, colId, { options: { ...col.options, width: newWidth } });
@@ -311,7 +311,7 @@
 		error.set(null);
 		try {
 			const val: unknown = groupKey === '(empty)' ? null : groupKey;
-			await createRow(tableId, { row_data: { [col.id]: val } });
+			await createRow(tableId, { row_data: { [col.column_id]: val } });
 			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
@@ -360,15 +360,15 @@
 	async function handleMoveColumn(col: Column, direction: 'up' | 'down') {
 		const tableId = $page.params.table_id!;
 		const sorted = [...$columns].sort((a, b) => a.position - b.position);
-		const idx = sorted.findIndex((c) => c.id === col.id);
+		const idx = sorted.findIndex((c) => c.column_id === col.column_id);
 		const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
 		if (swapIdx < 0 || swapIdx >= sorted.length) return;
 		const swapCol = sorted[swapIdx];
 		error.set(null);
 		try {
 			await Promise.all([
-				updateColumn(tableId, col.id, { position: swapCol.position }),
-				updateColumn(tableId, swapCol.id, { position: col.position })
+				updateColumn(tableId, col.column_id, { position: swapCol.position }),
+				updateColumn(tableId, swapCol.column_id, { position: col.position })
 			]);
 			await refreshTable(tableId);
 		} catch (e) {
@@ -399,7 +399,7 @@
 	}
 
 	function startEdit(rowId: string, col: Column, currentVal: unknown) {
-		editingCell = { rowId, colId: col.id };
+		editingCell = { rowId, colId: col.column_id };
 		editValue = currentVal === null || currentVal === undefined ? '' : String(currentVal);
 	}
 
@@ -412,7 +412,7 @@
 		if (col.type === 'number') parsed = editValue === '' ? null : Number(editValue);
 		else if (col.type === 'checkbox') parsed = editValue === 'true';
 		else if (editValue === '') parsed = null;
-		const newData = { ...row.row_data, [col.id]: parsed };
+		const newData = { ...row.row_data, [col.column_id]: parsed };
 		error.set(null);
 		try {
 			await updateRow(rowId, { row_data: newData });
@@ -425,7 +425,7 @@
 	async function toggleCheckbox(rowId: string, col: Column) {
 		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
-		const newData = { ...row.row_data, [col.id]: !row.row_data[col.id] };
+		const newData = { ...row.row_data, [col.column_id]: !row.row_data[col.column_id] };
 		error.set(null);
 		try {
 			await updateRow(rowId, { row_data: newData });
@@ -438,8 +438,8 @@
 	async function removeTag(rowId: string, col: Column, tag: string) {
 		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
-		const current = getTagValues(row, col.id);
-		const newData = { ...row.row_data, [col.id]: current.filter((t) => t !== tag) };
+		const current = getTagValues(row, col.column_id);
+		const newData = { ...row.row_data, [col.column_id]: current.filter((t) => t !== tag) };
 		try {
 			await updateRow(rowId, { row_data: newData });
 			await refreshRows($page.params.table_id!);
@@ -451,9 +451,9 @@
 	async function addTag(rowId: string, col: Column, tag: string) {
 		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
-		const current = getTagValues(row, col.id);
+		const current = getTagValues(row, col.column_id);
 		if (current.includes(tag)) return;
-		const newData = { ...row.row_data, [col.id]: [...current, tag] };
+		const newData = { ...row.row_data, [col.column_id]: [...current, tag] };
 		tagsPopupCell = null;
 		try {
 			await updateRow(rowId, { row_data: newData });
@@ -498,7 +498,7 @@
 
 	async function handleSaveOptions(colId: string, choices: import('$lib/types/table').ColumnChoice[]) {
 		const tableId = $page.params.table_id!;
-		const col = $columns.find((c) => c.id === colId);
+		const col = $columns.find((c) => c.column_id === colId);
 		if (!col) return;
 		error.set(null);
 		try {
@@ -512,7 +512,7 @@
 	function handleResizeStart(e: MouseEvent, col: Column) {
 		e.preventDefault();
 		e.stopPropagation();
-		resizingColId = col.id;
+		resizingColId = col.column_id;
 		resizeStartX = e.clientX;
 		resizeStartWidth = getColWidth(col);
 	}
@@ -522,7 +522,7 @@
 		const firstCol = $columns[0];
 		filterConditions = [
 			...filterConditions,
-			{ id: crypto.randomUUID(), colId: firstCol?.id ?? '', operator: 'contains', value: '' }
+			{ id: crypto.randomUUID(), colId: firstCol?.column_id ?? '', operator: 'contains', value: '' }
 		];
 	}
 
@@ -605,7 +605,7 @@
 			position?: number;
 		}>;
 		if (!Array.isArray(template)) throw new Error('Invalid template: expected an array');
-		await Promise.all([...$columns].map((col) => deleteColumn(tableId, col.id)));
+		await Promise.all([...$columns].map((col) => deleteColumn(tableId, col.column_id)));
 		for (const col of template) {
 			await createColumn(tableId, {
 				name: col.name,
@@ -627,7 +627,7 @@
 			...$rows.map((row) =>
 				cols
 					.map((col) => {
-						const val = row.row_data[col.id];
+						const val = row.row_data[col.column_id];
 						if (val === null || val === undefined) return '';
 						if (Array.isArray(val)) return escapeCSV(val.join(','));
 						return escapeCSV(String(val));
@@ -648,7 +648,7 @@
 		const cols = [...$columns].sort((a, b) => a.position - b.position);
 		const data = $rows.map((row) => {
 			const obj: Record<string, unknown> = {};
-			for (const col of cols) obj[col.name] = row.row_data[col.id] ?? null;
+			for (const col of cols) obj[col.name] = row.row_data[col.column_id] ?? null;
 			return obj;
 		});
 		const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -754,16 +754,16 @@
 					const rawVal = previewRow[h];
 					if (rawVal === '' || rawVal === undefined) continue;
 					if (col.type === 'tags')
-						data[col.id] = rawVal
+						data[col.column_id] = rawVal
 							.split(',')
 							.map((v) => v.trim())
 							.filter(Boolean);
 					else if (col.type === 'checkbox')
-						data[col.id] = rawVal.toLowerCase() === 'true' || rawVal === '1';
+						data[col.column_id] = rawVal.toLowerCase() === 'true' || rawVal === '1';
 					else if (col.type === 'number') {
 						const n = Number(rawVal);
-						data[col.id] = isNaN(n) ? null : n;
-					} else data[col.id] = rawVal;
+						data[col.column_id] = isNaN(n) ? null : n;
+					} else data[col.column_id] = rawVal;
 				}
 				await createRow(tableId, { row_data: data });
 			}

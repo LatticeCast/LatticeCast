@@ -110,7 +110,7 @@
 	} = $props();
 
 	function getColWidth(col: Column): number {
-		return localWidths[col.id] ?? col.options?.width ?? 150;
+		return localWidths[col.column_id] ?? col.options?.width ?? 150;
 	}
 </script>
 
@@ -137,23 +137,23 @@
 					>
 						#
 					</th>
-					{#each sortedColumns as col, i (col.id)}
+					{#each sortedColumns as col, i (col.column_id)}
 						<th
 							class="relative border-b border-gray-200 px-3 py-2 text-left text-xs font-semibold tracking-wide text-gray-500 uppercase
 								{i === 0 ? 'sticky left-12 z-10 border-r border-gray-200 bg-gray-50' : 'bg-gray-50'}"
 							style="width: {getColWidth(col)}px;"
-							oncontextmenu={(e) => onOpenContextMenu(e, 'col', col.id)}
+							oncontextmenu={(e) => onOpenContextMenu(e, 'col', col.column_id)}
 						>
 							<div class="flex items-center gap-1">
-								{#if renamingColId === col.id}
+								{#if renamingColId === col.column_id}
 									<input
 										class="min-w-0 flex-1 rounded border border-blue-400 bg-white px-2 py-0.5 text-sm text-gray-800 outline-none"
 										value={renameValue}
 										oninput={(e) =>
 											onRenameValueChange((e.currentTarget as HTMLInputElement).value)}
-										onblur={() => onCommitRename(col.id)}
+										onblur={() => onCommitRename(col.column_id)}
 										onkeydown={(e) => {
-											if (e.key === 'Enter') onCommitRename(col.id);
+											if (e.key === 'Enter') onCommitRename(col.column_id);
 											if (e.key === 'Escape') onRenamingColIdChange(null);
 										}}
 										autofocus
@@ -162,7 +162,7 @@
 									<button
 										onclick={(e) => {
 											e.stopPropagation();
-											onColMenuChange(colMenuId === col.id ? null : col.id);
+											onColMenuChange(colMenuId === col.column_id ? null : col.column_id);
 										}}
 										class="min-w-0 flex-1 cursor-pointer truncate text-left"
 										title="Click for column options"
@@ -173,7 +173,7 @@
 										>
 									</button>
 									<svg
-										class="h-3 w-3 shrink-0 text-gray-300 transition {colMenuId === col.id
+										class="h-3 w-3 shrink-0 text-gray-300 transition {colMenuId === col.column_id
 											? 'rotate-180'
 											: ''}"
 										fill="none"
@@ -192,7 +192,7 @@
 							</div>
 
 							<!-- Column dropdown menu -->
-							{#if colMenuId === col.id}
+							{#if colMenuId === col.column_id}
 								<div
 									class="absolute top-full left-0 z-30 mt-1 min-w-[168px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
 									onclick={(e) => e.stopPropagation()}
@@ -201,7 +201,7 @@
 									<button
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
 										onclick={() => {
-											onStartRename(col.id, col.name);
+											onStartRename(col.column_id, col.name);
 											onColMenuChange(null);
 										}}
 										role="menuitem"
@@ -281,11 +281,11 @@
 									<hr class="my-1 border-gray-100" />
 									<button
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
-											col.id && sortConfig?.dir === 'asc'
+											col.column_id && sortConfig?.dir === 'asc'
 											? 'font-semibold text-blue-600'
 											: ''}"
 										onclick={() => {
-											onSortChange({ colId: col.id, dir: 'asc' });
+											onSortChange({ colId: col.column_id, dir: 'asc' });
 											onColMenuChange(null);
 										}}
 										role="menuitem"
@@ -306,11 +306,11 @@
 									</button>
 									<button
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
-											col.id && sortConfig?.dir === 'desc'
+											col.column_id && sortConfig?.dir === 'desc'
 											? 'font-semibold text-blue-600'
 											: ''}"
 										onclick={() => {
-											onSortChange({ colId: col.id, dir: 'desc' });
+											onSortChange({ colId: col.column_id, dir: 'desc' });
 											onColMenuChange(null);
 										}}
 										role="menuitem"
@@ -332,7 +332,7 @@
 									<button
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
 										onclick={() => {
-											onFilterAdd(col.id);
+											onFilterAdd(col.column_id);
 											onShowFilterPanel();
 											onColMenuChange(null);
 										}}
@@ -356,7 +356,7 @@
 									<button
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50"
 										onclick={() => {
-											onHideCol(col.id);
+											onHideCol(col.column_id);
 											onColMenuChange(null);
 										}}
 										role="menuitem"
@@ -379,7 +379,7 @@
 									<button
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
 										onclick={() => {
-											onDeleteColumn(col.id);
+											onDeleteColumn(col.column_id);
 											onColMenuChange(null);
 										}}
 										role="menuitem"
@@ -523,7 +523,7 @@
 							</td>
 
 							<!-- Data cells -->
-							{#each sortedColumns as col, i (col.id)}
+							{#each sortedColumns as col, i (col.column_id)}
 								<td
 									class="overflow-hidden py-1 text-sm text-gray-800
 									{i === 0 ? 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2' : 'px-2'}"
@@ -532,13 +532,13 @@
 										if (
 											col.type !== 'checkbox' &&
 											col.type !== 'tags' &&
-											!(editingCell?.rowId === row.row_id && editingCell?.colId === col.id)
+											!(editingCell?.rowId === row.row_id && editingCell?.colId === col.column_id)
 										) {
-											onStartEdit(row.row_id, col, row.row_data[col.id]);
+											onStartEdit(row.row_id, col, row.row_data[col.column_id]);
 										}
 									}}
 								>
-									{#if editingCell?.rowId === row.row_id && editingCell?.colId === col.id}
+									{#if editingCell?.rowId === row.row_id && editingCell?.colId === col.column_id}
 										{#if col.type === 'select'}
 											{@const choices = getChoices(col)}
 											<select
@@ -602,7 +602,7 @@
 									{:else if col.type === 'checkbox'}
 										<button
 											class="relative inline-flex h-5 w-9 items-center rounded-full transition {row
-												.row_data[col.id]
+												.row_data[col.column_id]
 												? 'bg-blue-500'
 												: 'bg-gray-200'}"
 											onclick={(e) => {
@@ -611,17 +611,17 @@
 											}}
 											aria-label="Toggle"
 											role="switch"
-											aria-checked={!!row.row_data[col.id]}
+											aria-checked={!!row.row_data[col.column_id]}
 										>
 											<span
 												class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition {row
-													.row_data[col.id]
+													.row_data[col.column_id]
 													? 'translate-x-4'
 													: 'translate-x-1'}"
 											></span>
 										</button>
 									{:else if col.type === 'url'}
-										{@const urlVal = (row.row_data[col.id] as string) ?? ''}
+										{@const urlVal = (row.row_data[col.column_id] as string) ?? ''}
 										{#if urlVal}
 											<a
 												href={urlVal}
@@ -635,7 +635,7 @@
 											<span class="block min-h-[1.5rem] cursor-text py-1 text-gray-300">—</span>
 										{/if}
 									{:else if col.type === 'select'}
-										{@const selVal = (row.row_data[col.id] as string) ?? ''}
+										{@const selVal = (row.row_data[col.column_id] as string) ?? ''}
 										{#if selVal}
 											{@const color = getChoiceColor(col, selVal)}
 											<span
@@ -646,7 +646,7 @@
 											<span class="block min-h-[1.5rem] cursor-pointer py-1 text-gray-300">—</span>
 										{/if}
 									{:else if col.type === 'tags'}
-										{@const tagVals = getTagValues(row, col.id)}
+										{@const tagVals = getTagValues(row, col.column_id)}
 										{@const choices = getChoices(col)}
 										{@const available = choices.filter((c) => !tagVals.includes(c.value))}
 										<div
@@ -672,12 +672,12 @@
 														class="rounded-full border border-gray-300 px-1.5 py-0.5 text-xs text-gray-400 hover:border-blue-400 hover:text-blue-600"
 														onclick={() =>
 															onTagsPopupChange(
-																tagsPopupCell?.rowId === row.row_id && tagsPopupCell?.colId === col.id
+																tagsPopupCell?.rowId === row.row_id && tagsPopupCell?.colId === col.column_id
 																	? null
-																	: { rowId: row.row_id, colId: col.id }
+																	: { rowId: row.row_id, colId: col.column_id }
 															)}>+</button
 													>
-													{#if tagsPopupCell?.rowId === row.row_id && tagsPopupCell?.colId === col.id}
+													{#if tagsPopupCell?.rowId === row.row_id && tagsPopupCell?.colId === col.column_id}
 														<div
 															class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border border-gray-100 bg-white py-1 shadow-xl"
 														>
@@ -700,10 +700,10 @@
 											{/if}
 										</div>
 									{:else if col.type === 'date'}
-										{@const raw = row.row_data[col.id]}
+										{@const raw = row.row_data[col.column_id]}
 										<span class="font-mono text-sm">{raw ? formatDate(String(raw)) : ''}</span>
 									{:else}
-										{@const cellVal = row.row_data[col.id]}
+										{@const cellVal = row.row_data[col.column_id]}
 										{#if cellVal !== null && cellVal !== undefined && String(cellVal) !== ''}
 											<span class="block truncate">{String(cellVal)}</span>
 										{:else}
@@ -753,7 +753,7 @@
 							+
 						</button>
 					</td>
-					{#each sortedColumns as col, i (col.id)}
+					{#each sortedColumns as col, i (col.column_id)}
 						<td
 							class="cursor-pointer py-1 text-sm text-gray-300
 							{i === 0 ? 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2' : 'px-2'}"

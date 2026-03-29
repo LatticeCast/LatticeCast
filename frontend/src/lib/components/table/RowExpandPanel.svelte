@@ -32,44 +32,44 @@
 	const sortedCols = $derived([...columns].sort((a, b) => a.position - b.position));
 
 	function startEdit(col: Column) {
-		editField = col.id;
-		const val = localRow.row_data[col.id];
+		editField = col.column_id;
+		const val = localRow.row_data[col.column_id];
 		editVal = val === null || val === undefined ? '' : String(val);
 	}
 
 	async function commitEdit(col: Column) {
-		if (editField !== col.id) return;
+		if (editField !== col.column_id) return;
 		editField = null;
 		let parsed: unknown = editVal;
 		if (col.type === 'number') parsed = editVal === '' ? null : Number(editVal);
 		else if (col.type === 'checkbox') parsed = editVal === 'true';
 		else if (editVal === '') parsed = null;
-		const newData = { ...localRow.row_data, [col.id]: parsed };
+		const newData = { ...localRow.row_data, [col.column_id]: parsed };
 		localRow = { ...localRow, row_data: newData };
 		await onUpdateRow(localRow.row_id, newData);
 		await onRefreshRows(tableId);
 	}
 
 	async function toggleCheckbox(col: Column) {
-		const current = !!localRow.row_data[col.id];
-		const newData = { ...localRow.row_data, [col.id]: !current };
+		const current = !!localRow.row_data[col.column_id];
+		const newData = { ...localRow.row_data, [col.column_id]: !current };
 		localRow = { ...localRow, row_data: newData };
 		await onUpdateRow(localRow.row_id, newData);
 		await onRefreshRows(tableId);
 	}
 
 	async function removeTag(col: Column, tag: string) {
-		const current = getTagValues(localRow, col.id);
-		const newData = { ...localRow.row_data, [col.id]: current.filter((t) => t !== tag) };
+		const current = getTagValues(localRow, col.column_id);
+		const newData = { ...localRow.row_data, [col.column_id]: current.filter((t) => t !== tag) };
 		localRow = { ...localRow, row_data: newData };
 		await onUpdateRow(localRow.row_id, newData);
 		await onRefreshRows(tableId);
 	}
 
 	async function addTag(col: Column, tag: string) {
-		const current = getTagValues(localRow, col.id);
+		const current = getTagValues(localRow, col.column_id);
 		if (current.includes(tag)) return;
-		const newData = { ...localRow.row_data, [col.id]: [...current, tag] };
+		const newData = { ...localRow.row_data, [col.column_id]: [...current, tag] };
 		tagsPopup = null;
 		localRow = { ...localRow, row_data: newData };
 		await onUpdateRow(localRow.row_id, newData);
@@ -108,7 +108,7 @@
 
 	<!-- Fields list -->
 	<div class="flex-1 overflow-y-auto px-6 py-4">
-		{#each sortedCols as col (col.id)}
+		{#each sortedCols as col (col.column_id)}
 			<div class="mb-5">
 				<label class="mb-1 block text-xs font-semibold tracking-wide text-gray-400 uppercase">
 					{col.name}
@@ -118,23 +118,23 @@
 				{#if col.type === 'checkbox'}
 					<button
 						class="relative inline-flex h-6 w-10 items-center rounded-full transition {localRow
-							.row_data[col.id]
+							.row_data[col.column_id]
 							? 'bg-blue-500'
 							: 'bg-gray-200'}"
 						onclick={() => toggleCheckbox(col)}
 						role="switch"
-						aria-checked={!!localRow.row_data[col.id]}
+						aria-checked={!!localRow.row_data[col.column_id]}
 					>
 						<span
 							class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition {localRow
-								.row_data[col.id]
+								.row_data[col.column_id]
 								? 'translate-x-5'
 								: 'translate-x-1'}"
 						></span>
 					</button>
 				{:else if col.type === 'select'}
 					{@const choices = getChoices(col)}
-					{#if editField === col.id}
+					{#if editField === col.column_id}
 						<select
 							class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
 							bind:value={editVal}
@@ -148,7 +148,7 @@
 							{/each}
 						</select>
 					{:else}
-						{@const selVal = (localRow.row_data[col.id] as string) ?? ''}
+						{@const selVal = (localRow.row_data[col.column_id] as string) ?? ''}
 						<button
 							class="flex min-h-[2.25rem] w-full items-center rounded-xl border border-gray-200 px-3 py-2 text-left text-sm hover:border-blue-300"
 							onclick={() => startEdit(col)}
@@ -165,7 +165,7 @@
 						</button>
 					{/if}
 				{:else if col.type === 'tags'}
-					{@const tagVals = getTagValues(localRow, col.id)}
+					{@const tagVals = getTagValues(localRow, col.column_id)}
 					{@const choices = getChoices(col)}
 					{@const available = choices.filter((c) => !tagVals.includes(c.value))}
 					<div
@@ -189,10 +189,10 @@
 								<button
 									class="rounded-full border border-gray-300 px-2 py-0.5 text-xs text-gray-400 hover:border-blue-400 hover:text-blue-600"
 									onclick={() => {
-										tagsPopup = tagsPopup === col.id ? null : col.id;
+										tagsPopup = tagsPopup === col.column_id ? null : col.column_id;
 									}}>+</button
 								>
-								{#if tagsPopup === col.id}
+								{#if tagsPopup === col.column_id}
 									<div
 										class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border border-gray-100 bg-white py-1 shadow-xl"
 									>
@@ -214,7 +214,7 @@
 						{/if}
 					</div>
 				{:else if col.type === 'url'}
-					{#if editField === col.id}
+					{#if editField === col.column_id}
 						<input
 							type="url"
 							class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -227,7 +227,7 @@
 							autofocus
 						/>
 					{:else}
-						{@const urlVal = (localRow.row_data[col.id] as string) ?? ''}
+						{@const urlVal = (localRow.row_data[col.column_id] as string) ?? ''}
 						<button
 							class="flex min-h-[2.25rem] w-full items-center rounded-xl border border-gray-200 px-3 py-2 text-left text-sm hover:border-blue-300"
 							onclick={() => startEdit(col)}
@@ -247,7 +247,7 @@
 						</button>
 					{/if}
 				{:else if col.type === 'date'}
-					{#if editField === col.id}
+					{#if editField === col.column_id}
 						<input
 							type="date"
 							class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -260,8 +260,8 @@
 							autofocus
 						/>
 					{:else}
-						{@const dateVal = localRow.row_data[col.id]
-							? formatDate(String(localRow.row_data[col.id]))
+						{@const dateVal = localRow.row_data[col.column_id]
+							? formatDate(String(localRow.row_data[col.column_id]))
 							: ''}
 						<button
 							class="flex min-h-[2.25rem] w-full items-center rounded-xl border border-gray-200 px-3 py-2 text-left font-mono text-sm hover:border-blue-300"
@@ -271,7 +271,7 @@
 						</button>
 					{/if}
 				{:else if col.type === 'number'}
-					{#if editField === col.id}
+					{#if editField === col.column_id}
 						<input
 							type="number"
 							class="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -288,14 +288,14 @@
 							class="flex min-h-[2.25rem] w-full items-center rounded-xl border border-gray-200 px-3 py-2 text-left text-sm hover:border-blue-300"
 							onclick={() => startEdit(col)}
 						>
-							{#if localRow.row_data[col.id] !== null && localRow.row_data[col.id] !== undefined}
-								<span class="text-gray-800">{String(localRow.row_data[col.id])}</span>
+							{#if localRow.row_data[col.column_id] !== null && localRow.row_data[col.column_id] !== undefined}
+								<span class="text-gray-800">{String(localRow.row_data[col.column_id])}</span>
 							{:else}
 								<span class="text-gray-400">—</span>
 							{/if}
 						</button>
 					{/if}
-				{:else if editField === col.id}
+				{:else if editField === col.column_id}
 					<textarea
 						class="w-full resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
 						rows="3"
@@ -312,9 +312,9 @@
 						class="flex min-h-[2.25rem] w-full items-start rounded-xl border border-gray-200 px-3 py-2 text-left text-sm hover:border-blue-300"
 						onclick={() => startEdit(col)}
 					>
-						{#if localRow.row_data[col.id] !== null && localRow.row_data[col.id] !== undefined && String(localRow.row_data[col.id]) !== ''}
+						{#if localRow.row_data[col.column_id] !== null && localRow.row_data[col.column_id] !== undefined && String(localRow.row_data[col.column_id]) !== ''}
 							<span class="break-words whitespace-pre-wrap text-gray-800"
-								>{String(localRow.row_data[col.id])}</span
+								>{String(localRow.row_data[col.column_id])}</span
 							>
 						{:else}
 							<span class="text-gray-400">—</span>

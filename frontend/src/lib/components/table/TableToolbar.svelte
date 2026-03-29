@@ -101,24 +101,24 @@
 				<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">
 					Sort by
 				</div>
-				{#each sortedCols as col (col.id)}
+				{#each sortedCols as col (col.column_id)}
 					<button
 						class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
-						col.id
+						col.column_id
 							? 'font-semibold text-blue-600'
 							: ''}"
 						onclick={() => {
-							if (sortConfig?.colId === col.id) {
-								onSortChange({ colId: col.id, dir: sortConfig.dir === 'asc' ? 'desc' : 'asc' });
+							if (sortConfig?.colId === col.column_id) {
+								onSortChange({ colId: col.column_id, dir: sortConfig.dir === 'asc' ? 'desc' : 'asc' });
 							} else {
-								onSortChange({ colId: col.id, dir: 'asc' });
+								onSortChange({ colId: col.column_id, dir: 'asc' });
 							}
 							showSortMenu = false;
 						}}
 						role="menuitem"
 					>
 						{col.name}
-						{#if sortConfig?.colId === col.id}
+						{#if sortConfig?.colId === col.column_id}
 							<span class="ml-auto text-xs text-blue-500"
 								>{sortConfig.dir === 'asc' ? '↑ A→Z' : '↓ Z→A'}</span
 							>
@@ -176,66 +176,66 @@
 				<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">
 					Group by
 				</div>
-				{#each sortedCols.filter((c) => c.type === 'select' || c.type === 'date') as col (col.id)}
+				{#each sortedCols.filter((c) => c.type === 'select' || c.type === 'date') as col (col.column_id)}
 					{#if col.type === 'date'}
 						<div class="px-3 py-1 text-xs font-medium text-gray-500">
 							{col.name} <span class="text-gray-400">(date)</span>
 						</div>
 						<button
 							class="flex w-full items-center gap-2 px-5 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId ===
-								col.id && groupConfig?.granularity === 'month'
+								col.column_id && groupConfig?.granularity === 'month'
 								? 'font-semibold text-blue-600'
 								: ''}"
 							onclick={() => {
 								onGroupChange(
-									groupConfig?.colId === col.id && groupConfig?.granularity === 'month'
+									groupConfig?.colId === col.column_id && groupConfig?.granularity === 'month'
 										? null
-										: { colId: col.id, granularity: 'month' }
+										: { colId: col.column_id, granularity: 'month' }
 								);
 								showGroupMenu = false;
 							}}
 							role="menuitem"
 						>
 							by month
-							{#if groupConfig?.colId === col.id && groupConfig?.granularity === 'month'}
+							{#if groupConfig?.colId === col.column_id && groupConfig?.granularity === 'month'}
 								<span class="ml-auto text-xs text-blue-500">✓</span>
 							{/if}
 						</button>
 						<button
 							class="flex w-full items-center gap-2 px-5 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId ===
-								col.id && groupConfig?.granularity === 'day'
+								col.column_id && groupConfig?.granularity === 'day'
 								? 'font-semibold text-blue-600'
 								: ''}"
 							onclick={() => {
 								onGroupChange(
-									groupConfig?.colId === col.id && groupConfig?.granularity === 'day'
+									groupConfig?.colId === col.column_id && groupConfig?.granularity === 'day'
 										? null
-										: { colId: col.id, granularity: 'day' }
+										: { colId: col.column_id, granularity: 'day' }
 								);
 								showGroupMenu = false;
 							}}
 							role="menuitem"
 						>
 							by day
-							{#if groupConfig?.colId === col.id && groupConfig?.granularity === 'day'}
+							{#if groupConfig?.colId === col.column_id && groupConfig?.granularity === 'day'}
 								<span class="ml-auto text-xs text-blue-500">✓</span>
 							{/if}
 						</button>
 					{:else}
 						<button
 							class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId ===
-							col.id
+							col.column_id
 								? 'font-semibold text-blue-600'
 								: ''}"
 							onclick={() => {
-								onGroupChange(groupConfig?.colId === col.id ? null : { colId: col.id });
+								onGroupChange(groupConfig?.colId === col.column_id ? null : { colId: col.column_id });
 								showGroupMenu = false;
 							}}
 							role="menuitem"
 						>
 							{col.name}
 							<span class="ml-1 text-xs text-gray-400">({col.type})</span>
-							{#if groupConfig?.colId === col.id}
+							{#if groupConfig?.colId === col.column_id}
 								<span class="ml-auto text-xs text-blue-500">✓</span>
 							{/if}
 						</button>
@@ -294,12 +294,12 @@
 				<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">
 					Toggle columns
 				</div>
-				{#each sortedCols as col (col.id)}
+				{#each sortedCols as col (col.column_id)}
 					<label class="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-gray-50">
 						<input
 							type="checkbox"
-							checked={!hiddenCols.has(col.id)}
-							onchange={() => onToggleHideCol(col.id)}
+							checked={!hiddenCols.has(col.column_id)}
+							onchange={() => onToggleHideCol(col.column_id)}
 							class="accent-blue-500"
 						/>
 						<span class="text-sm text-gray-700">{col.name}</span>
@@ -488,8 +488,8 @@
 					bind:value={cond.colId}
 					class="rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-700 outline-none focus:border-blue-400"
 				>
-					{#each columns as col (col.id)}
-						<option value={col.id}>{col.name}</option>
+					{#each columns as col (col.column_id)}
+						<option value={col.column_id}>{col.name}</option>
 					{/each}
 				</select>
 				<select
