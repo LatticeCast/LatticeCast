@@ -2,9 +2,13 @@
 
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from botocore.exceptions import ClientError
+from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config.settings import settings
+from config.storage import get_s3_client
 from core.db import get_session
 from middleware.auth import get_current_user
 from models.row import Row, RowCreate, RowResponse, RowUpdate
@@ -95,6 +99,60 @@ async def update_row(
 
     repo = RowRepository(session)
     return await repo.update(row=row, data=data, updated_by=user.user_id)
+
+
+@router.get("/tables/{table_id}/rows/{row_id}/doc", response_class=PlainTextResponse)
+async def get_row_doc(
+    table_id: UUID,
+    row_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> str:
+    """Get markdown doc for a row from MinIO (returns empty string if not found)"""
+    table = await _get_table_for_member(table_id, user, session)
+    row = await session.get(Row, row_id)
+    if not row or row.table_id != table_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+
+    workspace_id = table.workspace_id
+    key = f"{workspace_id}/{workspace_id}/{table_id}/{row_id}.md"
+    client = get_s3_client()
+    try:
+        response = client.get_object(Bucket=settings.minio.bucket, Key=key)
+        return response["Body"].read().decode("utf-8")
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+            return ""
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
+
+
+@router.put("/tables/{table_id}/rows/{row_id}/doc", response_class=PlainTextResponse)
+async def put_row_doc(
+    table_id: UUID,
+    row_id: UUID,
+    body: str = Body(..., media_type="text/plain"),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> str:
+    """Save markdown doc for a row to MinIO"""
+    table = await _get_table_for_member(table_id, user, session)
+    row = await session.get(Row, row_id)
+    if not row or row.table_id != table_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+
+    workspace_id = table.workspace_id
+    key = f"{workspace_id}/{workspace_id}/{table_id}/{row_id}.md"
+    client = get_s3_client()
+    try:
+        client.put_object(
+            Bucket=settings.minio.bucket,
+            Key=key,
+            Body=body.encode("utf-8"),
+            ContentType="text/markdown",
+        )
+        return body
+    except ClientError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
 
 
 @router.delete("/rows/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
