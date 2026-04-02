@@ -287,6 +287,7 @@ _PM_COLUMNS: list[dict[str, Any]] = [
     {"name": "Estimate",    "type": "number"},
     {"name": "Tags",        "type": "tags"},
     {"name": "Description", "type": "text"},
+    {"name": "Doc",         "type": "url"},
     {"name": "Parent",      "type": "text"},
 ]
 
