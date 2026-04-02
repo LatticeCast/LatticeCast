@@ -76,7 +76,7 @@ async def _inject_hierarchy(content: str, table, row: Row, session: AsyncSession
     status_col_id = cols.get("Status", "")
 
     # Inject parent link
-    if parent_col_id and re.search(r'<!--\s*\[PARENT-KEY\]', content):
+    if parent_col_id and re.search(r"<!--\s*\[PARENT-KEY\]", content):
         parent_row_id_str = row.row_data.get(parent_col_id)
         parent_link = ""
         if parent_row_id_str:
@@ -89,10 +89,10 @@ async def _inject_hierarchy(content: str, table, row: Row, session: AsyncSession
             except (ValueError, Exception):
                 pass
         if parent_link:
-            content = re.sub(r'<!--\s*\[PARENT-KEY\][^>]*-->', parent_link, content)
+            content = re.sub(r"<!--\s*\[PARENT-KEY\][^>]*-->", parent_link, content)
 
     # Inject children links
-    if parent_col_id and re.search(r'<!--\s*Links to child', content):
+    if parent_col_id and re.search(r"<!--\s*Links to child", content):
         repo = RowRepository(session)
         children = await repo.filter_by_jsonb(table.table_id, {parent_col_id: str(row.row_id)})
         if children:
@@ -106,7 +106,7 @@ async def _inject_hierarchy(content: str, table, row: Row, session: AsyncSession
                     line += f" — {c_status}"
                 lines.append(line)
             children_text = "\n".join(lines)
-            content = re.sub(r'<!--\s*Links to child[^>]*-->', children_text, content)
+            content = re.sub(r"<!--\s*Links to child[^>]*-->", children_text, content)
 
     return content
 
@@ -148,18 +148,20 @@ async def create_row(
         row_count = await repo.count_by_table(table_id)
         key_value = f"{prefix}-{row_count}"
         from models.row import RowUpdate
+
         updated_data = {**row.row_data, key_col["column_id"]: key_value}
         row = await repo.update(row=row, data=RowUpdate(row_data=updated_data), updated_by=user.user_id)
 
     # Auto-create doc template in MinIO based on Type column
     type_col = next((c for c in table.columns if c.get("name") == "Type"), None)
     title_col = next((c for c in table.columns if c.get("name") == "Title"), None)
+    doc_col = next((c for c in table.columns if c.get("name") == "Doc"), None)
     row_type = row.row_data.get(type_col["column_id"], "") if type_col else ""
     row_key = row.row_data.get(key_col["column_id"], "") if key_col else ""
     row_title = row.row_data.get(title_col["column_id"], "") if title_col else ""
+    minio_key = f"{user.user_id}/{table.workspace_id}/{table_id}/{row.row_id}.md"
     if row_type in ("epic", "story", "task", "bug"):
         doc_content = _build_doc_template(row_type, row_key, row_title)
-        minio_key = f"{user.user_id}/{table.workspace_id}/{table_id}/{row.row_id}.md"
         try:
             get_s3_client().put_object(
                 Bucket=settings.minio.bucket,
@@ -170,11 +172,10 @@ async def create_row(
         except Exception:
             pass  # doc creation is best-effort; don't fail row creation
 
-        # Auto-populate Doc column with MinIO path if table has a "Doc" column
-        doc_col = next((c for c in table.columns if c.get("name") == "Doc"), None)
-        if doc_col:
-            updated_data = {**row.row_data, doc_col["column_id"]: minio_key}
-            row = await repo.update(row=row, data=RowUpdate(row_data=updated_data), updated_by=user.user_id)
+    # Auto-populate Doc column with MinIO path if table has a "Doc" column
+    if doc_col:
+        updated_data = {**row.row_data, doc_col["column_id"]: minio_key}
+        row = await repo.update(row=row, data=RowUpdate(row_data=updated_data), updated_by=user.user_id)
 
     return row
 
@@ -241,7 +242,7 @@ async def get_row_doc(
             return ""
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
 
-    if content and (re.search(r'<!--\s*\[PARENT-KEY\]', content) or re.search(r'<!--\s*Links to child', content)):
+    if content and (re.search(r"<!--\s*\[PARENT-KEY\]", content) or re.search(r"<!--\s*Links to child", content)):
         content = await _inject_hierarchy(content, table, row, session)
 
     return content
