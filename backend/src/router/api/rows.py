@@ -170,6 +170,12 @@ async def create_row(
         except Exception:
             pass  # doc creation is best-effort; don't fail row creation
 
+        # Auto-populate Doc column with MinIO path if table has a "Doc" column
+        doc_col = next((c for c in table.columns if c.get("name") == "Doc"), None)
+        if doc_col:
+            updated_data = {**row.row_data, doc_col["column_id"]: minio_key}
+            row = await repo.update(row=row, data=RowUpdate(row_data=updated_data), updated_by=user.user_id)
+
     return row
 
 
