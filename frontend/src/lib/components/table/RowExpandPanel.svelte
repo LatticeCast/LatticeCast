@@ -3,6 +3,7 @@
 	import { TAG_COLORS } from '$lib/UI/theme.svelte';
 	import { getChoices, getChoiceColor, getTagValues, formatDate } from './table.utils';
 	import { fetchDoc, saveDoc } from '$lib/backend/tables';
+	import { marked } from 'marked';
 
 	let {
 		row,
@@ -27,7 +28,6 @@
 	let docContent = $state('');
 	let docLoading = $state(false);
 	let docSaving = $state(false);
-	let showPreview = $state(false);
 
 	// Local copy so we can update inline
 	let localRow = $state<Row>(row);
@@ -57,25 +57,7 @@
 		}
 	}
 
-	function renderMarkdown(md: string): string {
-		// Simple markdown rendering: headings, bold, italic, lists, code
-		return md
-			.replace(/&/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/^### (.+)$/gm, '<h3 class="text-base font-semibold mt-3 mb-1">$1</h3>')
-			.replace(/^## (.+)$/gm, '<h2 class="text-lg font-semibold mt-4 mb-1">$1</h2>')
-			.replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold mt-4 mb-2">$1</h1>')
-			.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-			.replace(/\*(.+?)\*/g, '<em>$1</em>')
-			.replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1 rounded text-xs font-mono">$1</code>')
-			.replace(/^- \[ \] (.+)$/gm, '<div class="flex items-start gap-1.5 my-0.5"><input type="checkbox" disabled class="mt-0.5"/> <span>$1</span></div>')
-			.replace(/^- \[x\] (.+)$/gm, '<div class="flex items-start gap-1.5 my-0.5"><input type="checkbox" checked disabled class="mt-0.5"/> <span>$1</span></div>')
-			.replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
-			.replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 list-decimal">$2</li>')
-			.replace(/\n\n/g, '</p><p class="mb-2">')
-			.replace(/\n/g, '<br>');
-	}
+	const docPreview = $derived(marked(docContent) as string);
 
 	const sortedCols = $derived([...columns].sort((a, b) => a.position - b.position));
 
@@ -130,7 +112,7 @@
 
 <!-- Slide-out panel -->
 <div
-	class="fixed top-0 right-0 z-50 flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
+	class="fixed top-0 right-0 z-50 flex h-full w-full flex-col bg-white shadow-2xl {activeTab === 'doc' ? 'max-w-4xl' : 'max-w-md'}"
 	role="dialog"
 	aria-modal="true"
 	aria-label="Row details"
@@ -171,31 +153,27 @@
 	</div>
 
 	{#if activeTab === 'doc'}
-		<!-- Doc tab -->
+		<!-- Doc tab — split view -->
 		<div class="flex flex-1 flex-col overflow-hidden">
-			<div class="flex items-center justify-between border-b border-gray-100 px-4 py-2">
+			<div class="flex items-center border-b border-gray-100 px-4 py-2">
 				<span class="text-xs text-gray-400">Markdown {docSaving ? '· saving…' : ''}</span>
-				<button
-					class="rounded px-2 py-1 text-xs font-medium transition {showPreview ? 'bg-blue-100 text-blue-700' : 'text-gray-500 hover:text-gray-800'}"
-					onclick={() => (showPreview = !showPreview)}
-				>
-					{showPreview ? 'Edit' : 'Preview'}
-				</button>
 			</div>
 			{#if docLoading}
 				<div class="flex flex-1 items-center justify-center text-sm text-gray-400">Loading…</div>
-			{:else if showPreview}
-				<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-				<div class="prose prose-sm flex-1 overflow-y-auto px-5 py-4 text-sm text-gray-800">
-					{@html renderMarkdown(docContent)}
-				</div>
 			{:else}
-				<textarea
-					class="flex-1 resize-none border-none px-5 py-4 font-mono text-sm text-gray-800 outline-none"
-					placeholder="Write markdown here…"
-					bind:value={docContent}
-					onblur={handleDocBlur}
-				></textarea>
+				<div class="flex flex-1 overflow-hidden divide-x divide-gray-200">
+					<!-- Editor pane -->
+					<textarea
+						class="flex-1 resize-none border-none px-5 py-4 font-mono text-sm text-gray-800 outline-none"
+						placeholder="Write markdown here…"
+						bind:value={docContent}
+						onblur={handleDocBlur}
+					></textarea>
+					<!-- Preview pane -->
+					<div class="prose prose-sm flex-1 overflow-y-auto px-5 py-4 text-sm text-gray-800 max-w-none">
+						{@html docPreview}
+					</div>
+				</div>
 			{/if}
 		</div>
 	{:else}
