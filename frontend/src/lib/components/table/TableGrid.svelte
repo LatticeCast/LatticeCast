@@ -59,7 +59,8 @@
 		onAddRow,
 		onAddRowInGroup,
 		onToggleCollapseGroup,
-		onManageOptions
+		onManageOptions,
+		onNavigateRow
 	}: {
 		columns: Column[];
 		sortedColumns: Column[];
