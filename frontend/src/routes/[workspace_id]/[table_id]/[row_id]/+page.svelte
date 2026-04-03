@@ -7,8 +7,14 @@
 	import { authStore } from '$lib/stores/auth.store';
 	import { get } from 'svelte/store';
 	import { fetchTable, fetchRows, fetchDoc, saveDoc } from '$lib/backend/tables';
-	import { getChoices, getChoiceColor, getTagValues, formatDate } from '$lib/components/table/table.utils';
-	import type { Column, Row, Table } from '$lib/types/table';
+	import { fetchWorkspaces } from '$lib/backend/workspaces';
+	import {
+		getChoices,
+		getChoiceColor,
+		getTagValues,
+		formatDate
+	} from '$lib/components/table/table.utils';
+	import type { Column, Row, Table, Workspace } from '$lib/types/table';
 	import { marked } from 'marked';
 
 	const tableId = $derived($page.params.table_id ?? '');
@@ -16,6 +22,7 @@
 	const workspaceId = $derived($page.params.workspace_id ?? '');
 
 	let table = $state<Table | null>(null);
+	let workspace = $state<Workspace | null>(null);
 	let row = $state<Row | null>(null);
 	let docContent = $state('');
 	let loading = $state(true);
@@ -23,6 +30,10 @@
 	let docSaving = $state(false);
 	let editingDoc = $state(false);
 	let error = $state<string | null>(null);
+
+	const userDisplay = $derived(
+		$authStore?.userInfo?.name ?? $authStore?.userInfo?.email ?? $authStore?.accessToken ?? 'Me'
+	);
 
 	const sortedCols = $derived(
 		table ? [...table.columns].sort((a, b) => a.position - b.position) : []
@@ -34,6 +45,14 @@
 
 	const docPreview = $derived(marked(docContent) as string);
 
+	const ticketKey = $derived(
+		(() => {
+			if (!row || !table) return '';
+			const keyCol = table.columns.find((c) => c.name === 'Key');
+			return keyCol ? ((row.row_data[keyCol.column_id] as string) ?? '') : '';
+		})()
+	);
+
 	onMount(async () => {
 		const auth = get(authStore);
 		if (!auth?.accessToken) {
@@ -41,11 +60,13 @@
 			return;
 		}
 		try {
-			const [t, rows] = await Promise.all([
+			const [t, rows, wsList] = await Promise.all([
 				fetchTable(tableId),
-				fetchRows(tableId, 0, 200)
+				fetchRows(tableId, 0, 200),
+				fetchWorkspaces()
 			]);
 			table = t;
+			workspace = wsList.find((w) => w.workspace_id === t.workspace_id) ?? null;
 			row = rows.find((r) => r.row_id === rowId) ?? null;
 			if (!row) {
 				error = 'Row not found';
@@ -78,8 +99,8 @@
 		if (!row || !table) return rowId;
 		const titleCol = table.columns.find((c) => c.name === 'Title');
 		const keyCol = table.columns.find((c) => c.name === 'Key');
-		const key = keyCol ? (row.row_data[keyCol.column_id] as string) ?? '' : '';
-		const title = titleCol ? (row.row_data[titleCol.column_id] as string) ?? '' : '';
+		const key = keyCol ? ((row.row_data[keyCol.column_id] as string) ?? '') : '';
+		const title = titleCol ? ((row.row_data[titleCol.column_id] as string) ?? '') : '';
 		if (key && title) return `${key}: ${title}`;
 		return title || key || rowId;
 	}
@@ -92,18 +113,29 @@
 <div class="min-h-screen bg-gray-50">
 	<!-- Header bar -->
 	<div class="sticky top-0 z-10 border-b border-gray-200 bg-white px-6 py-3 shadow-sm">
-		<div class="flex items-center gap-3">
-			<button
-				onclick={() => goto(`/${workspaceId}/${tableId}`)}
-				class="rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
-				aria-label="Back to table"
+		<nav class="flex flex-wrap items-center gap-1 text-sm text-gray-500" aria-label="Breadcrumb">
+			<a
+				href="/tables"
+				class="max-w-[150px] truncate transition hover:text-blue-600"
+				title={userDisplay}>{userDisplay}</a
 			>
-				<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-				</svg>
-			</button>
-			<h1 class="truncate text-base font-semibold text-gray-900">{getRowTitle()}</h1>
-		</div>
+			<span class="text-gray-300 select-none">/</span>
+			<a
+				href="/tables"
+				class="max-w-[150px] truncate transition hover:text-blue-600"
+				title={workspace?.name ?? workspaceId}>{workspace?.name ?? workspaceId}</a
+			>
+			<span class="text-gray-300 select-none">/</span>
+			<a
+				href="/{workspaceId}/{tableId}"
+				class="max-w-[150px] truncate transition hover:text-blue-600"
+				title={table?.name ?? tableId}>{table?.name ?? tableId}</a
+			>
+			<span class="text-gray-300 select-none">/</span>
+			<span class="max-w-[200px] truncate font-semibold text-gray-900" title={getRowTitle()}>
+				{ticketKey || getRowTitle()}
+			</span>
+		</nav>
 	</div>
 
 	{#if loading}
@@ -112,7 +144,6 @@
 		<div class="flex h-64 items-center justify-center text-sm text-red-500">{error}</div>
 	{:else if row && table}
 		<div class="mx-auto max-w-4xl px-6 py-6">
-
 			<!-- Badge fields at top -->
 			<div class="mb-6 flex flex-wrap gap-2">
 				{#each badgeCols as col (col.column_id)}
@@ -138,14 +169,18 @@
 								</span>
 							{/each}
 						{:else if col.type === 'date'}
-							<span class="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs text-gray-600">
+							<span
+								class="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs text-gray-600"
+							>
 								<span class="font-normal text-gray-400">{col.name}:</span>
 								{formatDate(String(val))}
 							</span>
 						{:else if col.type === 'url'}
 							<!-- skip URL badges — shown in doc or fields section -->
 						{:else}
-							<span class="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs text-gray-700">
+							<span
+								class="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs text-gray-700"
+							>
 								<span class="font-normal text-gray-400">{col.name}:</span>
 								{String(val)}
 							</span>
@@ -173,7 +208,7 @@
 					<div class="flex h-40 items-center justify-center text-sm text-gray-400">Loading…</div>
 				{:else if editingDoc}
 					<textarea
-						class="w-full resize-none border-none px-5 py-4 font-mono text-sm text-gray-800 outline-none min-h-[400px]"
+						class="min-h-[400px] w-full resize-none border-none px-5 py-4 font-mono text-sm text-gray-800 outline-none"
 						placeholder="Write markdown here…"
 						bind:value={docContent}
 						onblur={handleDocBlur}
@@ -185,10 +220,9 @@
 				{:else}
 					<div class="px-5 py-8 text-center text-sm text-gray-400">
 						No doc yet.
-						<button
-							onclick={() => (editingDoc = true)}
-							class="ml-1 text-blue-500 hover:underline"
-						>Start writing</button>
+						<button onclick={() => (editingDoc = true)} class="ml-1 text-blue-500 hover:underline"
+							>Start writing</button
+						>
 					</div>
 				{/if}
 			</div>
