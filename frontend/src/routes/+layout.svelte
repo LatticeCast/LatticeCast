@@ -28,10 +28,11 @@
 		<button
 			onclick={() => (menuOpen = !menuOpen)}
 			data-testid="menu-toggle"
-			class="rounded-md p-1.5 text-white hover:bg-blue-500 focus:outline-none"
+			class="relative h-8 w-8 rounded-md text-white hover:bg-blue-500 focus:outline-none"
 			aria-label={menuOpen ? 'Close menu' : 'Open menu'}
 		>
-			{menuOpen ? '«' : '☰'}
+			<span class="menu-icon absolute inset-0 flex items-center justify-center transition-all duration-300 {menuOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}">«</span>
+			<span class="menu-icon absolute inset-0 flex items-center justify-center transition-all duration-300 {menuOpen ? 'opacity-0 scale-75' : 'opacity-100 scale-100'}">☰</span>
 		</button>
 	</header>
 
