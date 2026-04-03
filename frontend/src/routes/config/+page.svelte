@@ -59,6 +59,30 @@
 			</div>
 		</div>
 
+		<!-- Dark Mode -->
+		<div class="mb-4 rounded-3xl bg-white p-6 shadow-2xl">
+			<h2 class="mb-2 text-xl font-bold text-gray-800">Appearance</h2>
+			<p class="mb-4 text-sm text-gray-500">Customize the look of the app</p>
+
+			<button
+				onclick={() => ($settingsStore.darkMode = !$settingsStore.darkMode)}
+				class="flex w-full items-center justify-between rounded-2xl bg-gray-50 px-4 py-3"
+			>
+				<span class="font-medium text-gray-800">Dark Mode</span>
+				<div
+					class="relative h-7 w-12 rounded-full transition-colors {$settingsStore.darkMode
+						? 'bg-blue-500'
+						: 'bg-gray-300'}"
+				>
+					<div
+						class="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform {$settingsStore.darkMode
+							? 'translate-x-5'
+							: 'translate-x-0.5'}"
+					></div>
+				</div>
+			</button>
+		</div>
+
 		<!-- Notification Reminders -->
 		<div class="mb-4 rounded-3xl bg-white p-6 shadow-2xl">
 			<h2 class="mb-2 text-xl font-bold text-gray-800">Notification Reminders</h2>
