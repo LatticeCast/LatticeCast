@@ -1,6 +1,20 @@
 // src/lib/UI/theme.svelte.ts
 // Centralized color tokens for light/dark mode and tag palette
 
+import { settingsStore } from '$lib/stores/settings.store';
+
+let _isDark = $state(false);
+settingsStore.subscribe((s) => {
+	_isDark = s.darkMode;
+});
+
+/** Reactive dark-mode flag — true when dark mode is enabled in settings. */
+export const isDark = {
+	get value() {
+		return _isDark;
+	}
+};
+
 export interface ThemeTokens {
 	// Gradients
 	headerGradient: string;

@@ -9,6 +9,7 @@ export interface Settings {
 	speechLang: SpeechLang;
 	notificationEnabled: boolean;
 	notificationIntervalMinutes: number;
+	darkMode: boolean;
 }
 
 const SAVE_FILE = 'settings.save';
@@ -16,7 +17,8 @@ const SAVE_FILE = 'settings.save';
 const defaultSettings: Settings = {
 	speechLang: 'zh-TW',
 	notificationEnabled: false,
-	notificationIntervalMinutes: 60
+	notificationIntervalMinutes: 60,
+	darkMode: false
 };
 
 /** Load settings synchronously from localStorage (used for initial store value) */
