@@ -251,6 +251,12 @@
 				} else if (table.views.length > 0) {
 					activeViewName = table.views[0].name;
 				}
+				// Apply default sort from active view config
+				const initView = table.views.find((v) => v.name === activeViewName);
+				if (initView?.config?.sort) {
+					const s = initView.config.sort as { colId: string; dir: 'asc' | 'desc' };
+					if (s.colId && s.dir) sortConfig = s;
+				}
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to load table');
 			}
@@ -572,6 +578,13 @@
 		const url = new URL(window.location.href);
 		url.searchParams.set('view', view.name);
 		history.replaceState(history.state, '', url.toString());
+		// Apply sort from new view's config
+		if (view.config?.sort) {
+			const s = view.config.sort as { colId: string; dir: 'asc' | 'desc' };
+			if (s.colId && s.dir) sortConfig = s;
+		} else {
+			sortConfig = null;
+		}
 	}
 
 	async function handleAddView(type: string, name: string) {
