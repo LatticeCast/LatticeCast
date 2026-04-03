@@ -59,7 +59,8 @@
 		onAddRow,
 		onAddRowInGroup,
 		onToggleCollapseGroup,
-		onManageOptions
+		onManageOptions,
+		onNavigateRow
 	}: {
 		columns: Column[];
 		sortedColumns: Column[];
@@ -109,6 +110,7 @@
 		onAddRowInGroup: (key: string, col: Column) => void;
 		onToggleCollapseGroup: (key: string) => void;
 		onManageOptions: (col: Column) => void;
+		onNavigateRow: (rowId: string) => void;
 	} = $props();
 
 	function getColWidth(col: Column): number {
@@ -545,7 +547,9 @@
 									{i === 0 ? 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2' : 'px-2'}"
 									style="width: {getColWidth(col)}px;"
 									onclick={() => {
-										if (
+										if (col.name === 'Key' || col.name === 'Title') {
+											onNavigateRow(row.row_id);
+										} else if (
 											col.type !== 'checkbox' &&
 											col.type !== 'tags' &&
 											!(editingCell?.rowId === row.row_id && editingCell?.colId === col.column_id)
@@ -720,7 +724,13 @@
 										<span class="font-mono text-sm">{raw ? formatDate(String(raw)) : ''}</span>
 									{:else}
 										{@const cellVal = row.row_data[col.column_id]}
-										{#if cellVal !== null && cellVal !== undefined && String(cellVal) !== ''}
+										{#if col.name === 'Key' || col.name === 'Title'}
+											{#if cellVal !== null && cellVal !== undefined && String(cellVal) !== ''}
+												<span class="block cursor-pointer truncate font-medium text-blue-600 hover:underline">{String(cellVal)}</span>
+											{:else}
+												<span class="block min-h-[1.5rem] cursor-pointer py-1 text-gray-300">—</span>
+											{/if}
+										{:else if cellVal !== null && cellVal !== undefined && String(cellVal) !== ''}
 											<span class="block truncate">{String(cellVal)}</span>
 										{:else}
 											<span class="block min-h-[1.5rem] cursor-text py-1 text-gray-300">—</span>

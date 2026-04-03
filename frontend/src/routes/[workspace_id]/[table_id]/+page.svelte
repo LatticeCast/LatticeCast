@@ -888,6 +888,7 @@
 			onAddRowInGroup={handleAddRowInGroup}
 			onToggleCollapseGroup={toggleCollapseGroup}
 			onManageOptions={(col) => (managingOptionsCol = col)}
+			onNavigateRow={(rowId) => goto(`/${$page.params.workspace_id}/${$page.params.table_id}/${rowId}`)}
 		/>
 	{:else if activeView.type === 'kanban'}
 		<KanbanBoard
@@ -946,6 +947,7 @@
 		onUpdateRow={handleUpdateRow}
 		onRefreshRows={handleRefreshRows}
 		tableId={$page.params.table_id!}
+		workspaceId={$page.params.workspace_id!}
 	/>
 {/if}
 
