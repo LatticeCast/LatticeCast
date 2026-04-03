@@ -22,35 +22,24 @@
 
 <svelte:head></svelte:head>
 
-<div class="relative flex min-h-screen">
-	<!-- Hamburger button (top-left, only when sidebar closed) -->
-	{#if !menuOpen}
+<div class="relative flex min-h-screen flex-col">
+	<!-- Top bar -->
+	<header class="fixed top-0 left-0 right-0 z-30 flex h-12 items-center bg-blue-600 px-3 shadow">
 		<button
-			onclick={() => (menuOpen = true)}
+			onclick={() => (menuOpen = !menuOpen)}
 			data-testid="menu-toggle"
-			class="fixed top-4 left-4 z-20 rounded-md border border-gray-300 bg-white p-2 shadow hover:bg-gray-100 focus:outline-none"
-			aria-label="Open menu"
+			class="rounded-md p-1.5 text-white hover:bg-blue-500 focus:outline-none"
+			aria-label={menuOpen ? 'Close menu' : 'Open menu'}
 		>
-			☰
+			{menuOpen ? '«' : '☰'}
 		</button>
-	{/if}
+	</header>
 
-	<!-- Sliding sidebar (from left) -->
+	<!-- Sliding sidebar (from left, below top bar) -->
 	<div
-		class="fixed top-0 left-0 z-10 flex h-full w-52 flex-col bg-white shadow-lg transition-transform duration-300 ease-in-out"
+		class="fixed top-12 left-0 z-20 flex h-[calc(100vh-3rem)] w-52 flex-col bg-white shadow-lg transition-transform duration-300 ease-in-out"
 		style="transform: translateX({menuOpen ? 0 : -208}px);"
 	>
-		<!-- Close button -->
-		<div class="flex justify-end p-4">
-			<button
-				onclick={() => (menuOpen = false)}
-				class="rounded-md border border-gray-300 bg-white p-1 shadow-sm hover:bg-gray-50 focus:outline-none"
-				aria-label="Close menu"
-			>
-				«
-			</button>
-		</div>
-
 		<!-- Navigation -->
 		<nav data-testid="menu-nav" class="flex-1 space-y-1 px-4">
 			<button
@@ -149,8 +138,8 @@
 		</div>
 	</div>
 
-	<!-- Main content: shifts right when sidebar opens -->
-	<main class="content-area flex-1" style="margin-left: {menuOpen ? '208px' : '0'};">
+	<!-- Main content: shifts right when sidebar opens, padded below top bar -->
+	<main class="content-area flex-1 pt-12" style="margin-left: {menuOpen ? '208px' : '0'};">
 		{@render children?.()}
 	</main>
 </div>
