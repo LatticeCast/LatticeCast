@@ -947,6 +947,7 @@
 		onUpdateRow={handleUpdateRow}
 		onRefreshRows={handleRefreshRows}
 		tableId={$page.params.table_id!}
+		workspaceId={$page.params.workspace_id!}
 	/>
 {/if}
 

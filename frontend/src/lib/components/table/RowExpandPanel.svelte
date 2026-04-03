@@ -11,7 +11,8 @@
 		onClose,
 		onUpdateRow,
 		onRefreshRows,
-		tableId
+		tableId,
+		workspaceId
 	}: {
 		row: Row;
 		columns: Column[];
@@ -19,6 +20,7 @@
 		onUpdateRow: (rowId: string, data: Record<string, unknown>) => Promise<void>;
 		onRefreshRows: (tableId: string) => Promise<void>;
 		tableId: string;
+		workspaceId: string;
 	} = $props();
 
 	let editField = $state<string | null>(null);
@@ -120,20 +122,27 @@
 	<!-- Panel header -->
 	<div class="flex items-center justify-between border-b border-gray-200 bg-blue-600 px-6 py-3">
 		<h2 class="text-lg font-semibold text-white">Row Details</h2>
-		<button
-			onclick={onClose}
-			class="rounded-lg p-1.5 text-white/70 transition hover:bg-white/20 hover:text-white"
-			aria-label="Close panel"
-		>
-			<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M6 18L18 6M6 6l12 12"
-				/>
-			</svg>
-		</button>
+		<div class="flex items-center gap-2">
+			<a
+				href="/{workspaceId}/{tableId}/{row.row_id}"
+				class="rounded-lg px-3 py-1.5 text-sm font-medium text-white/80 transition hover:bg-white/20 hover:text-white"
+				aria-label="Open full page"
+			>Open full page</a>
+			<button
+				onclick={onClose}
+				class="rounded-lg p-1.5 text-white/70 transition hover:bg-white/20 hover:text-white"
+				aria-label="Close panel"
+			>
+				<svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M6 18L18 6M6 6l12 12"
+					/>
+				</svg>
+			</button>
+		</div>
 	</div>
 
 	<!-- Tabs -->
