@@ -331,7 +331,7 @@ async def create_pm_template(
     due_col_id = col_ids.get("Due Date", "")
 
     default_views: list[dict[str, Any]] = [
-        {"name": "Table", "type": "table", "config": {}},
+        {"name": "Table", "type": "table", "config": {"sort": {"colId": start_col_id, "dir": "desc"}}},
         {"name": "Sprint Board", "type": "kanban", "config": {
             "group_by": status_col_id,
             "card_fields": [
