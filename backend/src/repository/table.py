@@ -18,7 +18,7 @@ class TableRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, workspace_id: str, name: str) -> Table:
+    async def create(self, workspace_id: UUID, name: str) -> Table:
         table = Table(workspace_id=workspace_id, name=name)
         self.session.add(table)
         await self.session.commit()
@@ -31,7 +31,7 @@ class TableRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_by_workspace(self, workspace_id: str) -> list[Table]:
+    async def list_by_workspace(self, workspace_id: UUID) -> list[Table]:
         result = await self.session.execute(
             select(Table).where(Table.workspace_id == workspace_id)
         )
