@@ -23,32 +23,46 @@ async def get_current_user(
     Middleware: Verify token and check user exists in database.
     Returns the User object if found.
     """
+    user_id_str = token_payload.get("user_id")
     email = token_payload.get("email")
-    if not email:
-        logger.warn("Token does not contain email")
+
+    if user_id_str:
+        # No-auth mode: resolve by UUID or display_id
+        user = await UserRepository(session).resolve_user(user_id_str)
+        if not user:
+            if not settings.auth_required:
+                user = await UserRepository(session).create(user_id_str)
+                logger.info(f"Auto-created user: {user_id_str}")
+            else:
+                logger.warn(f"User not found: {user_id_str}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="User not registered",
+                )
+        logger.debug(f"Authenticated user: {user.user_id} via user_id token (role={user.role})")
+    elif email:
+        result = await session.execute(select(User).where(User.email == email))
+        user = result.scalar_one_or_none()
+        if not user:
+            if not settings.auth_required:
+                user = await UserRepository(session).create(email)
+                logger.info(f"Auto-created user: {email}")
+            else:
+                logger.warn(f"User not registered: {email}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="User not registered",
+                )
+        logger.debug(f"Authenticated user: {email} (role={user.role})")
+    else:
+        logger.warn("Token does not contain user_id or email")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token does not contain email",
+            detail="Token does not contain user_id or email",
         )
-
-    result = await session.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
-
-    if not user:
-        if not settings.auth_required:
-            # Auto-create user (+ user_info + default workspace) in no-auth mode
-            user = await UserRepository(session).create(email)
-            logger.info(f"Auto-created user: {email}")
-        else:
-            logger.warn(f"User not registered: {email}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User not registered",
-            )
 
     # Attach token payload to user for access to provider info
     user._token_payload = token_payload
-    logger.debug(f"Authenticated user: {email} (role={user.role})")
     return user
 
 

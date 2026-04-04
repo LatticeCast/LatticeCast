@@ -63,10 +63,10 @@ async def verify_bearer_token(
 
     token = authorization.removeprefix("Bearer ").strip()
 
-    # No-auth mode: treat token as user_id
+    # No-auth mode: treat token as user_id (UUID or display_id)
     if not settings.auth_required:
         logger.debug(f"Auth not required, using token as user_id: {token}")
-        return {"email": token, "_provider": "none"}
+        return {"user_id": token, "_provider": "none"}
 
     # Try Authentik first (JWT)
     try:
