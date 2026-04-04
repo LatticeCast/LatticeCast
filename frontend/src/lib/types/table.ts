@@ -1,5 +1,8 @@
 // src/lib/types/table.ts
 
+/** UUID string — always a 36-char hyphenated UUID, never a display_id or row_number */
+export type UUID = string;
+
 export type ColumnType =
 	| 'text'
 	| 'string'
@@ -21,7 +24,7 @@ export interface ColumnOptions {
 }
 
 export interface Workspace {
-	workspace_id: string;
+	workspace_id: UUID;
 	display_id: string | null;
 	name: string;
 	created_at: string;
@@ -29,14 +32,14 @@ export interface Workspace {
 }
 
 export interface WorkspaceMember {
-	workspace_id: string;
-	user_id: string;
+	workspace_id: UUID;
+	user_id: UUID;
 	role: string;
 }
 
 export interface Table {
-	table_id: string;
-	workspace_id: string;
+	table_id: UUID;
+	workspace_id: UUID;
 	name: string;
 	columns: Column[];
 	views: ViewConfig[];
@@ -45,7 +48,7 @@ export interface Table {
 }
 
 export interface Column {
-	column_id: string;
+	column_id: UUID;
 	name: string;
 	type: ColumnType;
 	options: ColumnOptions;
@@ -54,19 +57,20 @@ export interface Column {
 }
 
 export interface Row {
-	row_id: string;
-	table_id: string;
+	row_id: UUID;
+	table_id: UUID;
+	/** Auto-increment integer per table — use this (not row_id) in URL paths and API calls */
 	row_number: number;
-	row_data: Record<string, unknown>;
-	created_by: string | null;
-	updated_by: string | null;
+	row_data: Record<UUID, unknown>;
+	created_by: UUID | null;
+	updated_by: UUID | null;
 	created_at: string;
 	updated_at: string;
 }
 
 export interface CreateTable {
 	name: string;
-	workspace_id: string;
+	workspace_id: UUID;
 }
 
 export interface CreateColumn {
