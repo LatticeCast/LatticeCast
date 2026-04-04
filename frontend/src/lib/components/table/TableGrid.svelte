@@ -508,7 +508,7 @@
 									class="group relative flex h-full w-full items-center justify-center rounded px-1 py-0.5 text-xs text-gray-400 hover:bg-gray-200 hover:text-gray-600"
 									title="Expand row"
 								>
-									{rowIdx + 1}
+									{row.row_number}
 									{#if rowsWithDocs.has(row.row_id)}
 										<svg
 											class="absolute left-0.5 h-3 w-3 text-blue-400 group-hover:hidden"

@@ -29,7 +29,7 @@ class RowRepository:
         statement = (
             select(Row)
             .where(Row.table_id == table_id)
-            .order_by(Row.created_at)
+            .order_by(Row.row_number)
             .offset(offset)
             .limit(limit)
         )
@@ -62,7 +62,7 @@ class RowRepository:
             select(Row)
             .where(Row.table_id == table_id)
             .where(text("row_data @> cast(:contains as jsonb)").bindparams(contains=json.dumps(contains)))
-            .order_by(Row.created_at)
+            .order_by(Row.row_number)
             .offset(offset)
             .limit(limit)
         )
