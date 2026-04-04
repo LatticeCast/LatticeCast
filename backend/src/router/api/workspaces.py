@@ -12,6 +12,14 @@ from models.user import User
 from models.workspace import MemberCreate, MemberResponse, WorkspaceCreate, WorkspaceMember, WorkspaceResponse
 from repository.workspace import WorkspaceRepository
 
+
+async def _get_user_by_email(email: str, session: AsyncSession) -> User:
+    result = await session.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 
@@ -22,7 +30,7 @@ async def _get_workspace_or_404(workspace_id: str, repo: WorkspaceRepository):
     return workspace
 
 
-async def _require_owner(workspace_id: str, user_id: str, session: AsyncSession):
+async def _require_owner(workspace_id: str, user_id, session: AsyncSession):
     result = await session.execute(
         select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == workspace_id,
@@ -85,25 +93,27 @@ async def add_member(
     repo = WorkspaceRepository(session)
     await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace_id, user.user_id, session)
-    if await repo.is_member(workspace_id, data.user_id):
+    new_member = await _get_user_by_email(data.user_email, session)
+    if await repo.is_member(workspace_id, new_member.user_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User is already a member")
-    return await repo.add_member(workspace_id=workspace_id, user_id=data.user_id, role=data.role)
+    return await repo.add_member(workspace_id=workspace_id, user_id=new_member.user_id, role=data.role)
 
 
-@router.delete("/{workspace_id:path}/members/{member_user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{workspace_id:path}/members/{member_email}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_member(
     workspace_id: str,
-    member_user_id: str,
+    member_email: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Remove a member from a workspace (owner only)"""
+    """Remove a member from a workspace by email (owner only)"""
     repo = WorkspaceRepository(session)
     await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace_id, user.user_id, session)
-    if not await repo.is_member(workspace_id, member_user_id):
+    member = await _get_user_by_email(member_email, session)
+    if not await repo.is_member(workspace_id, member.user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
-    await repo.remove_member(workspace_id=workspace_id, user_id=member_user_id)
+    await repo.remove_member(workspace_id=workspace_id, user_id=member.user_id)
 
 
 @router.get("/{workspace_id:path}", response_model=WorkspaceResponse)

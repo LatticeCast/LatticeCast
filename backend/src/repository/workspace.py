@@ -1,4 +1,6 @@
 # src/repository/workspace.py
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,7 +24,7 @@ class WorkspaceRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_by_user(self, user_id: str) -> list[Workspace]:
+    async def list_by_user(self, user_id: UUID) -> list[Workspace]:
         result = await self.session.execute(
             select(Workspace)
             .join(WorkspaceMember, Workspace.workspace_id == WorkspaceMember.workspace_id)
@@ -30,14 +32,14 @@ class WorkspaceRepository:
         )
         return list(result.scalars().all())
 
-    async def add_member(self, workspace_id: str, user_id: str, role: str = "member") -> WorkspaceMember:
+    async def add_member(self, workspace_id: str, user_id: UUID, role: str = "member") -> WorkspaceMember:
         member = WorkspaceMember(workspace_id=workspace_id, user_id=user_id, role=role)
         self.session.add(member)
         await self.session.commit()
         await self.session.refresh(member)
         return member
 
-    async def remove_member(self, workspace_id: str, user_id: str) -> None:
+    async def remove_member(self, workspace_id: str, user_id: UUID) -> None:
         result = await self.session.execute(
             select(WorkspaceMember).where(
                 WorkspaceMember.workspace_id == workspace_id,
@@ -55,7 +57,7 @@ class WorkspaceRepository:
         )
         return list(result.scalars().all())
 
-    async def is_member(self, workspace_id: str, user_id: str) -> bool:
+    async def is_member(self, workspace_id: str, user_id: UUID) -> bool:
         result = await self.session.execute(
             select(WorkspaceMember).where(
                 WorkspaceMember.workspace_id == workspace_id,

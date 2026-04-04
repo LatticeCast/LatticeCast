@@ -3,7 +3,7 @@
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,10 +27,10 @@ RoleType = Literal["user", "admin"]
 class UserCreate(BaseModel):
     """Request body for creating a new user"""
 
-    user_id: EmailStr = Field(..., description="User email address (used as unique identifier)")
+    email: str = Field(..., description="User email address (used as unique identifier)")
     role: RoleType = Field(default="user", description="User role")
 
-    model_config = {"json_schema_extra": {"examples": [{"user_id": "user@example.com", "role": "user"}]}}
+    model_config = {"json_schema_extra": {"examples": [{"email": "user@example.com", "role": "user"}]}}
 
 
 class UserUpdate(BaseModel):
@@ -65,7 +65,7 @@ async def create_user(
     session: AsyncSession = Depends(get_session),
 ):
     """Create a new user by email"""
-    result = await session.execute(select(User).where(User.user_id == data.user_id))
+    result = await session.execute(select(User).where(User.email == data.email))
     existing = result.scalar_one_or_none()
 
     if existing:
@@ -74,7 +74,7 @@ async def create_user(
             detail="User already exists",
         )
 
-    user = User(user_id=data.user_id, role=data.role)
+    user = User(email=data.email, role=data.role)
     session.add(user)
     await session.commit()
     await session.refresh(user)
@@ -93,11 +93,9 @@ async def list_users(
     """List all users (paginated)"""
     from sqlalchemy import func
 
-    # Get total count
     count_result = await session.execute(select(func.count()).select_from(User))
     total = count_result.scalar()
 
-    # Get paginated users
     result = await session.execute(select(User).offset(offset).limit(limit))
     users = result.scalars().all()
 
@@ -110,15 +108,15 @@ async def list_users(
 
 
 @router.get(
-    "/{user_id}",
+    "/{user_email}",
     response_model=UserResponse,
 )
 async def get_user(
-    user_id: str,
+    user_email: str,
     session: AsyncSession = Depends(get_session),
 ):
-    """Get user by email (id)"""
-    result = await session.execute(select(User).where(User.user_id == user_id))
+    """Get user by email"""
+    result = await session.execute(select(User).where(User.email == user_email))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -130,16 +128,16 @@ async def get_user(
 
 
 @router.put(
-    "/{user_id}",
+    "/{user_email}",
     response_model=UserResponse,
 )
 async def update_user(
-    user_id: str,
+    user_email: str,
     data: UserUpdate,
     session: AsyncSession = Depends(get_session),
 ):
-    """Update user role by email (id)"""
-    result = await session.execute(select(User).where(User.user_id == user_id))
+    """Update user role by email"""
+    result = await session.execute(select(User).where(User.email == user_email))
     user = result.scalar_one_or_none()
 
     if not user:
@@ -158,15 +156,15 @@ async def update_user(
 
 
 @router.delete(
-    "/{user_id}",
+    "/{user_email}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_user(
-    user_id: str,
+    user_email: str,
     session: AsyncSession = Depends(get_session),
 ):
-    """Delete user by email (id)"""
-    result = await session.execute(select(User).where(User.user_id == user_id))
+    """Delete user by email"""
+    result = await session.execute(select(User).where(User.email == user_email))
     user = result.scalar_one_or_none()
 
     if not user:

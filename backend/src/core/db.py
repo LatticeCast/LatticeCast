@@ -28,7 +28,7 @@ async def _run_migrations(engine: AsyncEngine):
     """
     Run SQL migration files from migration/ directory.
     Files are executed in alphabetical order (e.g., 001_*, 002_*).
-    Each statement is executed separately (asyncpg requirement).
+    Each migration file is tracked in schema_migrations to prevent re-running.
     """
     if not MIGRATION_DIR.exists():
         print(f"⚠️ Migration directory not found: {MIGRATION_DIR}")
@@ -40,7 +40,24 @@ async def _run_migrations(engine: AsyncEngine):
         return
 
     async with engine.begin() as conn:
+        # Create migration tracking table if it doesn't exist
+        await conn.execute(text(
+            "CREATE TABLE IF NOT EXISTS schema_migrations ("
+            "  filename VARCHAR PRIMARY KEY,"
+            "  applied_at TIMESTAMP NOT NULL DEFAULT NOW()"
+            ")"
+        ))
+
         for sql_file in sql_files:
+            # Check if already applied
+            result = await conn.execute(
+                text("SELECT 1 FROM schema_migrations WHERE filename = :fn"),
+                {"fn": sql_file.name},
+            )
+            if result.scalar_one_or_none() is not None:
+                print(f"⏭️  Skipping already-applied migration: {sql_file.name}")
+                continue
+
             print(f"📄 Running migration: {sql_file.name}")
             sql_content = sql_file.read_text()
             # Split by semicolon and execute each statement separately
@@ -51,7 +68,14 @@ async def _run_migrations(engine: AsyncEngine):
                     continue
                 await conn.execute(text(stmt))
 
-    print(f"✅ Executed {len(sql_files)} migration(s)")
+            # Record as applied
+            await conn.execute(
+                text("INSERT INTO schema_migrations (filename) VALUES (:fn)"),
+                {"fn": sql_file.name},
+            )
+            print(f"✅ Applied migration: {sql_file.name}")
+
+    print(f"✅ Migration check complete ({len(sql_files)} file(s) checked)")
 
 
 # --------------------------------------------------

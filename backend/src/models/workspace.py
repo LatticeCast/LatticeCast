@@ -1,6 +1,7 @@
 # src/models/workspace.py
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 
 from sqlmodel import Field, SQLModel
 
@@ -24,7 +25,7 @@ class WorkspaceMember(SQLModel, table=True):
     __tablename__ = "workspace_members"
 
     workspace_id: str = Field(primary_key=True, foreign_key="workspaces.workspace_id", description="Workspace identifier")
-    user_id: str = Field(primary_key=True, foreign_key="users.user_id", description="User identifier (email)")
+    user_id: UUID = Field(primary_key=True, foreign_key="users.user_id", description="User UUID")
     role: str = Field(default="member", description="Member role (owner/member)")
 
 
@@ -52,7 +53,7 @@ class WorkspaceResponse(SQLModel):
 class MemberCreate(SQLModel):
     """Schema for adding a workspace member"""
 
-    user_id: str = Field(..., description="User identifier (email)")
+    user_email: str = Field(..., description="User email address")
     role: MemberRoleType = Field(default="member", description="Member role")
 
 
@@ -60,11 +61,11 @@ class MemberResponse(SQLModel):
     """Workspace member response schema"""
 
     workspace_id: str = Field(..., description="Workspace identifier")
-    user_id: str = Field(..., description="User identifier (email)")
+    user_id: UUID = Field(..., description="User UUID")
     role: MemberRoleType = Field(..., description="Member role")
 
     model_config = {
         "json_schema_extra": {
-            "examples": [{"workspace_id": "user@example.com", "user_id": "user@example.com", "role": "owner"}]
+            "examples": [{"workspace_id": "user@example.com", "user_id": "00000000-0000-0000-0000-000000000000", "role": "owner"}]
         }
     }

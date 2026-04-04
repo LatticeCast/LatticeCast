@@ -75,7 +75,7 @@ class MeResponse(BaseModel):
     """Current user information response"""
 
     sub: str | None = Field(default=None, description="Subject identifier from OAuth provider")
-    email: EmailStr = Field(..., description="User email address")
+    email: str = Field(..., description="User email address")
     name: str | None = Field(default=None, description="Display name")
     picture: str | None = Field(default=None, description="Profile picture URL")
     provider: Literal["google", "authentik", "none"] = Field(..., description="OAuth provider used")
@@ -105,7 +105,7 @@ async def me(user: User = Depends(get_current_user)) -> MeResponse:
 
     return MeResponse(
         sub=token_payload.get("sub"),
-        email=user.user_id,
+        email=user.email,
         name=token_payload.get("preferred_username") or token_payload.get("name"),
         picture=token_payload.get("picture"),
         provider=provider,

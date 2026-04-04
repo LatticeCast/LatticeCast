@@ -30,13 +30,13 @@ async def get_current_user(
             detail="Token does not contain email",
         )
 
-    result = await session.execute(select(User).where(User.user_id == email))
+    result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if not user:
         if not settings.auth_required:
             # Auto-create user in no-auth mode
-            user = User(user_id=email, role="user")
+            user = User(email=email, role="user")
             session.add(user)
             await session.commit()
             await session.refresh(user)
