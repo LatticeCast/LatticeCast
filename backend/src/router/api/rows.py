@@ -196,43 +196,43 @@ async def list_rows(
 
 
 # --------------------------------------------------
-# ROWS (flat for update/delete)
+# ROWS (nested update/delete by row_number)
 # --------------------------------------------------
 
 
-@router.put("/rows/{row_id}", response_model=RowResponse)
+@router.put("/tables/{table_id}/rows/{row_number}", response_model=RowResponse)
 async def update_row(
-    row_id: UUID,
+    table_id: UUID,
+    row_number: int,
     data: RowUpdate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Update a row's data (user must be a workspace member)"""
-    row = await session.get(Row, row_id)
+    """Update a row's data by row_number (user must be a workspace member)"""
+    await _get_table_for_member(table_id, user, session)
+    repo = RowRepository(session)
+    row = await repo.get_by_number(table_id, row_number)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-
-    await _get_table_for_member(row.table_id, user, session)
-
-    repo = RowRepository(session)
     return await repo.update(row=row, data=data, updated_by=user.user_id)
 
 
-@router.get("/tables/{table_id}/rows/{row_id}/doc", response_class=PlainTextResponse)
+@router.get("/tables/{table_id}/rows/{row_number}/doc", response_class=PlainTextResponse)
 async def get_row_doc(
     table_id: UUID,
-    row_id: UUID,
+    row_number: int,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> str:
-    """Get markdown doc for a row from MinIO (returns empty string if not found)"""
+    """Get markdown doc for a row from MinIO by row_number (returns empty string if not found)"""
     table = await _get_table_for_member(table_id, user, session)
-    row = await session.get(Row, row_id)
-    if not row or row.table_id != table_id:
+    repo = RowRepository(session)
+    row = await repo.get_by_number(table_id, row_number)
+    if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
     workspace_id = table.workspace_id
-    key = f"{workspace_id}/{table_id}/{row_id}.md"
+    key = f"{workspace_id}/{table_id}/{row.row_id}.md"
     client = get_s3_client()
     try:
         response = client.get_object(Bucket=settings.minio.bucket, Key=key)
@@ -248,22 +248,23 @@ async def get_row_doc(
     return content
 
 
-@router.put("/tables/{table_id}/rows/{row_id}/doc", response_class=PlainTextResponse)
+@router.put("/tables/{table_id}/rows/{row_number}/doc", response_class=PlainTextResponse)
 async def put_row_doc(
     table_id: UUID,
-    row_id: UUID,
+    row_number: int,
     body: str = Body(..., media_type="text/plain"),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> str:
-    """Save markdown doc for a row to MinIO"""
+    """Save markdown doc for a row to MinIO by row_number"""
     table = await _get_table_for_member(table_id, user, session)
-    row = await session.get(Row, row_id)
-    if not row or row.table_id != table_id:
+    repo = RowRepository(session)
+    row = await repo.get_by_number(table_id, row_number)
+    if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
     workspace_id = table.workspace_id
-    key = f"{workspace_id}/{table_id}/{row_id}.md"
+    key = f"{workspace_id}/{table_id}/{row.row_id}.md"
     client = get_s3_client()
     try:
         client.put_object(
@@ -282,39 +283,62 @@ async def batch_docs_exist(
     table_id: UUID,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> dict[str, list[str]]:
-    """Return list of row_ids that have non-empty docs in MinIO (single S3 list call)"""
+) -> dict[str, list[int]]:
+    """Return list of row_numbers that have non-empty docs in MinIO (single S3 list + DB lookup)"""
     table = await _get_table_for_member(table_id, user, session)
     workspace_id = table.workspace_id
     prefix = f"{workspace_id}/{table_id}/"
     client = get_s3_client()
     try:
         response = client.list_objects_v2(Bucket=settings.minio.bucket, Prefix=prefix, MaxKeys=1000)
-        row_ids = []
+        row_id_strs = []
         for obj in response.get("Contents", []):
             key = obj["Key"]
             if key.endswith(".md") and obj.get("Size", 0) > 0:
-                # Extract row_id from path: user/workspace/table/ROW_ID.md
                 filename = key.rsplit("/", 1)[-1]
-                row_id = filename.replace(".md", "")
-                row_ids.append(row_id)
-        return {"row_ids": row_ids}
+                row_id_strs.append(filename.replace(".md", ""))
     except ClientError:
-        return {"row_ids": []}
+        return {"row_numbers": []}
+
+    if not row_id_strs:
+        return {"row_numbers": []}
+
+    # Map row_ids → row_numbers via DB
+    from uuid import UUID as _UUID
+
+    from sqlalchemy import select as sa_select
+
+    valid_uuids = []
+    for s in row_id_strs:
+        try:
+            valid_uuids.append(_UUID(s))
+        except ValueError:
+            pass
+    if not valid_uuids:
+        return {"row_numbers": []}
+
+    from models.row import Row as _Row
+
+    result = await session.execute(
+        sa_select(_Row.row_number).where(
+            _Row.table_id == table_id,
+            _Row.row_id.in_(valid_uuids),
+        )
+    )
+    return {"row_numbers": list(result.scalars().all())}
 
 
-@router.delete("/rows/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/tables/{table_id}/rows/{row_number}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_row(
-    row_id: UUID,
+    table_id: UUID,
+    row_number: int,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Delete a row (user must be a workspace member)"""
-    row = await session.get(Row, row_id)
+    """Delete a row by row_number (user must be a workspace member)"""
+    await _get_table_for_member(table_id, user, session)
+    repo = RowRepository(session)
+    row = await repo.get_by_number(table_id, row_number)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-
-    await _get_table_for_member(row.table_id, user, session)
-
-    repo = RowRepository(session)
     await repo.delete(row=row)

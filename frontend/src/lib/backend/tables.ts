@@ -134,9 +134,9 @@ export async function createRow(tableId: string, data: CreateRow): Promise<Row> 
 	return response.json();
 }
 
-export async function updateRow(rowId: string, data: UpdateRow): Promise<Row> {
+export async function updateRow(tableId: string, rowNumber: number, data: UpdateRow): Promise<Row> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/rows/${rowId}`, {
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowNumber}`, {
 		method: 'PUT',
 		headers,
 		body: JSON.stringify(data)
@@ -145,9 +145,9 @@ export async function updateRow(rowId: string, data: UpdateRow): Promise<Row> {
 	return response.json();
 }
 
-export async function deleteRow(rowId: string): Promise<void> {
+export async function deleteRow(tableId: string, rowNumber: number): Promise<void> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/rows/${rowId}`, {
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowNumber}`, {
 		method: 'DELETE',
 		headers
 	});
@@ -156,20 +156,24 @@ export async function deleteRow(rowId: string): Promise<void> {
 
 // Docs
 
-export async function fetchDoc(tableId: string, rowId: string): Promise<string> {
+export async function fetchDoc(tableId: string, rowNumber: number): Promise<string> {
 	const auth = get(authStore);
 	if (!auth?.accessToken) throw new Error('Not authenticated');
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowId}/doc`, {
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowNumber}/doc`, {
 		headers: { Authorization: `Bearer ${auth.accessToken}` }
 	});
 	if (!response.ok) throw new Error(`Failed to fetch doc: ${response.statusText}`);
 	return response.text();
 }
 
-export async function saveDoc(tableId: string, rowId: string, content: string): Promise<string> {
+export async function saveDoc(
+	tableId: string,
+	rowNumber: number,
+	content: string
+): Promise<string> {
 	const auth = get(authStore);
 	if (!auth?.accessToken) throw new Error('Not authenticated');
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowId}/doc`, {
+	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowNumber}/doc`, {
 		method: 'PUT',
 		headers: {
 			Authorization: `Bearer ${auth.accessToken}`,
@@ -181,11 +185,11 @@ export async function saveDoc(tableId: string, rowId: string, content: string): 
 	return response.text();
 }
 
-export async function checkDocExists(tableId: string, rowId: string): Promise<boolean> {
+export async function checkDocExists(tableId: string, rowNumber: number): Promise<boolean> {
 	const auth = get(authStore);
 	if (!auth?.accessToken) return false;
 	try {
-		const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowId}/doc`, {
+		const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowNumber}/doc`, {
 			method: 'HEAD',
 			headers: { Authorization: `Bearer ${auth.accessToken}` }
 		});
@@ -197,7 +201,7 @@ export async function checkDocExists(tableId: string, rowId: string): Promise<bo
 	}
 }
 
-export async function batchDocsExist(tableId: string): Promise<Set<string>> {
+export async function batchDocsExist(tableId: string): Promise<Set<number>> {
 	const auth = get(authStore);
 	if (!auth?.accessToken) return new Set();
 	try {
@@ -206,7 +210,7 @@ export async function batchDocsExist(tableId: string): Promise<Set<string>> {
 		});
 		if (!response.ok) return new Set();
 		const data = await response.json();
-		return new Set(data.row_ids);
+		return new Set(data.row_numbers as number[]);
 	} catch {
 		return new Set();
 	}

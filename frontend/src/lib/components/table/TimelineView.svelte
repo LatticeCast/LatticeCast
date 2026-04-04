@@ -164,9 +164,8 @@
 	}
 
 	function getWeekNumber(d: Date): number {
-		const dayOfWeek = new Date(
-			Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())
-		).getUTCDay() || 7;
+		const dayOfWeek =
+			new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).getUTCDay() || 7;
 		const thursday = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() + 4 - dayOfWeek));
 		const yearStart = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1));
 		return Math.ceil(((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
@@ -254,7 +253,7 @@
 					const newDateStr = newDate.toISOString().slice(0, 10);
 					const row = rows.find((r) => r.row_id === dragState!.rowId);
 					if (row) {
-						await updateRow(row.row_id, {
+						await updateRow(tableId, row.row_number, {
 							row_data: { ...row.row_data, [dragState.colId]: newDateStr }
 						});
 						onRowsRefresh();
@@ -460,9 +459,15 @@
 
 							<!-- Bar -->
 							<div
-								class="absolute top-2 bottom-2 flex cursor-pointer items-center overflow-hidden rounded text-xs font-medium shadow-sm {getBarColorClasses(row)} {dragState?.rowId === row.row_id ? 'opacity-80' : ''}"
+								class="absolute top-2 bottom-2 flex cursor-pointer items-center overflow-hidden rounded text-xs font-medium shadow-sm {getBarColorClasses(
+									row
+								)} {dragState?.rowId === row.row_id ? 'opacity-80' : ''}"
 								style="left: {getBarLeft(startDate)}px; width: {getBarWidth(startDate, endDate)}px"
-								title="{labelCol ? String(row.row_data[labelCol.column_id] ?? '') : ''} ({formatDate(String(startDate.toISOString().slice(0, 10)))} → {formatDate(String(endDate.toISOString().slice(0, 10)))})"
+								title="{labelCol
+									? String(row.row_data[labelCol.column_id] ?? '')
+									: ''} ({formatDate(String(startDate.toISOString().slice(0, 10)))} → {formatDate(
+									String(endDate.toISOString().slice(0, 10))
+								)})"
 								role="button"
 								tabindex="0"
 								onclick={() => onOpenExpand(row)}
@@ -471,7 +476,7 @@
 								<!-- Left resize handle -->
 								{#if startColId}
 									<button
-										class="absolute left-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/10 focus:outline-none"
+										class="absolute top-0 bottom-0 left-0 w-2 cursor-col-resize hover:bg-black/10 focus:outline-none"
 										onmousedown={(e) => onResizeMouseDown(e, row, 'start')}
 										aria-label="Resize start date"
 									></button>
@@ -482,7 +487,7 @@
 								<!-- Right resize handle -->
 								{#if endColId}
 									<button
-										class="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-black/10 focus:outline-none"
+										class="absolute top-0 right-0 bottom-0 w-2 cursor-col-resize hover:bg-black/10 focus:outline-none"
 										onmousedown={(e) => onResizeMouseDown(e, row, 'end')}
 										aria-label="Resize end date"
 									></button>

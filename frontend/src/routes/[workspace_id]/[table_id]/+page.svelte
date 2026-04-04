@@ -29,7 +29,14 @@
 		deleteRow,
 		checkDocExists
 	} from '$lib/backend/tables';
-	import type { Column, ColumnChoice, ColumnOptions, ColumnType, Row, ViewConfig } from '$lib/types/table';
+	import type {
+		Column,
+		ColumnChoice,
+		ColumnOptions,
+		ColumnType,
+		Row,
+		ViewConfig
+	} from '$lib/types/table';
 	import { TAG_COLORS } from '$lib/UI/theme.svelte';
 	import { createView } from '$lib/backend/views';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -105,7 +112,9 @@
 	// ─── Derived ─────────────────────────────────────────────────────────────────
 
 	const sortedColumns = $derived(
-		[...$columns].sort((a, b) => a.position - b.position).filter((c) => !hiddenCols.has(c.column_id))
+		[...$columns]
+			.sort((a, b) => a.position - b.position)
+			.filter((c) => !hiddenCols.has(c.column_id))
 	);
 
 	const sortedRows = $derived(
@@ -277,7 +286,9 @@
 			const col = get(columns).find((c) => c.column_id === colId);
 			if (!col) return;
 			try {
-				await updateColumn(get(page).params.table_id!, colId, { options: { ...col.options, width: newWidth } });
+				await updateColumn(get(page).params.table_id!, colId, {
+					options: { ...col.options, width: newWidth }
+				});
 				await refreshTable(get(page).params.table_id!);
 			} catch (err) {
 				error.set(err instanceof Error ? err.message : 'Failed to resize column');
@@ -332,10 +343,12 @@
 
 	async function handleDeleteRow(rowId: string) {
 		const tableId = $page.params.table_id!;
+		const row = $rows.find((r) => r.row_id === rowId);
+		if (!row) return;
 		deletingRowId = rowId;
 		error.set(null);
 		try {
-			await deleteRow(rowId);
+			await deleteRow(tableId, row.row_number);
 			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to delete row');
@@ -416,6 +429,7 @@
 	async function commitEdit(rowId: string, col: Column) {
 		if (!editingCell) return;
 		editingCell = null;
+		const tableId = $page.params.table_id!;
 		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
 		let parsed: unknown = editValue;
@@ -425,40 +439,43 @@
 		const newData = { ...row.row_data, [col.column_id]: parsed };
 		error.set(null);
 		try {
-			await updateRow(rowId, { row_data: newData });
-			await refreshRows($page.params.table_id!);
+			await updateRow(tableId, row.row_number, { row_data: newData });
+			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
 		}
 	}
 
 	async function toggleCheckbox(rowId: string, col: Column) {
+		const tableId = $page.params.table_id!;
 		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
 		const newData = { ...row.row_data, [col.column_id]: !row.row_data[col.column_id] };
 		error.set(null);
 		try {
-			await updateRow(rowId, { row_data: newData });
-			await refreshRows($page.params.table_id!);
+			await updateRow(tableId, row.row_number, { row_data: newData });
+			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
 		}
 	}
 
 	async function removeTag(rowId: string, col: Column, tag: string) {
+		const tableId = $page.params.table_id!;
 		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
 		const current = getTagValues(row, col.column_id);
 		const newData = { ...row.row_data, [col.column_id]: current.filter((t) => t !== tag) };
 		try {
-			await updateRow(rowId, { row_data: newData });
-			await refreshRows($page.params.table_id!);
+			await updateRow(tableId, row.row_number, { row_data: newData });
+			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');
 		}
 	}
 
 	async function addTag(rowId: string, col: Column, tag: string) {
+		const tableId = $page.params.table_id!;
 		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
 		const current = getTagValues(row, col.column_id);
@@ -466,23 +483,26 @@
 		const newData = { ...row.row_data, [col.column_id]: [...current, tag] };
 		tagsPopupCell = null;
 		try {
-			await updateRow(rowId, { row_data: newData });
-			await refreshRows($page.params.table_id!);
+			await updateRow(tableId, row.row_number, { row_data: newData });
+			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');
 		}
 	}
 
 	async function handleUpdateRow(rowId: string, data: Record<string, unknown>) {
-		await updateRow(rowId, { row_data: data });
+		const tableId = $page.params.table_id!;
+		const row = $rows.find((r) => r.row_id === rowId);
+		if (!row) return;
+		await updateRow(tableId, row.row_number, { row_data: data });
 	}
 
 	async function loadDocFlags(tableId: string, _rowList: import('$lib/types/table').Row[]) {
 		const { batchDocsExist } = await import('$lib/backend/tables');
 		const docSet = await batchDocsExist(tableId);
 		rowsWithDocs.clear();
-		for (const rowId of docSet) {
-			rowsWithDocs.add(rowId);
+		for (const rowNumber of docSet) {
+			rowsWithDocs.add(String(rowNumber));
 		}
 	}
 
@@ -516,7 +536,10 @@
 		contextMenu = null;
 	}
 
-	async function handleSaveOptions(colId: string, choices: import('$lib/types/table').ColumnChoice[]) {
+	async function handleSaveOptions(
+		colId: string,
+		choices: import('$lib/types/table').ColumnChoice[]
+	) {
 		const tableId = $page.params.table_id!;
 		const col = $columns.find((c) => c.column_id === colId);
 		if (!col) return;
@@ -901,7 +924,10 @@
 			onAddRowInGroup={handleAddRowInGroup}
 			onToggleCollapseGroup={toggleCollapseGroup}
 			onManageOptions={(col) => (managingOptionsCol = col)}
-			onNavigateRow={(rowId) => goto(`/${$page.params.workspace_id}/${$page.params.table_id}/${rowId}`)}
+			onNavigateRow={(rowId) => {
+				const r = $rows.find((row) => row.row_id === rowId);
+				if (r) goto(`/${$page.params.workspace_id}/${$page.params.table_id}/${r.row_number}`);
+			}}
 		/>
 	{:else if activeView.type === 'kanban'}
 		<KanbanBoard

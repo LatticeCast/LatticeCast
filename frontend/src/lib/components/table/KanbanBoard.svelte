@@ -84,7 +84,7 @@
 		const currentVal = String(row.row_data[groupByColId] ?? '');
 		if (currentVal === laneValue) return;
 
-		await updateRow(row.row_id, {
+		await updateRow(tableId, row.row_number, {
 			row_data: { ...row.row_data, [groupByColId]: laneValue }
 		});
 		onRowsRefresh();
@@ -93,7 +93,9 @@
 	const groupByColId = $derived(viewConfig.config.group_by as string | undefined);
 	const cardFields = $derived((viewConfig.config.card_fields as string[]) ?? []);
 
-	const groupCol = $derived(groupByColId ? columns.find((c) => c.column_id === groupByColId) : undefined);
+	const groupCol = $derived(
+		groupByColId ? columns.find((c) => c.column_id === groupByColId) : undefined
+	);
 
 	// Prefer a column named "Priority" (select type) for card accent color; fall back to group col
 	const priorityCol = $derived(
@@ -145,10 +147,10 @@
 	}
 
 	function getLaneColor(value: string) {
-		if (!groupCol || !value) return { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200' };
+		if (!groupCol || !value)
+			return { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200' };
 		return getChoiceColor(groupCol, value);
 	}
-
 </script>
 
 <!-- Config bar -->
@@ -174,7 +176,7 @@
 	</div>
 
 	<!-- Card fields -->
-	<div class="relative card-fields-panel">
+	<div class="card-fields-panel relative">
 		<button
 			class="flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
 			onclick={(e) => {
@@ -183,11 +185,17 @@
 			}}
 		>
 			<svg class="h-3.5 w-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M4 6h16M4 12h16M4 18h16"
+				/>
 			</svg>
 			Card fields
 			{#if cardFields.length > 0}
-				<span class="ml-0.5 rounded-full bg-blue-100 px-1.5 text-blue-700">{cardFields.length}</span>
+				<span class="ml-0.5 rounded-full bg-blue-100 px-1.5 text-blue-700">{cardFields.length}</span
+				>
 			{/if}
 		</button>
 		{#if showCardFields}
@@ -229,7 +237,10 @@
 			<div
 				role="group"
 				aria-label="{lane.value || 'Uncategorized'} lane"
-				class="flex w-72 shrink-0 flex-col rounded-xl border border-gray-200 bg-gray-50 transition-shadow {dragOverLane === lane.value ? 'ring-2 ring-blue-400 ring-offset-1' : ''}"
+				class="flex w-72 shrink-0 flex-col rounded-xl border border-gray-200 bg-gray-50 transition-shadow {dragOverLane ===
+				lane.value
+					? 'ring-2 ring-blue-400 ring-offset-1'
+					: ''}"
 				ondragover={(e) => onDragOver(e, lane.value)}
 				ondragleave={onDragLeave}
 				ondrop={(e) => onDrop(e, lane.value)}
@@ -256,7 +267,10 @@
 								draggable="true"
 								ondragstart={(e) => onDragStart(e, row)}
 								ondragend={onDragEnd}
-								class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left shadow-sm transition hover:shadow-md {dragRowId === row.row_id ? 'opacity-40' : ''}"
+								class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left shadow-sm transition hover:shadow-md {dragRowId ===
+								row.row_id
+									? 'opacity-40'
+									: ''}"
 								style={getCardBorderStyle(row)}
 								onclick={() => onOpenExpand(row)}
 							>

@@ -1,4 +1,4 @@
-<!-- routes/[workspace_id]/[table_id]/[row_id]/+page.svelte -->
+<!-- routes/[workspace_id]/[table_id]/[row_number]/+page.svelte -->
 
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -18,7 +18,7 @@
 	import { marked } from 'marked';
 
 	const tableId = $derived($page.params.table_id ?? '');
-	const rowId = $derived($page.params.row_id ?? '');
+	const rowNumberParam = $derived(parseInt($page.params.row_number ?? '0', 10));
 	const workspaceId = $derived($page.params.workspace_id ?? '');
 
 	let table = $state<Table | null>(null);
@@ -67,14 +67,14 @@
 			]);
 			table = t;
 			workspace = wsList.find((w) => w.workspace_id === t.workspace_id) ?? null;
-			row = rows.find((r) => r.row_id === rowId) ?? null;
+			row = rows.find((r) => r.row_number === rowNumberParam) ?? null;
 			if (!row) {
 				error = 'Row not found';
 				return;
 			}
 			// Fetch doc
 			docLoading = true;
-			docContent = await fetchDoc(tableId, rowId);
+			docContent = await fetchDoc(tableId, rowNumberParam);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load';
 		} finally {
@@ -87,7 +87,7 @@
 		if (docSaving) return;
 		docSaving = true;
 		try {
-			await saveDoc(tableId, rowId, docContent);
+			await saveDoc(tableId, rowNumberParam, docContent);
 		} catch {
 			// best-effort
 		} finally {
@@ -96,13 +96,13 @@
 	}
 
 	function getRowTitle(): string {
-		if (!row || !table) return rowId;
+		if (!row || !table) return String(rowNumberParam);
 		const titleCol = table.columns.find((c) => c.name === 'Title');
 		const keyCol = table.columns.find((c) => c.name === 'Key');
 		const key = keyCol ? ((row.row_data[keyCol.column_id] as string) ?? '') : '';
 		const title = titleCol ? ((row.row_data[titleCol.column_id] as string) ?? '') : '';
 		if (key && title) return `${key}: ${title}`;
-		return title || key || rowId;
+		return title || key || String(rowNumberParam);
 	}
 </script>
 

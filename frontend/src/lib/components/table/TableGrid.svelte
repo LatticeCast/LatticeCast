@@ -233,7 +233,18 @@
 											}}
 											role="menuitem"
 										>
-											<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z" /></svg>
+											<svg
+												class="h-4 w-4 text-gray-400"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+												><path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A2 2 0 013 12V7a4 4 0 014-4z"
+												/></svg
+											>
 											Manage Options
 										</button>
 									{/if}
@@ -509,7 +520,7 @@
 									title="Expand row"
 								>
 									{row.row_number}
-									{#if rowsWithDocs.has(row.row_id)}
+									{#if rowsWithDocs.has(String(row.row_number))}
 										<svg
 											class="absolute left-0.5 h-3 w-3 text-blue-400 group-hover:hidden"
 											fill="currentColor"
@@ -692,7 +703,8 @@
 														class="rounded-full border border-gray-300 px-1.5 py-0.5 text-xs text-gray-400 hover:border-blue-400 hover:text-blue-600"
 														onclick={() =>
 															onTagsPopupChange(
-																tagsPopupCell?.rowId === row.row_id && tagsPopupCell?.colId === col.column_id
+																tagsPopupCell?.rowId === row.row_id &&
+																	tagsPopupCell?.colId === col.column_id
 																	? null
 																	: { rowId: row.row_id, colId: col.column_id }
 															)}>+</button
@@ -726,9 +738,13 @@
 										{@const cellVal = row.row_data[col.column_id]}
 										{#if col.name === 'Key' || col.name === 'Title'}
 											{#if cellVal !== null && cellVal !== undefined && String(cellVal) !== ''}
-												<span class="block cursor-pointer truncate font-medium text-blue-600 hover:underline">{String(cellVal)}</span>
+												<span
+													class="block cursor-pointer truncate font-medium text-blue-600 hover:underline"
+													>{String(cellVal)}</span
+												>
 											{:else}
-												<span class="block min-h-[1.5rem] cursor-pointer py-1 text-gray-300">—</span>
+												<span class="block min-h-[1.5rem] cursor-pointer py-1 text-gray-300">—</span
+												>
 											{/if}
 										{:else if cellVal !== null && cellVal !== undefined && String(cellVal) !== ''}
 											<span class="block truncate">{String(cellVal)}</span>
