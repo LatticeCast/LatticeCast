@@ -13,7 +13,7 @@ class Table(SQLModel, table=True):
     __tablename__ = "tables"
 
     table_id: UUID = Field(default_factory=uuid4, primary_key=True, description="Unique identifier")
-    workspace_id: str = Field(index=True, foreign_key="workspaces.workspace_id", description="Workspace ID (FK)")
+    workspace_id: UUID = Field(index=True, foreign_key="workspaces.workspace_id", description="Workspace UUID (FK)")
     name: str = Field(description="Table name")
     columns: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="Column definitions")
     views: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="View configurations")
@@ -25,13 +25,16 @@ class TableCreate(SQLModel):
     """Schema for creating a table"""
 
     name: str = Field(..., description="Table name")
+    workspace_id: UUID | None = Field(
+        default=None, description="Target workspace UUID (defaults to user's first workspace)"
+    )
 
 
 class TableResponse(SQLModel):
     """Table response model for API"""
 
     table_id: UUID = Field(..., description="Unique identifier")
-    workspace_id: str = Field(..., description="Workspace ID")
+    workspace_id: UUID = Field(..., description="Workspace UUID")
     name: str = Field(..., description="Table name")
     columns: list[dict[str, Any]] = Field(default_factory=list, description="Column definitions")
     views: list[dict[str, Any]] = Field(default_factory=list, description="View configurations")

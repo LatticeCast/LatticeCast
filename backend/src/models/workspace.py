@@ -1,7 +1,7 @@
 # src/models/workspace.py
 from datetime import datetime
 from typing import Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlmodel import Field, SQLModel
 
@@ -13,10 +13,23 @@ class Workspace(SQLModel, table=True):
 
     __tablename__ = "workspaces"
 
-    workspace_id: str = Field(primary_key=True, description="Workspace identifier (email for default workspace)")
+    workspace_id: UUID = Field(default_factory=uuid4, primary_key=True, description="UUID primary key")
+    display_id: str = Field(index=True, description="URL-safe slug derived from original workspace identifier")
     name: str = Field(description="Workspace display name")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
+
+
+class WorkspaceInfo(SQLModel, table=True):
+    """Workspace info table — display_id lookup and metadata"""
+
+    __tablename__ = "workspace_info"
+
+    workspace_id: UUID = Field(
+        primary_key=True, foreign_key="workspaces.workspace_id", description="UUID FK → workspaces"
+    )
+    display_id: str = Field(index=True, description="URL-safe slug (unique)")
+    name: str = Field(default="", description="Workspace display name")
 
 
 class WorkspaceMember(SQLModel, table=True):
@@ -24,7 +37,7 @@ class WorkspaceMember(SQLModel, table=True):
 
     __tablename__ = "workspace_members"
 
-    workspace_id: str = Field(primary_key=True, foreign_key="workspaces.workspace_id", description="Workspace identifier")
+    workspace_id: UUID = Field(primary_key=True, foreign_key="workspaces.workspace_id", description="Workspace UUID")
     user_id: UUID = Field(primary_key=True, foreign_key="users.user_id", description="User UUID")
     role: str = Field(default="member", description="Member role (owner/member)")
 
@@ -38,14 +51,21 @@ class WorkspaceCreate(SQLModel):
 class WorkspaceResponse(SQLModel):
     """Workspace response schema"""
 
-    workspace_id: str = Field(..., description="Workspace identifier")
+    workspace_id: UUID = Field(..., description="Workspace UUID")
     name: str = Field(..., description="Workspace display name")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
     model_config = {
         "json_schema_extra": {
-            "examples": [{"workspace_id": "user@example.com", "name": "user@example.com", "created_at": "2026-01-01T00:00:00", "updated_at": "2026-01-01T00:00:00"}]
+            "examples": [
+                {
+                    "workspace_id": "00000000-0000-0000-0000-000000000000",
+                    "name": "My Workspace",
+                    "created_at": "2026-01-01T00:00:00",
+                    "updated_at": "2026-01-01T00:00:00",
+                }
+            ]
         }
     }
 
@@ -60,12 +80,18 @@ class MemberCreate(SQLModel):
 class MemberResponse(SQLModel):
     """Workspace member response schema"""
 
-    workspace_id: str = Field(..., description="Workspace identifier")
+    workspace_id: UUID = Field(..., description="Workspace UUID")
     user_id: UUID = Field(..., description="User UUID")
     role: MemberRoleType = Field(..., description="Member role")
 
     model_config = {
         "json_schema_extra": {
-            "examples": [{"workspace_id": "user@example.com", "user_id": "00000000-0000-0000-0000-000000000000", "role": "owner"}]
+            "examples": [
+                {
+                    "workspace_id": "00000000-0000-0000-0000-000000000000",
+                    "user_id": "00000000-0000-0000-0000-000000000000",
+                    "role": "owner",
+                }
+            ]
         }
     }

@@ -1,6 +1,8 @@
 # src/router/api/workspaces.py
 
+import re
 from datetime import datetime
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -13,6 +15,14 @@ from models.workspace import MemberCreate, MemberResponse, WorkspaceCreate, Work
 from repository.workspace import WorkspaceRepository
 
 
+def _slugify(text: str) -> str:
+    """Convert text to a URL-safe display_id slug."""
+    slug = re.sub(r"[^a-z0-9._@/-]", "-", text.lower())
+    # Ensure starts with alphanumeric
+    slug = re.sub(r"^[^a-z0-9]+", "", slug)
+    return slug[:128] or "workspace"
+
+
 async def _get_user_by_email(email: str, session: AsyncSession) -> User:
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
@@ -20,17 +30,18 @@ async def _get_user_by_email(email: str, session: AsyncSession) -> User:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
 
+
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 
-async def _get_workspace_or_404(workspace_id: str, repo: WorkspaceRepository):
+async def _get_workspace_or_404(workspace_id: UUID, repo: WorkspaceRepository):
     workspace = await repo.get_by_id(workspace_id)
     if not workspace:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
     return workspace
 
 
-async def _require_owner(workspace_id: str, user_id, session: AsyncSession):
+async def _require_owner(workspace_id: UUID, user_id: UUID, session: AsyncSession):
     result = await session.execute(
         select(WorkspaceMember).where(
             WorkspaceMember.workspace_id == workspace_id,
@@ -50,8 +61,8 @@ async def create_workspace(
 ):
     """Create a new workspace; creator becomes owner"""
     repo = WorkspaceRepository(session)
-    workspace_id = f"{user.user_id}/{data.name}"
-    workspace = await repo.create(workspace_id=workspace_id, name=data.name)
+    display_id = _slugify(f"{user.user_id}/{data.name}")
+    workspace = await repo.create(name=data.name, display_id=display_id)
     await repo.add_member(workspace_id=workspace.workspace_id, user_id=user.user_id, role="owner")
     return workspace
 
@@ -66,11 +77,9 @@ async def list_workspaces(
     return await repo.list_by_user(user.user_id)
 
 
-# /members routes must be defined before /{workspace_id:path} to prevent path converter swallowing "/members"
-
-@router.get("/{workspace_id:path}/members", response_model=list[MemberResponse])
+@router.get("/{workspace_id}/members", response_model=list[MemberResponse])
 async def list_members(
-    workspace_id: str,
+    workspace_id: UUID,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -82,9 +91,9 @@ async def list_members(
     return await repo.get_members(workspace_id)
 
 
-@router.post("/{workspace_id:path}/members", response_model=MemberResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{workspace_id}/members", response_model=MemberResponse, status_code=status.HTTP_201_CREATED)
 async def add_member(
-    workspace_id: str,
+    workspace_id: UUID,
     data: MemberCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -99,9 +108,9 @@ async def add_member(
     return await repo.add_member(workspace_id=workspace_id, user_id=new_member.user_id, role=data.role)
 
 
-@router.delete("/{workspace_id:path}/members/{member_email}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{workspace_id}/members/{member_email}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_member(
-    workspace_id: str,
+    workspace_id: UUID,
     member_email: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -116,9 +125,9 @@ async def remove_member(
     await repo.remove_member(workspace_id=workspace_id, user_id=member.user_id)
 
 
-@router.get("/{workspace_id:path}", response_model=WorkspaceResponse)
+@router.get("/{workspace_id}", response_model=WorkspaceResponse)
 async def get_workspace(
-    workspace_id: str,
+    workspace_id: UUID,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -130,9 +139,9 @@ async def get_workspace(
     return workspace
 
 
-@router.put("/{workspace_id:path}", response_model=WorkspaceResponse)
+@router.put("/{workspace_id}", response_model=WorkspaceResponse)
 async def update_workspace(
-    workspace_id: str,
+    workspace_id: UUID,
     data: WorkspaceCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -149,9 +158,9 @@ async def update_workspace(
     return workspace
 
 
-@router.delete("/{workspace_id:path}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_workspace(
-    workspace_id: str,
+    workspace_id: UUID,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):

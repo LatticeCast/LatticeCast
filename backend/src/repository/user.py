@@ -1,10 +1,17 @@
 # src/repository/user.py
+import re
 from datetime import datetime
 
 from sqlmodel import Session, select
 
 from models.user import User
 from models.workspace import Workspace, WorkspaceMember
+
+
+def _slugify(text: str) -> str:
+    slug = re.sub(r"[^a-z0-9._@/-]", "-", text.lower())
+    slug = re.sub(r"^[^a-z0-9]+", "", slug)
+    return slug[:128] or "workspace"
 
 
 class UserRepository:
@@ -18,9 +25,12 @@ class UserRepository:
     def create(self, email: str, role: str = "user") -> User:
         user = User(email=email, role=role)
         self.session.add(user)
-        workspace = Workspace(workspace_id=email, name=email)
+        self.session.flush()  # get user_id assigned
+        display_id = _slugify(email)
+        workspace = Workspace(name=email, display_id=display_id)
         self.session.add(workspace)
-        member = WorkspaceMember(workspace_id=email, user_id=user.user_id, role="owner")
+        self.session.flush()  # get workspace_id assigned
+        member = WorkspaceMember(workspace_id=workspace.workspace_id, user_id=user.user_id, role="owner")
         self.session.add(member)
         self.session.commit()
         self.session.refresh(user)

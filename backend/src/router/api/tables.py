@@ -44,12 +44,19 @@ async def create_table(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Create a new table in the user's default workspace"""
+    """Create a new table in the specified workspace (or user's first workspace)"""
     ws_repo = WorkspaceRepository(session)
-    if not await ws_repo.is_member(user.user_id, user.user_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No default workspace found")
+    if data.workspace_id:
+        if not await ws_repo.is_member(data.workspace_id, user.user_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of that workspace")
+        workspace_id = data.workspace_id
+    else:
+        workspace = await ws_repo.get_first_owned_workspace(user.user_id)
+        if not workspace:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No workspace found — create a workspace first")
+        workspace_id = workspace.workspace_id
     table_repo = TableRepository(session)
-    return await table_repo.create(workspace_id=user.user_id, name=data.name)
+    return await table_repo.create(workspace_id=workspace_id, name=data.name)
 
 
 @router.get("", response_model=list[TableResponse])
@@ -302,10 +309,20 @@ async def create_pm_template(
     name = data.get("name", "")
     if not name:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="name is required")
-    workspace_id = data.get("workspace_id", user.user_id)
     ws_repo = WorkspaceRepository(session)
-    if not await ws_repo.is_member(workspace_id, user.user_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of that workspace")
+    raw_workspace_id = data.get("workspace_id")
+    if raw_workspace_id:
+        try:
+            workspace_id: UUID = UUID(str(raw_workspace_id))
+        except (ValueError, AttributeError):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="workspace_id must be a valid UUID")
+        if not await ws_repo.is_member(workspace_id, user.user_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of that workspace")
+    else:
+        workspace = await ws_repo.get_first_owned_workspace(user.user_id)
+        if not workspace:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No workspace found — create a workspace first")
+        workspace_id = workspace.workspace_id
 
     table_repo = TableRepository(session)
     table = await table_repo.create(workspace_id=workspace_id, name=name)
