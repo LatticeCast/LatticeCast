@@ -19,6 +19,63 @@ async_session_factory: sessionmaker | None = None
 MIGRATION_DIR = Path("/migration")
 
 
+def _split_sql(sql: str) -> list[str]:
+    """
+    Split SQL into individual statements on semicolons, skipping semicolons
+    inside dollar-quoted blocks ($$...$$) and single-line comments.
+    Dollar-quote tags must be $$ or $word$ (letters/digits/underscore only).
+    Returns only non-empty, non-comment-only statements.
+    """
+    import re
+    dollar_tag_re = re.compile(r'\$([A-Za-z0-9_]*)\$')
+
+    statements: list[str] = []
+    current: list[str] = []
+    in_dollar_quote = False
+    dollar_tag = ""
+    i = 0
+
+    while i < len(sql):
+        # Detect start of dollar-quoted block ($$...$$  or $tag$...$tag$)
+        if not in_dollar_quote:
+            m = dollar_tag_re.match(sql, i)
+            if m:
+                tag = m.group(0)
+                in_dollar_quote = True
+                dollar_tag = tag
+                current.append(tag)
+                i = m.end()
+                continue
+        elif sql[i : i + len(dollar_tag)] == dollar_tag:
+            current.append(dollar_tag)
+            i += len(dollar_tag)
+            in_dollar_quote = False
+            dollar_tag = ""
+            continue
+
+        if not in_dollar_quote and sql[i] == ";":
+            stmt = "".join(current).strip()
+            lines = [ln.strip() for ln in stmt.splitlines()
+                     if ln.strip() and not ln.strip().startswith("--")]
+            if lines:
+                statements.append(stmt)
+            current = []
+            i += 1
+            continue
+
+        current.append(sql[i])
+        i += 1
+
+    # Flush remaining
+    stmt = "".join(current).strip()
+    lines = [ln.strip() for ln in stmt.splitlines()
+             if ln.strip() and not ln.strip().startswith("--")]
+    if lines:
+        statements.append(stmt)
+
+    return statements
+
+
 # --------------------------------------------------
 # RUN MIGRATIONS
 # --------------------------------------------------
@@ -60,12 +117,9 @@ async def _run_migrations(engine: AsyncEngine):
 
             print(f"📄 Running migration: {sql_file.name}")
             sql_content = sql_file.read_text()
-            # Split by semicolon and execute each statement separately
-            statements = [s.strip() for s in sql_content.split(";") if s.strip()]
+            # Split by semicolon, respecting dollar-quoted blocks ($$...$$)
+            statements = _split_sql(sql_content)
             for stmt in statements:
-                # Skip comments-only statements
-                if stmt.startswith("--") and "\n" not in stmt:
-                    continue
                 await conn.execute(text(stmt))
 
             # Record as applied

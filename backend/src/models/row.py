@@ -14,9 +14,10 @@ class Row(SQLModel, table=True):
 
     row_id: UUID = Field(default_factory=uuid4, primary_key=True, description="Unique identifier")
     table_id: UUID = Field(foreign_key="tables.table_id", index=True, description="Parent table ID")
+    row_number: int = Field(default=0, description="Auto-increment row number per table (set by DB trigger)")
     row_data: dict[str, Any] = Field(default_factory=dict, sa_type=JSON, description="Row data keyed by column UUID (JSONB)")
-    created_by: str = Field(default="", description="User ID who created the row")
-    updated_by: str = Field(default="", description="User ID who last updated the row")
+    created_by: UUID | None = Field(default=None, foreign_key="users.user_id", description="UUID of user who created the row")
+    updated_by: UUID | None = Field(default=None, foreign_key="users.user_id", description="UUID of user who last updated the row")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
 
@@ -32,8 +33,9 @@ class RowUpdate(SQLModel):
 class RowResponse(SQLModel):
     row_id: UUID = Field(..., description="Unique identifier")
     table_id: UUID = Field(..., description="Parent table ID")
+    row_number: int = Field(..., description="Auto-increment row number per table")
     row_data: dict[str, Any] = Field(..., description="Row data keyed by column UUID")
-    created_by: str = Field(..., description="User ID who created the row")
-    updated_by: str = Field(..., description="User ID who last updated the row")
+    created_by: UUID | None = Field(default=None, description="UUID of user who created the row")
+    updated_by: UUID | None = Field(default=None, description="UUID of user who last updated the row")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")

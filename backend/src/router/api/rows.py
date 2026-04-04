@@ -139,8 +139,7 @@ async def create_row(
     table = await _get_table_for_member(table_id, user, session)
 
     repo = RowRepository(session)
-    user_id_str = str(user.user_id)
-    row = await repo.create(table_id=table_id, row_data=data.row_data, created_by=user_id_str, updated_by=user_id_str)
+    row = await repo.create(table_id=table_id, row_data=data.row_data, created_by=user.user_id, updated_by=user.user_id)
 
     # Auto-generate Key if table has a "Key" column
     key_col = next((c for c in table.columns if c.get("name") == "Key"), None)
@@ -151,7 +150,7 @@ async def create_row(
         from models.row import RowUpdate
 
         updated_data = {**row.row_data, key_col["column_id"]: key_value}
-        row = await repo.update(row=row, data=RowUpdate(row_data=updated_data), updated_by=user_id_str)
+        row = await repo.update(row=row, data=RowUpdate(row_data=updated_data), updated_by=user.user_id)
 
     # Auto-create doc template in MinIO based on Type column
     type_col = next((c for c in table.columns if c.get("name") == "Type"), None)
@@ -176,7 +175,7 @@ async def create_row(
     # Auto-populate Doc column with MinIO path if table has a "Doc" column
     if doc_col:
         updated_data = {**row.row_data, doc_col["column_id"]: minio_key}
-        row = await repo.update(row=row, data=RowUpdate(row_data=updated_data), updated_by=user_id_str)
+        row = await repo.update(row=row, data=RowUpdate(row_data=updated_data), updated_by=user.user_id)
 
     return row
 
@@ -216,7 +215,7 @@ async def update_row(
     await _get_table_for_member(row.table_id, user, session)
 
     repo = RowRepository(session)
-    return await repo.update(row=row, data=data, updated_by=str(user.user_id))
+    return await repo.update(row=row, data=data, updated_by=user.user_id)
 
 
 @router.get("/tables/{table_id}/rows/{row_id}/doc", response_class=PlainTextResponse)

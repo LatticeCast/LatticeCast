@@ -15,7 +15,7 @@ class RowRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, table_id: UUID, row_data: dict[str, Any] | None = None, created_by: str = "", updated_by: str = "") -> Row:
+    async def create(self, table_id: UUID, row_data: dict[str, Any] | None = None, created_by: UUID | None = None, updated_by: UUID | None = None) -> Row:
         row = Row(table_id=table_id, row_data=row_data or {}, created_by=created_by, updated_by=updated_by)
         self.session.add(row)
         await self.session.commit()
@@ -36,7 +36,7 @@ class RowRepository:
         result = await self.session.execute(statement)
         return list(result.scalars().all())
 
-    async def update(self, row: Row, data: RowUpdate, updated_by: str = "") -> Row:
+    async def update(self, row: Row, data: RowUpdate, updated_by: UUID | None = None) -> Row:
         row.row_data = data.row_data
         row.updated_by = updated_by
         row.updated_at = datetime.utcnow()

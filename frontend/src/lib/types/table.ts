@@ -55,9 +55,10 @@ export interface Column {
 export interface Row {
 	row_id: string;
 	table_id: string;
+	row_number: number;
 	row_data: Record<string, unknown>;
-	created_by: string;
-	updated_by: string;
+	created_by: string | null;
+	updated_by: string | null;
 	created_at: string;
 	updated_at: string;
 }
