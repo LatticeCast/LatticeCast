@@ -20,7 +20,7 @@
 		refreshTable
 	} from '$lib/stores/tables.store';
 	import {
-		fetchTables,
+		fetchTable,
 		createRow,
 		createColumn,
 		deleteColumn,
@@ -242,12 +242,7 @@
 			}
 			const tableId = $page.params.table_id!;
 			try {
-				const [all] = await Promise.all([fetchTables(), loadWorkspaces()]);
-				const table = all.find((t) => t.table_id === tableId);
-				if (!table) {
-					goto('/tables');
-					return;
-				}
+				const [table] = await Promise.all([fetchTable(tableId), loadWorkspaces()]);
 				await loadTable(table);
 				// Non-blocking: load doc flags in background, don't block page render
 				loadDocFlags(table.table_id, get(rows)).catch(() => {});
