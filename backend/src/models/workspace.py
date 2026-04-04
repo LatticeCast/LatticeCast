@@ -52,6 +52,7 @@ class WorkspaceResponse(SQLModel):
     """Workspace response schema"""
 
     workspace_id: UUID = Field(..., description="Workspace UUID")
+    display_id: str | None = Field(default=None, description="URL-safe slug from workspace_info")
     name: str = Field(..., description="Workspace display name")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
@@ -61,6 +62,7 @@ class WorkspaceResponse(SQLModel):
             "examples": [
                 {
                     "workspace_id": "00000000-0000-0000-0000-000000000000",
+                    "display_id": "my-workspace",
                     "name": "My Workspace",
                     "created_at": "2026-01-01T00:00:00",
                     "updated_at": "2026-01-01T00:00:00",

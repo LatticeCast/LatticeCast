@@ -22,6 +22,7 @@ export interface ColumnOptions {
 
 export interface Workspace {
 	workspace_id: string;
+	display_id: string | null;
 	name: string;
 	created_at: string;
 	updated_at: string;
