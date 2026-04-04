@@ -1,8 +1,9 @@
 # src/repository/user.py
 import re
 from datetime import datetime
+from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import User, UserInfo
@@ -55,8 +56,32 @@ class UserRepository:
         await self.session.refresh(user)
         return user
 
+    async def get_by_id(self, user_id: UUID) -> User | None:
+        result = await self.session.execute(select(User).where(User.user_id == user_id))
+        return result.scalar_one_or_none()
+
     async def get_or_create(self, email: str, role: str = "user") -> User:
         user = await self.get_by_email(email)
         if user:
             return user
         return await self.create(email, role)
+
+    async def resolve_user(self, identifier: str) -> User | None:
+        """Resolve a user by UUID string or display_id (case-insensitive).
+
+        Tries UUID parse first; falls back to LOWER(display_id) lookup in user_info.
+        """
+        try:
+            user_uuid = UUID(identifier)
+            user = await self.get_by_id(user_uuid)
+            if user:
+                return user
+        except ValueError:
+            pass
+        # Fallback: case-insensitive display_id lookup via user_info
+        result = await self.session.execute(
+            select(User)
+            .join(UserInfo, User.user_id == UserInfo.user_id)
+            .where(func.lower(UserInfo.display_id) == identifier.lower())
+        )
+        return result.scalar_one_or_none()
