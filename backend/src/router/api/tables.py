@@ -47,13 +47,18 @@ async def create_table(
     """Create a new table in the specified workspace (or user's first workspace)"""
     ws_repo = WorkspaceRepository(session)
     if data.workspace_id:
-        if not await ws_repo.is_member(data.workspace_id, user.user_id):
+        workspace = await ws_repo.resolve_workspace(data.workspace_id)
+        if not workspace:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+        if not await ws_repo.is_member(workspace.workspace_id, user.user_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of that workspace")
-        workspace_id = data.workspace_id
+        workspace_id = workspace.workspace_id
     else:
         workspace = await ws_repo.get_first_owned_workspace(user.user_id)
         if not workspace:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No workspace found — create a workspace first")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="No workspace found — create a workspace first"
+            )
         workspace_id = workspace.workspace_id
     table_repo = TableRepository(session)
     return await table_repo.create(workspace_id=workspace_id, name=data.name)
@@ -268,34 +273,52 @@ async def delete_view(
 # --------------------------------------------------
 
 _PM_COLUMNS: list[dict[str, Any]] = [
-    {"name": "Key",         "type": "text"},
-    {"name": "Title",       "type": "text"},
-    {"name": "Type",        "type": "select", "options": {"choices": [
-        {"value": "epic",  "color": "bg-purple-100 text-purple-700"},
-        {"value": "story", "color": "bg-blue-100 text-blue-700"},
-        {"value": "task",  "color": "bg-green-100 text-green-700"},
-        {"value": "bug",   "color": "bg-red-100 text-red-700"},
-    ]}},
-    {"name": "Status",      "type": "select", "options": {"choices": [
-        {"value": "todo",        "color": "bg-gray-100 text-gray-700"},
-        {"value": "in_progress", "color": "bg-blue-100 text-blue-700"},
-        {"value": "review",      "color": "bg-yellow-100 text-yellow-700"},
-        {"value": "done",        "color": "bg-green-100 text-green-700"},
-    ]}},
-    {"name": "Priority",    "type": "select", "options": {"choices": [
-        {"value": "critical", "color": "bg-red-100 text-red-700"},
-        {"value": "high",     "color": "bg-orange-100 text-orange-700"},
-        {"value": "medium",   "color": "bg-yellow-100 text-yellow-700"},
-        {"value": "low",      "color": "bg-gray-100 text-gray-700"},
-    ]}},
-    {"name": "Assignee",    "type": "text"},
-    {"name": "Start Date",  "type": "date"},
-    {"name": "Due Date",    "type": "date"},
-    {"name": "Estimate",    "type": "number"},
-    {"name": "Tags",        "type": "tags"},
+    {"name": "Key", "type": "text"},
+    {"name": "Title", "type": "text"},
+    {
+        "name": "Type",
+        "type": "select",
+        "options": {
+            "choices": [
+                {"value": "epic", "color": "bg-purple-100 text-purple-700"},
+                {"value": "story", "color": "bg-blue-100 text-blue-700"},
+                {"value": "task", "color": "bg-green-100 text-green-700"},
+                {"value": "bug", "color": "bg-red-100 text-red-700"},
+            ]
+        },
+    },
+    {
+        "name": "Status",
+        "type": "select",
+        "options": {
+            "choices": [
+                {"value": "todo", "color": "bg-gray-100 text-gray-700"},
+                {"value": "in_progress", "color": "bg-blue-100 text-blue-700"},
+                {"value": "review", "color": "bg-yellow-100 text-yellow-700"},
+                {"value": "done", "color": "bg-green-100 text-green-700"},
+            ]
+        },
+    },
+    {
+        "name": "Priority",
+        "type": "select",
+        "options": {
+            "choices": [
+                {"value": "critical", "color": "bg-red-100 text-red-700"},
+                {"value": "high", "color": "bg-orange-100 text-orange-700"},
+                {"value": "medium", "color": "bg-yellow-100 text-yellow-700"},
+                {"value": "low", "color": "bg-gray-100 text-gray-700"},
+            ]
+        },
+    },
+    {"name": "Assignee", "type": "text"},
+    {"name": "Start Date", "type": "date"},
+    {"name": "Due Date", "type": "date"},
+    {"name": "Estimate", "type": "number"},
+    {"name": "Tags", "type": "tags"},
     {"name": "Description", "type": "text"},
-    {"name": "Doc",         "type": "url"},
-    {"name": "Parent",      "type": "text"},
+    {"name": "Doc", "type": "url"},
+    {"name": "Parent", "type": "text"},
 ]
 
 
@@ -312,16 +335,18 @@ async def create_pm_template(
     ws_repo = WorkspaceRepository(session)
     raw_workspace_id = data.get("workspace_id")
     if raw_workspace_id:
-        try:
-            workspace_id: UUID = UUID(str(raw_workspace_id))
-        except (ValueError, AttributeError):
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="workspace_id must be a valid UUID")
-        if not await ws_repo.is_member(workspace_id, user.user_id):
+        workspace = await ws_repo.resolve_workspace(str(raw_workspace_id))
+        if not workspace:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+        if not await ws_repo.is_member(workspace.workspace_id, user.user_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of that workspace")
+        workspace_id = workspace.workspace_id
     else:
         workspace = await ws_repo.get_first_owned_workspace(user.user_id)
         if not workspace:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No workspace found — create a workspace first")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="No workspace found — create a workspace first"
+            )
         workspace_id = workspace.workspace_id
 
     table_repo = TableRepository(session)
@@ -349,21 +374,29 @@ async def create_pm_template(
 
     default_views: list[dict[str, Any]] = [
         {"name": "Table", "type": "table", "config": {"sort": {"colId": start_col_id, "dir": "desc"}}},
-        {"name": "Sprint Board", "type": "kanban", "config": {
-            "group_by": status_col_id,
-            "card_fields": [
-                col_ids.get("Key", ""),
-                col_ids.get("Title", ""),
-                col_ids.get("Priority", ""),
-                col_ids.get("Assignee", ""),
-            ],
-        }},
-        {"name": "Roadmap", "type": "timeline", "config": {
-            "start_col": start_col_id,
-            "end_col": due_col_id,
-            "color_by": status_col_id,
-            "group_by": col_ids.get("Type", ""),
-        }},
+        {
+            "name": "Sprint Board",
+            "type": "kanban",
+            "config": {
+                "group_by": status_col_id,
+                "card_fields": [
+                    col_ids.get("Key", ""),
+                    col_ids.get("Title", ""),
+                    col_ids.get("Priority", ""),
+                    col_ids.get("Assignee", ""),
+                ],
+            },
+        },
+        {
+            "name": "Roadmap",
+            "type": "timeline",
+            "config": {
+                "start_col": start_col_id,
+                "end_col": due_col_id,
+                "color_by": status_col_id,
+                "group_by": col_ids.get("Type", ""),
+            },
+        },
     ]
     for view_dict in default_views:
         table = await table_repo.add_view(table, view_dict)

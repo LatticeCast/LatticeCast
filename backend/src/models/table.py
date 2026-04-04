@@ -25,8 +25,8 @@ class TableCreate(SQLModel):
     """Schema for creating a table"""
 
     name: str = Field(..., description="Table name")
-    workspace_id: UUID | None = Field(
-        default=None, description="Target workspace UUID (defaults to user's first workspace)"
+    workspace_id: str | None = Field(
+        default=None, description="Target workspace UUID or display_id (defaults to user's first workspace)"
     )
 
 
