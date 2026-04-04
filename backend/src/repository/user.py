@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import User, UserInfo
-from models.workspace import Workspace, WorkspaceMember
+from models.workspace import Workspace, WorkspaceInfo, WorkspaceMember
 
 
 def _slugify(text: str) -> str:
@@ -38,6 +38,8 @@ class UserRepository:
         workspace = Workspace(name=email, display_id=display_id)
         self.session.add(workspace)
         await self.session.flush()  # get workspace_id assigned
+        workspace_info = WorkspaceInfo(workspace_id=workspace.workspace_id, display_id=display_id, name=email)
+        self.session.add(workspace_info)
         member = WorkspaceMember(workspace_id=workspace.workspace_id, user_id=user.user_id, role="owner")
         self.session.add(member)
         await self.session.commit()
