@@ -10,8 +10,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.settings import settings
 from core.db import get_session
 from middleware.token import verify_bearer_token
-from models.user import User
+from models.user import User, UserInfo
 from util import logger
+
+
+def _slugify(text: str) -> str:
+    import re
+    slug = re.sub(r"[^a-z0-9._@/-]", "-", text.lower())
+    slug = re.sub(r"^[^a-z0-9]+", "", slug)
+    return slug[:128] or "user"
 
 
 async def get_current_user(
@@ -38,6 +45,10 @@ async def get_current_user(
             # Auto-create user in no-auth mode
             user = User(email=email, role="user")
             session.add(user)
+            await session.flush()  # get user_id assigned
+            display_id = _slugify(email)
+            user_info = UserInfo(user_id=user.user_id, display_id=display_id, email=email, name="")
+            session.add(user_info)
             await session.commit()
             await session.refresh(user)
             logger.info(f"Auto-created user: {email}")

@@ -4,7 +4,7 @@ from datetime import datetime
 
 from sqlmodel import Session, select
 
-from models.user import User
+from models.user import User, UserInfo
 from models.workspace import Workspace, WorkspaceMember
 
 
@@ -27,6 +27,8 @@ class UserRepository:
         self.session.add(user)
         self.session.flush()  # get user_id assigned
         display_id = _slugify(email)
+        user_info = UserInfo(user_id=user.user_id, display_id=display_id, email=email, name="")
+        self.session.add(user_info)
         workspace = Workspace(name=email, display_id=display_id)
         self.session.add(workspace)
         self.session.flush()  # get workspace_id assigned
