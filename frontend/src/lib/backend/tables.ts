@@ -197,6 +197,21 @@ export async function checkDocExists(tableId: string, rowId: string): Promise<bo
 	}
 }
 
+export async function batchDocsExist(tableId: string): Promise<Set<string>> {
+	const auth = get(authStore);
+	if (!auth?.accessToken) return new Set();
+	try {
+		const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/docs-exist`, {
+			headers: { Authorization: `Bearer ${auth.accessToken}` }
+		});
+		if (!response.ok) return new Set();
+		const data = await response.json();
+		return new Set(data.row_ids);
+	} catch {
+		return new Set();
+	}
+}
+
 // Templates
 
 export async function createPmTemplate(name: string, workspaceId: string): Promise<Table> {

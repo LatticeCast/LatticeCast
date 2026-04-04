@@ -240,7 +240,8 @@
 					return;
 				}
 				await loadTable(table);
-				loadDocFlags(table.table_id, get(rows));
+				// Non-blocking: load doc flags in background, don't block page render
+				loadDocFlags(table.table_id, get(rows)).catch(() => {});
 				const ws = get(workspaces).find((w) => w.workspace_id === table.workspace_id);
 				if (ws) currentWorkspace.set(ws);
 				// Restore active view from URL param or localStorage
@@ -476,13 +477,12 @@
 		await updateRow(rowId, { row_data: data });
 	}
 
-	async function loadDocFlags(tableId: string, rowList: import('$lib/types/table').Row[]) {
-		const results = await Promise.all(
-			rowList.map((r) => checkDocExists(tableId, r.row_id).then((has) => ({ rowId: r.row_id, has })))
-		);
+	async function loadDocFlags(tableId: string, _rowList: import('$lib/types/table').Row[]) {
+		const { batchDocsExist } = await import('$lib/backend/tables');
+		const docSet = await batchDocsExist(tableId);
 		rowsWithDocs.clear();
-		for (const { rowId, has } of results) {
-			if (has) rowsWithDocs.add(rowId);
+		for (const rowId of docSet) {
+			rowsWithDocs.add(rowId);
 		}
 	}
 

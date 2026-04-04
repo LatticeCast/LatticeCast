@@ -277,6 +277,32 @@ async def put_row_doc(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
 
 
+@router.get("/tables/{table_id}/docs-exist")
+async def batch_docs_exist(
+    table_id: UUID,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, list[str]]:
+    """Return list of row_ids that have non-empty docs in MinIO (single S3 list call)"""
+    table = await _get_table_for_member(table_id, user, session)
+    workspace_id = table.workspace_id
+    prefix = f"{user.user_id}/{workspace_id}/{table_id}/"
+    client = get_s3_client()
+    try:
+        response = client.list_objects_v2(Bucket=settings.minio.bucket, Prefix=prefix, MaxKeys=1000)
+        row_ids = []
+        for obj in response.get("Contents", []):
+            key = obj["Key"]
+            if key.endswith(".md") and obj.get("Size", 0) > 0:
+                # Extract row_id from path: user/workspace/table/ROW_ID.md
+                filename = key.rsplit("/", 1)[-1]
+                row_id = filename.replace(".md", "")
+                row_ids.append(row_id)
+        return {"row_ids": row_ids}
+    except ClientError:
+        return {"row_ids": []}
+
+
 @router.delete("/rows/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_row(
     row_id: UUID,
