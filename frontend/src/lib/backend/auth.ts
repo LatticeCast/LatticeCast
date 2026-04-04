@@ -33,6 +33,7 @@ export interface TokenResponse {
 }
 
 export interface MeResponse {
+	user_id: string;
 	sub?: string;
 	email: string;
 	name?: string;

@@ -23,12 +23,13 @@
 		loggingIn = true;
 		loginError = '';
 		try {
-			// Call backend /me to create user in DB (auto-created when auth_required=false)
+			// Call backend /me to create/resolve user in DB (auto-created when auth_required=false)
+			// Returns resolved user_id UUID regardless of whether input was UUID or display_id
 			const me = await fetchMe(id);
 			authStore.set({
 				provider: 'none',
-				accessToken: id,
-				userInfo: { sub: id, email: me?.email ?? id, name: me?.name ?? id },
+				accessToken: me?.user_id ?? id,
+				userInfo: { sub: me?.user_id ?? id, email: me?.email ?? id, name: me?.name ?? id },
 				role: me?.role ?? 'user'
 			});
 			goto('/');

@@ -4,6 +4,7 @@ Authentication API endpoints.
 """
 
 from typing import Literal
+from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path
@@ -74,6 +75,7 @@ class TokenResponse(BaseModel):
 class MeResponse(BaseModel):
     """Current user information response"""
 
+    user_id: UUID = Field(..., description="User UUID in this system")
     sub: str | None = Field(default=None, description="Subject identifier from OAuth provider")
     email: str = Field(..., description="User email address")
     name: str | None = Field(default=None, description="Display name")
@@ -104,6 +106,7 @@ async def me(user: User = Depends(get_current_user)) -> MeResponse:
     provider = token_payload.get("_provider", "authentik")
 
     return MeResponse(
+        user_id=user.user_id,
         sub=token_payload.get("sub"),
         email=user.email,
         name=token_payload.get("preferred_username") or token_payload.get("name"),
