@@ -1,7 +1,7 @@
 # src/repository/workspace.py
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.workspace import Workspace, WorkspaceInfo, WorkspaceMember
@@ -72,6 +72,26 @@ class WorkspaceRepository:
             )
         )
         return result.scalar_one_or_none() is not None
+
+    async def resolve_workspace(self, identifier: str) -> Workspace | None:
+        """Resolve a workspace by UUID string or display_id (case-insensitive).
+
+        Tries UUID parse first; falls back to LOWER(display_id) lookup in workspace_info.
+        """
+        try:
+            workspace_uuid = UUID(identifier)
+            workspace = await self.get_by_id(workspace_uuid)
+            if workspace:
+                return workspace
+        except ValueError:
+            pass
+        # Fallback: case-insensitive display_id lookup via workspace_info
+        result = await self.session.execute(
+            select(Workspace)
+            .join(WorkspaceInfo, Workspace.workspace_id == WorkspaceInfo.workspace_id)
+            .where(func.lower(WorkspaceInfo.display_id) == identifier.lower())
+        )
+        return result.scalar_one_or_none()
 
     async def get_first_owned_workspace(self, user_id: UUID) -> Workspace | None:
         """Return the first workspace the user owns, or any workspace they are a member of."""
