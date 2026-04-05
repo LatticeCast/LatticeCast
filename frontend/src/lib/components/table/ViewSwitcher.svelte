@@ -16,6 +16,7 @@
 	let showAddMenu = $state(false);
 
 	const VIEW_TYPES = [
+		{ type: 'table', label: 'Table' },
 		{ type: 'kanban', label: 'Kanban' },
 		{ type: 'timeline', label: 'Timeline' }
 	];
