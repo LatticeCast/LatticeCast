@@ -4,7 +4,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth.store';
-	import { fetchTables, createTable, deleteTable, createPmTemplate } from '$lib/backend/tables';
+	import { fetchTables, createTable, updateTable, deleteTable, createPmTemplate } from '$lib/backend/tables';
 	import { fetchWorkspaces, updateWorkspace, deleteWorkspace } from '$lib/backend/workspaces';
 	import { currentTable, pageTitle } from '$lib/stores/tables.store';
 	import type { Table, Workspace } from '$lib/types/table';
@@ -130,13 +130,64 @@
 		}
 	}
 
-	async function handleDelete(tableId: string) {
-		error = '';
+	// Table settings dialog
+	let tableSettingsTarget = $state<Table | null>(null);
+	let tableRenameValue = $state('');
+	let tableSaving = $state(false);
+	let tableSettingsError = $state('');
+
+	function openTableSettings(table: Table, e: MouseEvent) {
+		e.stopPropagation();
+		tableSettingsTarget = table;
+		tableRenameValue = table.name;
+		tableSettingsError = '';
+	}
+
+	function closeTableSettings() {
+		tableSettingsTarget = null;
+		tableRenameValue = '';
+		tableSettingsError = '';
+	}
+
+	async function handleTableRename() {
+		if (!tableSettingsTarget) return;
+		const name = tableRenameValue.trim();
+		if (!name || name === tableSettingsTarget.name) { closeTableSettings(); return; }
+		// Validate unique name within workspace
+		const wsId = tableSettingsTarget.workspace_id;
+		const duplicate = tables.some(
+			(t) => t.workspace_id === wsId && t.name === name && t.table_id !== tableSettingsTarget!.table_id
+		);
+		if (duplicate) {
+			tableSettingsError = `A table named "${name}" already exists in this workspace.`;
+			return;
+		}
+		tableSaving = true;
+		tableSettingsError = '';
 		try {
-			await deleteTable(tableId);
-			tables = tables.filter((t) => t.table_id !== tableId);
+			const updated = await updateTable(tableSettingsTarget.table_id, { name });
+			tables = tables.map((t) => t.table_id === updated.table_id ? updated : t);
+			closeTableSettings();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to delete table';
+			tableSettingsError = e instanceof Error ? e.message : 'Failed to rename table';
+		} finally {
+			tableSaving = false;
+		}
+	}
+
+	async function handleTableDelete() {
+		if (!tableSettingsTarget) return;
+		if (!confirm(`Delete table "${tableSettingsTarget.name}"? This cannot be undone.`)) return;
+		tableSaving = true;
+		tableSettingsError = '';
+		try {
+			await deleteTable(tableSettingsTarget.table_id);
+			tables = tables.filter((t) => t.table_id !== tableSettingsTarget!.table_id);
+			closeTableSettings();
+		} catch (e) {
+			tableSettingsError = e instanceof Error ? e.message : 'Failed to delete table';
+		} finally {
+			tableSaving = false;
 		}
 	}
 
@@ -247,17 +298,15 @@
 							{table.name}
 						</button>
 						<button
-							onclick={() => handleDelete(table.table_id)}
-							class="rounded-xl p-2 text-gray-400 transition hover:bg-red-50 hover:text-red-500"
-							aria-label="Delete table"
+							onclick={(e) => openTableSettings(table, e)}
+							class="rounded-xl p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+							aria-label="Table settings"
+							title="Table settings"
 						>
 							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-								/>
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+									d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
 							</svg>
 						</button>
 					</div>
@@ -266,6 +315,63 @@
 		{/if}
 	</div>
 </div>
+
+<!-- Table Settings Dialog -->
+{#if tableSettingsTarget}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+		onclick={closeTableSettings}
+		role="dialog"
+		aria-modal="true"
+	>
+		<div
+			class="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<h2 class="mb-4 text-lg font-bold text-gray-900">Table Settings</h2>
+
+			<div class="mb-4">
+				<label class="mb-1 block text-sm font-medium text-gray-700" for="table-rename-input">Name</label>
+				<input
+					id="table-rename-input"
+					type="text"
+					bind:value={tableRenameValue}
+					onkeydown={(e) => { if (e.key === 'Enter') handleTableRename(); if (e.key === 'Escape') closeTableSettings(); }}
+					class="w-full rounded-xl border-2 border-gray-200 px-3 py-2 text-gray-800 focus:border-blue-500 focus:outline-none"
+				/>
+			</div>
+
+			{#if tableSettingsError}
+				<div class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{tableSettingsError}</div>
+			{/if}
+
+			<div class="flex items-center justify-between gap-2">
+				<button
+					onclick={handleTableDelete}
+					disabled={tableSaving}
+					class="rounded-xl px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+				>
+					Delete table
+				</button>
+				<div class="flex gap-2">
+					<button
+						onclick={closeTableSettings}
+						class="rounded-xl px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+					>
+						Cancel
+					</button>
+					<button
+						onclick={handleTableRename}
+						disabled={tableSaving || !tableRenameValue.trim()}
+						class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+					>
+						{tableSaving ? 'Saving...' : 'Save'}
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <!-- Workspace Settings Dialog -->
 {#if wsSettingsTarget}
