@@ -38,7 +38,7 @@
 		ViewConfig
 	} from '$lib/types/table';
 	import { TAG_COLORS } from '$lib/UI/theme.svelte';
-	import { createView } from '$lib/backend/views';
+	import { createView, updateView } from '$lib/backend/views';
 	import { SvelteSet } from 'svelte/reactivity';
 	import {
 		type FilterCondition,
@@ -98,6 +98,7 @@
 
 	// View state
 	let activeViewName = $state('');
+	let _applyingConfig = false;
 
 	// Column resize
 	let resizingColId = $state<string | null>(null);
@@ -248,6 +249,8 @@
 				loadDocFlags(table.table_id, get(rows)).catch(() => {});
 				const ws = get(workspaces).find((w) => w.workspace_id === table.workspace_id);
 				if (ws) currentWorkspace.set(ws);
+				// Guard against effect persisting during initial view config apply
+				_applyingConfig = true;
 				// Restore active view from URL param or localStorage
 				const urlView = new URL(window.location.href).searchParams.get('view');
 				const savedView = urlView ?? localStorage.getItem(`view:${tableId}`);
@@ -256,12 +259,9 @@
 				} else if (table.views.length > 0) {
 					activeViewName = table.views[0].name;
 				}
-				// Apply default sort from active view config
+				// Apply sort/group/filter from active view config
 				const initView = table.views.find((v) => v.name === activeViewName);
-				if (initView?.config?.sort) {
-					const s = initView.config.sort as { colId: string; dir: 'asc' | 'desc' };
-					if (s.colId && s.dir) sortConfig = s;
-				}
+				if (initView) applyViewConfig(initView);  // also sets _applyingConfig = true and schedules reset
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to load table');
 			}
@@ -588,6 +588,66 @@
 		showFilterPanel = true;
 	}
 
+	// View config helpers
+	function applyViewConfig(view: ViewConfig) {
+		_applyingConfig = true;
+		// Sort
+		if (view.config?.sort) {
+			const s = view.config.sort as { colId: string; dir: 'asc' | 'desc' };
+			if (s.colId && s.dir) sortConfig = s;
+			else sortConfig = null;
+		} else {
+			sortConfig = null;
+		}
+		// Group
+		if (view.config?.group) {
+			const g = view.config.group as { colId: string; granularity?: 'month' | 'day' };
+			if (g.colId) groupConfig = g;
+			else groupConfig = null;
+		} else {
+			groupConfig = null;
+		}
+		// Filter
+		if (view.config?.filter && Array.isArray(view.config.filter)) {
+			const saved = view.config.filter as { colId: string; operator: string; value: string }[];
+			filterConditions = saved.map((f) => ({
+				id: crypto.randomUUID(),
+				colId: f.colId,
+				operator: f.operator as FilterCondition['operator'],
+				value: f.value
+			}));
+		} else {
+			filterConditions = [];
+		}
+		Promise.resolve().then(() => { _applyingConfig = false; });
+	}
+
+	function persistViewConfig() {
+		const tableId = $page.params.table_id!;
+		const view = ($currentTable?.views ?? []).find((v) => v.name === activeViewName);
+		if (!view) return;
+		const newConfig = {
+			...view.config,
+			sort: sortConfig ?? undefined,
+			group: groupConfig ?? undefined,
+			filter: filterConditions.length > 0
+				? filterConditions.map(({ colId, operator, value }) => ({ colId, operator, value }))
+				: undefined
+		};
+		updateView(tableId, view.name, newConfig).catch(() => {});
+	}
+
+	// Auto-persist sort/group/filter when they change (but not during applyViewConfig)
+	$effect(() => {
+		// Establish reactive dependencies
+		const _s = JSON.stringify(sortConfig);
+		const _g = JSON.stringify(groupConfig);
+		const _f = JSON.stringify(filterConditions);
+		if (!_applyingConfig && activeViewName) {
+			persistViewConfig();
+		}
+	});
+
 	// View handlers
 	function handleViewChange(view: ViewConfig) {
 		activeViewName = view.name;
@@ -596,13 +656,7 @@
 		const url = new URL(window.location.href);
 		url.searchParams.set('view', view.name);
 		history.replaceState(history.state, '', url.toString());
-		// Apply sort from new view's config
-		if (view.config?.sort) {
-			const s = view.config.sort as { colId: string; dir: 'asc' | 'desc' };
-			if (s.colId && s.dir) sortConfig = s;
-		} else {
-			sortConfig = null;
-		}
+		applyViewConfig(view);
 	}
 
 	async function handleAddView(type: string, name: string) {
