@@ -22,11 +22,33 @@ class RowRepository:
         created_by: UUID | None = None,
         updated_by: UUID | None = None,
     ) -> Row:
-        row = Row(table_id=table_id, row_data=row_data or {}, created_by=created_by, updated_by=updated_by)
-        self.session.add(row)
+        # Use raw INSERT + RETURNING because PG trigger sets row_number
+        # and SQLAlchemy can't track the PK change from 0 → actual value
+        from sqlalchemy import text
+        result = await self.session.execute(
+            text("""
+                INSERT INTO rows (table_id, row_data, created_by, updated_by)
+                VALUES (:table_id, CAST(:row_data AS jsonb), :created_by, :updated_by)
+                RETURNING table_id, row_number, row_data, created_by, updated_by, created_at, updated_at
+            """),
+            {
+                "table_id": str(table_id),
+                "row_data": json.dumps(row_data or {}),
+                "created_by": str(created_by) if created_by else None,
+                "updated_by": str(updated_by) if updated_by else None,
+            },
+        )
         await self.session.commit()
-        await self.session.refresh(row)
-        return row
+        r = result.mappings().one()
+        return Row(
+            table_id=r["table_id"],
+            row_number=r["row_number"],
+            row_data=r["row_data"],
+            created_by=r["created_by"],
+            updated_by=r["updated_by"],
+            created_at=r["created_at"],
+            updated_at=r["updated_at"],
+        )
 
     async def get_by_number(self, table_id: UUID, row_number: int) -> Row | None:
         result = await self.session.execute(select(Row).where(Row.table_id == table_id, Row.row_number == row_number))
