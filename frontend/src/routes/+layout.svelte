@@ -301,21 +301,7 @@
 				</svg>
 			</span>
 		</button>
-		<!-- Tables icon — always visible next to Home -->
-		<button
-			onclick={() => navigate('/tables')}
-			data-testid="nav-tables-topbar"
-			class="relative h-8 w-8 shrink-0 rounded-md text-white hover:bg-blue-500 focus:outline-none"
-			aria-label="Tables"
-			title="Tables"
-		>
-			<span class="absolute inset-0 flex items-center justify-center">
-				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18M10 3v18M6 3h12a1 1 0 011 1v16a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z" />
-				</svg>
-			</span>
-		</button>
-		<nav class="ml-1 flex min-w-0 items-center gap-1 overflow-hidden" aria-label="Breadcrumb">
+<nav class="ml-1 flex min-w-0 items-center gap-1 overflow-hidden" aria-label="Breadcrumb">
 			{#if $page.params.workspace_id}
 				{@const wsId = $page.params.workspace_id}
 				{@const wsName = workspaces.find((w) => w.workspace_id === wsId)?.workspace_name ?? wsId}
