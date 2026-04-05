@@ -11,6 +11,18 @@
 	let loginError = $state('');
 	let loggingIn = $state(false);
 
+	const DISPLAY_ID_RE = /^[a-z0-9][a-z0-9_.\\-]*$/;
+
+	function validateDisplayId(id: string): string {
+		if (!id) return '';
+		if (!DISPLAY_ID_RE.test(id)) {
+			return 'Invalid format — use lowercase letters, numbers, and _ - . only (e.g. homun-lang-002)';
+		}
+		return '';
+	}
+
+	let validationError = $derived(validateDisplayId(userId.trim()));
+
 	onMount(() => {
 		if ($authStore?.role) {
 			goto('/');
@@ -19,7 +31,7 @@
 
 	async function simpleLogin() {
 		const id = userId.trim();
-		if (!id) return;
+		if (!id || validationError) return;
 		loggingIn = true;
 		loginError = '';
 		try {
@@ -56,19 +68,22 @@
 					<input
 						type="text"
 						bind:value={userId}
-						placeholder="Enter your user ID"
+						placeholder="Display ID (e.g. homun-lang-002)"
 						data-testid="login-userid"
 						disabled={loggingIn}
 						onkeydown={(e) => e.key === 'Enter' && simpleLogin()}
-						class="w-full rounded-2xl border-2 border-gray-200 bg-gray-50 px-4 py-4 text-center text-lg text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+						class="w-full rounded-2xl border-2 bg-gray-50 px-4 py-4 text-center text-lg text-gray-800 placeholder-gray-400 focus:outline-none disabled:opacity-50
+							{validationError && userId.trim() ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'}"
 					/>
-					{#if loginError}
+					{#if validationError && userId.trim()}
+						<p class="text-center text-sm text-red-500">{validationError}</p>
+					{:else if loginError}
 						<p class="text-center text-sm text-red-500">{loginError}</p>
 					{/if}
 					<button
 						onclick={simpleLogin}
 						data-testid="login-start"
-						disabled={!userId.trim() || loggingIn}
+						disabled={!userId.trim() || !!validationError || loggingIn}
 						class="w-full rounded-2xl bg-linear-to-r from-blue-600 to-sky-500 px-4 py-4 font-semibold text-white transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
 					>
 						{loggingIn ? 'Connecting...' : 'Start'}
