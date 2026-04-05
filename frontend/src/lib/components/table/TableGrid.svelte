@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Column, Row } from '$lib/types/table';
-	import { TAG_COLORS } from '$lib/UI/theme.svelte';
+	import { TAG_COLORS, isDark, theme } from '$lib/UI/theme.svelte';
 	import {
 		type RenderItem,
 		getItemKey,
@@ -113,17 +113,19 @@
 		onNavigateRow: (rowId: string) => void;
 	} = $props();
 
+	const T = $derived(isDark.value ? theme.dark : theme.light);
+
 	function getColWidth(col: Column): number {
 		return localWidths[col.column_id] ?? col.options?.width ?? 150;
 	}
 </script>
 
-<div class="min-h-[calc(100vh-6rem)] flex-1 overflow-x-auto bg-white">
+<div class="min-h-[calc(100vh-6rem)] flex-1 overflow-x-auto {T.cardBg}">
 	{#if loading}
-		<div class="pt-16 text-center text-gray-400">Loading...</div>
+		<div class="pt-16 text-center {T.muted}">Loading...</div>
 	{:else if sortedColumns.length === 0}
 		<div
-			class="mx-4 my-4 rounded-xl border border-gray-200 bg-gray-50 p-8 text-center text-gray-400"
+			class="mx-4 my-4 rounded-xl border p-8 text-center {isDark.value ? 'border-gray-700 bg-gray-800 text-gray-400' : 'border-gray-200 bg-gray-50 text-gray-400'}"
 		>
 			No columns defined yet. Click "+ Column" to start.
 		</div>
@@ -136,15 +138,15 @@
 				<tr>
 					<!-- Row number header -->
 					<th
-						class="sticky left-0 z-20 border-r border-b border-gray-200 bg-gray-50 px-2 py-2 text-center text-xs font-semibold text-gray-400"
+						class="sticky left-0 z-20 border-r border-b px-2 py-2 text-center text-xs font-semibold {isDark.value ? 'border-gray-700 bg-gray-800 text-gray-500' : 'border-gray-200 bg-gray-50 text-gray-400'}"
 						style="width: 48px;"
 					>
 						#
 					</th>
 					{#each sortedColumns as col, i (col.column_id)}
 						<th
-							class="relative border-b border-gray-200 px-3 py-2 text-left text-xs font-semibold tracking-wide text-gray-500 uppercase
-								{i === 0 ? 'sticky left-12 z-10 border-r border-gray-200 bg-gray-50' : 'bg-gray-50'}"
+							class="relative border-b px-3 py-2 text-left text-xs font-semibold tracking-wide uppercase {isDark.value ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}
+								{i === 0 ? (isDark.value ? 'sticky left-12 z-10 border-r border-gray-700 bg-gray-800' : 'sticky left-12 z-10 border-r border-gray-200 bg-gray-50') : (isDark.value ? 'bg-gray-800' : 'bg-gray-50')}"
 							style="width: {getColWidth(col)}px;"
 							oncontextmenu={(e) => onOpenContextMenu(e, 'col', col.column_id)}
 						>
@@ -198,12 +200,12 @@
 							<!-- Column dropdown menu -->
 							{#if colMenuId === col.column_id}
 								<div
-									class="absolute top-full left-0 z-30 mt-1 min-w-[168px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+									class="absolute top-full left-0 z-30 mt-1 min-w-[168px] rounded-xl border py-1 shadow-xl {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}"
 									onclick={(e) => e.stopPropagation()}
 									role="menu"
 								>
 									<button
-										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}"
 										onclick={() => {
 											onStartRename(col.column_id, col.name);
 											onColMenuChange(null);
@@ -226,7 +228,7 @@
 									</button>
 									{#if col.type === 'select' || col.type === 'tags'}
 										<button
-											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}"
 											onclick={() => {
 												onManageOptions(col);
 												onColMenuChange(null);
@@ -248,9 +250,9 @@
 											Manage Options
 										</button>
 									{/if}
-									<hr class="my-1 border-gray-100" />
+									<hr class="{isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'}" />
 									<button
-										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}"
 										onclick={() => {
 											onMoveColumn(col, 'up');
 											onColMenuChange(null);
@@ -272,7 +274,7 @@
 										Move Left
 									</button>
 									<button
-										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}"
 										onclick={() => {
 											onMoveColumn(col, 'down');
 											onColMenuChange(null);
@@ -293,7 +295,7 @@
 										>
 										Move Right
 									</button>
-									<hr class="my-1 border-gray-100" />
+									<hr class="{isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'}" />
 									<button
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
 											col.column_id && sortConfig?.dir === 'asc'
@@ -345,7 +347,7 @@
 										Sort Z → A
 									</button>
 									<button
-										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-700 hover:bg-gray-50'}"
 										onclick={() => {
 											onFilterAdd(col.column_id);
 											onShowFilterPanel();
@@ -367,9 +369,9 @@
 										>
 										Filter
 									</button>
-									<hr class="my-1 border-gray-100" />
+									<hr class="{isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'}" />
 									<button
-										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-500 hover:bg-gray-50"
+										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-50'}"
 										onclick={() => {
 											onHideCol(col.column_id);
 											onColMenuChange(null);
@@ -390,7 +392,7 @@
 										>
 										Hide
 									</button>
-									<hr class="my-1 border-gray-100" />
+									<hr class="{isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'}" />
 									<button
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
 										onclick={() => {
@@ -426,9 +428,9 @@
 						</th>
 					{/each}
 					<!-- Actions col header -->
-					<th class="border-b border-gray-200 bg-gray-50" style="width: 40px;"></th>
+					<th class="border-b {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}" style="width: 40px;"></th>
 					<!-- "+" add column -->
-					<th class="border-b border-gray-200 bg-gray-50" style="width: 40px;">
+					<th class="border-b {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}" style="width: 40px;">
 						<button
 							onclick={onShowAddColumn}
 							class="flex h-full w-full items-center justify-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
@@ -451,7 +453,7 @@
 				{#each renderItems as item (getItemKey(item))}
 					{#if item.type === 'group-header'}
 						<tr class="border-b border-gray-200">
-							<td colspan={sortedColumns.length + 3} class="bg-gray-50 py-0.5">
+							<td colspan={sortedColumns.length + 3} class="{isDark.value ? 'bg-gray-800' : 'bg-gray-50'} py-0.5">
 								<div class="flex items-center gap-2 px-3 py-1">
 									<button
 										onclick={() => onToggleCollapseGroup(item.key)}
@@ -479,7 +481,7 @@
 											>{item.key}</span
 										>
 									{:else}
-										<span class="text-sm font-medium text-gray-700">{item.key}</span>
+										<span class="text-sm font-medium {isDark.value ? 'text-gray-300' : 'text-gray-700'}">{item.key}</span>
 									{/if}
 									<span class="text-xs text-gray-400"
 										>{item.count} {item.count === 1 ? 'row' : 'rows'}</span
@@ -488,12 +490,12 @@
 							</td>
 						</tr>
 					{:else if item.type === 'group-add'}
-						<tr class="border-b border-gray-100">
+						<tr class="border-b {isDark.value ? 'border-gray-700' : 'border-gray-100'}">
 							<td colspan={sortedColumns.length + 3} class="px-4 py-1">
 								<button
 									onclick={() => onAddRowInGroup(item.key, item.col)}
 									disabled={addingRow}
-									class="rounded px-2 py-0.5 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
+									class="rounded px-2 py-0.5 text-xs {isDark.value ? 'text-gray-500 hover:bg-gray-700 hover:text-gray-300' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'} disabled:opacity-50"
 								>
 									+ Add row
 								</button>
@@ -503,7 +505,7 @@
 						{@const row = item.row}
 						{@const rowIdx = item.rowIdx}
 						<tr
-							class="border-b border-gray-100 transition hover:bg-blue-50/50 {deletingRowId ===
+							class="border-b transition {isDark.value ? 'border-gray-700 hover:bg-blue-900/20' : 'border-gray-100 hover:bg-blue-50/50'} {deletingRowId ===
 							row.row_id
 								? 'opacity-50'
 								: ''}"
@@ -511,7 +513,7 @@
 						>
 							<!-- Row number -->
 							<td
-								class="sticky left-0 z-20 border-r border-gray-100 bg-gray-50 px-1 py-1 text-center"
+								class="sticky left-0 z-20 border-r px-1 py-1 text-center {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-100 bg-gray-50'}"
 								style="width: 48px;"
 							>
 								<button
@@ -554,8 +556,8 @@
 							<!-- Data cells -->
 							{#each sortedColumns as col, i (col.column_id)}
 								<td
-									class="overflow-hidden py-1 text-sm text-gray-800
-									{i === 0 ? 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2' : 'px-2'}"
+									class="overflow-hidden py-1 text-sm {T.body}
+									{i === 0 ? (isDark.value ? 'sticky left-12 z-10 border-r border-gray-700 bg-gray-800 px-2' : 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2') : 'px-2'}"
 									style="width: {getColWidth(col)}px;"
 									onclick={() => {
 										if (col.name === 'Key' || col.name === 'Title') {
@@ -711,7 +713,7 @@
 													>
 													{#if tagsPopupCell?.rowId === row.row_id && tagsPopupCell?.colId === col.column_id}
 														<div
-															class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border border-gray-100 bg-white py-1 shadow-xl"
+															class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border py-1 shadow-xl {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-100 bg-white'}"
 														>
 															{#each available as choice (choice.value)}
 																{@const color =
@@ -781,9 +783,9 @@
 					<!-- empty -->
 				{/each}
 				<!-- "+" row at bottom — click any cell to add new row -->
-				<tr class="border-b border-gray-100 transition hover:bg-blue-50/30">
+				<tr class="border-b transition {isDark.value ? 'border-gray-700 hover:bg-blue-900/10' : 'border-gray-100 hover:bg-blue-50/30'}">
 					<td
-						class="sticky left-0 z-20 border-r border-gray-100 bg-gray-50 px-1 py-1 text-center"
+						class="sticky left-0 z-20 border-r px-1 py-1 text-center {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-100 bg-gray-50'}"
 						style="width: 48px;"
 					>
 						<button
@@ -797,8 +799,8 @@
 					</td>
 					{#each sortedColumns as col, i (col.column_id)}
 						<td
-							class="cursor-pointer py-1 text-sm text-gray-300
-							{i === 0 ? 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2' : 'px-2'}"
+							class="cursor-pointer py-1 text-sm {isDark.value ? 'text-gray-600' : 'text-gray-300'}
+							{i === 0 ? (isDark.value ? 'sticky left-12 z-10 border-r border-gray-700 bg-gray-800 px-2' : 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2') : 'px-2'}"
 							style="width: {getColWidth(col)}px;"
 							onclick={() => onAddRow()}
 						>

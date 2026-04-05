@@ -3,6 +3,7 @@
 	import { getChoices, getChoiceColor, getTagValues, formatDate } from './table.utils';
 	import { updateRow } from '$lib/backend/tables';
 	import { updateView } from '$lib/backend/views';
+	import { isDark } from '$lib/UI/theme.svelte';
 
 	let {
 		tableId,
@@ -155,16 +156,16 @@
 
 <!-- Config bar -->
 <div
-	class="flex items-center gap-4 border-b border-gray-200 bg-white px-4 py-2"
+	class="flex items-center gap-4 border-b px-4 py-2 {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}"
 	onclick={(e) => {
 		if (!(e.target as HTMLElement).closest('.card-fields-panel')) showCardFields = false;
 	}}
 >
 	<!-- Group by -->
 	<div class="flex items-center gap-2">
-		<span class="text-xs font-medium text-gray-500">Group by</span>
+		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}">Group by</span>
 		<select
-			class="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 focus:border-blue-500 focus:outline-none"
+			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value ? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400' : 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
 			value={groupByColId ?? ''}
 			onchange={handleGroupByChange}
 		>
@@ -178,7 +179,7 @@
 	<!-- Card fields -->
 	<div class="card-fields-panel relative">
 		<button
-			class="flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+			class="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs {isDark.value ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}"
 			onclick={(e) => {
 				e.stopPropagation();
 				showCardFields = !showCardFields;
@@ -200,7 +201,7 @@
 		</button>
 		{#if showCardFields}
 			<div
-				class="card-fields-panel absolute top-full left-0 z-30 mt-1 min-w-[200px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+				class="card-fields-panel absolute top-full left-0 z-30 mt-1 min-w-[200px] rounded-xl border py-1 shadow-xl {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}"
 				onclick={(e) => e.stopPropagation()}
 				role="menu"
 			>
@@ -208,14 +209,14 @@
 					Show on cards
 				</div>
 				{#each columns as col (col.column_id)}
-					<label class="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-gray-50">
+					<label class="flex cursor-pointer items-center gap-2 px-3 py-1.5 {isDark.value ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}">
 						<input
 							type="checkbox"
 							class="accent-blue-500"
 							checked={cardFields.includes(col.column_id)}
 							onchange={() => toggleCardField(col.column_id)}
 						/>
-						<span class="text-sm text-gray-700">{col.name}</span>
+						<span class="text-sm {isDark.value ? 'text-gray-300' : 'text-gray-700'}">{col.name}</span>
 						<span class="ml-auto text-xs text-gray-400">{col.type}</span>
 					</label>
 				{/each}
@@ -225,19 +226,19 @@
 </div>
 
 {#if !groupByColId || !groupCol}
-	<div class="flex h-64 items-center justify-center text-gray-400">
+	<div class="flex h-64 items-center justify-center {isDark.value ? 'text-gray-500' : 'text-gray-400'}">
 		<div class="text-center">
 			<p class="text-sm">Select a "Group by" column above to activate the Kanban view.</p>
 		</div>
 	</div>
 {:else}
-	<div class="flex h-full gap-4 overflow-x-auto p-4">
+	<div class="flex h-full gap-4 overflow-x-auto p-4 {isDark.value ? 'bg-gray-900' : ''}">
 		{#each lanes as lane (lane.value)}
 			{@const color = getLaneColor(lane.value)}
 			<div
 				role="group"
 				aria-label="{lane.value || 'Uncategorized'} lane"
-				class="flex w-72 shrink-0 flex-col rounded-xl border border-gray-200 bg-gray-50 transition-shadow {dragOverLane ===
+				class="flex w-72 shrink-0 flex-col rounded-xl border transition-shadow {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'} {dragOverLane ===
 				lane.value
 					? 'ring-2 ring-blue-400 ring-offset-1'
 					: ''}"
@@ -246,7 +247,7 @@
 				ondrop={(e) => onDrop(e, lane.value)}
 			>
 				<!-- Lane header -->
-				<div class="flex items-center gap-2 border-b border-gray-200 px-3 py-2.5">
+				<div class="flex items-center gap-2 border-b px-3 py-2.5 {isDark.value ? 'border-gray-700' : 'border-gray-200'}">
 					<span
 						class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
 					>
@@ -258,8 +259,8 @@
 				<!-- Cards -->
 				<div class="flex flex-col gap-2 overflow-y-auto p-2">
 					{#if lane.rows.length === 0}
-						<div class="rounded-lg border border-dashed border-gray-200 px-3 py-4 text-center">
-							<p class="text-xs text-gray-400">No items</p>
+						<div class="rounded-lg border border-dashed px-3 py-4 text-center {isDark.value ? 'border-gray-700' : 'border-gray-200'}">
+							<p class="text-xs {isDark.value ? 'text-gray-500' : 'text-gray-400'}">No items</p>
 						</div>
 					{:else}
 						{#each lane.rows as row (row.row_id)}
@@ -267,7 +268,7 @@
 								draggable="true"
 								ondragstart={(e) => onDragStart(e, row)}
 								ondragend={onDragEnd}
-								class="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-left shadow-sm transition hover:shadow-md {dragRowId ===
+								class="w-full rounded-lg border px-3 py-2.5 text-left shadow-sm transition hover:shadow-md {isDark.value ? 'border-gray-700 bg-gray-700' : 'border-gray-200 bg-white'} {dragRowId ===
 								row.row_id
 									? 'opacity-40'
 									: ''}"
@@ -310,7 +311,7 @@
 												{val}
 											</a>
 										{:else if val !== null && val !== undefined && val !== ''}
-											<span class="block truncate text-sm text-gray-700">
+											<span class="block truncate text-sm {isDark.value ? 'text-gray-200' : 'text-gray-700'}">
 												{col!.type === 'date' ? formatDate(String(val)) : String(val)}
 											</span>
 										{/if}
