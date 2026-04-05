@@ -6,6 +6,7 @@
 	import { authStore, logout } from '$lib/stores/auth.store';
 	import { isDark } from '$lib/UI/theme.svelte';
 	import { browser } from '$app/environment';
+	import { currentTable, currentWorkspace } from '$lib/stores/tables.store';
 
 	let { children } = $props();
 	let menuOpen = $state(false);
@@ -36,12 +37,21 @@
 		<button
 			onclick={() => (menuOpen = !menuOpen)}
 			data-testid="menu-toggle"
-			class="relative h-8 w-8 rounded-md text-white hover:bg-blue-500 focus:outline-none"
+			class="relative h-8 w-8 shrink-0 rounded-md text-white hover:bg-blue-500 focus:outline-none"
 			aria-label={menuOpen ? 'Close menu' : 'Open menu'}
 		>
 			<span class="menu-icon absolute inset-0 flex items-center justify-center transition-all duration-300 {menuOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}">«</span>
 			<span class="menu-icon absolute inset-0 flex items-center justify-center transition-all duration-300 {menuOpen ? 'opacity-0 scale-75' : 'opacity-100 scale-100'}">☰</span>
 		</button>
+		{#if $currentTable}
+			<div class="ml-2 flex min-w-0 items-center gap-1.5 overflow-hidden">
+				{#if $currentWorkspace}
+					<span class="truncate text-sm text-white/60">{$currentWorkspace.name}</span>
+					<span class="text-white/40">/</span>
+				{/if}
+				<span class="truncate text-sm font-semibold text-white">{$currentTable.name}</span>
+			</div>
+		{/if}
 	</header>
 
 	<!-- Sliding sidebar (from left, below top bar) -->

@@ -53,7 +53,6 @@
 	} from '$lib/components/table/table.utils';
 
 	// Components
-	import TableHeader from '$lib/components/table/TableHeader.svelte';
 	import TableToolbar from '$lib/components/table/TableToolbar.svelte';
 	import TableGrid from '$lib/components/table/TableGrid.svelte';
 	import ViewSwitcher from '$lib/components/table/ViewSwitcher.svelte';
@@ -891,14 +890,9 @@
 <div
 	class="flex min-h-screen flex-col bg-white {resizingColId ? 'cursor-col-resize select-none' : ''}"
 >
-	<TableHeader
-		tableName={$currentTable?.name ?? 'Loading...'}
-		workspaceName={$currentWorkspace?.name}
-		loading={$loading}
-		error={$error}
-		onBack={() => goto('/tables')}
-		onAddColumn={() => (showAddColumn = true)}
-	/>
+	{#if $error}
+		<div class="mx-4 mt-2 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{$error}</div>
+	{/if}
 
 	<ViewSwitcher
 		views={$currentTable?.views ?? []}
