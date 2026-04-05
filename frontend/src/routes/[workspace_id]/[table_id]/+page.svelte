@@ -619,6 +619,13 @@
 		} else {
 			filterConditions = [];
 		}
+		// Hidden cols
+		hiddenCols.clear();
+		if (view.config?.hidden && Array.isArray(view.config.hidden)) {
+			for (const colId of view.config.hidden as string[]) {
+				hiddenCols.add(colId);
+			}
+		}
 		Promise.resolve().then(() => { _applyingConfig = false; });
 	}
 
@@ -632,17 +639,19 @@
 			group: groupConfig ?? undefined,
 			filter: filterConditions.length > 0
 				? filterConditions.map(({ colId, operator, value }) => ({ colId, operator, value }))
-				: undefined
+				: undefined,
+			hidden: hiddenCols.size > 0 ? [...hiddenCols] : undefined
 		};
 		updateView(tableId, view.name, newConfig).catch(() => {});
 	}
 
-	// Auto-persist sort/group/filter when they change (but not during applyViewConfig)
+	// Auto-persist sort/group/filter/hiddenCols when they change (but not during applyViewConfig)
 	$effect(() => {
 		// Establish reactive dependencies
 		const _s = JSON.stringify(sortConfig);
 		const _g = JSON.stringify(groupConfig);
 		const _f = JSON.stringify(filterConditions);
+		const _h = [...hiddenCols].sort().join(',');
 		if (!_applyingConfig && activeViewName) {
 			persistViewConfig();
 		}
