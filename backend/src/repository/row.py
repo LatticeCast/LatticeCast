@@ -28,9 +28,6 @@ class RowRepository:
         await self.session.refresh(row)
         return row
 
-    async def get_by_id(self, row_id: UUID) -> Row | None:
-        return await self.session.get(Row, row_id)
-
     async def get_by_number(self, table_id: UUID, row_number: int) -> Row | None:
         result = await self.session.execute(select(Row).where(Row.table_id == table_id, Row.row_number == row_number))
         return result.scalar_one_or_none()
