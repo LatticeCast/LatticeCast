@@ -89,8 +89,9 @@
 			workspaces = workspaces.map((w) => (w.workspace_id === updated.workspace_id ? updated : w));
 			renamingWorkspace = false;
 			renameError = '';
-		} catch {
-			renameError = 'Save failed';
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : '';
+			renameError = msg.includes('already exists') ? 'Name already exists' : 'Save failed';
 		}
 	}
 
@@ -122,8 +123,9 @@
 			};
 			renamingTable = false;
 			renameError = '';
-		} catch {
-			renameError = 'Save failed';
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : '';
+			renameError = msg.includes('already exists') ? 'Name already exists' : 'Save failed';
 		}
 	}
 

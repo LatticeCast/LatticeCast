@@ -57,7 +57,10 @@ export async function updateWorkspace(workspaceId: string, data: UpdateWorkspace
 		headers,
 		body: JSON.stringify(data)
 	});
-	if (!response.ok) throw new Error(`Failed to update workspace: ${response.statusText}`);
+	if (!response.ok) {
+		const body = await response.json().catch(() => ({}));
+		throw new Error(body.detail || `Failed to update workspace: ${response.statusText}`);
+	}
 	return response.json();
 }
 

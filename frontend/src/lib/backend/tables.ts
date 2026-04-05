@@ -61,7 +61,10 @@ export async function updateTable(tableId: string, data: UpdateTable): Promise<T
 		headers,
 		body: JSON.stringify(data)
 	});
-	if (!response.ok) throw new Error(`Failed to update table: ${response.statusText}`);
+	if (!response.ok) {
+		const body = await response.json().catch(() => ({}));
+		throw new Error(body.detail || `Failed to update table: ${response.statusText}`);
+	}
 	return response.json();
 }
 
