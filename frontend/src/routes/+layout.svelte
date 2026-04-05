@@ -148,44 +148,6 @@
 				Tables
 			</button>
 
-			<button
-				onclick={() => navigate('/config')}
-				data-testid="nav-settings"
-				class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-400"
-			>
-				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-					/>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-					/>
-				</svg>
-				Settings
-			</button>
-
-			<button
-				onclick={() => navigate('/debug')}
-				data-testid="nav-debug"
-				class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-400"
-			>
-				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
-					/>
-				</svg>
-				Debug
-			</button>
-
 			<!-- Workspace → Tables tree -->
 			{#if workspaces.length > 0}
 				<div class="mt-3 border-t border-gray-200 pt-3 dark:border-gray-700">
@@ -259,69 +221,109 @@
 			{/if}
 		</nav>
 
-		<!-- Bottom: user info + logout -->
-		<div class="border-t border-gray-200 p-4 dark:border-gray-700">
-			{#if $authStore?.role}
-				{#if $authStore.userInfo}
-					<div class="mb-3 flex items-center gap-2 px-2">
-						{#if $authStore.userInfo.picture}
-							<img src={$authStore.userInfo.picture} alt="Profile" class="h-7 w-7 rounded-full" />
+		<!-- Bottom: Settings, Debug, then user + logout -->
+		<div class="border-t border-gray-200 dark:border-gray-700">
+			<!-- Settings & Debug -->
+			<div class="px-4 pt-2 pb-1 space-y-0.5">
+				<button
+					onclick={() => navigate('/config')}
+					data-testid="nav-settings"
+					class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-400"
+				>
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+						/>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+						/>
+					</svg>
+					Settings
+				</button>
+				<button
+					onclick={() => navigate('/debug')}
+					data-testid="nav-debug"
+					class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-400"
+				>
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+						/>
+					</svg>
+					Debug
+				</button>
+			</div>
+
+			<!-- User identity + logout -->
+			<div class="border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+				{#if $authStore?.role}
+					<div class="flex items-center gap-2">
+						<!-- Avatar -->
+						{#if $authStore.userInfo?.picture}
+							<img src={$authStore.userInfo.picture} alt="Profile" class="h-7 w-7 shrink-0 rounded-full" />
 						{:else}
 							<div
-								class="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-xs text-blue-600 dark:bg-blue-900 dark:text-blue-300"
+								class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs text-blue-600 dark:bg-blue-900 dark:text-blue-300"
 							>
-								{($authStore.userInfo.name || $authStore.userInfo.email || '?')
+								{($authStore.userInfo?.name || $authStore.userInfo?.email || '?')
 									.charAt(0)
 									.toUpperCase()}
 							</div>
 						{/if}
+						<!-- Name + role -->
 						<div class="min-w-0 flex-1">
 							<p class="truncate text-xs font-medium text-gray-900 dark:text-gray-100">
-								{$authStore.userInfo.name || $authStore.userInfo.email || 'User'}
+								{$authStore.userInfo?.name || $authStore.userInfo?.email || 'User'}
 							</p>
-							<p class="truncate text-xs text-gray-500 dark:text-gray-400">
-								{$authStore.provider}
-								<span
-									class={`ml-1 rounded px-1 text-xs ${$authStore.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}
-								>
-									{$authStore.role}
-								</span>
+							<p class="truncate text-xs text-gray-400 dark:text-gray-500">
+								{$authStore.userInfo?.sub ?? ''}
 							</p>
 						</div>
+						<!-- Logout icon button -->
+						<button
+							onclick={handleLogout}
+							data-testid="nav-logout"
+							class="shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+							title="Logout"
+							aria-label="Logout"
+						>
+							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+								/>
+							</svg>
+						</button>
 					</div>
+				{:else}
+					<button
+						onclick={() => navigate('/login')}
+						data-testid="nav-login"
+						class="flex w-full items-center gap-3 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600"
+					>
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
+							/>
+						</svg>
+						Login
+					</button>
 				{/if}
-				<button
-					onclick={handleLogout}
-					data-testid="nav-logout"
-					class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-700 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-400"
-				>
-					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-						/>
-					</svg>
-					Logout
-				</button>
-			{:else}
-				<button
-					onclick={() => navigate('/login')}
-					data-testid="nav-login"
-					class="flex w-full items-center gap-3 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600"
-				>
-					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
-						/>
-					</svg>
-					Login
-				</button>
-			{/if}
+			</div>
 		</div>
 	</div>
 
