@@ -98,6 +98,7 @@
 	// View state
 	let activeViewName = $state('');
 	let _applyingConfig = false;
+	let viewColOrder = $state<string[] | null>(null);
 
 	// Column resize
 	let resizingColId = $state<string | null>(null);
@@ -113,7 +114,14 @@
 
 	const sortedColumns = $derived(
 		[...$columns]
-			.sort((a, b) => a.position - b.position)
+			.sort((a, b) => {
+				if (viewColOrder && viewColOrder.length > 0) {
+					const ai = viewColOrder.indexOf(a.column_id);
+					const bi = viewColOrder.indexOf(b.column_id);
+					return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+				}
+				return a.position - b.position;
+			})
 			.filter((c) => !hiddenCols.has(c.column_id))
 	);
 
@@ -272,21 +280,10 @@
 			localWidths = { ...localWidths, [resizingColId]: Math.max(60, resizeStartWidth + delta) };
 		}
 
-		async function onResizeUp() {
+		function onResizeUp() {
 			if (!resizingColId) return;
-			const colId = resizingColId;
-			const newWidth = localWidths[colId] ?? resizeStartWidth;
 			resizingColId = null;
-			const col = get(columns).find((c) => c.column_id === colId);
-			if (!col) return;
-			try {
-				await updateColumn(get(page).params.table_id!, colId, {
-					options: { ...col.options, width: newWidth }
-				});
-				await refreshTable(get(page).params.table_id!);
-			} catch (err) {
-				error.set(err instanceof Error ? err.message : 'Failed to resize column');
-			}
+			// localWidths already updated by onResizeMove; $effect will persist to view config
 		}
 
 		function onWindowClick() {
@@ -374,23 +371,24 @@
 		}
 	}
 
-	async function handleMoveColumn(col: Column, direction: 'up' | 'down') {
-		const tableId = $page.params.table_id!;
-		const sorted = [...$columns].sort((a, b) => a.position - b.position);
-		const idx = sorted.findIndex((c) => c.column_id === col.column_id);
+	function handleMoveColumn(col: Column, direction: 'up' | 'down') {
+		// Build current ordered list using viewColOrder if available, else col.position
+		const ordered = [...$columns]
+			.sort((a, b) => {
+				if (viewColOrder && viewColOrder.length > 0) {
+					const ai = viewColOrder.indexOf(a.column_id);
+					const bi = viewColOrder.indexOf(b.column_id);
+					return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+				}
+				return a.position - b.position;
+			})
+			.map((c) => c.column_id);
+		const idx = ordered.indexOf(col.column_id);
 		const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-		if (swapIdx < 0 || swapIdx >= sorted.length) return;
-		const swapCol = sorted[swapIdx];
-		error.set(null);
-		try {
-			await Promise.all([
-				updateColumn(tableId, col.column_id, { position: swapCol.position }),
-				updateColumn(tableId, swapCol.column_id, { position: col.position })
-			]);
-			await refreshTable(tableId);
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to reorder column');
-		}
+		if (swapIdx < 0 || swapIdx >= ordered.length) return;
+		[ordered[idx], ordered[swapIdx]] = [ordered[swapIdx], ordered[idx]];
+		viewColOrder = ordered;
+		// $effect will call persistViewConfig()
 	}
 
 	function startRename(colId: string, currentName: string) {
@@ -625,6 +623,18 @@
 				hiddenCols.add(colId);
 			}
 		}
+		// Col widths (per-view override)
+		if (view.config?.widths && typeof view.config.widths === 'object' && !Array.isArray(view.config.widths)) {
+			localWidths = { ...(view.config.widths as Record<string, number>) };
+		} else {
+			localWidths = {};
+		}
+		// Col order (per-view override)
+		if (view.config?.colOrder && Array.isArray(view.config.colOrder)) {
+			viewColOrder = view.config.colOrder as string[];
+		} else {
+			viewColOrder = null;
+		}
 		Promise.resolve().then(() => { _applyingConfig = false; });
 	}
 
@@ -639,18 +649,22 @@
 			filter: filterConditions.length > 0
 				? filterConditions.map(({ colId, operator, value }) => ({ colId, operator, value }))
 				: undefined,
-			hidden: hiddenCols.size > 0 ? [...hiddenCols] : undefined
+			hidden: hiddenCols.size > 0 ? [...hiddenCols] : undefined,
+			widths: Object.keys(localWidths).length > 0 ? { ...localWidths } : undefined,
+			colOrder: viewColOrder ?? undefined
 		};
 		updateView(tableId, view.name, newConfig).catch(() => {});
 	}
 
-	// Auto-persist sort/group/filter/hiddenCols when they change (but not during applyViewConfig)
+	// Auto-persist view config when any view-local state changes (but not during applyViewConfig)
 	$effect(() => {
 		// Establish reactive dependencies
 		const _s = JSON.stringify(sortConfig);
 		const _g = JSON.stringify(groupConfig);
 		const _f = JSON.stringify(filterConditions);
 		const _h = [...hiddenCols].sort().join(',');
+		const _w = JSON.stringify(localWidths);
+		const _o = JSON.stringify(viewColOrder);
 		if (!_applyingConfig && activeViewName) {
 			persistViewConfig();
 		}
