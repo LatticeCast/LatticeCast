@@ -96,17 +96,32 @@
 				<span class="absolute inset-0 flex items-center justify-center">☰</span>
 			</button>
 		{/if}
-		{#if $currentTable}
-			<div class="ml-2 flex min-w-0 items-center gap-1.5 overflow-hidden">
+		<nav class="ml-2 flex min-w-0 items-center gap-1 overflow-hidden" aria-label="Breadcrumb">
+			<button
+				onclick={() => navigate('/')}
+				data-testid="breadcrumb-home"
+				class="shrink-0 rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
+			>Home</button>
+			{#if $currentTable}
+				<span class="shrink-0 text-white/40">/</span>
 				{#if $currentWorkspace}
-					<span class="truncate text-sm text-white/60">{$currentWorkspace.name}</span>
-					<span class="text-white/40">/</span>
+					<button
+						onclick={() => navigate('/tables')}
+						data-testid="breadcrumb-workspace"
+						class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
+					>{$currentWorkspace.name}</button>
+					<span class="shrink-0 text-white/40">/</span>
 				{/if}
-				<span class="truncate text-sm font-semibold text-white">{$currentTable.name}</span>
-			</div>
-		{:else if $pageTitle}
-			<span class="ml-2 truncate text-sm font-semibold text-white">{$pageTitle}</span>
-		{/if}
+				<button
+					onclick={() => navigate(`/${$currentWorkspace?.workspace_id ?? ''}/${$currentTable.table_id}`)}
+					data-testid="breadcrumb-table"
+					class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white hover:text-white/80"
+				>{$currentTable.name}</button>
+			{:else if $pageTitle}
+				<span class="shrink-0 text-white/40">/</span>
+				<span class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white">{$pageTitle}</span>
+			{/if}
+		</nav>
 	</header>
 
 	<!-- Sliding sidebar (from left, below top bar) -->
