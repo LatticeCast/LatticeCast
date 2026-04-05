@@ -376,7 +376,7 @@
 	</div>
 {:else}
 	<!-- Timeline grid -->
-	<div class="relative flex-1 overflow-auto">
+	<div class="relative flex-1 overflow-auto {isDark.value ? 'bg-gray-900' : 'bg-white'}">
 		<div style="min-width: {SIDEBAR_WIDTH + totalGridWidth}px">
 			<!-- Header row -->
 			<div

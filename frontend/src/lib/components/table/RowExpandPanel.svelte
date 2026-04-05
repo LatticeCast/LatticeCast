@@ -127,7 +127,7 @@
 	aria-label="Row details"
 >
 	<!-- Panel header -->
-	<div class="flex items-center justify-between border-b border-gray-200 bg-blue-600 px-6 py-3">
+	<div class="flex items-center justify-between border-b bg-blue-600 px-6 py-3 {isDark.value ? 'border-gray-700' : 'border-gray-200'}">
 		<h2 class="text-lg font-semibold text-white">Row Details</h2>
 		<div class="flex items-center gap-2">
 			<a
