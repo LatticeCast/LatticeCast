@@ -185,14 +185,15 @@ async def list_rows(
     table_id: UUID,
     offset: int = 0,
     limit: int = 100,
+    sort: str = "desc",
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """List all rows in a table (user must be a workspace member)"""
+    """List all rows in a table (user must be a workspace member). sort=desc (newest first) or asc."""
     await _get_table_for_member(table_id, user, session)
 
     repo = RowRepository(session)
-    return await repo.list_by_table(table_id=table_id, offset=offset, limit=limit)
+    return await repo.list_by_table(table_id=table_id, offset=offset, limit=limit, sort=sort)
 
 
 # --------------------------------------------------

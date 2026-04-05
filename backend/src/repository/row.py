@@ -35,8 +35,9 @@ class RowRepository:
         result = await self.session.execute(select(Row).where(Row.table_id == table_id, Row.row_number == row_number))
         return result.scalar_one_or_none()
 
-    async def list_by_table(self, table_id: UUID, offset: int = 0, limit: int = 100) -> list[Row]:
-        statement = select(Row).where(Row.table_id == table_id).order_by(Row.row_number).offset(offset).limit(limit)
+    async def list_by_table(self, table_id: UUID, offset: int = 0, limit: int = 100, sort: str = "desc") -> list[Row]:
+        order = Row.row_number.desc() if sort == "desc" else Row.row_number.asc()
+        statement = select(Row).where(Row.table_id == table_id).order_by(order).offset(offset).limit(limit)
         result = await self.session.execute(statement)
         return list(result.scalars().all())
 
