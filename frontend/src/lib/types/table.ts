@@ -25,8 +25,7 @@ export interface ColumnOptions {
 
 export interface Workspace {
 	workspace_id: UUID;
-	display_id: string | null;
-	name: string;
+	workspace_name: string;
 	created_at: string;
 	updated_at: string;
 }

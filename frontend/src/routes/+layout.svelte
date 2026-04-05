@@ -114,7 +114,7 @@
 											d="M9 5l7 7-7 7"
 										/>
 									</svg>
-									<span class="truncate font-medium">{ws.name}</span>
+									<span class="truncate font-medium">{ws.workspace_name}</span>
 									<span class="ml-auto shrink-0 text-xs text-gray-400">{wsTables.length}</span>
 								</button>
 								{#if isExpanded}
@@ -318,7 +318,7 @@
 		<nav class="ml-1 flex min-w-0 items-center gap-1 overflow-hidden" aria-label="Breadcrumb">
 			{#if $page.params.workspace_id}
 				{@const wsId = $page.params.workspace_id}
-				{@const wsName = workspaces.find((w) => w.workspace_id === wsId)?.name ?? wsId}
+				{@const wsName = workspaces.find((w) => w.workspace_id === wsId)?.workspace_name ?? wsId}
 				<button
 					onclick={() => navigate('/tables')}
 					data-testid="breadcrumb-workspace"

@@ -29,7 +29,7 @@
 	function openWsSettings(ws: Workspace, e: MouseEvent) {
 		e.stopPropagation();
 		wsSettingsTarget = ws;
-		wsRenameValue = ws.name;
+		wsRenameValue = ws.workspace_name;
 		wsSettingsError = '';
 	}
 
@@ -42,7 +42,7 @@
 	async function handleWsRename() {
 		if (!wsSettingsTarget) return;
 		const name = wsRenameValue.trim();
-		if (!name || name === wsSettingsTarget.name) { closeWsSettings(); return; }
+		if (!name || name === wsSettingsTarget.workspace_name) { closeWsSettings(); return; }
 		wsSaving = true;
 		wsSettingsError = '';
 		try {
@@ -59,7 +59,7 @@
 
 	async function handleWsDelete() {
 		if (!wsSettingsTarget) return;
-		if (!confirm(`Delete workspace "${wsSettingsTarget.name}"? This cannot be undone.`)) return;
+		if (!confirm(`Delete workspace "${wsSettingsTarget.workspace_name}"? This cannot be undone.`)) return;
 		wsSaving = true;
 		wsSettingsError = '';
 		try {
@@ -228,7 +228,7 @@
 								? 'text-white'
 								: 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}"
 						>
-							{ws.name}
+							{ws.workspace_name}
 						</button>
 						<button
 							onclick={(e) => openWsSettings(ws, e)}

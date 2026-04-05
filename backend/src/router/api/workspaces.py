@@ -1,6 +1,5 @@
 # src/router/api/workspaces.py
 
-import re
 from datetime import datetime
 from uuid import UUID
 
@@ -11,16 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.db import get_session
 from middleware.auth import get_current_user
 from models.user import User
-from models.workspace import MemberCreate, MemberResponse, Workspace, WorkspaceCreate, WorkspaceInfo, WorkspaceMember, WorkspaceResponse
+from models.workspace import MemberCreate, MemberResponse, Workspace, WorkspaceCreate, WorkspaceMember, WorkspaceResponse
 from repository.workspace import WorkspaceRepository
-
-
-def _slugify(text: str) -> str:
-    """Convert text to a URL-safe display_id slug."""
-    slug = re.sub(r"[^a-z0-9._@/-]", "-", text.lower())
-    # Ensure starts with alphanumeric
-    slug = re.sub(r"^[^a-z0-9]+", "", slug)
-    return slug[:128] or "workspace"
 
 
 async def _resolve_member_user(data: MemberCreate, session: AsyncSession) -> User:
@@ -81,8 +72,7 @@ async def create_workspace(
 ):
     """Create a new workspace; creator becomes owner"""
     repo = WorkspaceRepository(session)
-    display_id = _slugify(f"{user.user_id}/{data.name}")
-    workspace = await repo.create(name=data.name, display_id=display_id)
+    workspace = await repo.create(workspace_name=data.name)
     await repo.add_member(workspace_id=workspace.workspace_id, user_id=user.user_id, role="owner")
     return workspace
 
@@ -172,43 +162,28 @@ async def update_workspace(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Update workspace name (owner only). display_id is re-derived from the new name and must be unique among the owner's workspaces."""
+    """Update workspace name (owner only). workspace_name must be unique among the owner's workspaces."""
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, session)
 
-    new_display_id = _slugify(f"{user.user_id}/{data.name}")
-
-    # Check uniqueness: no other workspace owned by this user may share the same display_id
+    # Check uniqueness: no other workspace owned by this user may share the same workspace_name
     conflict = await session.execute(
         select(Workspace)
         .join(WorkspaceMember, Workspace.workspace_id == WorkspaceMember.workspace_id)
         .where(
             WorkspaceMember.user_id == user.user_id,
             WorkspaceMember.role == "owner",
-            func.lower(Workspace.display_id) == new_display_id.lower(),
+            func.lower(Workspace.workspace_name) == data.name.lower(),
             Workspace.workspace_id != workspace.workspace_id,
         )
     )
     if conflict.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A workspace with that name already exists")
 
-    # Update workspace row
-    workspace.name = data.name
-    workspace.display_id = new_display_id
+    workspace.workspace_name = data.name
     workspace.updated_at = datetime.utcnow()
     session.add(workspace)
-
-    # Update workspace_info row
-    info_result = await session.execute(
-        select(WorkspaceInfo).where(WorkspaceInfo.workspace_id == workspace.workspace_id)
-    )
-    info = info_result.scalar_one_or_none()
-    if info:
-        info.name = data.name
-        info.display_id = new_display_id
-        session.add(info)
-
     await session.commit()
     await session.refresh(workspace)
     return workspace

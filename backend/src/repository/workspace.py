@@ -4,33 +4,22 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.workspace import Workspace, WorkspaceInfo, WorkspaceMember
+from models.workspace import Workspace, WorkspaceMember
 
 
 class WorkspaceRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, name: str, display_id: str) -> Workspace:
-        workspace = Workspace(name=name, display_id=display_id)
+    async def create(self, workspace_name: str) -> Workspace:
+        workspace = Workspace(workspace_name=workspace_name)
         self.session.add(workspace)
-        await self.session.flush()  # get workspace_id before inserting workspace_info
-        workspace_info = WorkspaceInfo(workspace_id=workspace.workspace_id, display_id=display_id, name=name)
-        self.session.add(workspace_info)
         await self.session.commit()
         await self.session.refresh(workspace)
         return workspace
 
     async def get_by_id(self, workspace_id: UUID) -> Workspace | None:
         result = await self.session.execute(select(Workspace).where(Workspace.workspace_id == workspace_id))
-        return result.scalar_one_or_none()
-
-    async def get_by_display_id(self, display_id: str) -> Workspace | None:
-        result = await self.session.execute(
-            select(Workspace)
-            .join(WorkspaceInfo, Workspace.workspace_id == WorkspaceInfo.workspace_id)
-            .where(WorkspaceInfo.display_id == display_id)
-        )
         return result.scalar_one_or_none()
 
     async def list_by_user(self, user_id: UUID) -> list[Workspace]:
@@ -74,9 +63,9 @@ class WorkspaceRepository:
         return result.scalar_one_or_none() is not None
 
     async def resolve_workspace(self, identifier: str) -> Workspace | None:
-        """Resolve a workspace by UUID string or display_id (case-insensitive).
+        """Resolve a workspace by UUID string or workspace_name (case-insensitive).
 
-        Tries UUID parse first; falls back to LOWER(display_id) lookup in workspace_info.
+        Tries UUID parse first; falls back to LOWER(workspace_name) lookup.
         """
         try:
             workspace_uuid = UUID(identifier)
@@ -85,11 +74,9 @@ class WorkspaceRepository:
                 return workspace
         except ValueError:
             pass
-        # Fallback: case-insensitive display_id lookup via workspace_info
+        # Fallback: case-insensitive workspace_name lookup
         result = await self.session.execute(
-            select(Workspace)
-            .join(WorkspaceInfo, Workspace.workspace_id == WorkspaceInfo.workspace_id)
-            .where(func.lower(WorkspaceInfo.display_id) == identifier.lower())
+            select(Workspace).where(func.lower(Workspace.workspace_name) == identifier.lower())
         )
         return result.scalar_one_or_none()
 
