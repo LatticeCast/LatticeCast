@@ -14,8 +14,6 @@ class User(SQLModel, table=True):
     __tablename__ = "users"
 
     user_id: UUID = Field(default_factory=uuid4, primary_key=True, description="UUID primary key")
-    email: str = Field(index=True, description="Email address (unique identifier)")
-    name: str = Field(default="", description="Display name")
     role: str = Field(default="user", index=True, description="User role (user/admin)")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")

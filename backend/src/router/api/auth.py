@@ -9,8 +9,11 @@ from uuid import UUID
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
+from core.db import get_session
 from middleware.auth import get_current_user
 from models.user import User
 
@@ -82,6 +85,7 @@ class MeResponse(BaseModel):
     picture: str | None = Field(default=None, description="Profile picture URL")
     provider: Literal["google", "authentik", "none"] = Field(..., description="OAuth provider used")
     role: str | None = Field(default=None, description="User role in the system")
+    display_id: str | None = Field(default=None, description="URL-safe display ID")
 
 
 # --------------------------------------------------
@@ -97,7 +101,10 @@ class MeResponse(BaseModel):
         403: {"model": HTTPErrorResponse, "description": "User not registered"},
     },
 )
-async def me(user: User = Depends(get_current_user)) -> MeResponse:
+async def me(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> MeResponse:
     """
     Get current user information.
     Requires valid Bearer token and user must be registered in database.
@@ -105,14 +112,20 @@ async def me(user: User = Depends(get_current_user)) -> MeResponse:
     token_payload = getattr(user, "_token_payload", {})
     provider = token_payload.get("_provider", "authentik")
 
+    # Get email/name from user_info
+    from models.user import UserInfo
+    result = await session.execute(select(UserInfo).where(UserInfo.user_id == user.user_id))
+    info = result.scalar_one_or_none()
+
     return MeResponse(
         user_id=user.user_id,
         sub=token_payload.get("sub"),
-        email=user.email,
-        name=token_payload.get("preferred_username") or token_payload.get("name"),
+        email=info.email if info else token_payload.get("email", ""),
+        name=info.name if info else token_payload.get("name", ""),
         picture=token_payload.get("picture"),
         provider=provider,
         role=user.role,
+        display_id=info.display_id if info else None,
     )
 
 

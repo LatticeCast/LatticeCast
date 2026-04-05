@@ -41,7 +41,10 @@ async def get_current_user(
                 )
         logger.debug(f"Authenticated user: {user.user_id} via user_id token (role={user.role})")
     elif email:
-        result = await session.execute(select(User).where(User.email == email))
+        from models.user import UserInfo
+        result = await session.execute(
+            select(User).join(UserInfo, User.user_id == UserInfo.user_id).where(UserInfo.email == email)
+        )
         user = result.scalar_one_or_none()
         if not user:
             if not settings.auth_required:
