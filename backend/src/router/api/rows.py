@@ -159,7 +159,7 @@ async def create_row(
     row_type = row.row_data.get(type_col["column_id"], "") if type_col else ""
     row_key = row.row_data.get(key_col["column_id"], "") if key_col else ""
     row_title = row.row_data.get(title_col["column_id"], "") if title_col else ""
-    minio_key = f"{table.workspace_id}/{table_id}/{row.row_id}.md"
+    minio_key = f"{table.workspace_id}/{table_id}/{row.row_number}.md"
     if row_type in ("epic", "story", "task", "bug"):
         doc_content = _build_doc_template(row_type, row_key, row_title)
         try:
@@ -233,7 +233,7 @@ async def get_row_doc(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
     workspace_id = table.workspace_id
-    key = f"{workspace_id}/{table_id}/{row.row_id}.md"
+    key = f"{workspace_id}/{table_id}/{row.row_number}.md"
     client = get_s3_client()
     try:
         response = client.get_object(Bucket=settings.minio.bucket, Key=key)
@@ -265,7 +265,7 @@ async def put_row_doc(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
     workspace_id = table.workspace_id
-    key = f"{workspace_id}/{table_id}/{row.row_id}.md"
+    key = f"{workspace_id}/{table_id}/{row.row_number}.md"
     client = get_s3_client()
     try:
         client.put_object(
@@ -285,48 +285,26 @@ async def batch_docs_exist(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, list[int]]:
-    """Return list of row_numbers that have non-empty docs in MinIO (single S3 list + DB lookup)"""
+    """Return list of row_numbers that have non-empty docs in MinIO (single S3 list, no DB lookup)"""
     table = await _get_table_for_member(table_id, user, session)
     workspace_id = table.workspace_id
     prefix = f"{workspace_id}/{table_id}/"
     client = get_s3_client()
     try:
         response = client.list_objects_v2(Bucket=settings.minio.bucket, Prefix=prefix, MaxKeys=1000)
-        row_id_strs = []
+        row_numbers = []
         for obj in response.get("Contents", []):
             key = obj["Key"]
             if key.endswith(".md") and obj.get("Size", 0) > 0:
-                filename = key.rsplit("/", 1)[-1]
-                row_id_strs.append(filename.replace(".md", ""))
+                filename = key.rsplit("/", 1)[-1].replace(".md", "")
+                try:
+                    row_numbers.append(int(filename))
+                except ValueError:
+                    pass
     except ClientError:
         return {"row_numbers": []}
 
-    if not row_id_strs:
-        return {"row_numbers": []}
-
-    # Map row_ids → row_numbers via DB
-    from uuid import UUID as _UUID
-
-    from sqlalchemy import select as sa_select
-
-    valid_uuids = []
-    for s in row_id_strs:
-        try:
-            valid_uuids.append(_UUID(s))
-        except ValueError:
-            pass
-    if not valid_uuids:
-        return {"row_numbers": []}
-
-    from models.row import Row as _Row
-
-    result = await session.execute(
-        sa_select(_Row.row_number).where(
-            _Row.table_id == table_id,
-            _Row.row_id.in_(valid_uuids),
-        )
-    )
-    return {"row_numbers": list(result.scalars().all())}
+    return {"row_numbers": row_numbers}
 
 
 @router.delete("/tables/{table_id}/rows/{row_number}", status_code=status.HTTP_204_NO_CONTENT)
