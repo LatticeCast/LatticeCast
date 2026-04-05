@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.table import Table
@@ -28,6 +28,30 @@ class TableRepository:
     async def get_by_id(self, table_id: UUID) -> Table | None:
         result = await self.session.execute(
             select(Table).where(Table.table_id == table_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def resolve_table(self, workspace_id: UUID, identifier: str) -> Table | None:
+        """Resolve a table within a workspace by UUID first, then case-insensitive name."""
+        try:
+            table_uuid = UUID(identifier)
+            result = await self.session.execute(
+                select(Table).where(
+                    Table.table_id == table_uuid,
+                    Table.workspace_id == workspace_id,
+                )
+            )
+            table = result.scalar_one_or_none()
+            if table:
+                return table
+        except (ValueError, AttributeError):
+            pass
+        # Fallback: case-insensitive name match within workspace
+        result = await self.session.execute(
+            select(Table).where(
+                Table.workspace_id == workspace_id,
+                func.lower(Table.name) == identifier.lower(),
+            )
         )
         return result.scalar_one_or_none()
 
