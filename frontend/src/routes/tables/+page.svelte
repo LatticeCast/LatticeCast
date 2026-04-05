@@ -5,7 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth.store';
 	import { fetchTables, createTable, deleteTable, createPmTemplate } from '$lib/backend/tables';
-	import { fetchWorkspaces } from '$lib/backend/workspaces';
+	import { fetchWorkspaces, updateWorkspace, deleteWorkspace } from '$lib/backend/workspaces';
 	import { currentTable, pageTitle } from '$lib/stores/tables.store';
 	import type { Table, Workspace } from '$lib/types/table';
 
@@ -19,6 +19,63 @@
 	let showTemplateModal = $state(false);
 	let templateName = $state('');
 	let creatingTemplate = $state(false);
+
+	// Workspace settings dialog
+	let wsSettingsTarget = $state<Workspace | null>(null);
+	let wsRenameValue = $state('');
+	let wsSaving = $state(false);
+	let wsSettingsError = $state('');
+
+	function openWsSettings(ws: Workspace, e: MouseEvent) {
+		e.stopPropagation();
+		wsSettingsTarget = ws;
+		wsRenameValue = ws.name;
+		wsSettingsError = '';
+	}
+
+	function closeWsSettings() {
+		wsSettingsTarget = null;
+		wsRenameValue = '';
+		wsSettingsError = '';
+	}
+
+	async function handleWsRename() {
+		if (!wsSettingsTarget) return;
+		const name = wsRenameValue.trim();
+		if (!name || name === wsSettingsTarget.name) { closeWsSettings(); return; }
+		wsSaving = true;
+		wsSettingsError = '';
+		try {
+			const updated = await updateWorkspace(wsSettingsTarget.workspace_id, { name });
+			workspaces = workspaces.map((w) => w.workspace_id === updated.workspace_id ? updated : w);
+			if (currentWorkspace?.workspace_id === updated.workspace_id) currentWorkspace = updated;
+			closeWsSettings();
+		} catch (e) {
+			wsSettingsError = e instanceof Error ? e.message : 'Failed to rename workspace';
+		} finally {
+			wsSaving = false;
+		}
+	}
+
+	async function handleWsDelete() {
+		if (!wsSettingsTarget) return;
+		if (!confirm(`Delete workspace "${wsSettingsTarget.name}"? This cannot be undone.`)) return;
+		wsSaving = true;
+		wsSettingsError = '';
+		try {
+			await deleteWorkspace(wsSettingsTarget.workspace_id);
+			workspaces = workspaces.filter((w) => w.workspace_id !== wsSettingsTarget!.workspace_id);
+			tables = tables.filter((t) => t.workspace_id !== wsSettingsTarget!.workspace_id);
+			if (currentWorkspace?.workspace_id === wsSettingsTarget.workspace_id) {
+				currentWorkspace = workspaces[0] ?? null;
+			}
+			closeWsSettings();
+		} catch (e) {
+			wsSettingsError = e instanceof Error ? e.message : 'Failed to delete workspace';
+		} finally {
+			wsSaving = false;
+		}
+	}
 
 	const filteredTables = $derived(
 		currentWorkspace
@@ -113,14 +170,30 @@
 		{#if workspaces.length > 0}
 			<div class="mb-4 flex flex-wrap gap-2">
 				{#each workspaces as ws (ws.workspace_id)}
-					<button
-						onclick={() => (currentWorkspace = ws)}
-						class="rounded-xl px-4 py-2 text-sm font-medium shadow-sm transition {currentWorkspace?.workspace_id === ws.workspace_id
-							? 'bg-blue-600 text-white'
-							: 'bg-white text-gray-700 hover:bg-blue-50 hover:text-blue-600'}"
-					>
-						{ws.name}
-					</button>
+					<div class="flex items-center rounded-xl shadow-sm {currentWorkspace?.workspace_id === ws.workspace_id ? 'bg-blue-600' : 'bg-white'}">
+						<button
+							onclick={() => (currentWorkspace = ws)}
+							class="rounded-l-xl px-4 py-2 text-sm font-medium transition {currentWorkspace?.workspace_id === ws.workspace_id
+								? 'text-white'
+								: 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}"
+						>
+							{ws.name}
+						</button>
+						<button
+							onclick={(e) => openWsSettings(ws, e)}
+							class="rounded-r-xl px-2 py-2 text-sm transition {currentWorkspace?.workspace_id === ws.workspace_id
+								? 'text-blue-200 hover:text-white'
+								: 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}"
+							aria-label="Workspace settings"
+							title="Workspace settings"
+						>
+							<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+									d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+							</svg>
+						</button>
+					</div>
 				{/each}
 			</div>
 		{/if}
@@ -193,6 +266,63 @@
 		{/if}
 	</div>
 </div>
+
+<!-- Workspace Settings Dialog -->
+{#if wsSettingsTarget}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+		onclick={closeWsSettings}
+		role="dialog"
+		aria-modal="true"
+	>
+		<div
+			class="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<h2 class="mb-4 text-lg font-bold text-gray-900">Workspace Settings</h2>
+
+			<div class="mb-4">
+				<label class="mb-1 block text-sm font-medium text-gray-700" for="ws-rename-input">Name</label>
+				<input
+					id="ws-rename-input"
+					type="text"
+					bind:value={wsRenameValue}
+					onkeydown={(e) => { if (e.key === 'Enter') handleWsRename(); if (e.key === 'Escape') closeWsSettings(); }}
+					class="w-full rounded-xl border-2 border-gray-200 px-3 py-2 text-gray-800 focus:border-blue-500 focus:outline-none"
+				/>
+			</div>
+
+			{#if wsSettingsError}
+				<div class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{wsSettingsError}</div>
+			{/if}
+
+			<div class="flex items-center justify-between gap-2">
+				<button
+					onclick={handleWsDelete}
+					disabled={wsSaving}
+					class="rounded-xl px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+				>
+					Delete workspace
+				</button>
+				<div class="flex gap-2">
+					<button
+						onclick={closeWsSettings}
+						class="rounded-xl px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+					>
+						Cancel
+					</button>
+					<button
+						onclick={handleWsRename}
+						disabled={wsSaving || !wsRenameValue.trim()}
+						class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+					>
+						{wsSaving ? 'Saving...' : 'Save'}
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <!-- Template Gallery Modal -->
 {#if showTemplateModal}
