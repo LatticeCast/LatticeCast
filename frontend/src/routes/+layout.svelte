@@ -24,7 +24,6 @@
 	};
 
 	const navigate = (path: string) => {
-		menuOpen = false;
 		goto(path);
 	};
 </script>
@@ -34,15 +33,25 @@
 <div class="relative flex min-h-screen flex-col">
 	<!-- Top bar -->
 	<header class="fixed top-0 left-0 right-0 z-30 flex h-12 items-center bg-blue-600 px-3 shadow">
-		<button
-			onclick={() => (menuOpen = !menuOpen)}
-			data-testid="menu-toggle"
-			class="relative h-8 w-8 shrink-0 rounded-md text-white hover:bg-blue-500 focus:outline-none"
-			aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-		>
-			<span class="menu-icon absolute inset-0 flex items-center justify-center transition-all duration-300 {menuOpen ? 'opacity-100 scale-100' : 'opacity-0 scale-75'}">«</span>
-			<span class="menu-icon absolute inset-0 flex items-center justify-center transition-all duration-300 {menuOpen ? 'opacity-0 scale-75' : 'opacity-100 scale-100'}">☰</span>
-		</button>
+		{#if menuOpen}
+			<button
+				onclick={() => (menuOpen = false)}
+				data-testid="menu-close"
+				class="relative h-8 w-8 shrink-0 rounded-md text-white hover:bg-blue-500 focus:outline-none"
+				aria-label="Close menu"
+			>
+				<span class="absolute inset-0 flex items-center justify-center">«</span>
+			</button>
+		{:else}
+			<button
+				onclick={() => (menuOpen = true)}
+				data-testid="menu-toggle"
+				class="relative h-8 w-8 shrink-0 rounded-md text-white hover:bg-blue-500 focus:outline-none"
+				aria-label="Open menu"
+			>
+				<span class="absolute inset-0 flex items-center justify-center">☰</span>
+			</button>
+		{/if}
 		{#if $currentTable}
 			<div class="ml-2 flex min-w-0 items-center gap-1.5 overflow-hidden">
 				{#if $currentWorkspace}
