@@ -6,7 +6,7 @@
 	import { authStore, logout } from '$lib/stores/auth.store';
 	import { isDark } from '$lib/UI/theme.svelte';
 	import { browser } from '$app/environment';
-	import { currentTable, currentWorkspace } from '$lib/stores/tables.store';
+	import { currentTable, currentWorkspace, pageTitle } from '$lib/stores/tables.store';
 
 	let { children } = $props();
 	let menuOpen = $state(false);
@@ -51,6 +51,8 @@
 				{/if}
 				<span class="truncate text-sm font-semibold text-white">{$currentTable.name}</span>
 			</div>
+		{:else if $pageTitle}
+			<span class="ml-2 truncate text-sm font-semibold text-white">{$pageTitle}</span>
 		{/if}
 	</header>
 

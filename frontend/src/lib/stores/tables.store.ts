@@ -13,6 +13,7 @@ export const columns = writable<Column[]>([]);
 export const rows = writable<Row[]>([]);
 export const loading = writable(false);
 export const error = writable<string | null>(null);
+export const pageTitle = writable<string>('');
 
 export async function loadWorkspaces(): Promise<void> {
 	loading.set(true);

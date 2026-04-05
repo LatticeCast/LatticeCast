@@ -1,11 +1,12 @@
 <!-- routes/tables/+page.svelte -->
 
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth.store';
 	import { fetchTables, createTable, deleteTable, createPmTemplate } from '$lib/backend/tables';
 	import { fetchWorkspaces } from '$lib/backend/workspaces';
+	import { currentTable, pageTitle } from '$lib/stores/tables.store';
 	import type { Table, Workspace } from '$lib/types/table';
 
 	let tables = $state<Table[]>([]);
@@ -30,7 +31,13 @@
 			goto('/login');
 			return;
 		}
+		currentTable.set(null);
+		pageTitle.set('Tables');
 		await loadData();
+	});
+
+	onDestroy(() => {
+		pageTitle.set('');
 	});
 
 	async function loadData() {
@@ -100,10 +107,7 @@
 </script>
 
 <div class="min-h-screen bg-gray-50 p-6">
-	<div class="mx-auto max-w-2xl pt-16">
-		<div class="mb-6 rounded-2xl bg-linear-to-r from-blue-600 to-blue-500 px-6 py-5">
-			<h1 class="text-3xl font-bold text-white">Tables</h1>
-		</div>
+	<div class="mx-auto max-w-2xl pt-4">
 
 		<!-- Workspace Selector -->
 		{#if workspaces.length > 0}
