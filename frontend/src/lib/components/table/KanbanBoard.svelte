@@ -48,11 +48,11 @@
 	const selectColumns = $derived(columns.filter((c) => c.type === 'select'));
 
 	// Drag state
-	let dragRowId = $state<string | null>(null);
+	let dragRowId = $state<number | null>(null);
 	let dragOverLane = $state<string | null>(null);
 
 	function onDragStart(e: DragEvent, row: Row) {
-		dragRowId = row.row_id;
+		dragRowId = row.row_number;
 		if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
 	}
 
@@ -78,7 +78,7 @@
 		dragOverLane = null;
 		if (!dragRowId || !groupByColId) return;
 
-		const row = rows.find((r) => r.row_id === dragRowId);
+		const row = rows.find((r) => r.row_number === dragRowId);
 		dragRowId = null;
 		if (!row) return;
 
@@ -263,13 +263,13 @@
 							<p class="text-xs {isDark.value ? 'text-gray-500' : 'text-gray-400'}">No items</p>
 						</div>
 					{:else}
-						{#each lane.rows as row (row.row_id)}
+						{#each lane.rows as row (row.row_number)}
 							<button
 								draggable="true"
 								ondragstart={(e) => onDragStart(e, row)}
 								ondragend={onDragEnd}
 								class="w-full rounded-lg border px-3 py-2.5 text-left shadow-sm transition hover:shadow-md {isDark.value ? 'border-gray-700 bg-gray-700' : 'border-gray-200 bg-white'} {dragRowId ===
-								row.row_id
+								row.row_number
 									? 'opacity-40'
 									: ''}"
 								style={getCardBorderStyle(row)}

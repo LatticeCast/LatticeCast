@@ -69,14 +69,14 @@
 	// ─── State ───────────────────────────────────────────────────────────────────
 
 	let addingRow = $state(false);
-	let deletingRowId = $state<string | null>(null);
+	let deletingRowId = $state<number | null>(null);
 	let expandedRow = $state<Row | null>(null);
 	let showAddColumn = $state(false);
 	let renamingColId = $state<string | null>(null);
 	let renameValue = $state('');
-	let editingCell = $state<{ rowId: string; colId: string } | null>(null);
+	let editingCell = $state<{ rowId: number; colId: string } | null>(null);
 	let editValue = $state<string>('');
-	let tagsPopupCell = $state<{ rowId: string; colId: string } | null>(null);
+	let tagsPopupCell = $state<{ rowId: number; colId: string } | null>(null);
 	let colMenuId = $state<string | null>(null);
 	let sortConfig = $state<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
 	let filterConditions = $state<FilterCondition[]>([]);
@@ -336,9 +336,9 @@
 		}
 	}
 
-	async function handleDeleteRow(rowId: string) {
+	async function handleDeleteRow(rowId: number) {
 		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_id === rowId);
+		const row = $rows.find((r) => r.row_number === rowId);
 		if (!row) return;
 		deletingRowId = rowId;
 		error.set(null);
@@ -416,16 +416,16 @@
 		}
 	}
 
-	function startEdit(rowId: string, col: Column, currentVal: unknown) {
+	function startEdit(rowId: number, col: Column, currentVal: unknown) {
 		editingCell = { rowId, colId: col.column_id };
 		editValue = currentVal === null || currentVal === undefined ? '' : String(currentVal);
 	}
 
-	async function commitEdit(rowId: string, col: Column) {
+	async function commitEdit(rowId: number, col: Column) {
 		if (!editingCell) return;
 		editingCell = null;
 		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_id === rowId);
+		const row = $rows.find((r) => r.row_number === rowId);
 		if (!row) return;
 		let parsed: unknown = editValue;
 		if (col.type === 'number') parsed = editValue === '' ? null : Number(editValue);
@@ -441,9 +441,9 @@
 		}
 	}
 
-	async function toggleCheckbox(rowId: string, col: Column) {
+	async function toggleCheckbox(rowId: number, col: Column) {
 		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_id === rowId);
+		const row = $rows.find((r) => r.row_number === rowId);
 		if (!row) return;
 		const newData = { ...row.row_data, [col.column_id]: !row.row_data[col.column_id] };
 		error.set(null);
@@ -455,9 +455,9 @@
 		}
 	}
 
-	async function removeTag(rowId: string, col: Column, tag: string) {
+	async function removeTag(rowId: number, col: Column, tag: string) {
 		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_id === rowId);
+		const row = $rows.find((r) => r.row_number === rowId);
 		if (!row) return;
 		const current = getTagValues(row, col.column_id);
 		const newData = { ...row.row_data, [col.column_id]: current.filter((t) => t !== tag) };
@@ -469,9 +469,9 @@
 		}
 	}
 
-	async function addTag(rowId: string, col: Column, tag: string) {
+	async function addTag(rowId: number, col: Column, tag: string) {
 		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_id === rowId);
+		const row = $rows.find((r) => r.row_number === rowId);
 		if (!row) return;
 		const current = getTagValues(row, col.column_id);
 		if (current.includes(tag)) return;
@@ -485,9 +485,9 @@
 		}
 	}
 
-	async function handleUpdateRow(rowId: string, data: Record<string, unknown>) {
+	async function handleUpdateRow(rowId: number, data: Record<string, unknown>) {
 		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_id === rowId);
+		const row = $rows.find((r) => r.row_number === rowId);
 		if (!row) return;
 		await updateRow(tableId, row.row_number, { row_data: data });
 	}
@@ -517,8 +517,8 @@
 		contextMenu = { type, id, x: e.clientX, y: e.clientY };
 	}
 
-	async function handleDuplicateRow(rowId: string) {
-		const row = $rows.find((r) => r.row_id === rowId);
+	async function handleDuplicateRow(rowId: number) {
+		const row = $rows.find((r) => r.row_number === rowId);
 		if (!row) return;
 		const tableId = $page.params.table_id!;
 		error.set(null);
@@ -983,7 +983,7 @@
 			onToggleCollapseGroup={toggleCollapseGroup}
 			onManageOptions={(col) => (managingOptionsCol = col)}
 			onNavigateRow={(rowId) => {
-				const r = $rows.find((row) => row.row_id === rowId);
+				const r = $rows.find((row) => row.row_number === rowId);
 				if (r) goto(`/${$page.params.workspace_id}/${$page.params.table_id}/${r.row_number}`);
 			}}
 		/>

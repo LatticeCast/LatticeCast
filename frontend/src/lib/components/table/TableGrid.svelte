@@ -68,29 +68,29 @@
 		loading: boolean;
 		tableMinWidth: number;
 		addingRow: boolean;
-		deletingRowId: string | null;
+		deletingRowId: number | null;
 		rowsWithDocs: SvelteSet<string>;
-		editingCell: { rowId: string; colId: string } | null;
+		editingCell: { rowId: number; colId: string } | null;
 		editValue: string;
 		renamingColId: string | null;
 		renameValue: string;
 		colMenuId: string | null;
-		tagsPopupCell: { rowId: string; colId: string } | null;
+		tagsPopupCell: { rowId: number; colId: string } | null;
 		sortConfig: { colId: string; dir: 'asc' | 'desc' } | null;
 		filterConditions: { id: string; colId: string; operator: string; value: string }[];
 		resizingColId: string | null;
 		hiddenCols: SvelteSet<string>;
 		collapsedGroups: SvelteSet<string>;
 		localWidths: Record<string, number>;
-		onStartEdit: (rowId: string, col: Column, currentVal: unknown) => void;
-		onCommitEdit: (rowId: string, col: Column) => void;
+		onStartEdit: (rowId: number, col: Column, currentVal: unknown) => void;
+		onCommitEdit: (rowId: number, col: Column) => void;
 		onEditValueChange: (val: string) => void;
-		onEditingCellChange: (cell: { rowId: string; colId: string } | null) => void;
-		onToggleCheckbox: (rowId: string, col: Column) => void;
-		onRemoveTag: (rowId: string, col: Column, tag: string) => void;
-		onAddTag: (rowId: string, col: Column, tag: string) => void;
-		onTagsPopupChange: (cell: { rowId: string; colId: string } | null) => void;
-		onDeleteRow: (rowId: string) => void;
+		onEditingCellChange: (cell: { rowId: number; colId: string } | null) => void;
+		onToggleCheckbox: (rowId: number, col: Column) => void;
+		onRemoveTag: (rowId: number, col: Column, tag: string) => void;
+		onAddTag: (rowId: number, col: Column, tag: string) => void;
+		onTagsPopupChange: (cell: { rowId: number; colId: string } | null) => void;
+		onDeleteRow: (rowId: number) => void;
 		onOpenExpand: (row: Row) => void;
 		onOpenContextMenu: (e: MouseEvent, type: 'row' | 'col', id: string) => void;
 		onStartRename: (colId: string, name: string) => void;
@@ -110,7 +110,7 @@
 		onAddRowInGroup: (key: string, col: Column) => void;
 		onToggleCollapseGroup: (key: string) => void;
 		onManageOptions: (col: Column) => void;
-		onNavigateRow: (rowId: string) => void;
+		onNavigateRow: (rowId: number) => void;
 	} = $props();
 
 	const T = $derived(isDark.value ? theme.dark : theme.light);
@@ -506,10 +506,10 @@
 						{@const rowIdx = item.rowIdx}
 						<tr
 							class="border-b transition {isDark.value ? 'border-gray-700 hover:bg-blue-900/20' : 'border-gray-100 hover:bg-blue-50/50'} {deletingRowId ===
-							row.row_id
+							row.row_number
 								? 'opacity-50'
 								: ''}"
-							oncontextmenu={(e) => onOpenContextMenu(e, 'row', row.row_id)}
+							oncontextmenu={(e) => onOpenContextMenu(e, 'row', String(row.row_number))}
 						>
 							<!-- Row number -->
 							<td
@@ -561,17 +561,17 @@
 									style="width: {getColWidth(col)}px;"
 									onclick={() => {
 										if (col.name === 'Key' || col.name === 'Title') {
-											onNavigateRow(row.row_id);
+											onNavigateRow(row.row_number);
 										} else if (
 											col.type !== 'checkbox' &&
 											col.type !== 'tags' &&
-											!(editingCell?.rowId === row.row_id && editingCell?.colId === col.column_id)
+											!(editingCell?.rowId === row.row_number && editingCell?.colId === col.column_id)
 										) {
-											onStartEdit(row.row_id, col, row.row_data[col.column_id]);
+											onStartEdit(row.row_number, col, row.row_data[col.column_id]);
 										}
 									}}
 								>
-									{#if editingCell?.rowId === row.row_id && editingCell?.colId === col.column_id}
+									{#if editingCell?.rowId === row.row_number && editingCell?.colId === col.column_id}
 										{#if col.type === 'select'}
 											{@const choices = getChoices(col)}
 											<select
@@ -579,9 +579,9 @@
 												value={editValue}
 												onchange={(e) => {
 													onEditValueChange((e.currentTarget as HTMLSelectElement).value);
-													onCommitEdit(row.row_id, col);
+													onCommitEdit(row.row_number, col);
 												}}
-												onblur={() => onCommitEdit(row.row_id, col)}
+												onblur={() => onCommitEdit(row.row_number, col)}
 												autofocus
 											>
 												<option value="">—</option>
@@ -596,9 +596,9 @@
 												value={editValue}
 												oninput={(e) =>
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
-												onblur={() => onCommitEdit(row.row_id, col)}
+												onblur={() => onCommitEdit(row.row_number, col)}
 												onkeydown={(e) => {
-													if (e.key === 'Enter') onCommitEdit(row.row_id, col);
+													if (e.key === 'Enter') onCommitEdit(row.row_number, col);
 													if (e.key === 'Escape') onEditingCellChange(null);
 												}}
 												autofocus
@@ -610,9 +610,9 @@
 												value={editValue}
 												oninput={(e) =>
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
-												onblur={() => onCommitEdit(row.row_id, col)}
+												onblur={() => onCommitEdit(row.row_number, col)}
 												onkeydown={(e) => {
-													if (e.key === 'Enter') onCommitEdit(row.row_id, col);
+													if (e.key === 'Enter') onCommitEdit(row.row_number, col);
 													if (e.key === 'Escape') onEditingCellChange(null);
 												}}
 												autofocus
@@ -624,9 +624,9 @@
 												value={editValue}
 												oninput={(e) =>
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
-												onblur={() => onCommitEdit(row.row_id, col)}
+												onblur={() => onCommitEdit(row.row_number, col)}
 												onkeydown={(e) => {
-													if (e.key === 'Enter') onCommitEdit(row.row_id, col);
+													if (e.key === 'Enter') onCommitEdit(row.row_number, col);
 													if (e.key === 'Escape') onEditingCellChange(null);
 												}}
 												autofocus
@@ -640,7 +640,7 @@
 												: 'bg-gray-200'}"
 											onclick={(e) => {
 												e.stopPropagation();
-												onToggleCheckbox(row.row_id, col);
+												onToggleCheckbox(row.row_number, col);
 											}}
 											aria-label="Toggle"
 											role="switch"
@@ -694,7 +694,7 @@
 													{tag}
 													<button
 														class="ml-0.5 rounded-full leading-none hover:opacity-60"
-														onclick={() => onRemoveTag(row.row_id, col, tag)}
+														onclick={() => onRemoveTag(row.row_number, col, tag)}
 														aria-label="Remove {tag}">×</button
 													>
 												</span>
@@ -705,13 +705,13 @@
 														class="rounded-full border border-gray-300 px-1.5 py-0.5 text-xs text-gray-400 hover:border-blue-400 hover:text-blue-600"
 														onclick={() =>
 															onTagsPopupChange(
-																tagsPopupCell?.rowId === row.row_id &&
+																tagsPopupCell?.rowId === row.row_number &&
 																	tagsPopupCell?.colId === col.column_id
 																	? null
-																	: { rowId: row.row_id, colId: col.column_id }
+																	: { rowId: row.row_number, colId: col.column_id }
 															)}>+</button
 													>
-													{#if tagsPopupCell?.rowId === row.row_id && tagsPopupCell?.colId === col.column_id}
+													{#if tagsPopupCell?.rowId === row.row_number && tagsPopupCell?.colId === col.column_id}
 														<div
 															class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border py-1 shadow-xl {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-100 bg-white'}"
 														>
@@ -720,7 +720,7 @@
 																	TAG_COLORS[choices.indexOf(choice) % TAG_COLORS.length]}
 																<button
 																	class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-50"
-																	onclick={() => onAddTag(row.row_id, col, choice.value)}
+																	onclick={() => onAddTag(row.row_number, col, choice.value)}
 																>
 																	<span
 																		class="inline-flex items-center rounded-full border px-2 py-0.5 font-medium {color.bg} {color.text} {color.border}"
@@ -760,8 +760,8 @@
 							<!-- Actions (delete) -->
 							<td class="px-1 py-1 text-center" style="width: 40px;">
 								<button
-									onclick={() => onDeleteRow(row.row_id)}
-									disabled={deletingRowId === row.row_id}
+									onclick={() => onDeleteRow(row.row_number)}
+									disabled={deletingRowId === row.row_number}
 									class="rounded p-1 text-gray-300 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
 									aria-label="Delete row"
 									title="Delete row"

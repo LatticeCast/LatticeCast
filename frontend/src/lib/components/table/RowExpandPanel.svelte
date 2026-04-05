@@ -17,7 +17,7 @@
 		row: Row;
 		columns: Column[];
 		onClose: () => void;
-		onUpdateRow: (rowId: string, data: Record<string, unknown>) => Promise<void>;
+		onUpdateRow: (rowNumber: number, data: Record<string, unknown>) => Promise<void>;
 		onRefreshRows: (tableId: string) => Promise<void>;
 		tableId: string;
 		workspaceId: string;
@@ -82,7 +82,7 @@
 		else if (editVal === '') parsed = null;
 		const newData = { ...localRow.row_data, [col.column_id]: parsed };
 		localRow = { ...localRow, row_data: newData };
-		await onUpdateRow(localRow.row_id, newData);
+		await onUpdateRow(localRow.row_number, newData);
 		await onRefreshRows(tableId);
 	}
 
@@ -90,7 +90,7 @@
 		const current = !!localRow.row_data[col.column_id];
 		const newData = { ...localRow.row_data, [col.column_id]: !current };
 		localRow = { ...localRow, row_data: newData };
-		await onUpdateRow(localRow.row_id, newData);
+		await onUpdateRow(localRow.row_number, newData);
 		await onRefreshRows(tableId);
 	}
 
@@ -98,7 +98,7 @@
 		const current = getTagValues(localRow, col.column_id);
 		const newData = { ...localRow.row_data, [col.column_id]: current.filter((t) => t !== tag) };
 		localRow = { ...localRow, row_data: newData };
-		await onUpdateRow(localRow.row_id, newData);
+		await onUpdateRow(localRow.row_number, newData);
 		await onRefreshRows(tableId);
 	}
 
@@ -108,7 +108,7 @@
 		const newData = { ...localRow.row_data, [col.column_id]: [...current, tag] };
 		tagsPopup = null;
 		localRow = { ...localRow, row_data: newData };
-		await onUpdateRow(localRow.row_id, newData);
+		await onUpdateRow(localRow.row_number, newData);
 		await onRefreshRows(tableId);
 	}
 </script>

@@ -57,9 +57,7 @@ export interface Column {
 }
 
 export interface Row {
-	row_id: UUID;
 	table_id: UUID;
-	/** Auto-increment integer per table — use this (not row_id) in URL paths and API calls */
 	row_number: number;
 	row_data: Record<UUID, unknown>;
 	created_by: UUID | null;

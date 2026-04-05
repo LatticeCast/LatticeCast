@@ -25,8 +25,8 @@
 		filterConditions: FilterCondition[];
 		onClose: () => void;
 		onExpandRow: (row: Row) => void;
-		onDuplicateRow: (rowId: string) => void;
-		onDeleteRow: (rowId: string) => void;
+		onDuplicateRow: (rowId: number) => void;
+		onDeleteRow: (rowId: number) => void;
 		onRenameColumn: (colId: string, name: string) => void;
 		onSortChange: (config: { colId: string; dir: 'asc' | 'desc' }) => void;
 		onAddFilter: (colId: string) => void;
@@ -49,7 +49,7 @@
 		<button
 			class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
 			onclick={() => {
-				const row = rows.find((r) => r.row_id === contextMenu.id);
+				const row = rows.find((r) => String(r.row_number) === contextMenu.id);
 				if (row) onExpandRow(row);
 				onClose();
 			}}
@@ -67,7 +67,7 @@
 		</button>
 		<button
 			class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
-			onclick={() => onDuplicateRow(contextMenu.id)}
+			onclick={() => onDuplicateRow(Number(contextMenu.id))}
 			role="menuitem"
 		>
 			<svg class="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -84,7 +84,7 @@
 		<button
 			class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
 			onclick={() => {
-				onDeleteRow(contextMenu.id);
+				onDeleteRow(Number(contextMenu.id));
 				onClose();
 			}}
 			role="menuitem"
