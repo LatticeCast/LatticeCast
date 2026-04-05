@@ -67,10 +67,13 @@ class UserRepository:
         return await self.create(email, role)
 
     async def resolve_user(self, identifier: str) -> User | None:
-        """Resolve a user by UUID string or display_id (case-insensitive).
+        """Resolve a user by UUID → display_id → email (in order).
 
-        Tries UUID parse first; falls back to LOWER(display_id) lookup in user_info.
+        1. Try UUID parse
+        2. Try LOWER(display_id) in user_info
+        3. Try LOWER(email) in user_info
         """
+        # 1. UUID
         try:
             user_uuid = UUID(identifier)
             user = await self.get_by_id(user_uuid)
@@ -78,10 +81,19 @@ class UserRepository:
                 return user
         except ValueError:
             pass
-        # Fallback: case-insensitive display_id lookup via user_info
+        # 2. display_id (case-insensitive)
         result = await self.session.execute(
             select(User)
             .join(UserInfo, User.user_id == UserInfo.user_id)
             .where(func.lower(UserInfo.display_id) == identifier.lower())
+        )
+        user = result.scalar_one_or_none()
+        if user:
+            return user
+        # 3. email (case-insensitive)
+        result = await self.session.execute(
+            select(User)
+            .join(UserInfo, User.user_id == UserInfo.user_id)
+            .where(func.lower(UserInfo.email) == identifier.lower())
         )
         return result.scalar_one_or_none()
