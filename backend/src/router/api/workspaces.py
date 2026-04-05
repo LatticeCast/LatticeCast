@@ -5,7 +5,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.db import get_session
@@ -23,12 +23,32 @@ def _slugify(text: str) -> str:
     return slug[:128] or "workspace"
 
 
-async def _get_user_by_email(email: str, session: AsyncSession) -> User:
-    result = await session.execute(select(User).where(User.email == email))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return user
+async def _resolve_member_user(data: MemberCreate, session: AsyncSession) -> User:
+    """Resolve user by user_id (UUID), user_name (display_id), or user_email"""
+    from models.user import UserInfo
+    if data.user_id:
+        user = await session.get(User, data.user_id)
+        if user:
+            return user
+    elif data.user_name:
+        result = await session.execute(
+            select(User).join(UserInfo, User.user_id == UserInfo.user_id).where(
+                func.lower(UserInfo.display_id) == data.user_name.lower()
+            )
+        )
+        user = result.scalar_one_or_none()
+        if user:
+            return user
+    elif data.user_email:
+        result = await session.execute(
+            select(User).join(UserInfo, User.user_id == UserInfo.user_id).where(
+                func.lower(UserInfo.email) == data.user_email.lower()
+            )
+        )
+        user = result.scalar_one_or_none()
+        if user:
+            return user
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found — provide user_id, user_name, or user_email")
 
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -102,24 +122,30 @@ async def add_member(
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, session)
-    new_member = await _get_user_by_email(data.user_email, session)
+    new_member = await _resolve_member_user(data, session)
     if await repo.is_member(workspace.workspace_id, new_member.user_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User is already a member")
     return await repo.add_member(workspace_id=workspace.workspace_id, user_id=new_member.user_id, role=data.role)
 
 
-@router.delete("/{workspace_id}/members/{member_email}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{workspace_id}/members/{member_user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_member(
     workspace_id: str,
-    member_email: str,
+    member_user_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Remove a member from a workspace by email (owner only)"""
+    """Remove a member from a workspace (owner only). member_user_id can be UUID or display_id."""
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, session)
-    member = await _get_user_by_email(member_email, session)
+    member_data = MemberCreate(user_name=member_user_id)
+    try:
+        member_data.user_id = UUID(member_user_id)
+        member_data.user_name = None
+    except ValueError:
+        pass
+    member = await _resolve_member_user(member_data, session)
     if not await repo.is_member(workspace.workspace_id, member.user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
     await repo.remove_member(workspace_id=workspace.workspace_id, user_id=member.user_id)
