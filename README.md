@@ -2,7 +2,18 @@
 
 Self-hosted Airtable + Jira. Flexible tables with JSONB, customizable views (Table, Kanban, Timeline), and built-in project management.
 
+![](layout.webp)
+
 ## Features
+
+| Tool | Sidebar Tree | Table Grid | Horizontal Scroll | PM Features | Custom Fields |
+|------|-------------|------------|-------------------|-------------|---------------|
+| Linear | ✅ | ❌ (cards) | ❌ | ✅ | ❌ |
+| Notion | ✅ (page tree) | ✅ | ❌ | Partial | ✅ |
+| Airtable | ✅ | ✅ | ✅ | ❌ | ✅ |
+| Jira | ✅ | ❌ (list) | ❌ | ✅ | Partial |
+| VS Code | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **LatticeCast** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 - **Flexible Schema** — create columns of any type (text, number, date, select, tags, checkbox, url), all stored as JSONB
 - **Workspaces** — multi-user, shared access with owner/member roles
