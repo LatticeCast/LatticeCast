@@ -64,7 +64,7 @@
 </script>
 
 <!-- Toolbar -->
-<div class="flex items-center gap-1 border-b border-gray-200 bg-white px-4 py-1.5">
+<div class="flex items-center gap-1 overflow-x-auto border-b border-gray-200 bg-white px-4 py-1.5">
 	<!-- Sort -->
 	<div class="relative">
 		<button

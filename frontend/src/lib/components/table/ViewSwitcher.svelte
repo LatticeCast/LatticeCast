@@ -27,7 +27,7 @@
 	}}
 />
 
-<div class="flex items-center gap-0.5 border-b border-gray-200 bg-white px-4">
+<div class="flex items-center gap-0.5 overflow-x-auto border-b border-gray-200 bg-white px-4">
 	{#each views as view (view.name)}
 		<button
 			onclick={() => onViewChange(view)}
