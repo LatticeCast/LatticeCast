@@ -29,6 +29,8 @@
 	let activeTab = $state<'fields' | 'doc'>('fields');
 	let docContent = $state('');
 	let docLoading = $state(false);
+	let docLoaded = $state(false);
+	let docEditing = $state(false);
 	let docSaving = $state(false);
 
 	// Local copy so we can update inline
@@ -38,7 +40,7 @@
 	});
 
 	$effect(() => {
-		if (activeTab === 'doc' && !docContent && !docLoading) {
+		if (activeTab === 'doc' && !docLoaded && !docLoading) {
 			docLoading = true;
 			fetchDoc(tableId, row.row_number)
 				.then((content) => {
@@ -47,6 +49,7 @@
 				.catch(() => {})
 				.finally(() => {
 					docLoading = false;
+					docLoaded = true;
 				});
 		}
 	});
@@ -178,8 +181,22 @@
 			<div class="flex items-center border-b px-4 py-2 {isDark.value ? 'border-gray-700' : 'border-gray-100'}">
 				<span class="text-xs {isDark.value ? 'text-gray-500' : 'text-gray-400'}">Markdown {docSaving ? '· saving…' : ''}</span>
 			</div>
-			{#if docLoading}
+			{#if docLoading || !docLoaded}
 				<div class="flex flex-1 items-center justify-center text-sm {isDark.value ? 'text-gray-500' : 'text-gray-400'}">Loading…</div>
+			{:else if !docContent && !docEditing}
+				<!-- Empty state -->
+				<div class="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-12">
+					<svg class="h-12 w-12 {isDark.value ? 'text-gray-600' : 'text-gray-300'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+					</svg>
+					<p class="text-sm {isDark.value ? 'text-gray-400' : 'text-gray-500'}">No doc yet for this row.</p>
+					<button
+						onclick={() => (docEditing = true)}
+						class="rounded-lg px-4 py-2 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 {isDark.value ? 'hover:bg-blue-900/20' : ''}"
+					>
+						Start writing →
+					</button>
+				</div>
 			{:else}
 				<div class="flex flex-1 divide-x overflow-hidden {isDark.value ? 'divide-gray-700' : 'divide-gray-200'}">
 					<!-- Editor pane -->
