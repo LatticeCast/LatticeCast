@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.db import get_session
 from middleware.auth import get_current_user
 from models.user import User
-from models.workspace import MemberCreate, MemberResponse, WorkspaceCreate, WorkspaceMember, WorkspaceResponse
+from models.workspace import MemberCreate, MemberResponse, Workspace, WorkspaceCreate, WorkspaceInfo, WorkspaceMember, WorkspaceResponse
 from repository.workspace import WorkspaceRepository
 
 
@@ -172,13 +172,43 @@ async def update_workspace(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Update workspace name (owner only)"""
+    """Update workspace name (owner only). display_id is re-derived from the new name and must be unique among the owner's workspaces."""
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, session)
+
+    new_display_id = _slugify(f"{user.user_id}/{data.name}")
+
+    # Check uniqueness: no other workspace owned by this user may share the same display_id
+    conflict = await session.execute(
+        select(Workspace)
+        .join(WorkspaceMember, Workspace.workspace_id == WorkspaceMember.workspace_id)
+        .where(
+            WorkspaceMember.user_id == user.user_id,
+            WorkspaceMember.role == "owner",
+            func.lower(Workspace.display_id) == new_display_id.lower(),
+            Workspace.workspace_id != workspace.workspace_id,
+        )
+    )
+    if conflict.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A workspace with that name already exists")
+
+    # Update workspace row
     workspace.name = data.name
+    workspace.display_id = new_display_id
     workspace.updated_at = datetime.utcnow()
     session.add(workspace)
+
+    # Update workspace_info row
+    info_result = await session.execute(
+        select(WorkspaceInfo).where(WorkspaceInfo.workspace_id == workspace.workspace_id)
+    )
+    info = info_result.scalar_one_or_none()
+    if info:
+        info.name = data.name
+        info.display_id = new_display_id
+        session.add(info)
+
     await session.commit()
     await session.refresh(workspace)
     return workspace
