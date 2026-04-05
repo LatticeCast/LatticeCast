@@ -123,7 +123,7 @@
 			<a
 				href="/tables"
 				class="max-w-[150px] truncate transition hover:text-blue-600"
-				title={workspace?.name ?? workspaceId}>{workspace?.name ?? workspaceId}</a
+				title={workspace?.workspace_name ?? workspaceId}>{workspace?.workspace_name ?? workspaceId}</a
 			>
 			<span class="text-gray-300 select-none">/</span>
 			<a
