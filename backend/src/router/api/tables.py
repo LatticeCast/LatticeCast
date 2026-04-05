@@ -99,6 +99,9 @@ async def update_table(
     """Update a table name (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
     table_repo = TableRepository(session)
+    existing = await table_repo.list_by_workspace(table.workspace_id)
+    if any(t.name == data.name and t.table_id != table_id for t in existing):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A table with that name already exists in this workspace")
     return await table_repo.update(table, data.name)
 
 
