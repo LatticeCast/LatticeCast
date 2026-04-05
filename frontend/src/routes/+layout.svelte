@@ -151,25 +151,9 @@
 		<div class="flex h-full w-52 flex-col">
 			<!-- Navigation -->
 			<nav data-testid="menu-nav" class="flex-1 space-y-1 overflow-y-auto px-4 pt-3">
-				<button
-					onclick={() => navigate('/tables')}
-					data-testid="nav-tables"
-					class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-400"
-				>
-					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M3 10h18M3 14h18M10 3v18M6 3h12a1 1 0 011 1v16a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z"
-						/>
-					</svg>
-					Tables
-				</button>
-
 				<!-- Workspace → Tables tree -->
 				{#if workspaces.length > 0}
-					<div class="mt-3 border-t border-gray-200 pt-3 dark:border-gray-700">
+					<div>
 						<p
 							class="mb-1 px-3 text-xs font-semibold tracking-wide text-gray-400 uppercase dark:text-gray-500"
 						>
@@ -380,6 +364,20 @@
 			<span class="absolute inset-0 flex items-center justify-center">
 				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+				</svg>
+			</span>
+		</button>
+		<!-- Tables icon — always visible next to Home -->
+		<button
+			onclick={() => navigate('/tables')}
+			data-testid="nav-tables-topbar"
+			class="relative h-8 w-8 shrink-0 rounded-md text-white hover:bg-blue-500 focus:outline-none"
+			aria-label="Tables"
+			title="Tables"
+		>
+			<span class="absolute inset-0 flex items-center justify-center">
+				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18M10 3v18M6 3h12a1 1 0 011 1v16a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z" />
 				</svg>
 			</span>
 		</button>
