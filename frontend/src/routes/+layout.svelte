@@ -152,22 +152,6 @@
 			<!-- Navigation -->
 			<nav data-testid="menu-nav" class="flex-1 space-y-1 overflow-y-auto px-4 pt-3">
 				<button
-					onclick={() => navigate('/')}
-					data-testid="nav-home"
-					class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-400"
-				>
-					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
-						/>
-					</svg>
-					Home
-				</button>
-
-				<button
 					onclick={() => navigate('/tables')}
 					data-testid="nav-tables"
 					class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-gray-700 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-400"
@@ -386,14 +370,21 @@
 				<span class="absolute inset-0 flex items-center justify-center">☰</span>
 			</button>
 		{/if}
-		<nav class="ml-2 flex min-w-0 items-center gap-1 overflow-hidden" aria-label="Breadcrumb">
-			<button
-				onclick={() => navigate('/')}
-				data-testid="breadcrumb-home"
-				class="shrink-0 rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
-			>Home</button>
+		<!-- Home icon — always visible next to ☰ -->
+		<button
+			onclick={() => navigate('/')}
+			data-testid="nav-home"
+			class="relative h-8 w-8 shrink-0 rounded-md text-white hover:bg-blue-500 focus:outline-none"
+			aria-label="Home"
+		>
+			<span class="absolute inset-0 flex items-center justify-center">
+				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+				</svg>
+			</span>
+		</button>
+		<nav class="ml-1 flex min-w-0 items-center gap-1 overflow-hidden" aria-label="Breadcrumb">
 			{#if $currentTable}
-				<span class="shrink-0 text-white/40">/</span>
 				{#if $currentWorkspace}
 					{#if renamingWorkspace}
 						<div class="relative flex min-w-0 items-center">
