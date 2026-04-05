@@ -4,7 +4,7 @@ import re
 from uuid import UUID
 
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -267,11 +267,22 @@ async def get_row_doc(
 async def put_row_doc(
     table_id: str,
     row_number: int,
-    body: str = Body(..., media_type="text/plain"),
+    request: Request,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> str:
-    """Save markdown doc for a row to MinIO by row_number"""
+    """Save markdown doc for a row to MinIO by row_number.
+    Accepts text/plain body or multipart/form-data with a 'file' field."""
+    content_type = request.headers.get("content-type", "")
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        file_field = form.get("file")
+        if file_field is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Missing 'file' field in multipart form")
+        body = (await file_field.read()).decode("utf-8")
+    else:
+        body = (await request.body()).decode("utf-8")
+
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
     row = await repo.get_by_number(table.table_id, row_number)
