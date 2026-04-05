@@ -93,6 +93,37 @@
 
 	const groupByColId = $derived(viewConfig.config.group_by as string | undefined);
 	const cardFields = $derived((viewConfig.config.card_fields as string[]) ?? []);
+	const sortColId = $derived(viewConfig.config.sort_col as string | undefined);
+	const sortDir = $derived((viewConfig.config.sort_dir as 'asc' | 'desc') ?? 'asc');
+
+	async function handleSortColChange(e: Event) {
+		const val = (e.target as HTMLSelectElement).value;
+		await saveConfig({ sort_col: val || undefined });
+	}
+
+	async function handleSortDirChange(e: Event) {
+		const val = (e.target as HTMLSelectElement).value as 'asc' | 'desc';
+		await saveConfig({ sort_dir: val });
+	}
+
+	function sortRows(rowList: Row[]): Row[] {
+		if (!sortColId) return rowList;
+		return [...rowList].sort((a, b) => {
+			const av = a.row_data[sortColId];
+			const bv = b.row_data[sortColId];
+			const as = av === null || av === undefined ? '' : String(av);
+			const bs = bv === null || bv === undefined ? '' : String(bv);
+			const aNum = Number(as);
+			const bNum = Number(bs);
+			let cmp: number;
+			if (!isNaN(aNum) && !isNaN(bNum)) {
+				cmp = aNum - bNum;
+			} else {
+				cmp = as.localeCompare(bs);
+			}
+			return sortDir === 'asc' ? cmp : -cmp;
+		});
+	}
 
 	const groupCol = $derived(
 		groupByColId ? columns.find((c) => c.column_id === groupByColId) : undefined
@@ -156,16 +187,22 @@
 
 <!-- Config bar -->
 <div
-	class="flex items-center gap-4 border-b px-4 py-2 {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}"
+	class="flex items-center gap-4 border-b px-4 py-2 {isDark.value
+		? 'border-gray-700 bg-gray-800'
+		: 'border-gray-200 bg-white'}"
 	onclick={(e) => {
 		if (!(e.target as HTMLElement).closest('.card-fields-panel')) showCardFields = false;
 	}}
 >
 	<!-- Group by -->
 	<div class="flex items-center gap-2">
-		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}">Group by</span>
+		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}"
+			>Group by</span
+		>
 		<select
-			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value ? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400' : 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
+				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
+				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
 			value={groupByColId ?? ''}
 			onchange={handleGroupByChange}
 		>
@@ -176,10 +213,43 @@
 		</select>
 	</div>
 
+	<!-- Sort -->
+	<div class="flex items-center gap-2">
+		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}"
+			>Sort by</span
+		>
+		<select
+			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
+				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
+				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+			value={sortColId ?? ''}
+			onchange={handleSortColChange}
+		>
+			<option value="">— none —</option>
+			{#each columns as col (col.column_id)}
+				<option value={col.column_id}>{col.name}</option>
+			{/each}
+		</select>
+		{#if sortColId}
+			<select
+				class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
+					? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
+					: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+				value={sortDir}
+				onchange={handleSortDirChange}
+			>
+				<option value="asc">A → Z</option>
+				<option value="desc">Z → A</option>
+			</select>
+		{/if}
+	</div>
+
 	<!-- Card fields -->
 	<div class="card-fields-panel relative">
 		<button
-			class="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs {isDark.value ? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}"
+			class="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs {isDark.value
+				? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600'
+				: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}"
 			onclick={(e) => {
 				e.stopPropagation();
 				showCardFields = !showCardFields;
@@ -201,7 +271,9 @@
 		</button>
 		{#if showCardFields}
 			<div
-				class="card-fields-panel absolute top-full left-0 z-30 mt-1 min-w-[200px] rounded-xl border py-1 shadow-xl {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}"
+				class="card-fields-panel absolute top-full left-0 z-30 mt-1 min-w-[200px] rounded-xl border py-1 shadow-xl {isDark.value
+					? 'border-gray-700 bg-gray-800'
+					: 'border-gray-200 bg-white'}"
 				onclick={(e) => e.stopPropagation()}
 				role="menu"
 			>
@@ -209,14 +281,20 @@
 					Show on cards
 				</div>
 				{#each columns as col (col.column_id)}
-					<label class="flex cursor-pointer items-center gap-2 px-3 py-1.5 {isDark.value ? 'hover:bg-gray-700' : 'hover:bg-gray-50'}">
+					<label
+						class="flex cursor-pointer items-center gap-2 px-3 py-1.5 {isDark.value
+							? 'hover:bg-gray-700'
+							: 'hover:bg-gray-50'}"
+					>
 						<input
 							type="checkbox"
 							class="accent-blue-500"
 							checked={cardFields.includes(col.column_id)}
 							onchange={() => toggleCardField(col.column_id)}
 						/>
-						<span class="text-sm {isDark.value ? 'text-gray-300' : 'text-gray-700'}">{col.name}</span>
+						<span class="text-sm {isDark.value ? 'text-gray-300' : 'text-gray-700'}"
+							>{col.name}</span
+						>
 						<span class="ml-auto text-xs text-gray-400">{col.type}</span>
 					</label>
 				{/each}
@@ -226,7 +304,9 @@
 </div>
 
 {#if !groupByColId || !groupCol}
-	<div class="flex h-64 items-center justify-center {isDark.value ? 'text-gray-500' : 'text-gray-400'}">
+	<div
+		class="flex h-64 items-center justify-center {isDark.value ? 'text-gray-500' : 'text-gray-400'}"
+	>
 		<div class="text-center">
 			<p class="text-sm">Select a "Group by" column above to activate the Kanban view.</p>
 		</div>
@@ -238,8 +318,9 @@
 			<div
 				role="group"
 				aria-label="{lane.value || 'Uncategorized'} lane"
-				class="flex w-72 shrink-0 flex-col rounded-xl border transition-shadow {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'} {dragOverLane ===
-				lane.value
+				class="flex w-72 shrink-0 flex-col rounded-xl border transition-shadow {isDark.value
+					? 'border-gray-700 bg-gray-800'
+					: 'border-gray-200 bg-gray-50'} {dragOverLane === lane.value
 					? 'ring-2 ring-blue-400 ring-offset-1'
 					: ''}"
 				ondragover={(e) => onDragOver(e, lane.value)}
@@ -247,7 +328,11 @@
 				ondrop={(e) => onDrop(e, lane.value)}
 			>
 				<!-- Lane header -->
-				<div class="flex items-center gap-2 border-b px-3 py-2.5 {isDark.value ? 'border-gray-700' : 'border-gray-200'}">
+				<div
+					class="flex items-center gap-2 border-b px-3 py-2.5 {isDark.value
+						? 'border-gray-700'
+						: 'border-gray-200'}"
+				>
 					<span
 						class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
 					>
@@ -259,19 +344,22 @@
 				<!-- Cards -->
 				<div class="flex flex-col gap-2 overflow-y-auto p-2">
 					{#if lane.rows.length === 0}
-						<div class="rounded-lg border border-dashed px-3 py-4 text-center {isDark.value ? 'border-gray-700' : 'border-gray-200'}">
+						<div
+							class="rounded-lg border border-dashed px-3 py-4 text-center {isDark.value
+								? 'border-gray-700'
+								: 'border-gray-200'}"
+						>
 							<p class="text-xs {isDark.value ? 'text-gray-500' : 'text-gray-400'}">No items</p>
 						</div>
 					{:else}
-						{#each lane.rows as row (row.row_number)}
+						{#each sortRows(lane.rows) as row (row.row_number)}
 							<button
 								draggable="true"
 								ondragstart={(e) => onDragStart(e, row)}
 								ondragend={onDragEnd}
-								class="w-full rounded-lg border px-3 py-2.5 text-left shadow-sm transition hover:shadow-md {isDark.value ? 'border-gray-700 bg-gray-700' : 'border-gray-200 bg-white'} {dragRowId ===
-								row.row_number
-									? 'opacity-40'
-									: ''}"
+								class="w-full rounded-lg border px-3 py-2.5 text-left shadow-sm transition hover:shadow-md {isDark.value
+									? 'border-gray-700 bg-gray-700'
+									: 'border-gray-200 bg-white'} {dragRowId === row.row_number ? 'opacity-40' : ''}"
 								style={getCardBorderStyle(row)}
 								onclick={() => onOpenExpand(row)}
 							>
@@ -311,7 +399,11 @@
 												{val}
 											</a>
 										{:else if val !== null && val !== undefined && val !== ''}
-											<span class="block truncate text-sm {isDark.value ? 'text-gray-200' : 'text-gray-700'}">
+											<span
+												class="block truncate text-sm {isDark.value
+													? 'text-gray-200'
+													: 'text-gray-700'}"
+											>
 												{col!.type === 'date' ? formatDate(String(val)) : String(val)}
 											</span>
 										{/if}
