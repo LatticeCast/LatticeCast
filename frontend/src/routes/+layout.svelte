@@ -3,10 +3,11 @@
 <script lang="ts">
 	import '../app.css';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { authStore, logout } from '$lib/stores/auth.store';
 	import { isDark } from '$lib/UI/theme.svelte';
 	import { browser } from '$app/environment';
-	import { currentTable, currentWorkspace, pageTitle } from '$lib/stores/tables.store';
+	import { currentTable, pageTitle } from '$lib/stores/tables.store';
 	import { fetchWorkspaces } from '$lib/backend/workspaces';
 	import { fetchTables } from '$lib/backend/tables';
 	import type { Workspace, Table } from '$lib/types/table';
@@ -315,20 +316,32 @@
 			</span>
 		</button>
 		<nav class="ml-1 flex min-w-0 items-center gap-1 overflow-hidden" aria-label="Breadcrumb">
-			{#if $currentTable}
-				{#if $currentWorkspace}
-					<button
-						onclick={() => navigate('/tables')}
-						data-testid="breadcrumb-workspace"
-						class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
-					>{$currentWorkspace.name}</button>
-					<span class="shrink-0 text-white/40">/</span>
-				{/if}
+			{#if $page.params.workspace_id}
+				{@const wsId = $page.params.workspace_id}
+				{@const wsName = workspaces.find((w) => w.workspace_id === wsId)?.name ?? wsId}
 				<button
-					onclick={() => navigate(`/${$currentWorkspace?.workspace_id}/${$currentTable.table_id}`)}
-					data-testid="breadcrumb-table"
-					class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white hover:text-white/80"
-				>{$currentTable.name}</button>
+					onclick={() => navigate('/tables')}
+					data-testid="breadcrumb-workspace"
+					class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
+				>{wsName}</button>
+				{#if $page.params.table_id}
+					{@const tableId = $page.params.table_id}
+					{@const tableName = tablesByWorkspace[wsId]?.find((t) => t.table_id === tableId)?.name ?? $currentTable?.name ?? tableId}
+					<span class="shrink-0 text-white/40">/</span>
+					<button
+						onclick={() => navigate(`/${wsId}/${tableId}`)}
+						data-testid="breadcrumb-table"
+						class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white hover:text-white/80"
+					>{tableName}</button>
+					{#if $page.params.row_number}
+						<span class="shrink-0 text-white/40">/</span>
+						<button
+							onclick={() => navigate(`/${wsId}/${tableId}/${$page.params.row_number}`)}
+							data-testid="breadcrumb-row"
+							class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
+						>{$page.params.row_number}</button>
+					{/if}
+				{/if}
 			{:else if $pageTitle}
 				<span class="shrink-0 text-white/40">/</span>
 				<span class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white">{$pageTitle}</span>
