@@ -7,8 +7,8 @@
 	import { isDark } from '$lib/UI/theme.svelte';
 	import { browser } from '$app/environment';
 	import { currentTable, currentWorkspace, pageTitle } from '$lib/stores/tables.store';
-	import { fetchWorkspaces } from '$lib/backend/workspaces';
-	import { fetchTables } from '$lib/backend/tables';
+	import { fetchWorkspaces, updateWorkspace } from '$lib/backend/workspaces';
+	import { fetchTables, updateTable } from '$lib/backend/tables';
 	import type { Workspace, Table } from '$lib/types/table';
 
 	let { children } = $props();
@@ -17,6 +17,12 @@
 	let workspaces = $state<Workspace[]>([]);
 	let tablesByWorkspace = $state<Record<string, Table[]>>({});
 	let expandedWorkspaces = $state<Set<string>>(new Set());
+
+	// Inline rename state for breadcrumb
+	let renamingWorkspace = $state(false);
+	let renamingTable = $state(false);
+	let renameValue = $state('');
+	let renameError = $state('');
 
 	$effect(() => {
 		if (browser) {
@@ -59,6 +65,66 @@
 		if (next.has(wsId)) next.delete(wsId);
 		else next.add(wsId);
 		expandedWorkspaces = next;
+	}
+
+	function startRenameWorkspace() {
+		if (!$currentWorkspace) return;
+		renameValue = $currentWorkspace.name;
+		renameError = '';
+		renamingWorkspace = true;
+	}
+
+	async function commitRenameWorkspace() {
+		if (!$currentWorkspace) { renamingWorkspace = false; return; }
+		const trimmed = renameValue.trim();
+		if (!trimmed) { renameError = 'Name required'; return; }
+		if (trimmed === $currentWorkspace.name) { renamingWorkspace = false; return; }
+		const conflict = workspaces.find(
+			(w) => w.workspace_id !== $currentWorkspace!.workspace_id && w.name === trimmed
+		);
+		if (conflict) { renameError = 'Name already exists'; return; }
+		try {
+			const updated = await updateWorkspace($currentWorkspace.workspace_id, { name: trimmed });
+			currentWorkspace.set(updated);
+			workspaces = workspaces.map((w) => (w.workspace_id === updated.workspace_id ? updated : w));
+			renamingWorkspace = false;
+			renameError = '';
+		} catch {
+			renameError = 'Save failed';
+		}
+	}
+
+	function startRenameTable() {
+		if (!$currentTable) return;
+		renameValue = $currentTable.name;
+		renameError = '';
+		renamingTable = true;
+	}
+
+	async function commitRenameTable() {
+		if (!$currentTable || !$currentWorkspace) { renamingTable = false; return; }
+		const trimmed = renameValue.trim();
+		if (!trimmed) { renameError = 'Name required'; return; }
+		if (trimmed === $currentTable.name) { renamingTable = false; return; }
+		const wsTables = tablesByWorkspace[$currentWorkspace.workspace_id] ?? [];
+		const conflict = wsTables.find(
+			(t) => t.table_id !== $currentTable!.table_id && t.name === trimmed
+		);
+		if (conflict) { renameError = 'Name already exists'; return; }
+		try {
+			const updated = await updateTable($currentTable.table_id, { name: trimmed });
+			currentTable.set(updated);
+			tablesByWorkspace = {
+				...tablesByWorkspace,
+				[$currentWorkspace.workspace_id]: wsTables.map((t) =>
+					t.table_id === updated.table_id ? updated : t
+				)
+			};
+			renamingTable = false;
+			renameError = '';
+		} catch {
+			renameError = 'Save failed';
+		}
 	}
 
 	const handleLogout = () => {
@@ -105,18 +171,62 @@
 			{#if $currentTable}
 				<span class="shrink-0 text-white/40">/</span>
 				{#if $currentWorkspace}
-					<button
-						onclick={() => navigate('/tables')}
-						data-testid="breadcrumb-workspace"
-						class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
-					>{$currentWorkspace.name}</button>
+					{#if renamingWorkspace}
+						<div class="relative flex min-w-0 items-center">
+							<input
+								class="min-w-0 rounded border border-white/40 bg-blue-700 px-1 py-0.5 text-sm text-white outline-none focus:border-white"
+								style="width: {Math.max(renameValue.length, 4) + 2}ch"
+								value={renameValue}
+								oninput={(e) => { renameValue = (e.currentTarget as HTMLInputElement).value; renameError = ''; }}
+								onblur={commitRenameWorkspace}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') commitRenameWorkspace();
+									if (e.key === 'Escape') { renamingWorkspace = false; renameError = ''; }
+								}}
+								autofocus
+								data-testid="breadcrumb-workspace-input"
+							/>
+							{#if renameError}
+								<span class="absolute top-full left-0 z-50 mt-0.5 whitespace-nowrap rounded bg-red-600 px-1.5 py-0.5 text-xs text-white">{renameError}</span>
+							{/if}
+						</div>
+					{:else}
+						<button
+							onclick={startRenameWorkspace}
+							data-testid="breadcrumb-workspace"
+							class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
+							title="Click to rename workspace"
+						>{$currentWorkspace.name}</button>
+					{/if}
 					<span class="shrink-0 text-white/40">/</span>
 				{/if}
-				<button
-					onclick={() => navigate(`/${$currentWorkspace?.workspace_id ?? ''}/${$currentTable.table_id}`)}
-					data-testid="breadcrumb-table"
-					class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white hover:text-white/80"
-				>{$currentTable.name}</button>
+				{#if renamingTable}
+					<div class="relative flex min-w-0 items-center">
+						<input
+							class="min-w-0 rounded border border-white/40 bg-blue-700 px-1 py-0.5 text-sm font-semibold text-white outline-none focus:border-white"
+							style="width: {Math.max(renameValue.length, 4) + 2}ch"
+							value={renameValue}
+							oninput={(e) => { renameValue = (e.currentTarget as HTMLInputElement).value; renameError = ''; }}
+							onblur={commitRenameTable}
+							onkeydown={(e) => {
+								if (e.key === 'Enter') commitRenameTable();
+								if (e.key === 'Escape') { renamingTable = false; renameError = ''; }
+							}}
+							autofocus
+							data-testid="breadcrumb-table-input"
+						/>
+						{#if renameError}
+							<span class="absolute top-full left-0 z-50 mt-0.5 whitespace-nowrap rounded bg-red-600 px-1.5 py-0.5 text-xs text-white">{renameError}</span>
+						{/if}
+					</div>
+				{:else}
+					<button
+						onclick={startRenameTable}
+						data-testid="breadcrumb-table"
+						class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white hover:text-white/80"
+						title="Click to rename table"
+					>{$currentTable.name}</button>
+				{/if}
 			{:else if $pageTitle}
 				<span class="shrink-0 text-white/40">/</span>
 				<span class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white">{$pageTitle}</span>
