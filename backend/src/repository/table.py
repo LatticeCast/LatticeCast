@@ -26,9 +26,7 @@ class TableRepository:
         return table
 
     async def get_by_id(self, table_id: UUID) -> Table | None:
-        result = await self.session.execute(
-            select(Table).where(Table.table_id == table_id)
-        )
+        result = await self.session.execute(select(Table).where(Table.table_id == table_id))
         return result.scalar_one_or_none()
 
     async def resolve_table(self, workspace_id: UUID, identifier: str) -> Table | None:
@@ -55,10 +53,25 @@ class TableRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_by_workspace(self, workspace_id: UUID) -> list[Table]:
+    async def resolve_table_global(self, identifier: str, workspace_ids: list[UUID]) -> Table | None:
+        """Resolve a table by UUID (global) or case-insensitive name across the given workspaces."""
+        try:
+            table_uuid = UUID(identifier)
+            return await self.get_by_id(table_uuid)
+        except (ValueError, AttributeError):
+            pass
+        if not workspace_ids:
+            return None
         result = await self.session.execute(
-            select(Table).where(Table.workspace_id == workspace_id)
+            select(Table).where(
+                Table.workspace_id.in_(workspace_ids),
+                func.lower(Table.name) == identifier.lower(),
+            )
         )
+        return result.scalar_one_or_none()
+
+    async def list_by_workspace(self, workspace_id: UUID) -> list[Table]:
+        result = await self.session.execute(select(Table).where(Table.workspace_id == workspace_id))
         return list(result.scalars().all())
 
     async def update(self, table: Table, name: str) -> Table:
@@ -82,10 +95,7 @@ class TableRepository:
         return table
 
     async def update_column(self, table: Table, column_id: str, updates: dict[str, Any]) -> Table:
-        table.columns = [
-            {**col, **updates} if col.get("column_id") == column_id else col
-            for col in table.columns
-        ]
+        table.columns = [{**col, **updates} if col.get("column_id") == column_id else col for col in table.columns]
         table.updated_at = datetime.utcnow()
         self.session.add(table)
         await self.session.commit()
@@ -109,10 +119,7 @@ class TableRepository:
         return table
 
     async def update_view(self, table: Table, view_name: str, updates: dict[str, Any]) -> Table:
-        table.views = [
-            {**v, **updates} if v.get("name") == view_name else v
-            for v in table.views
-        ]
+        table.views = [{**v, **updates} if v.get("name") == view_name else v for v in table.views]
         table.updated_at = datetime.utcnow()
         self.session.add(table)
         await self.session.commit()
@@ -145,11 +152,7 @@ class TableRepository:
                 expr = f"((row_data->>'{column_id}')::numeric)"
             else:  # date → B-tree on text (ISO dates sort correctly as text)
                 expr = f"((row_data->>'{column_id}'))"
-            sql = (
-                f"CREATE INDEX IF NOT EXISTS {idx_name} "
-                f"ON rows ({expr}) "
-                f"WHERE table_id = '{table_id_str}'"
-            )
+            sql = f"CREATE INDEX IF NOT EXISTS {idx_name} ON rows ({expr}) WHERE table_id = '{table_id_str}'"
         elif col_type in GIN_TYPES:
             sql = (
                 f"CREATE INDEX IF NOT EXISTS {idx_name} "

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,16 +18,18 @@ router = APIRouter(prefix="/tables", tags=["tables"])
 
 
 async def _get_table_for_member(
-    table_id: UUID,
+    table_id: str,
     user: User,
     session: AsyncSession,
 ) -> Table:
-    """Fetch table and verify the current user is a member of its workspace."""
+    """Fetch table by UUID or name and verify the current user is a member of its workspace."""
+    ws_repo = WorkspaceRepository(session)
+    workspaces = await ws_repo.list_by_user(user.user_id)
+    workspace_ids = [ws.workspace_id for ws in workspaces]
     table_repo = TableRepository(session)
-    table = await table_repo.get_by_id(table_id)
+    table = await table_repo.resolve_table_global(table_id, workspace_ids)
     if not table:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
-    ws_repo = WorkspaceRepository(session)
     if not await ws_repo.is_member(table.workspace_id, user.user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
     return table
@@ -81,7 +83,7 @@ async def list_tables(
 
 @router.get("/{table_id}", response_model=TableResponse)
 async def get_table(
-    table_id: UUID,
+    table_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -91,7 +93,7 @@ async def get_table(
 
 @router.put("/{table_id}", response_model=TableResponse)
 async def update_table(
-    table_id: UUID,
+    table_id: str,
     data: TableUpdate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -100,14 +102,16 @@ async def update_table(
     table = await _get_table_for_member(table_id, user, session)
     table_repo = TableRepository(session)
     existing = await table_repo.list_by_workspace(table.workspace_id)
-    if any(t.name == data.name and t.table_id != table_id for t in existing):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A table with that name already exists in this workspace")
+    if any(t.name == data.name and t.table_id != table.table_id for t in existing):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="A table with that name already exists in this workspace"
+        )
     return await table_repo.update(table, data.name)
 
 
 @router.delete("/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_table(
-    table_id: UUID,
+    table_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
@@ -124,7 +128,7 @@ async def delete_table(
 
 @router.get("/{table_id}/columns")
 async def list_columns(
-    table_id: UUID,
+    table_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
@@ -135,7 +139,7 @@ async def list_columns(
 
 @router.post("/{table_id}/columns", status_code=status.HTTP_201_CREATED)
 async def create_column(
-    table_id: UUID,
+    table_id: str,
     data: dict[str, Any],
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -152,13 +156,13 @@ async def create_column(
     }
     table_repo = TableRepository(session)
     updated = await table_repo.add_column(table, column_dict)
-    await table_repo.create_column_index(table_id, column_dict["column_id"], column_dict["type"])
+    await table_repo.create_column_index(table.table_id, column_dict["column_id"], column_dict["type"])
     return updated.columns[-1]
 
 
 @router.put("/{table_id}/columns/{column_id}")
 async def update_column(
-    table_id: UUID,
+    table_id: str,
     column_id: str,
     data: dict[str, Any],
     user: User = Depends(get_current_user),
@@ -175,8 +179,8 @@ async def update_column(
     if "type" in updates:
         old_col = next(c for c in table.columns if c.get("column_id") == column_id)
         if updates["type"] != old_col.get("type"):
-            await table_repo.drop_column_index(table_id, column_id)
-            await table_repo.create_column_index(table_id, column_id, updates["type"])
+            await table_repo.drop_column_index(table.table_id, column_id)
+            await table_repo.create_column_index(table.table_id, column_id, updates["type"])
     updated = await table_repo.update_column(table, column_id, updates)
     col = next(c for c in updated.columns if c.get("column_id") == column_id)
     return col
@@ -184,7 +188,7 @@ async def update_column(
 
 @router.delete("/{table_id}/columns/{column_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_column(
-    table_id: UUID,
+    table_id: str,
     column_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -194,7 +198,7 @@ async def delete_column(
     if not any(c.get("column_id") == column_id for c in table.columns):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found")
     table_repo = TableRepository(session)
-    await table_repo.drop_column_index(table_id, column_id)
+    await table_repo.drop_column_index(table.table_id, column_id)
     await table_repo.delete_column(table, column_id)
 
 
@@ -205,7 +209,7 @@ async def delete_column(
 
 @router.get("/{table_id}/views")
 async def list_views(
-    table_id: UUID,
+    table_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[dict[str, Any]]:
@@ -216,7 +220,7 @@ async def list_views(
 
 @router.post("/{table_id}/views", status_code=status.HTTP_201_CREATED)
 async def create_view(
-    table_id: UUID,
+    table_id: str,
     data: dict[str, Any],
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
@@ -240,7 +244,7 @@ async def create_view(
 
 @router.put("/{table_id}/views/{view_name}")
 async def update_view(
-    table_id: UUID,
+    table_id: str,
     view_name: str,
     data: dict[str, Any],
     user: User = Depends(get_current_user),
@@ -258,7 +262,7 @@ async def update_view(
 
 @router.delete("/{table_id}/views/{view_name}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_view(
-    table_id: UUID,
+    table_id: str,
     view_name: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
