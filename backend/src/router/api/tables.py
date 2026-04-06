@@ -370,7 +370,7 @@ async def create_pm_template(
         workspace_id = workspace.workspace_id
 
     table_repo = TableRepository(session)
-    table = await table_repo.create(workspace_id=workspace_id, name=name)
+    table = await table_repo.create(workspace_id=workspace_id, table_name=name)
 
     # Add columns and collect their generated IDs for view config
     col_ids: dict[str, str] = {}
