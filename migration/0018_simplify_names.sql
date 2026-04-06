@@ -1,6 +1,11 @@
 -- 0018_simplify_names.sql
+-- Workspaces: add UNIQUE on workspace_name (merge of display_id+name done in 0017)
 -- Tables: rename name → table_name, unique per workspace
--- Workspace already simplified in 0017
+-- Drop workspace_info (cleanup)
+
+-- Unique workspace_name globally
+ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS uq_workspaces_workspace_name;
+ALTER TABLE workspaces ADD CONSTRAINT uq_workspaces_workspace_name UNIQUE (workspace_name);
 
 -- Only rename if column "name" still exists (idempotent)
 DO $$

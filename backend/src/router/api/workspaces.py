@@ -72,6 +72,11 @@ async def create_workspace(
 ):
     """Create a new workspace; creator becomes owner"""
     repo = WorkspaceRepository(session)
+    conflict = await session.execute(
+        select(Workspace).where(func.lower(Workspace.workspace_name) == data.name.lower())
+    )
+    if conflict.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A workspace with that name already exists")
     workspace = await repo.create(workspace_name=data.name)
     await repo.add_member(workspace_id=workspace.workspace_id, user_id=user.user_id, role="owner")
     return workspace
@@ -162,18 +167,14 @@ async def update_workspace(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Update workspace name (owner only). workspace_name must be unique among the owner's workspaces."""
+    """Update workspace name (owner only). workspace_name must be globally unique."""
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, session)
 
-    # Check uniqueness: no other workspace owned by this user may share the same workspace_name
+    # Check uniqueness: workspace_name is globally unique
     conflict = await session.execute(
-        select(Workspace)
-        .join(WorkspaceMember, Workspace.workspace_id == WorkspaceMember.workspace_id)
-        .where(
-            WorkspaceMember.user_id == user.user_id,
-            WorkspaceMember.role == "owner",
+        select(Workspace).where(
             func.lower(Workspace.workspace_name) == data.name.lower(),
             Workspace.workspace_id != workspace.workspace_id,
         )
