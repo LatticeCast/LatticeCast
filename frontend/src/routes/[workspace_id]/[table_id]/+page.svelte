@@ -904,7 +904,7 @@
 </script>
 
 <div
-	class="flex min-h-screen flex-col bg-white {resizingColId ? 'cursor-col-resize select-none' : ''}"
+	class="flex h-full flex-col bg-white {resizingColId ? 'cursor-col-resize select-none' : ''}"
 >
 	{#if $error}
 		<div class="mx-4 mt-2 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{$error}</div>
