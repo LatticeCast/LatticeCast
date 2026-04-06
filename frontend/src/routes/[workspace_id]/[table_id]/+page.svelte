@@ -937,6 +937,7 @@
 		views={$currentTable?.views ?? []}
 		activeViewName={activeView.name}
 		onViewChange={handleViewChange}
+		onAddRow={() => openCreateTicket()}
 		onAddView={handleAddView}
 	/>
 

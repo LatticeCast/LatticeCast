@@ -5,12 +5,14 @@
 		views,
 		activeViewName,
 		onViewChange,
-		onAddView
+		onAddView,
+		onAddRow = () => {}
 	}: {
 		views: ViewConfig[];
 		activeViewName: string;
 		onViewChange: (view: ViewConfig) => void;
 		onAddView: (type: string, name: string) => void;
+		onAddRow?: () => void;
 	} = $props();
 
 	let showAddMenu = $state(false);
@@ -68,6 +70,20 @@
 			{view.name}
 		</button>
 	{/each}
+
+	<!-- Spacer -->
+	<div class="flex-1"></div>
+
+	<!-- New Ticket button -->
+	<button
+		onclick={onAddRow}
+		class="flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-blue-700"
+	>
+		<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+		</svg>
+		New Ticket
+	</button>
 
 	<!-- Add view button -->
 	<div class="relative ml-1">
