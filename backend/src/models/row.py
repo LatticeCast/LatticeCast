@@ -26,7 +26,7 @@ class RowCreate(SQLModel):
 
 
 class RowUpdate(SQLModel):
-    row_data: dict[str, Any] = Field(..., description="Row data keyed by column UUID (full replace)")
+    row_data: dict[str, Any] = Field(..., description="Partial row data to merge into existing row_data (unset fields are preserved)")
 
 
 class RowResponse(SQLModel):

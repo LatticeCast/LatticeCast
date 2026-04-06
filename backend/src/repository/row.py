@@ -61,7 +61,7 @@ class RowRepository:
         return list(result.scalars().all())
 
     async def update(self, row: Row, data: RowUpdate, updated_by: UUID | None = None) -> Row:
-        row.row_data = data.row_data
+        row.row_data = {**(row.row_data or {}), **data.row_data}
         row.updated_by = updated_by
         row.updated_at = datetime.utcnow()
         self.session.add(row)
