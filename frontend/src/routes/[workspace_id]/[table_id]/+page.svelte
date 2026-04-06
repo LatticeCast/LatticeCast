@@ -242,13 +242,13 @@
 
 	// ─── Lifecycle ───────────────────────────────────────────────────────────────
 
-	onMount(() => {
+	$effect(() => {
+		const tableId = $page.params.table_id!;
 		(async () => {
 			if (!$authStore?.role) {
 				goto('/login');
 				return;
 			}
-			const tableId = $page.params.table_id!;
 			try {
 				const [table] = await Promise.all([fetchTable(tableId), loadWorkspaces()]);
 				await loadTable(table);
@@ -273,7 +273,9 @@
 				error.set(e instanceof Error ? e.message : 'Failed to load table');
 			}
 		})();
+	});
 
+	onMount(() => {
 		function onResizeMove(e: MouseEvent) {
 			if (!resizingColId) return;
 			const delta = e.clientX - resizeStartX;
