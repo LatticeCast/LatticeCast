@@ -68,6 +68,7 @@ async def create_table(
     # Default template: Title + Description (if no columns specified)
     if not table.columns:
         from uuid import uuid4
+
         default_cols = [
             {"column_id": str(uuid4()), "name": "Title", "type": "text", "options": {}, "position": 0},
             {"column_id": str(uuid4()), "name": "Description", "type": "text", "options": {}, "position": 1},
@@ -349,9 +350,9 @@ async def create_pm_template(
     session: AsyncSession = Depends(get_session),
 ):
     """Create a PM project table with pre-configured columns and default views"""
-    name = data.get("name", "")
-    if not name:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="name is required")
+    table_name = data.get("table_name", "")
+    if not table_name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="table_name is required")
     ws_repo = WorkspaceRepository(session)
     raw_workspace_id = data.get("workspace_id")
     if raw_workspace_id:
@@ -370,7 +371,7 @@ async def create_pm_template(
         workspace_id = workspace.workspace_id
 
     table_repo = TableRepository(session)
-    table = await table_repo.create(workspace_id=workspace_id, table_name=name)
+    table = await table_repo.create(workspace_id=workspace_id, table_name=table_name)
 
     # Add columns and collect their generated IDs for view config
     col_ids: dict[str, str] = {}

@@ -26,7 +26,7 @@ class TableCreate(SQLModel):
 
     table_name: str = Field(..., description="Table name")
     workspace_id: str | None = Field(
-        default=None, description="Target workspace UUID or display_id (defaults to user's first workspace)"
+        default=None, description="Target workspace UUID or workspace_name (defaults to user's first workspace)"
     )
 
 
