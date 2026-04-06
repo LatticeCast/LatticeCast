@@ -14,7 +14,7 @@ class Table(SQLModel, table=True):
 
     table_id: UUID = Field(default_factory=uuid4, primary_key=True, description="Unique identifier")
     workspace_id: UUID = Field(index=True, foreign_key="workspaces.workspace_id", description="Workspace UUID (FK)")
-    name: str = Field(description="Table name")
+    table_name: str = Field(description="Table name")
     columns: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="Column definitions")
     views: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="View configurations")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
@@ -24,7 +24,7 @@ class Table(SQLModel, table=True):
 class TableCreate(SQLModel):
     """Schema for creating a table"""
 
-    name: str = Field(..., description="Table name")
+    table_name: str = Field(..., description="Table name")
     workspace_id: str | None = Field(
         default=None, description="Target workspace UUID or display_id (defaults to user's first workspace)"
     )
@@ -35,7 +35,7 @@ class TableResponse(SQLModel):
 
     table_id: UUID = Field(..., description="Unique identifier")
     workspace_id: UUID = Field(..., description="Workspace UUID")
-    name: str = Field(..., description="Table name")
+    table_name: str = Field(..., description="Table name")
     columns: list[dict[str, Any]] = Field(default_factory=list, description="Column definitions")
     views: list[dict[str, Any]] = Field(default_factory=list, description="View configurations")
     created_at: datetime = Field(..., description="Creation timestamp")
@@ -45,4 +45,4 @@ class TableResponse(SQLModel):
 class TableUpdate(SQLModel):
     """Schema for updating a table"""
 
-    name: str = Field(..., description="New table name")
+    table_name: str = Field(..., description="New table name")

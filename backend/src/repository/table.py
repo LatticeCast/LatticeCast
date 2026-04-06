@@ -18,8 +18,8 @@ class TableRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, workspace_id: UUID, name: str) -> Table:
-        table = Table(workspace_id=workspace_id, name=name)
+    async def create(self, workspace_id: UUID, table_name: str) -> Table:
+        table = Table(workspace_id=workspace_id, table_name=table_name)
         self.session.add(table)
         await self.session.commit()
         await self.session.refresh(table)
@@ -48,7 +48,7 @@ class TableRepository:
         result = await self.session.execute(
             select(Table).where(
                 Table.workspace_id == workspace_id,
-                func.lower(Table.name) == identifier.lower(),
+                func.lower(Table.table_name) == identifier.lower(),
             )
         )
         return result.scalar_one_or_none()
@@ -65,7 +65,7 @@ class TableRepository:
         result = await self.session.execute(
             select(Table).where(
                 Table.workspace_id.in_(workspace_ids),
-                func.lower(Table.name) == identifier.lower(),
+                func.lower(Table.table_name) == identifier.lower(),
             )
         )
         return result.scalar_one_or_none()
@@ -74,8 +74,8 @@ class TableRepository:
         result = await self.session.execute(select(Table).where(Table.workspace_id == workspace_id))
         return list(result.scalars().all())
 
-    async def update(self, table: Table, name: str) -> Table:
-        table.name = name
+    async def update(self, table: Table, table_name: str) -> Table:
+        table.table_name = table_name
         table.updated_at = datetime.utcnow()
         self.session.add(table)
         await self.session.commit()

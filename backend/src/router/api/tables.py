@@ -63,7 +63,7 @@ async def create_table(
             )
         workspace_id = workspace.workspace_id
     table_repo = TableRepository(session)
-    table = await table_repo.create(workspace_id=workspace_id, name=data.name)
+    table = await table_repo.create(workspace_id=workspace_id, table_name=data.table_name)
 
     # Default template: Title + Description (if no columns specified)
     if not table.columns:
@@ -113,11 +113,11 @@ async def update_table(
     table = await _get_table_for_member(table_id, user, session)
     table_repo = TableRepository(session)
     existing = await table_repo.list_by_workspace(table.workspace_id)
-    if any(t.name == data.name and t.table_id != table.table_id for t in existing):
+    if any(t.table_name == data.table_name and t.table_id != table.table_id for t in existing):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="A table with that name already exists in this workspace"
         )
-    return await table_repo.update(table, data.name)
+    return await table_repo.update(table, data.table_name)
 
 
 @router.delete("/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
