@@ -302,6 +302,7 @@
 			</span>
 		</button>
 <nav class="ml-1 flex min-w-0 items-center gap-1 overflow-hidden" aria-label="Breadcrumb">
+			<span class="shrink-0 text-white/40">/</span>
 			{#if $page.params.workspace_id}
 				{@const wsId = $page.params.workspace_id}
 				{@const wsName = workspaces.find((w) => w.workspace_id === wsId)?.workspace_name ?? wsId}
@@ -329,7 +330,6 @@
 					{/if}
 				{/if}
 			{:else if $pageTitle}
-				<span class="shrink-0 text-white/40">/</span>
 				<span class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white">{$pageTitle}</span>
 			{/if}
 		</nav>
