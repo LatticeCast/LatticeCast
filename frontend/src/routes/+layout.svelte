@@ -329,8 +329,6 @@
 						>{$page.params.row_number}</button>
 					{/if}
 				{/if}
-			{:else if $pageTitle}
-				<span class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white">{$pageTitle}</span>
 			{/if}
 		</nav>
 	</header>
