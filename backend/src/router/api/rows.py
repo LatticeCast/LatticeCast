@@ -145,23 +145,12 @@ async def create_row(
         table_id=table.table_id, row_data=data.row_data, created_by=user.user_id, updated_by=user.user_id
     )
 
-    # Auto-generate Key if table has a "Key" column
-    key_col = next((c for c in table.columns if c.get("name") == "Key"), None)
-    if key_col:
-        prefix = "".join(w[0].upper() for w in table.name.split() if w)[:4]
-        row_count = await repo.count_by_table(table.table_id)
-        key_value = f"{prefix}-{row_count}"
-        from models.row import RowUpdate
-
-        updated_data = {**row.row_data, key_col["column_id"]: key_value}
-        row = await repo.update(row=row, data=RowUpdate(row_data=updated_data), updated_by=user.user_id)
-
     # Auto-create doc template in MinIO based on Type column
     type_col = next((c for c in table.columns if c.get("name") == "Type"), None)
     title_col = next((c for c in table.columns if c.get("name") == "Title"), None)
     doc_col = next((c for c in table.columns if c.get("name") == "Doc"), None)
     row_type = row.row_data.get(type_col["column_id"], "") if type_col else ""
-    row_key = row.row_data.get(key_col["column_id"], "") if key_col else ""
+    row_key = f"{row_type}-{row.row_number}" if row_type else str(row.row_number)
     row_title = row.row_data.get(title_col["column_id"], "") if title_col else ""
     minio_key = f"{table.workspace_id}/{table.table_id}/{row.row_number}.md"
     if row_type in ("epic", "story", "task", "bug"):

@@ -280,7 +280,6 @@ async def delete_view(
 # --------------------------------------------------
 
 _PM_COLUMNS: list[dict[str, Any]] = [
-    {"name": "Key", "type": "text"},
     {"name": "Title", "type": "text"},
     {
         "name": "Type",
@@ -390,7 +389,6 @@ async def create_pm_template(
             "config": {
                 "group_by": status_col_id,
                 "card_fields": [
-                    col_ids.get("Key", ""),
                     col_ids.get("Title", ""),
                     col_ids.get("Priority", ""),
                     col_ids.get("Assignee", ""),
