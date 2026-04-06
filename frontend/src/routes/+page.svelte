@@ -6,19 +6,22 @@
 	import { authStore } from '$lib/stores/auth.store';
 	import { fetchTables, createTable, updateTable, deleteTable, createPmTemplate } from '$lib/backend/tables';
 	import { fetchWorkspaces, updateWorkspace, deleteWorkspace } from '$lib/backend/workspaces';
-	import { page } from '$app/stores';
 	import { currentTable, pageTitle } from '$lib/stores/tables.store';
 	import type { Table, Workspace } from '$lib/types/table';
 
 	let tables = $state<Table[]>([]);
 	let workspaces = $state<Workspace[]>([]);
-	let currentWorkspace = $state<Workspace | null>(null);
 	let loading = $state(true);
 	let error = $state('');
-	let creating = $state(false);
-	let newTableName = $state('');
+
+	// Per-workspace create state
+	let newTableNames = $state<Record<string, string>>({});
+	let creating = $state<Record<string, boolean>>({});
+
+	// Template modal
 	let showTemplateModal = $state(false);
 	let templateName = $state('');
+	let templateWorkspaceId = $state('');
 	let creatingTemplate = $state(false);
 
 	// Workspace settings dialog
@@ -49,9 +52,6 @@
 		try {
 			const updated = await updateWorkspace(wsSettingsTarget.workspace_id, { name });
 			workspaces = workspaces.map((w) => w.workspace_id === updated.workspace_id ? updated : w);
-			if (currentWorkspace?.workspace_id === updated.workspace_id) {
-				currentWorkspace = updated;
-			}
 			closeWsSettings();
 		} catch (e) {
 			wsSettingsError = e instanceof Error ? e.message : 'Failed to rename workspace';
@@ -67,11 +67,9 @@
 		wsSettingsError = '';
 		try {
 			await deleteWorkspace(wsSettingsTarget.workspace_id);
-			workspaces = workspaces.filter((w) => w.workspace_id !== wsSettingsTarget!.workspace_id);
-			tables = tables.filter((t) => t.workspace_id !== wsSettingsTarget!.workspace_id);
-			if (currentWorkspace?.workspace_id === wsSettingsTarget.workspace_id) {
-				currentWorkspace = workspaces[0] ?? null;
-			}
+			const deletedId = wsSettingsTarget.workspace_id;
+			workspaces = workspaces.filter((w) => w.workspace_id !== deletedId);
+			tables = tables.filter((t) => t.workspace_id !== deletedId);
 			closeWsSettings();
 		} catch (e) {
 			wsSettingsError = e instanceof Error ? e.message : 'Failed to delete workspace';
@@ -80,14 +78,8 @@
 		}
 	}
 
-	const filteredTables = $derived(
-		currentWorkspace
-			? tables.filter((t) => t.workspace_id === currentWorkspace!.workspace_id)
-			: tables
-	);
-
-	function switchWorkspace(ws: Workspace) {
-		currentWorkspace = ws;
+	function tablesForWorkspace(wsId: string): Table[] {
+		return tables.filter((t) => t.workspace_id === wsId);
 	}
 
 	onMount(async () => {
@@ -96,7 +88,7 @@
 			return;
 		}
 		currentTable.set(null);
-		pageTitle.set('Tables');
+		pageTitle.set('Home');
 		await loadData();
 	});
 
@@ -111,8 +103,6 @@
 			const [ws, tbls] = await Promise.all([fetchWorkspaces(), fetchTables()]);
 			workspaces = ws;
 			tables = tbls;
-			const wsParam = $page.url.searchParams.get('workspace');
-			currentWorkspace = (wsParam ? ws.find((w) => w.workspace_id === wsParam) : null) ?? ws[0] ?? null;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load data';
 		} finally {
@@ -120,19 +110,19 @@
 		}
 	}
 
-	async function handleCreate() {
-		const name = newTableName.trim();
-		if (!name || !currentWorkspace) return;
-		creating = true;
+	async function handleCreate(wsId: string) {
+		const name = (newTableNames[wsId] ?? '').trim();
+		if (!name) return;
+		creating = { ...creating, [wsId]: true };
 		error = '';
 		try {
-			const table = await createTable({ name, workspace_id: currentWorkspace.workspace_id });
+			const table = await createTable({ name, workspace_id: wsId });
 			tables = [...tables, table];
-			newTableName = '';
+			newTableNames = { ...newTableNames, [wsId]: '' };
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create table';
 		} finally {
-			creating = false;
+			creating = { ...creating, [wsId]: false };
 		}
 	}
 
@@ -196,20 +186,17 @@
 		}
 	}
 
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter') handleCreate();
-	}
-
 	async function handlePmTemplate() {
 		const name = templateName.trim();
-		if (!name || !currentWorkspace) return;
+		if (!name || !templateWorkspaceId) return;
 		creatingTemplate = true;
 		error = '';
 		try {
-			const table = await createPmTemplate(name, currentWorkspace.workspace_id);
+			const table = await createPmTemplate(name, templateWorkspaceId);
 			tables = [...tables, table];
 			showTemplateModal = false;
 			templateName = '';
+			templateWorkspaceId = '';
 			goto(`/${table.workspace_id}/${table.table_id}`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create template';
@@ -217,103 +204,104 @@
 			creatingTemplate = false;
 		}
 	}
+
+	function openTemplateModal(wsId: string) {
+		templateWorkspaceId = wsId;
+		templateName = '';
+		showTemplateModal = true;
+	}
 </script>
 
 <div class="min-h-screen bg-gray-50 p-6">
 	<div class="mx-auto max-w-2xl pt-4">
 
-		<!-- Workspace Selector -->
-		{#if workspaces.length > 0}
-			<div class="mb-4 flex flex-wrap gap-2">
-				{#each workspaces as ws (ws.workspace_id)}
-					<div class="flex items-center rounded-xl shadow-sm {currentWorkspace?.workspace_id === ws.workspace_id ? 'bg-blue-600' : 'bg-white'}">
-						<button
-							onclick={() => switchWorkspace(ws)}
-							class="rounded-l-xl px-4 py-2 text-sm font-medium transition {currentWorkspace?.workspace_id === ws.workspace_id
-								? 'text-white'
-								: 'text-gray-700 hover:bg-blue-50 hover:text-blue-600'}"
-						>
-							{ws.workspace_name}
-						</button>
-						<button
-							onclick={(e) => openWsSettings(ws, e)}
-							class="rounded-r-xl px-2 py-2 text-sm transition {currentWorkspace?.workspace_id === ws.workspace_id
-								? 'text-blue-200 hover:text-white'
-								: 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}"
-							aria-label="Workspace settings"
-							title="Workspace settings"
-						>
-							<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-									d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-							</svg>
-						</button>
-					</div>
-				{/each}
-			</div>
-		{/if}
-
-		<!-- Create Table -->
-		<div class="mb-6 flex gap-2">
-			<input
-				type="text"
-				bind:value={newTableName}
-				onkeydown={handleKeydown}
-				placeholder="New table name..."
-				class="flex-1 rounded-2xl border-2 border-gray-200 bg-white px-4 py-3 text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
-			/>
-			<button
-				onclick={handleCreate}
-				disabled={creating || !newTableName.trim() || !currentWorkspace}
-				class="rounded-2xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
-			>
-				{creating ? 'Creating...' : 'Create'}
-			</button>
-			<button
-				onclick={() => { showTemplateModal = true; templateName = ''; }}
-				disabled={!currentWorkspace}
-				class="rounded-2xl border-2 border-blue-200 bg-white px-4 py-3 font-semibold text-blue-600 transition hover:bg-blue-50 disabled:opacity-50"
-			>
-				From Template
-			</button>
-		</div>
-
 		{#if error}
 			<div class="mb-4 rounded-xl bg-red-50 px-4 py-3 text-red-600">{error}</div>
 		{/if}
 
-		<!-- Tables List -->
 		{#if loading}
 			<div class="text-center text-gray-500">Loading...</div>
-		{:else if filteredTables.length === 0}
+		{:else if workspaces.length === 0}
 			<div class="rounded-3xl bg-white p-8 text-center text-gray-400 shadow-sm">
-				No tables yet. Create one above.
+				No workspaces yet.
 			</div>
 		{:else}
-			<div class="space-y-2">
-				{#each filteredTables as table (table.table_id)}
-					<div
-						class="flex items-center gap-3 rounded-2xl bg-white px-4 py-4 shadow-sm transition hover:bg-blue-50"
-					>
-						<button
-							onclick={() => goto(`/${table.workspace_id}/${table.table_id}`)}
-							class="flex-1 text-left font-medium text-gray-800"
-						>
-							{table.name}
-						</button>
-						<button
-							onclick={(e) => openTableSettings(table, e)}
-							class="rounded-xl p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-							aria-label="Table settings"
-							title="Table settings"
-						>
-							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-									d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-							</svg>
-						</button>
+			<div class="space-y-8">
+				{#each workspaces as ws (ws.workspace_id)}
+					{@const wsTables = tablesForWorkspace(ws.workspace_id)}
+					<div>
+						<!-- Workspace header -->
+						<div class="mb-3 flex items-center gap-2">
+							<h2 class="text-lg font-bold text-gray-800">{ws.workspace_name}</h2>
+							<button
+								onclick={(e) => openWsSettings(ws, e)}
+								class="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+								aria-label="Workspace settings"
+								title="Workspace settings"
+							>
+								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+										d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+								</svg>
+							</button>
+						</div>
+
+						<!-- Create Table -->
+						<div class="mb-3 flex gap-2">
+							<input
+								type="text"
+								bind:value={newTableNames[ws.workspace_id]}
+								onkeydown={(e) => { if (e.key === 'Enter') handleCreate(ws.workspace_id); }}
+								placeholder="New table name..."
+								class="flex-1 rounded-2xl border-2 border-gray-200 bg-white px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+							/>
+							<button
+								onclick={() => handleCreate(ws.workspace_id)}
+								disabled={creating[ws.workspace_id] || !(newTableNames[ws.workspace_id] ?? '').trim()}
+								class="rounded-2xl bg-blue-600 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+							>
+								{creating[ws.workspace_id] ? 'Creating...' : 'Create'}
+							</button>
+							<button
+								onclick={() => openTemplateModal(ws.workspace_id)}
+								class="rounded-2xl border-2 border-blue-200 bg-white px-4 py-2.5 font-semibold text-blue-600 transition hover:bg-blue-50"
+							>
+								From Template
+							</button>
+						</div>
+
+						<!-- Tables -->
+						{#if wsTables.length === 0}
+							<div class="rounded-2xl bg-white px-4 py-4 text-center text-sm text-gray-400 shadow-sm">
+								No tables yet.
+							</div>
+						{:else}
+							<div class="space-y-2">
+								{#each wsTables as table (table.table_id)}
+									<div class="flex items-center gap-3 rounded-2xl bg-white px-4 py-4 shadow-sm transition hover:bg-blue-50">
+										<button
+											onclick={() => goto(`/${table.workspace_id}/${table.table_id}`)}
+											class="flex-1 text-left font-medium text-gray-800"
+										>
+											{table.name}
+										</button>
+										<button
+											onclick={(e) => openTableSettings(table, e)}
+											class="rounded-xl p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+											aria-label="Table settings"
+											title="Table settings"
+										>
+											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+													d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+											</svg>
+										</button>
+									</div>
+								{/each}
+							</div>
+						{/if}
 					</div>
 				{/each}
 			</div>
