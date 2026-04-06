@@ -73,11 +73,11 @@ async def create_workspace(
     """Create a new workspace; creator becomes owner"""
     repo = WorkspaceRepository(session)
     conflict = await session.execute(
-        select(Workspace).where(func.lower(Workspace.workspace_name) == data.name.lower())
+        select(Workspace).where(func.lower(Workspace.workspace_name) == data.workspace_name.lower())
     )
     if conflict.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A workspace with that name already exists")
-    workspace = await repo.create(workspace_name=data.name)
+    workspace = await repo.create(workspace_name=data.workspace_name)
     await repo.add_member(workspace_id=workspace.workspace_id, user_id=user.user_id, role="owner")
     return workspace
 
@@ -175,14 +175,14 @@ async def update_workspace(
     # Check uniqueness: workspace_name is globally unique
     conflict = await session.execute(
         select(Workspace).where(
-            func.lower(Workspace.workspace_name) == data.name.lower(),
+            func.lower(Workspace.workspace_name) == data.workspace_name.lower(),
             Workspace.workspace_id != workspace.workspace_id,
         )
     )
     if conflict.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A workspace with that name already exists")
 
-    workspace.workspace_name = data.name
+    workspace.workspace_name = data.workspace_name
     workspace.updated_at = datetime.utcnow()
     session.add(workspace)
     await session.commit()

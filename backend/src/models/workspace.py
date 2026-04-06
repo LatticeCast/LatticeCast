@@ -32,7 +32,7 @@ class WorkspaceMember(SQLModel, table=True):
 class WorkspaceCreate(SQLModel):
     """Schema for creating a workspace"""
 
-    name: str = Field(..., description="Workspace display name")
+    workspace_name: str = Field(..., description="Workspace display name")
 
 
 class WorkspaceResponse(SQLModel):
