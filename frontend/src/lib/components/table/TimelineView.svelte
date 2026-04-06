@@ -12,7 +12,8 @@
 		viewConfig,
 		onOpenExpand,
 		onRowsRefresh = () => {},
-		onViewUpdate = () => {}
+		onViewUpdate = () => {},
+		onAddRow = () => {}
 	}: {
 		tableId: string;
 		columns: Column[];
@@ -21,6 +22,7 @@
 		onOpenExpand: (row: Row) => void;
 		onRowsRefresh?: () => void;
 		onViewUpdate?: (updated: ViewConfig) => void;
+		onAddRow?: (initialData: Record<string, unknown>) => void;
 	} = $props();
 
 	type Granularity = 'day' | 'week' | 'month';
@@ -352,6 +354,16 @@
 			{/each}
 		</select>
 	</div>
+
+	<!-- New ticket button -->
+	<button
+		onclick={() => onAddRow({})}
+		class="flex items-center gap-1 rounded-lg border px-3 py-1 text-xs font-medium transition {isDark.value
+			? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600'
+			: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}"
+	>
+		+ New ticket
+	</button>
 
 	<!-- Granularity toggle -->
 	<div class="ml-auto flex items-center gap-0.5 rounded-lg border p-0.5 {isDark.value ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-gray-50'}">

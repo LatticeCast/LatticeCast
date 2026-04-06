@@ -64,10 +64,13 @@
 	import ImportTemplateModal from '$lib/components/table/ImportTemplateModal.svelte';
 	import ImportPreviewModal from '$lib/components/table/ImportPreviewModal.svelte';
 	import ManageOptionsModal from '$lib/components/table/ManageOptionsModal.svelte';
+	import CreateTicketModal from '$lib/components/table/CreateTicketModal.svelte';
 
 	// ─── State ───────────────────────────────────────────────────────────────────
 
 	let addingRow = $state(false);
+	let showCreateTicket = $state(false);
+	let createTicketInitialData = $state<Record<string, unknown>>({});
 	let deletingRowId = $state<number | null>(null);
 	let expandedRow = $state<Row | null>(null);
 	let showAddColumn = $state(false);
@@ -314,6 +317,26 @@
 			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
+		} finally {
+			addingRow = false;
+		}
+	}
+
+	function openCreateTicket(initialData: Record<string, unknown> = {}) {
+		createTicketInitialData = initialData;
+		showCreateTicket = true;
+	}
+
+	async function handleCreateTicket(rowData: Record<string, unknown>) {
+		const tableId = $page.params.table_id!;
+		showCreateTicket = false;
+		addingRow = true;
+		error.set(null);
+		try {
+			await createRow(tableId, { row_data: rowData });
+			await refreshRows(tableId);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to create ticket');
 		} finally {
 			addingRow = false;
 		}
@@ -988,7 +1011,7 @@
 			onMoveColumn={handleMoveColumn}
 			onResizeStart={handleResizeStart}
 			onShowAddColumn={() => (showAddColumn = true)}
-			onAddRow={handleAddRow}
+			onAddRow={() => openCreateTicket()}
 			onAddRowInGroup={handleAddRowInGroup}
 			onToggleCollapseGroup={toggleCollapseGroup}
 			onManageOptions={(col) => (managingOptionsCol = col)}
@@ -1006,6 +1029,7 @@
 			onOpenExpand={openExpand}
 			onRowsRefresh={() => refreshRows($page.params.table_id!)}
 			onViewUpdate={handleViewUpdate}
+			onAddRow={openCreateTicket}
 		/>
 	{:else if activeView.type === 'timeline'}
 		<TimelineView
@@ -1016,6 +1040,7 @@
 			onOpenExpand={openExpand}
 			onRowsRefresh={() => refreshRows($page.params.table_id!)}
 			onViewUpdate={handleViewUpdate}
+			onAddRow={openCreateTicket}
 		/>
 	{/if}
 </div>
@@ -1082,3 +1107,11 @@
 		onSave={handleSaveOptions}
 	/>
 {/if}
+
+<CreateTicketModal
+	show={showCreateTicket}
+	columns={$columns}
+	initialData={createTicketInitialData}
+	onClose={() => (showCreateTicket = false)}
+	onSubmit={handleCreateTicket}
+/>

@@ -12,7 +12,8 @@
 		viewConfig,
 		onOpenExpand,
 		onRowsRefresh = () => {},
-		onViewUpdate = () => {}
+		onViewUpdate = () => {},
+		onAddRow = () => {}
 	}: {
 		tableId: string;
 		columns: Column[];
@@ -21,6 +22,7 @@
 		onOpenExpand: (row: Row) => void;
 		onRowsRefresh?: () => void;
 		onViewUpdate?: (updated: ViewConfig) => void;
+		onAddRow?: (initialData: Record<string, unknown>) => void;
 	} = $props();
 
 	// Config panel state
@@ -412,6 +414,17 @@
 							</button>
 						{/each}
 					{/if}
+
+					<!-- Add ticket button per lane -->
+					<button
+						onclick={() =>
+							onAddRow(groupByColId && lane.value ? { [groupByColId]: lane.value } : {})}
+						class="mt-1 w-full rounded-lg px-3 py-1.5 text-left text-xs transition {isDark.value
+							? 'text-gray-500 hover:bg-gray-700 hover:text-gray-300'
+							: 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}"
+					>
+						+ New ticket
+					</button>
 				</div>
 			</div>
 		{/each}

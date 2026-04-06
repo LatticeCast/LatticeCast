@@ -6,7 +6,7 @@
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth.store';
 	import { get } from 'svelte/store';
-	import { fetchTable, fetchRows, fetchDoc, saveDoc } from '$lib/backend/tables';
+	import { fetchTable, fetchRows, fetchDoc, saveDoc, createRow } from '$lib/backend/tables';
 	import { fetchWorkspaces } from '$lib/backend/workspaces';
 	import {
 		getChoices,
@@ -16,6 +16,7 @@
 	} from '$lib/components/table/table.utils';
 	import type { Column, Row, Table, Workspace } from '$lib/types/table';
 	import { marked } from 'marked';
+	import CreateTicketModal from '$lib/components/table/CreateTicketModal.svelte';
 
 	const tableId = $derived($page.params.table_id ?? '');
 	const rowNumberParam = $derived(parseInt($page.params.row_number ?? '0', 10));
@@ -30,6 +31,7 @@
 	let docSaving = $state(false);
 	let editingDoc = $state(false);
 	let error = $state<string | null>(null);
+	let showCreateTicket = $state(false);
 
 	const userDisplay = $derived(
 		$authStore?.userInfo?.name ?? $authStore?.userInfo?.email ?? $authStore?.accessToken ?? 'Me'
@@ -95,6 +97,15 @@
 		}
 	}
 
+	async function handleCreateTicket(rowData: Record<string, unknown>) {
+		showCreateTicket = false;
+		try {
+			await createRow(tableId, { row_data: rowData });
+		} catch {
+			// best-effort
+		}
+	}
+
 	function getRowTitle(): string {
 		if (!row || !table) return String(rowNumberParam);
 		const titleCol = table.columns.find((c) => c.name === 'Title');
@@ -117,6 +128,20 @@
 		<div class="flex h-64 items-center justify-center text-sm text-red-500">{error}</div>
 	{:else if row && table}
 		<div class="mx-auto max-w-4xl px-6 py-6">
+			<!-- Actions bar -->
+			<div class="mb-4 flex items-center justify-between">
+				<a
+					href="/{workspaceId}/{tableId}"
+					class="text-sm text-blue-600 hover:underline"
+				>← Back</a>
+				<button
+					onclick={() => (showCreateTicket = true)}
+					class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
+				>
+					+ New ticket
+				</button>
+			</div>
+
 			<!-- Badge fields at top -->
 			<div class="mb-6 flex flex-wrap gap-2">
 				{#each badgeCols as col (col.column_id)}
@@ -202,3 +227,12 @@
 		</div>
 	{/if}
 </div>
+
+{#if table}
+	<CreateTicketModal
+		show={showCreateTicket}
+		columns={table.columns}
+		onClose={() => (showCreateTicket = false)}
+		onSubmit={handleCreateTicket}
+	/>
+{/if}
