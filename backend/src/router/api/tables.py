@@ -63,7 +63,18 @@ async def create_table(
             )
         workspace_id = workspace.workspace_id
     table_repo = TableRepository(session)
-    return await table_repo.create(workspace_id=workspace_id, name=data.name)
+    table = await table_repo.create(workspace_id=workspace_id, name=data.name)
+
+    # Default template: Title + Description (if no columns specified)
+    if not table.columns:
+        from uuid import uuid4
+        default_cols = [
+            {"column_id": str(uuid4()), "name": "Title", "type": "text", "options": {}, "position": 0},
+            {"column_id": str(uuid4()), "name": "Description", "type": "text", "options": {}, "position": 1},
+        ]
+        table = await table_repo.set_columns(table, default_cols)
+
+    return table
 
 
 @router.get("", response_model=list[TableResponse])

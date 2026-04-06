@@ -86,6 +86,14 @@ class TableRepository:
         await self.session.delete(table)
         await self.session.commit()
 
+    async def set_columns(self, table: Table, columns: list[dict[str, Any]]) -> Table:
+        table.columns = columns
+        table.updated_at = datetime.utcnow()
+        self.session.add(table)
+        await self.session.commit()
+        await self.session.refresh(table)
+        return table
+
     async def add_column(self, table: Table, column_dict: dict[str, Any]) -> Table:
         table.columns = [*table.columns, column_dict]
         table.updated_at = datetime.utcnow()
