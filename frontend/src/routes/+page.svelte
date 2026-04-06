@@ -88,7 +88,7 @@
 			return;
 		}
 		currentTable.set(null);
-		pageTitle.set('Home');
+		pageTitle.set('');
 		await loadData();
 	});
 
