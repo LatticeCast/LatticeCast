@@ -120,7 +120,7 @@
 	}
 </script>
 
-<div class="flex-1 overflow-x-auto overflow-y-auto {T.cardBg}">
+<div class="min-h-0 flex-1 overflow-x-auto overflow-y-auto {T.cardBg}">
 	{#if loading}
 		<div class="pt-16 text-center {T.muted}">Loading...</div>
 	{:else if sortedColumns.length === 0}
