@@ -306,7 +306,7 @@
 				{@const wsId = $page.params.workspace_id}
 				{@const wsName = workspaces.find((w) => w.workspace_id === wsId)?.workspace_name ?? wsId}
 				<button
-					onclick={() => navigate('/')}
+					onclick={() => navigate(`/${wsId}`)}
 					data-testid="breadcrumb-workspace"
 					class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
 				>{wsName}</button>
