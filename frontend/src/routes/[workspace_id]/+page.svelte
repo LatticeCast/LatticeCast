@@ -1,11 +1,12 @@
-<!-- routes/[workspace_id]/+page.svelte — redirects to / -->
+<!-- routes/[workspace_id]/+page.svelte — tables list filtered to this workspace -->
 
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 
 	onMount(() => {
-		goto('/', { replaceState: true });
+		goto(`/?workspace=${$page.params.workspace_id}`, { replaceState: true });
 	});
 </script>
 
