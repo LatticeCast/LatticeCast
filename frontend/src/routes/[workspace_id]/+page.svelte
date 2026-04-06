@@ -1,4 +1,4 @@
-<!-- routes/tables/[workspace_id]/+page.svelte -->
+<!-- routes/[workspace_id]/+page.svelte — tables list filtered to this workspace -->
 
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
@@ -55,8 +55,7 @@
 			workspaces = workspaces.map((w) => w.workspace_id === updated.workspace_id ? updated : w);
 			if (currentWorkspace?.workspace_id === updated.workspace_id) {
 				currentWorkspace = updated;
-				// Update URL to reflect renamed workspace
-				goto(`/tables/${wsSlug(updated.workspace_name)}`, { replaceState: true });
+				goto(`/${wsSlug(updated.workspace_name)}`, { replaceState: true });
 			}
 			closeWsSettings();
 		} catch (e) {
@@ -79,7 +78,7 @@
 				const next = workspaces[0] ?? null;
 				currentWorkspace = next;
 				if (next) {
-					goto(`/tables/${wsSlug(next.workspace_name)}`, { replaceState: true });
+					goto(`/${wsSlug(next.workspace_name)}`, { replaceState: true });
 				} else {
 					goto('/tables', { replaceState: true });
 				}
@@ -100,7 +99,7 @@
 
 	function switchWorkspace(ws: Workspace) {
 		currentWorkspace = ws;
-		goto(`/tables/${wsSlug(ws.workspace_name)}`);
+		goto(`/${wsSlug(ws.workspace_name)}`);
 	}
 
 	onMount(async () => {
@@ -136,7 +135,7 @@
 
 			// Correct URL if slug drifted (e.g. user typed UUID or old slug)
 			if (matched && wsSlug(matched.workspace_name) !== urlParam) {
-				goto(`/tables/${wsSlug(matched.workspace_name)}`, { replaceState: true });
+				goto(`/${wsSlug(matched.workspace_name)}`, { replaceState: true });
 			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load data';
