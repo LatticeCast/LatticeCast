@@ -1,28 +1,18 @@
 -- 0018_simplify_names.sql
--- Workspace: merge display_id + name → workspace_name (unique)
--- Table: rename name → table_name (unique per workspace)
+-- Tables: rename name → table_name, unique per workspace
+-- Workspace already simplified in 0017
 
--- ─── Workspaces: merge display_id + name → workspace_name ────────────────────
+-- Only rename if column "name" still exists (idempotent)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tables' AND column_name='name') THEN
+    ALTER TABLE tables RENAME COLUMN name TO table_name;
+  END IF;
+END $$;
 
--- Add workspace_name (copy from display_id which is the URL-safe slug)
-ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS workspace_name VARCHAR NOT NULL DEFAULT '';
-UPDATE workspaces SET workspace_name = display_id WHERE workspace_name = '';
-
--- Drop old columns
-ALTER TABLE workspaces DROP COLUMN IF EXISTS display_id;
-ALTER TABLE workspaces DROP COLUMN IF EXISTS name;
-
--- Add unique constraint
-DROP INDEX IF EXISTS ix_workspaces_display_id;
-ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS uq_workspaces_name;
-ALTER TABLE workspaces ADD CONSTRAINT uq_workspaces_name UNIQUE (workspace_name);
-CREATE INDEX IF NOT EXISTS ix_workspaces_workspace_name ON workspaces(lower(workspace_name));
-
--- ─── Tables: rename name → table_name, unique per workspace ──────────────────
-
-ALTER TABLE tables RENAME COLUMN name TO table_name;
+-- Unique table_name within same workspace
 ALTER TABLE tables DROP CONSTRAINT IF EXISTS uq_tables_workspace_name;
 ALTER TABLE tables ADD CONSTRAINT uq_tables_workspace_name UNIQUE (workspace_id, table_name);
 
--- ─── Drop workspace_info table (no longer needed) ───────────────────────────
+-- Drop workspace_info if exists (no longer needed)
 DROP TABLE IF EXISTS workspace_info CASCADE;
