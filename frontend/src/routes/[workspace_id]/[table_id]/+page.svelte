@@ -166,9 +166,23 @@
 			}
 			if (!sortConfig) return result;
 			const { colId, dir } = sortConfig;
+			const sortCol = $columns.find((c) => c.column_id === colId);
+			const choiceOrder =
+				sortCol?.type === 'select'
+					? getChoices(sortCol).map((c) => c.value)
+					: null;
 			return [...result].sort((a, b) => {
 				const av = a.row_data[colId];
 				const bv = b.row_data[colId];
+				if (choiceOrder) {
+					const getIdx = (v: unknown) => {
+						if (v == null) return choiceOrder!.length;
+						const i = choiceOrder!.indexOf(String(v));
+						return i === -1 ? choiceOrder!.length : i;
+					};
+					const cmp = getIdx(av) - getIdx(bv);
+					return dir === 'asc' ? cmp : -cmp;
+				}
 				const as = av === null || av === undefined ? '' : String(av);
 				const bs = bv === null || bv === undefined ? '' : String(bv);
 				const cmp = as.localeCompare(bs, undefined, { numeric: true, sensitivity: 'base' });
