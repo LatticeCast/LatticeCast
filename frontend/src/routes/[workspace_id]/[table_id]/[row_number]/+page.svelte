@@ -111,33 +111,6 @@
 </svelte:head>
 
 <div class="min-h-screen bg-gray-50">
-	<!-- Header bar -->
-	<div class="sticky top-0 z-10 border-b border-gray-200 bg-white px-6 py-3 shadow-sm">
-		<nav class="flex flex-wrap items-center gap-1 text-sm text-gray-500" aria-label="Breadcrumb">
-			<a
-				href="/tables"
-				class="max-w-[150px] truncate transition hover:text-blue-600"
-				title={userDisplay}>{userDisplay}</a
-			>
-			<span class="text-gray-300 select-none">/</span>
-			<a
-				href="/tables"
-				class="max-w-[150px] truncate transition hover:text-blue-600"
-				title={workspace?.workspace_name ?? workspaceId}>{workspace?.workspace_name ?? workspaceId}</a
-			>
-			<span class="text-gray-300 select-none">/</span>
-			<a
-				href="/{workspaceId}/{tableId}"
-				class="max-w-[150px] truncate transition hover:text-blue-600"
-				title={table?.name ?? tableId}>{table?.name ?? tableId}</a
-			>
-			<span class="text-gray-300 select-none">/</span>
-			<span class="max-w-[200px] truncate font-semibold text-gray-900" title={getRowTitle()}>
-				{ticketKey || getRowTitle()}
-			</span>
-		</nav>
-	</div>
-
 	{#if loading}
 		<div class="flex h-64 items-center justify-center text-sm text-gray-400">Loading…</div>
 	{:else if error}
