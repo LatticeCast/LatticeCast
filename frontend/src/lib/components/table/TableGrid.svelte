@@ -693,7 +693,7 @@
 										</button>
 									{:else if col.type === 'url'}
 										{@const urlVal = (row.row_data[col.column_id] as string) ?? ''}
-										{#if urlVal}
+										{#if urlVal && (urlVal.startsWith('http://') || urlVal.startsWith('https://'))}
 											<a
 												href={urlVal}
 												target="_blank"
@@ -702,6 +702,8 @@
 												onclick={(e) => e.stopPropagation()}
 												title={urlVal}>{urlVal}</a
 											>
+										{:else if urlVal}
+											<span class="block truncate text-gray-500" title={urlVal}>{urlVal}</span>
 										{:else}
 											<span class="block min-h-[1.5rem] cursor-text py-1 text-gray-300">—</span>
 										{/if}
