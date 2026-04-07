@@ -39,7 +39,7 @@ export interface WorkspaceMember {
 export interface Table {
 	table_id: UUID;
 	workspace_id: UUID;
-	name: string;
+	table_name: string;
 	columns: Column[];
 	views: ViewConfig[];
 	created_at: string;
@@ -66,7 +66,7 @@ export interface Row {
 }
 
 export interface CreateTable {
-	name: string;
+	table_name: string;
 	workspace_id: UUID;
 }
 
@@ -82,7 +82,7 @@ export interface CreateRow {
 }
 
 export interface UpdateTable {
-	name?: string;
+	table_name?: string;
 }
 
 export interface UpdateColumn {

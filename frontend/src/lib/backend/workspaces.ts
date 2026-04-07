@@ -18,11 +18,11 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 }
 
 export interface CreateWorkspace {
-	name: string;
+	workspace_name: string;
 }
 
 export interface UpdateWorkspace {
-	name: string;
+	workspace_name: string;
 }
 
 export interface AddMember {

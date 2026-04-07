@@ -750,7 +750,7 @@
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `${$currentTable?.name ?? 'table'}-template.json`;
+		a.download = `${$currentTable?.table_name ?? 'table'}-template.json`;
 		a.click();
 		URL.revokeObjectURL(url);
 	}
@@ -799,7 +799,7 @@
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `${$currentTable?.name ?? 'table'}.csv`;
+		a.download = `${$currentTable?.table_name ?? 'table'}.csv`;
 		a.click();
 		URL.revokeObjectURL(url);
 	}
@@ -815,7 +815,7 @@
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `${$currentTable?.name ?? 'table'}-data.json`;
+		a.download = `${$currentTable?.table_name ?? 'table'}-data.json`;
 		a.click();
 		URL.revokeObjectURL(url);
 	}
