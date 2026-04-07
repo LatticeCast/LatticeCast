@@ -6,7 +6,7 @@ import type { AuthProvider, LoginInfo } from '$lib/types/auth';
 import { exchangeCodeViaBackend, fetchMe } from '$lib/backend/auth';
 
 export async function startLogin(providerName: AuthProvider) {
-	const provider = providers[providerName];
+	const provider = providers[providerName as keyof typeof providers];
 
 	const codeVerifier = generateRandomString(128);
 	const codeChallenge = await generateCodeChallenge(codeVerifier);
@@ -41,7 +41,7 @@ export async function handleOAuthCallback(
 	code: string,
 	state: string
 ): Promise<LoginInfo> {
-	const provider = providers[providerName];
+	const provider = providers[providerName as keyof typeof providers];
 
 	const savedState = sessionStorage.getItem(`state_${providerName}`);
 	const verifier = sessionStorage.getItem(`pkce_${providerName}`);
