@@ -1,0 +1,26 @@
+name: Migration Test
+
+on:
+  push:
+    paths:
+      - "migration/**.sql"
+      - "migration/test_migrations.py"
+  pull_request:
+    paths:
+      - "migration/**.sql"
+      - "migration/test_migrations.py"
+  workflow_dispatch:
+
+jobs:
+  migration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run migration tests
+        run: python migration/test_migrations.py
