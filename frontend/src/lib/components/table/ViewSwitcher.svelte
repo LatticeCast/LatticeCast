@@ -52,58 +52,58 @@
 
 <!-- Outer wrapper: position:relative so the panel is clipped by it, not by overflow-x-auto -->
 <div class="relative">
-	<!-- Tab bar -->
-	<div class="flex items-center gap-0.5 overflow-x-auto border-b border-gray-200 bg-white px-4">
-		{#each views as view (view.name)}
-			<button
-				onclick={() => onViewChange(view)}
-				class="flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition {activeViewName ===
-				view.name
-					? 'border-blue-500 text-blue-600 font-medium'
-					: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
-			>
-				{#if view.type === 'table'}
-					<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M3 10h18M3 14h18M10 3v18M14 3v18M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"
-						/>
-					</svg>
-				{:else if view.type === 'kanban'}
-					<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"
-						/>
-					</svg>
-				{:else if view.type === 'timeline'}
-					<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-						/>
-					</svg>
-				{/if}
-				{view.name}
-			</button>
-		{/each}
+	<!-- Tab bar: flex row — scrollable tabs on left, sticky Add view button on right -->
+	<div class="flex items-center border-b border-gray-200 bg-white">
+		<!-- Scrollable view tabs -->
+		<div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-4">
+			{#each views as view (view.name)}
+				<button
+					onclick={() => onViewChange(view)}
+					class="flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition {activeViewName ===
+					view.name
+						? 'border-blue-500 text-blue-600 font-medium'
+						: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+				>
+					{#if view.type === 'table'}
+						<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M3 10h18M3 14h18M10 3v18M14 3v18M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"
+							/>
+						</svg>
+					{:else if view.type === 'kanban'}
+						<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"
+							/>
+						</svg>
+					{:else if view.type === 'timeline'}
+						<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+							/>
+						</svg>
+					{/if}
+					{view.name}
+				</button>
+			{/each}
+		</div>
 
-		<!-- Spacer -->
-		<div class="flex-1"></div>
-
-		<!-- Add view button -->
+		<!-- Add view button — outside overflow-x-auto, always visible -->
 		<button
 			onclick={(e) => {
 				e.stopPropagation();
 				showAddPanel = !showAddPanel;
 			}}
-			class="flex items-center gap-1 rounded-md px-2 py-1.5 text-sm transition {showAddPanel
+			class="flex shrink-0 items-center gap-1 border-b border-l border-gray-200 px-3 py-2 text-sm transition {showAddPanel
 				? 'bg-blue-50 text-blue-600'
 				: 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}"
 			aria-label="Add view"
