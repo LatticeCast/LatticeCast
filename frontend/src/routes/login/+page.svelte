@@ -36,7 +36,7 @@
 		loginError = '';
 		try {
 			// Call backend /me to create/resolve user in DB (auto-created when auth_required=false)
-			// Returns resolved user_id UUID regardless of whether input was UUID or display_id
+			// Returns resolved user_id UUID regardless of whether input was UUID or user_name
 			const me = await fetchMe(id);
 			authStore.set({
 				provider: 'none',

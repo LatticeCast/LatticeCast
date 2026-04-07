@@ -11,7 +11,7 @@ from models.workspace import Workspace, WorkspaceMember
 
 
 def _slugify(text: str) -> str:
-    """Convert text to a display_id matching ^[a-z0-9][a-z0-9_-]{2,31}$."""
+    """Convert text to a user_name matching ^[a-z0-9][a-z0-9_-]{2,31}$."""
     slug = re.sub(r"[^a-z0-9_-]", "-", text.lower())
     slug = re.sub(r"-+", "-", slug)
     slug = re.sub(r"^[^a-z0-9]+", "", slug)
@@ -33,8 +33,8 @@ class UserRepository:
         user = User(email=email, role=role)
         self.session.add(user)
         await self.session.flush()  # get user_id assigned
-        display_id = _slugify(email)
-        user_info = UserInfo(user_id=user.user_id, display_id=display_id, email=email, name="")
+        user_name = _slugify(email)
+        user_info = UserInfo(user_id=user.user_id, user_name=user_name, email=email, name="")
         self.session.add(user_info)
         workspace = Workspace(workspace_name=email)
         self.session.add(workspace)
@@ -65,10 +65,10 @@ class UserRepository:
         return await self.create(email, role)
 
     async def resolve_user(self, identifier: str) -> User | None:
-        """Resolve a user by UUID → display_id → email (in order).
+        """Resolve a user by UUID → user_name → email (in order).
 
         1. Try UUID parse
-        2. Try LOWER(display_id) in user_info
+        2. Try LOWER(user_name) in user_info
         3. Try LOWER(email) in user_info
         """
         # 1. UUID
@@ -79,11 +79,11 @@ class UserRepository:
                 return user
         except ValueError:
             pass
-        # 2. display_id (case-insensitive)
+        # 2. user_name (case-insensitive)
         result = await self.session.execute(
             select(User)
             .join(UserInfo, User.user_id == UserInfo.user_id)
-            .where(func.lower(UserInfo.display_id) == identifier.lower())
+            .where(func.lower(UserInfo.user_name) == identifier.lower())
         )
         user = result.scalar_one_or_none()
         if user:

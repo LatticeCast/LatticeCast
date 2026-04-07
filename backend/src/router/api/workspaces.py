@@ -15,7 +15,7 @@ from repository.workspace import WorkspaceRepository
 
 
 async def _resolve_member_user(data: MemberCreate, session: AsyncSession) -> User:
-    """Resolve user by user_id (UUID), user_name (display_id), or user_email"""
+    """Resolve user by user_id (UUID), user_name, or user_email"""
     from models.user import UserInfo
     if data.user_id:
         user = await session.get(User, data.user_id)
@@ -24,7 +24,7 @@ async def _resolve_member_user(data: MemberCreate, session: AsyncSession) -> Use
     elif data.user_name:
         result = await session.execute(
             select(User).join(UserInfo, User.user_id == UserInfo.user_id).where(
-                func.lower(UserInfo.display_id) == data.user_name.lower()
+                func.lower(UserInfo.user_name) == data.user_name.lower()
             )
         )
         user = result.scalar_one_or_none()

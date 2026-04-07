@@ -40,6 +40,7 @@ export interface MeResponse {
 	picture?: string;
 	provider: 'google' | 'authentik' | 'none';
 	role?: string;
+	user_name?: string;
 }
 
 /**

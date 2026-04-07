@@ -85,7 +85,7 @@ class MeResponse(BaseModel):
     picture: str | None = Field(default=None, description="Profile picture URL")
     provider: Literal["google", "authentik", "none"] = Field(..., description="OAuth provider used")
     role: str | None = Field(default=None, description="User role in the system")
-    display_id: str | None = Field(default=None, description="URL-safe display ID")
+    user_name: str | None = Field(default=None, description="URL-safe user name")
 
 
 # --------------------------------------------------
@@ -125,7 +125,7 @@ async def me(
         picture=token_payload.get("picture"),
         provider=provider,
         role=user.role,
-        display_id=info.display_id if info else None,
+        user_name=info.user_name if info else None,
     )
 
 
