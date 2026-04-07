@@ -61,7 +61,8 @@
 		onAddRowInGroup,
 		onToggleCollapseGroup,
 		onManageOptions,
-		onNavigateRow
+		onNavigateRow,
+		onOpenDocCell
 	}: {
 		columns: Column[];
 		sortedColumns: Column[];
