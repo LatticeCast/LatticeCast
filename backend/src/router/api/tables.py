@@ -104,7 +104,12 @@ async def get_table(
     session: AsyncSession = Depends(get_session),
 ):
     """Get a table by ID (user must be a workspace member)"""
-    return await _get_table_for_member(table_id, user, session)
+    table = await _get_table_for_member(table_id, user, session)
+    # Heal legacy tables: ensure at least one Table view exists
+    if not any(v.get("type") == "table" for v in (table.views or [])):
+        table_repo = TableRepository(session)
+        table = await table_repo.add_view(table, {"name": "Table", "type": "table", "config": {}})
+    return table
 
 
 @router.put("/{table_id}", response_model=TableResponse)
