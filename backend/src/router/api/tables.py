@@ -70,8 +70,9 @@ async def create_table(
         from uuid import uuid4
 
         default_cols = [
-            {"column_id": str(uuid4()), "name": "Title", "type": "text", "options": {}, "position": 0},
-            {"column_id": str(uuid4()), "name": "Description", "type": "text", "options": {}, "position": 1},
+            {"column_id": str(uuid4()), "name": "Doc", "type": "url", "options": {}, "position": 0},
+            {"column_id": str(uuid4()), "name": "Title", "type": "text", "options": {}, "position": 1},
+            {"column_id": str(uuid4()), "name": "Description", "type": "text", "options": {}, "position": 2},
         ]
         table = await table_repo.set_columns(table, default_cols)
 
@@ -305,6 +306,7 @@ async def delete_view(
 # --------------------------------------------------
 
 _PM_COLUMNS: list[dict[str, Any]] = [
+    {"name": "Doc", "type": "url"},
     {"name": "Title", "type": "text"},
     {
         "name": "Type",
@@ -351,7 +353,6 @@ _PM_COLUMNS: list[dict[str, Any]] = [
     {"name": "Estimate", "type": "number"},
     {"name": "Tags", "type": "tags"},
     {"name": "Description", "type": "text"},
-    {"name": "Doc", "type": "url"},
     {"name": "Parent", "type": "text"},
 ]
 
