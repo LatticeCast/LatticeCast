@@ -25,6 +25,8 @@
 		onAddRow?: (initialData: Record<string, unknown>) => void;
 	} = $props();
 
+	const isTicketTable = $derived(columns.some((c) => c.name === 'Key'));
+
 	// Config panel state
 	let showCardFields = $state(false);
 
@@ -415,7 +417,7 @@
 						{/each}
 					{/if}
 
-					<!-- Add ticket button per lane -->
+					<!-- Add row / New ticket button per lane -->
 					<button
 						onclick={() =>
 							onAddRow(groupByColId && lane.value ? { [groupByColId]: lane.value } : {})}
@@ -423,7 +425,7 @@
 							? 'text-gray-500 hover:bg-gray-700 hover:text-gray-300'
 							: 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}"
 					>
-						+ New ticket
+						+ {isTicketTable ? 'New ticket' : 'Add row'}
 					</button>
 				</div>
 			</div>

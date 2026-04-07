@@ -25,6 +25,8 @@
 		onAddRow?: (initialData: Record<string, unknown>) => void;
 	} = $props();
 
+	const isTicketTable = $derived(columns.some((c) => c.name === 'Key'));
+
 	type Granularity = 'day' | 'week' | 'month';
 	let granularity = $state<Granularity>('month');
 
@@ -355,14 +357,14 @@
 		</select>
 	</div>
 
-	<!-- New ticket button -->
+	<!-- Add row / New ticket button -->
 	<button
 		onclick={() => onAddRow({})}
 		class="flex items-center gap-1 rounded-lg border px-3 py-1 text-xs font-medium transition {isDark.value
 			? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600'
 			: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}"
 	>
-		+ New ticket
+		+ {isTicketTable ? 'New ticket' : 'Add row'}
 	</button>
 
 	<!-- Granularity toggle -->

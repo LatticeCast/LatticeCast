@@ -55,6 +55,8 @@
 		})()
 	);
 
+	const isTicketTable = $derived(!!table?.columns.find((c) => c.name === 'Key'));
+
 	onMount(async () => {
 		const auth = get(authStore);
 		if (!auth?.accessToken) {
@@ -138,7 +140,7 @@
 					onclick={() => (showCreateTicket = true)}
 					class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
 				>
-					+ New ticket
+					+ {isTicketTable ? 'New ticket' : 'Add row'}
 				</button>
 			</div>
 
