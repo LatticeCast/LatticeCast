@@ -572,7 +572,7 @@
 									{i === 0 ? (isDark.value ? 'sticky left-12 z-10 border-r border-gray-700 bg-gray-800 px-2' : 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2') : 'px-2'}"
 									style="width: {getColWidth(col)}px;"
 									onclick={() => {
-										if (col.name === 'Key' || col.name === 'Title') {
+										if (col.name === 'Key') {
 											onNavigateRow(row.row_number);
 										} else if (col.type === 'doc') {
 											onOpenDocCell(row, col);
@@ -778,7 +778,7 @@
 										<span class="font-mono text-sm">{raw ? formatDate(String(raw)) : ''}</span>
 									{:else}
 										{@const cellVal = row.row_data[col.column_id]}
-										{#if col.name === 'Key' || col.name === 'Title'}
+										{#if col.name === 'Key'}
 											{#if cellVal !== null && cellVal !== undefined && String(cellVal) !== ''}
 												<span
 													class="block cursor-pointer truncate font-medium text-blue-600 hover:underline"
