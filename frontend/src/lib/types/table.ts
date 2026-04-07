@@ -11,7 +11,8 @@ export type ColumnType =
 	| 'select'
 	| 'tags'
 	| 'checkbox'
-	| 'url';
+	| 'url'
+	| 'doc';
 
 export interface ColumnChoice {
 	value: string;

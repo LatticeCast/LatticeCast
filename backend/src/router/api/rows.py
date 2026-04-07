@@ -321,6 +321,66 @@ async def batch_docs_exist(
     return {"row_numbers": row_numbers}
 
 
+@router.get("/tables/{table_id}/rows/{row_number}/col-doc/{column_id}", response_class=PlainTextResponse)
+async def get_col_doc(
+    table_id: str,
+    row_number: int,
+    column_id: str,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> str:
+    """Get markdown doc for a specific column cell from MinIO (returns empty string if not found)"""
+    table = await _get_table_for_member(table_id, user, session)
+    repo = RowRepository(session)
+    row = await repo.get_by_number(table.table_id, row_number)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+
+    workspace_id = table.workspace_id
+    key = f"{workspace_id}/{table.table_id}/col-{column_id}/{row.row_number}.md"
+    client = get_s3_client()
+    try:
+        response = client.get_object(Bucket=settings.minio.bucket, Key=key)
+        return response["Body"].read().decode("utf-8")
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+            return ""
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
+
+
+@router.put("/tables/{table_id}/rows/{row_number}/col-doc/{column_id}", response_class=PlainTextResponse)
+async def put_col_doc(
+    table_id: str,
+    row_number: int,
+    column_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> str:
+    """Save markdown doc for a specific column cell to MinIO."""
+    body = (await request.body()).decode("utf-8")
+
+    table = await _get_table_for_member(table_id, user, session)
+    repo = RowRepository(session)
+    row = await repo.get_by_number(table.table_id, row_number)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+
+    workspace_id = table.workspace_id
+    key = f"{workspace_id}/{table.table_id}/col-{column_id}/{row.row_number}.md"
+    client = get_s3_client()
+    try:
+        client.put_object(
+            Bucket=settings.minio.bucket,
+            Key=key,
+            Body=body.encode("utf-8"),
+            ContentType="text/markdown",
+        )
+        return body
+    except ClientError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
+
+
 @router.delete("/tables/{table_id}/rows/{row_number}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_row(
     table_id: str,

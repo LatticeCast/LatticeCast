@@ -65,6 +65,7 @@
 	import ImportPreviewModal from '$lib/components/table/ImportPreviewModal.svelte';
 	import ManageOptionsModal from '$lib/components/table/ManageOptionsModal.svelte';
 	import CreateTicketModal from '$lib/components/table/CreateTicketModal.svelte';
+	import DocCellEditor from '$lib/components/table/DocCellEditor.svelte';
 
 	// ─── State ───────────────────────────────────────────────────────────────────
 
@@ -73,6 +74,7 @@
 	let createTicketInitialData = $state<Record<string, unknown>>({});
 	let deletingRowId = $state<number | null>(null);
 	let expandedRow = $state<Row | null>(null);
+	let docCellState = $state<{ row: Row; col: Column } | null>(null);
 	let showAddColumn = $state(false);
 	let renamingColId = $state<string | null>(null);
 	let renameValue = $state('');
@@ -1079,6 +1081,7 @@
 				const r = $rows.find((row) => row.row_number === rowId);
 				if (r) goto(`/${$page.params.workspace_id}/${$page.params.table_id}/${r.row_number}`);
 			}}
+			onOpenDocCell={(row, col) => (docCellState = { row, col })}
 		/>
 	{:else if activeView.type === 'kanban'}
 		<KanbanBoard
@@ -1140,6 +1143,15 @@
 		onRefreshRows={handleRefreshRows}
 		tableId={$page.params.table_id!}
 		workspaceId={$page.params.workspace_id!}
+	/>
+{/if}
+
+{#if docCellState}
+	<DocCellEditor
+		row={docCellState.row}
+		column={docCellState.col}
+		tableId={$page.params.table_id!}
+		onClose={() => (docCellState = null)}
 	/>
 {/if}
 
