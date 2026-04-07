@@ -321,7 +321,9 @@
 	// ─── Handlers ────────────────────────────────────────────────────────────────
 
 	async function handleAddRow(editColId?: string) {
+		if (addingRow) return;
 		const tableId = $page.params.table_id!;
+		addingRow = true;
 		error.set(null);
 
 		// Optimistic: insert a temporary row immediately
@@ -354,6 +356,8 @@
 			rows.update((r) => r.filter((row) => row.row_number !== tempRowNumber));
 			editingCell = null;
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
+		} finally {
+			addingRow = false;
 		}
 	}
 
@@ -378,14 +382,29 @@
 	}
 
 	async function handleAddRowInGroup(groupKey: string, col: Column) {
+		if (addingRow) return;
 		const tableId = $page.params.table_id!;
 		addingRow = true;
 		error.set(null);
+
+		const val: unknown = groupKey === '(empty)' ? null : groupKey;
+		const tempRowNumber = -Date.now();
+		const tempRow: Row = {
+			table_id: tableId,
+			row_number: tempRowNumber,
+			row_data: { [col.column_id]: val },
+			created_by: null,
+			updated_by: null,
+			created_at: new Date().toISOString(),
+			updated_at: new Date().toISOString()
+		};
+		rows.update((r) => [...r, tempRow]);
+
 		try {
-			const val: unknown = groupKey === '(empty)' ? null : groupKey;
-			await createRow(tableId, { row_data: { [col.column_id]: val } });
-			await refreshRows(tableId);
+			const newRow = await createRow(tableId, { row_data: { [col.column_id]: val } });
+			rows.update((r) => r.map((row) => (row.row_number === tempRowNumber ? newRow : row)));
 		} catch (e) {
+			rows.update((r) => r.filter((row) => row.row_number !== tempRowNumber));
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
 		} finally {
 			addingRow = false;
