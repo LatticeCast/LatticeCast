@@ -354,9 +354,9 @@ async def create_pm_template(
     if not table_name:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="table_name is required")
     ws_repo = WorkspaceRepository(session)
-    raw_workspace_id = data.get("workspace_id")
-    if raw_workspace_id:
-        workspace = await ws_repo.resolve_workspace(str(raw_workspace_id))
+    raw_workspace = data.get("workspace_name") or data.get("workspace_id")
+    if raw_workspace:
+        workspace = await ws_repo.resolve_workspace(str(raw_workspace))
         if not workspace:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
         if not await ws_repo.is_member(workspace.workspace_id, user.user_id):
