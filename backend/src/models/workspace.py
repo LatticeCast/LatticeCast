@@ -61,7 +61,7 @@ class MemberCreate(SQLModel):
     """Schema for adding a workspace member — provide ONE of user_id, user_name, user_email"""
 
     user_id: UUID | None = Field(default=None, description="User UUID")
-    user_name: str | None = Field(default=None, description="User display_id (e.g. lattice)")
+    user_name: str | None = Field(default=None, description="User user_name (e.g. lattice)")
     user_email: str | None = Field(default=None, description="User email")
     role: MemberRoleType = Field(default="member", description="Member role")
 

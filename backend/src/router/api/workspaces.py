@@ -130,7 +130,7 @@ async def remove_member(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Remove a member from a workspace (owner only). member_user_id can be UUID or display_id."""
+    """Remove a member from a workspace (owner only). member_user_id can be UUID or user_name."""
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, session)
