@@ -27,7 +27,7 @@ class UserInfo(SQLModel, table=True):
     user_id: UUID = Field(
         primary_key=True, foreign_key="users.user_id", description="UUID FK → users"
     )
-    user_name: str = Field(index=True, description="URL-safe slug (unique)")
+    user_name: str = Field(index=True, unique=True, description="URL-safe slug (unique)")
     email: str = Field(default="", description="Email address (denormalized for display)")
     name: str = Field(default="", description="Display name")
 

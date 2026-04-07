@@ -27,7 +27,7 @@ async def get_current_user(
     email = token_payload.get("email")
 
     if user_id_str:
-        # No-auth mode: resolve by UUID or display_id
+        # No-auth mode: resolve by UUID or user_name
         user = await UserRepository(session).resolve_user(user_id_str)
         if not user:
             if not settings.auth_required:

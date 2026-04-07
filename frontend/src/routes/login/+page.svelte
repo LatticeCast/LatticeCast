@@ -11,17 +11,17 @@
 	let loginError = $state('');
 	let loggingIn = $state(false);
 
-	const DISPLAY_ID_RE = /^[a-z0-9][a-z0-9_.\\-]*$/;
+	const USER_NAME_RE = /^[a-z0-9][a-z0-9_.\\-]*$/;
 
-	function validateDisplayId(id: string): string {
+	function validateUserName(id: string): string {
 		if (!id) return '';
-		if (!DISPLAY_ID_RE.test(id)) {
+		if (!USER_NAME_RE.test(id)) {
 			return 'Invalid format — use lowercase letters, numbers, and _ - . only (e.g. homun-lang-002)';
 		}
 		return '';
 	}
 
-	let validationError = $derived(validateDisplayId(userId.trim()));
+	let validationError = $derived(validateUserName(userId.trim()));
 
 	onMount(() => {
 		if ($authStore?.role) {
@@ -68,7 +68,7 @@
 					<input
 						type="text"
 						bind:value={userId}
-						placeholder="Display ID (e.g. homun-lang-002)"
+						placeholder="User name (e.g. homun-lang-002)"
 						data-testid="login-userid"
 						disabled={loggingIn}
 						onkeydown={(e) => e.key === 'Enter' && simpleLogin()}

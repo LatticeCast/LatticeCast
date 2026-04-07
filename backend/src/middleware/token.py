@@ -63,7 +63,7 @@ async def verify_bearer_token(
 
     token = authorization.removeprefix("Bearer ").strip()
 
-    # No-auth mode: treat token as user_id (UUID or display_id)
+    # No-auth mode: treat token as user_id (UUID or user_name)
     if not settings.auth_required:
         logger.debug(f"Auth not required, using token as user_id: {token}")
         return {"user_id": token, "_provider": "none"}

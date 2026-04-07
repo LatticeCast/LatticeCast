@@ -1,6 +1,6 @@
 // src/lib/types/table.ts
 
-/** UUID string — always a 36-char hyphenated UUID, never a display_id or row_number */
+/** UUID string — always a 36-char hyphenated UUID, never a user_name or row_number */
 export type UUID = string;
 
 export type ColumnType =
