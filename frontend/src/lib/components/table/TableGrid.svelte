@@ -574,6 +574,8 @@
 									onclick={() => {
 										if (col.name === 'Key') {
 											onNavigateRow(row.row_number);
+										} else if (col.name === 'Title') {
+											// plain text — no click behavior; use expand icon to open detail
 										} else if (col.type === 'doc') {
 											onOpenDocCell(row, col);
 										} else if (
@@ -787,6 +789,12 @@
 											{:else}
 												<span class="block min-h-[1.5rem] cursor-pointer py-1 text-gray-300">—</span
 												>
+											{/if}
+										{:else if col.name === 'Title'}
+											{#if cellVal !== null && cellVal !== undefined && String(cellVal) !== ''}
+												<span class="block truncate">{String(cellVal)}</span>
+											{:else}
+												<span class="block min-h-[1.5rem] py-1 text-gray-300">—</span>
 											{/if}
 										{:else if cellVal !== null && cellVal !== undefined && String(cellVal) !== ''}
 											<span class="block truncate">{String(cellVal)}</span>
