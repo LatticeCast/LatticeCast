@@ -572,11 +572,7 @@
 									{i === 0 ? (isDark.value ? 'sticky left-12 z-10 border-r border-gray-700 bg-gray-800 px-2' : 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2') : 'px-2'}"
 									style="width: {getColWidth(col)}px;"
 									onclick={() => {
-										if (col.name === 'Key') {
-											onNavigateRow(row.row_number);
-										} else if (col.name === 'Title') {
-											// plain text — no click behavior; use expand icon to open detail
-										} else if (col.type === 'doc') {
+										if (col.type === 'doc') {
 											onOpenDocCell(row, col);
 										} else if (
 											col.type !== 'checkbox' &&
@@ -789,12 +785,6 @@
 											{:else}
 												<span class="block min-h-[1.5rem] cursor-pointer py-1 text-gray-300">—</span
 												>
-											{/if}
-										{:else if col.name === 'Title'}
-											{#if cellVal !== null && cellVal !== undefined && String(cellVal) !== ''}
-												<span class="block truncate">{String(cellVal)}</span>
-											{:else}
-												<span class="block min-h-[1.5rem] py-1 text-gray-300">—</span>
 											{/if}
 										{:else if cellVal !== null && cellVal !== undefined && String(cellVal) !== ''}
 											<span class="block truncate">{String(cellVal)}</span>
