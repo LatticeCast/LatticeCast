@@ -57,6 +57,7 @@
 		onResizeStart,
 		onShowAddColumn,
 		onAddRow,
+		onAddRowAndEdit,
 		onAddRowInGroup,
 		onToggleCollapseGroup,
 		onManageOptions,
@@ -107,6 +108,7 @@
 		onResizeStart: (e: MouseEvent, col: Column) => void;
 		onShowAddColumn: () => void;
 		onAddRow: () => void;
+		onAddRowAndEdit?: (colId: string) => void;
 		onAddRowInGroup: (key: string, col: Column) => void;
 		onToggleCollapseGroup: (key: string) => void;
 		onManageOptions: (col: Column) => void;
@@ -114,6 +116,14 @@
 	} = $props();
 
 	const T = $derived(isDark.value ? theme.dark : theme.light);
+
+	const lastDataRowId = $derived(
+		renderItems.reduceRight<number | null>((acc, item) => {
+			if (acc !== null) return acc;
+			if (item.type === 'row') return item.row.row_number;
+			return null;
+		}, null)
+	);
 
 	function getColWidth(col: Column): number {
 		return localWidths[col.column_id] ?? col.options?.width ?? 150;
@@ -598,7 +608,10 @@
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
 												onblur={() => onCommitEdit(row.row_number, col)}
 												onkeydown={(e) => {
-													if (e.key === 'Enter') onCommitEdit(row.row_number, col);
+													if (e.key === 'Enter') {
+														onCommitEdit(row.row_number, col);
+														if (row.row_number === lastDataRowId) onAddRow();
+													}
 													if (e.key === 'Escape') onEditingCellChange(null);
 												}}
 												autofocus
@@ -612,7 +625,10 @@
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
 												onblur={() => onCommitEdit(row.row_number, col)}
 												onkeydown={(e) => {
-													if (e.key === 'Enter') onCommitEdit(row.row_number, col);
+													if (e.key === 'Enter') {
+														onCommitEdit(row.row_number, col);
+														if (row.row_number === lastDataRowId) onAddRow();
+													}
 													if (e.key === 'Escape') onEditingCellChange(null);
 												}}
 												autofocus
@@ -626,7 +642,10 @@
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
 												onblur={() => onCommitEdit(row.row_number, col)}
 												onkeydown={(e) => {
-													if (e.key === 'Enter') onCommitEdit(row.row_number, col);
+													if (e.key === 'Enter') {
+														onCommitEdit(row.row_number, col);
+														if (row.row_number === lastDataRowId) onAddRow();
+													}
 													if (e.key === 'Escape') onEditingCellChange(null);
 												}}
 												autofocus
@@ -802,7 +821,7 @@
 							class="cursor-pointer py-1 text-sm {isDark.value ? 'text-gray-600' : 'text-gray-300'}
 							{i === 0 ? (isDark.value ? 'sticky left-12 z-10 border-r border-gray-700 bg-gray-800 px-2' : 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2') : 'px-2'}"
 							style="width: {getColWidth(col)}px;"
-							onclick={() => onAddRow()}
+							onclick={() => onAddRowAndEdit ? onAddRowAndEdit(col.column_id) : onAddRow()}
 						>
 							<span class="block min-h-[1.5rem] py-1">—</span>
 						</td>

@@ -322,13 +322,17 @@
 
 	// ─── Handlers ────────────────────────────────────────────────────────────────
 
-	async function handleAddRow() {
+	async function handleAddRow(editColId?: string) {
 		const tableId = $page.params.table_id!;
 		addingRow = true;
 		error.set(null);
 		try {
-			await createRow(tableId, { row_data: {} });
+			const newRow = await createRow(tableId, { row_data: {} });
 			await refreshRows(tableId);
+			if (editColId) {
+				editingCell = { rowId: newRow.row_number, colId: editColId };
+				editValue = '';
+			}
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
 		} finally {
@@ -951,7 +955,6 @@
 		views={$currentTable?.views ?? []}
 		activeViewName={activeView.name}
 		onViewChange={handleViewChange}
-		onAddRow={() => openCreateTicket()}
 		onAddView={handleAddView}
 	/>
 
@@ -1026,7 +1029,8 @@
 			onMoveColumn={handleMoveColumn}
 			onResizeStart={handleResizeStart}
 			onShowAddColumn={() => (showAddColumn = true)}
-			onAddRow={() => openCreateTicket()}
+			onAddRow={() => handleAddRow()}
+			onAddRowAndEdit={(colId) => handleAddRow(colId)}
 			onAddRowInGroup={handleAddRowInGroup}
 			onToggleCollapseGroup={toggleCollapseGroup}
 			onManageOptions={(col) => (managingOptionsCol = col)}
