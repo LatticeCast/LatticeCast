@@ -364,7 +364,7 @@ async def create_pm_template(
     session: AsyncSession = Depends(get_session),
 ):
     """Create a PM project table with pre-configured columns and default views"""
-    table_name = data.get("table_name", "")
+    table_name = data.get("table_name", "") or data.get("name", "")
     if not table_name:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="table_name is required")
     ws_repo = WorkspaceRepository(session)
