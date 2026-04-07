@@ -168,9 +168,7 @@
 			const { colId, dir } = sortConfig;
 			const sortCol = $columns.find((c) => c.column_id === colId);
 			const choiceOrder =
-				sortCol?.type === 'select'
-					? getChoices(sortCol).map((c) => c.value)
-					: null;
+				sortCol?.type === 'select' ? getChoices(sortCol).map((c) => c.value) : null;
 			return [...result].sort((a, b) => {
 				const av = a.row_data[colId];
 				const bv = b.row_data[colId];
@@ -285,7 +283,7 @@
 				}
 				// Apply sort/group/filter from active view config
 				const initView = table.views.find((v) => v.name === activeViewName);
-				if (initView) applyViewConfig(initView);  // also sets _applyingConfig = true and schedules reset
+				if (initView) applyViewConfig(initView); // also sets _applyingConfig = true and schedules reset
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to load table');
 			}
@@ -324,19 +322,38 @@
 
 	async function handleAddRow(editColId?: string) {
 		const tableId = $page.params.table_id!;
-		addingRow = true;
 		error.set(null);
+
+		// Optimistic: insert a temporary row immediately
+		const tempRowNumber = -Date.now();
+		const tempRow: Row = {
+			table_id: tableId,
+			row_number: tempRowNumber,
+			row_data: {},
+			created_by: null,
+			updated_by: null,
+			created_at: new Date().toISOString(),
+			updated_at: new Date().toISOString()
+		};
+		rows.update((r) => [...r, tempRow]);
+
+		if (editColId) {
+			editingCell = { rowId: tempRowNumber, colId: editColId };
+			editValue = '';
+		}
+
 		try {
 			const newRow = await createRow(tableId, { row_data: {} });
-			await refreshRows(tableId);
+			// Replace temp row with real row from backend
+			rows.update((r) => r.map((row) => (row.row_number === tempRowNumber ? newRow : row)));
 			if (editColId) {
 				editingCell = { rowId: newRow.row_number, colId: editColId };
-				editValue = '';
 			}
 		} catch (e) {
+			// Rollback optimistic row
+			rows.update((r) => r.filter((row) => row.row_number !== tempRowNumber));
+			editingCell = null;
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
-		} finally {
-			addingRow = false;
 		}
 	}
 
@@ -667,7 +684,11 @@
 			}
 		}
 		// Col widths (per-view override)
-		if (view.config?.widths && typeof view.config.widths === 'object' && !Array.isArray(view.config.widths)) {
+		if (
+			view.config?.widths &&
+			typeof view.config.widths === 'object' &&
+			!Array.isArray(view.config.widths)
+		) {
 			localWidths = { ...(view.config.widths as Record<string, number>) };
 		} else {
 			localWidths = {};
@@ -678,7 +699,9 @@
 		} else {
 			viewColOrder = null;
 		}
-		Promise.resolve().then(() => { _applyingConfig = false; });
+		Promise.resolve().then(() => {
+			_applyingConfig = false;
+		});
 	}
 
 	function persistViewConfig() {
@@ -689,9 +712,10 @@
 			...view.config,
 			sort: sortConfig ?? undefined,
 			group: groupConfig ?? undefined,
-			filter: filterConditions.length > 0
-				? filterConditions.map(({ colId, operator, value }) => ({ colId, operator, value }))
-				: undefined,
+			filter:
+				filterConditions.length > 0
+					? filterConditions.map(({ colId, operator, value }) => ({ colId, operator, value }))
+					: undefined,
 			hidden: hiddenCols.size > 0 ? [...hiddenCols] : undefined,
 			widths: Object.keys(localWidths).length > 0 ? { ...localWidths } : undefined,
 			colOrder: viewColOrder ?? undefined
@@ -944,9 +968,7 @@
 	}
 </script>
 
-<div
-	class="flex h-full flex-col bg-white {resizingColId ? 'cursor-col-resize select-none' : ''}"
->
+<div class="flex h-full flex-col bg-white {resizingColId ? 'cursor-col-resize select-none' : ''}">
 	{#if $error}
 		<div class="mx-4 mt-2 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{$error}</div>
 	{/if}
