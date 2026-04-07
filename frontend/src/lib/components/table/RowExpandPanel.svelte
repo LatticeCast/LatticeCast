@@ -12,7 +12,8 @@
 		onUpdateRow,
 		onRefreshRows,
 		tableId,
-		workspaceId
+		workspaceId,
+		onOpenDocCell
 	}: {
 		row: Row;
 		columns: Column[];
@@ -21,6 +22,7 @@
 		onRefreshRows: (tableId: string) => Promise<void>;
 		tableId: string;
 		workspaceId: string;
+		onOpenDocCell?: (row: Row, col: Column) => void;
 	} = $props();
 
 	let editField = $state<string | null>(null);
@@ -405,6 +407,16 @@
 								{/if}
 							</button>
 						{/if}
+					{:else if col.type === 'doc'}
+						<button
+							class="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition {isDark.value ? 'border-gray-600 text-blue-400 hover:border-blue-500 hover:bg-blue-900/20' : 'border-gray-200 text-blue-600 hover:border-blue-300 hover:bg-blue-50'}"
+							onclick={() => onOpenDocCell?.(localRow, col)}
+						>
+							<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+								<path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+							</svg>
+							Open doc
+						</button>
 					{:else if editField === col.column_id}
 						<textarea
 							class="w-full resize-none rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {isDark.value ? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400 focus:ring-blue-400' : 'border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500'}"
