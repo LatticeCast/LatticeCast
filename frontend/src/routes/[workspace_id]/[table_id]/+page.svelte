@@ -38,7 +38,7 @@
 		ViewConfig
 	} from '$lib/types/table';
 	import { TAG_COLORS } from '$lib/UI/theme.svelte';
-	import { createView, updateView } from '$lib/backend/views';
+	import { createView, updateView, deleteView } from '$lib/backend/views';
 	import { SvelteSet } from 'svelte/reactivity';
 	import {
 		type FilterCondition,
@@ -781,6 +781,21 @@
 		}
 	}
 
+	async function handleDeleteView(view: ViewConfig) {
+		const tableId = $page.params.table_id!;
+		error.set(null);
+		try {
+			await deleteView(tableId, view.name);
+			await refreshTable(tableId);
+			if (activeViewName === view.name) {
+				const remaining = $currentTable?.views ?? [];
+				activeViewName = remaining[0]?.name ?? 'Table';
+			}
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to delete view');
+		}
+	}
+
 	async function handleViewUpdate(_updated: ViewConfig) {
 		await refreshTable($page.params.table_id!);
 	}
@@ -999,6 +1014,7 @@
 		activeViewName={activeView.name}
 		onViewChange={handleViewChange}
 		onAddView={handleAddView}
+		onDeleteView={handleDeleteView}
 	/>
 
 	{#if activeView.type === 'table'}

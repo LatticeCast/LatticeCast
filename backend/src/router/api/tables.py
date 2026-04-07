@@ -75,6 +75,10 @@ async def create_table(
         ]
         table = await table_repo.set_columns(table, default_cols)
 
+    # Ensure every table has at least one Table view
+    if not any(v.get("type") == "table" for v in (table.views or [])):
+        table = await table_repo.add_view(table, {"name": "Table", "type": "table", "config": {}})
+
     return table
 
 
@@ -283,6 +287,10 @@ async def delete_view(
     table = await _get_table_for_member(table_id, user, session)
     if not any(v.get("name") == view_name for v in table.views):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
+    # Cannot delete the last Table-type view
+    table_views = [v for v in table.views if v.get("type") == "table"]
+    if len(table_views) <= 1 and any(v.get("name") == view_name and v.get("type") == "table" for v in table.views):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot delete the last Table view")
     table_repo = TableRepository(session)
     await table_repo.delete_view(table, view_name)
 

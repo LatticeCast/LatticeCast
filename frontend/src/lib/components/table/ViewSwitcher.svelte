@@ -5,12 +5,14 @@
 		views,
 		activeViewName,
 		onViewChange,
-		onAddView
+		onAddView,
+		onDeleteView
 	}: {
 		views: ViewConfig[];
 		activeViewName: string;
 		onViewChange: (view: ViewConfig) => void;
 		onAddView: (type: string, name: string) => void;
+		onDeleteView?: (view: ViewConfig) => void;
 	} = $props();
 
 	let showAddPanel = $state(false);
@@ -39,6 +41,11 @@
 		onAddView(type, name);
 		showAddPanel = false;
 	}
+
+	function canDelete(view: ViewConfig): boolean {
+		if (view.type !== 'table') return true;
+		return views.filter((v) => v.type === 'table').length > 1;
+	}
 </script>
 
 <svelte:window
@@ -57,43 +64,55 @@
 		<!-- Scrollable view tabs -->
 		<div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-4">
 			{#each views as view (view.name)}
-				<button
-					onclick={() => onViewChange(view)}
-					class="flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm transition {activeViewName ===
-					view.name
-						? 'border-blue-500 text-blue-600 font-medium'
-						: 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
-				>
-					{#if view.type === 'table'}
-						<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M3 10h18M3 14h18M10 3v18M14 3v18M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"
-							/>
-						</svg>
-					{:else if view.type === 'kanban'}
-						<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"
-							/>
-						</svg>
-					{:else if view.type === 'timeline'}
-						<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-							/>
-						</svg>
+				<div class="group flex shrink-0 items-center border-b-2 transition {activeViewName === view.name ? 'border-blue-500' : 'border-transparent hover:border-gray-300'}">
+					<button
+						onclick={() => onViewChange(view)}
+						class="flex items-center gap-1.5 px-3 py-2 text-sm transition {activeViewName === view.name ? 'text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}"
+					>
+						{#if view.type === 'table'}
+							<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M3 10h18M3 14h18M10 3v18M14 3v18M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"
+								/>
+							</svg>
+						{:else if view.type === 'kanban'}
+							<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"
+								/>
+							</svg>
+						{:else if view.type === 'timeline'}
+							<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+								/>
+							</svg>
+						{/if}
+						{view.name}
+					</button>
+					{#if onDeleteView}
+						<button
+							onclick={(e) => { e.stopPropagation(); if (canDelete(view)) onDeleteView(view); }}
+							disabled={!canDelete(view)}
+							title={canDelete(view) ? `Delete ${view.name}` : 'Cannot delete the last Table view'}
+							class="mr-1 rounded p-0.5 opacity-0 transition group-hover:opacity-100 {canDelete(view) ? 'text-gray-400 hover:bg-red-50 hover:text-red-500' : 'cursor-not-allowed text-gray-200'}"
+							aria-label="Delete view"
+						>
+							<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+							</svg>
+						</button>
 					{/if}
-					{view.name}
-				</button>
+				</div>
 			{/each}
 		</div>
 
