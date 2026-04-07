@@ -12,8 +12,8 @@ class Table(SQLModel, table=True):
 
     __tablename__ = "tables"
 
-    table_id: UUID = Field(default_factory=uuid4, primary_key=True, description="Unique identifier")
     workspace_id: UUID = Field(index=True, foreign_key="workspaces.workspace_id", description="Workspace UUID (FK)")
+    table_id: UUID = Field(default_factory=uuid4, primary_key=True, description="Unique identifier")
     table_name: str = Field(description="Table name")
     columns: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="Column definitions")
     views: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="View configurations")
