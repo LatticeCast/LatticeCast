@@ -703,7 +703,12 @@
 												title={urlVal}>{urlVal}</a
 											>
 										{:else if urlVal}
-											<span class="block truncate text-gray-500" title={urlVal}>{urlVal}</span>
+											<a
+												href="/{urlVal}"
+												class="block max-w-full truncate text-blue-600 underline hover:text-blue-800"
+												onclick={(e) => e.stopPropagation()}
+												title={urlVal}>{urlVal}</a
+											>
 										{:else}
 											<span class="block min-h-[1.5rem] cursor-text py-1 text-gray-300">—</span>
 										{/if}
