@@ -12,7 +12,7 @@ class Row(SQLModel, table=True):
 
     __tablename__ = "rows"
 
-    table_id: UUID = Field(foreign_key="tables.table_id", primary_key=True, description="Parent table ID")
+    table_id: str = Field(foreign_key="tables.table_id", primary_key=True, description="Parent table ID (string)")
     row_number: int = Field(default=0, primary_key=True, description="Auto-increment row number per table (set by DB trigger)")
     row_data: dict[str, Any] = Field(default_factory=dict, sa_type=JSON, description="Row data keyed by column UUID (JSONB)")
     created_by: UUID | None = Field(default=None, foreign_key="users.user_id", description="UUID of user who created the row")

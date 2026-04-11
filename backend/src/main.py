@@ -92,9 +92,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Lattice Cast API",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url="/api/v1/docs",
+    redoc_url="/api/v1/redoc",
+    openapi_url="/api/v1/openapi.json",
     description="""
 Lattice Cast backend API for project management.
 
@@ -138,7 +138,7 @@ app.add_middleware(
 
 
 # Parent API router - all routes under /api
-api_router = APIRouter(prefix="/api")
+api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(api_auth_router)
 api_router.include_router(api_storage_router)
 api_router.include_router(admin_users_router)

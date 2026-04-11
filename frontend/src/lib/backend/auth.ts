@@ -12,7 +12,7 @@ export interface AppConfig {
  * Fetch public app config (no auth required).
  */
 export async function fetchAppConfig(): Promise<AppConfig> {
-	const response = await fetch(`${BACKEND_URL}/api/login/config`);
+	const response = await fetch(`${BACKEND_URL}/api/v1/login/config`);
 	if (!response.ok) {
 		throw new Error('Failed to fetch app config');
 	}
@@ -52,7 +52,7 @@ export async function exchangeCodeViaBackend(
 	redirectUri: string,
 	codeVerifier: string
 ): Promise<TokenResponse> {
-	const response = await fetch(`${BACKEND_URL}/api/login/${provider}/token`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/login/${provider}/token`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify({
@@ -74,7 +74,7 @@ export async function exchangeCodeViaBackend(
  * Get user info and role from backend /me endpoint.
  */
 export async function fetchMe(accessToken: string): Promise<MeResponse | null> {
-	const response = await fetch(`${BACKEND_URL}/api/login/me`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/login/me`, {
 		headers: { Authorization: `Bearer ${accessToken}` }
 	});
 

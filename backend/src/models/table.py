@@ -1,20 +1,19 @@
 # src/models/table.py
 from datetime import datetime
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from sqlalchemy import JSON
 from sqlmodel import Field, SQLModel
 
 
 class Table(SQLModel, table=True):
-    """Table database model"""
+    """Table database model — table_id is human-readable string PK (= table name)"""
 
     __tablename__ = "tables"
 
     workspace_id: UUID = Field(index=True, foreign_key="workspaces.workspace_id", description="Workspace UUID (FK)")
-    table_id: UUID = Field(default_factory=uuid4, primary_key=True, description="Unique identifier")
-    table_name: str = Field(description="Table name")
+    table_id: str = Field(primary_key=True, description="Table name (human-readable string PK)")
     columns: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="Column definitions")
     views: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="View configurations")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
@@ -24,18 +23,17 @@ class Table(SQLModel, table=True):
 class TableCreate(SQLModel):
     """Schema for creating a table"""
 
-    table_name: str = Field(..., description="Table name")
+    table_id: str = Field(..., description="Table name (becomes the PK)")
     workspace_id: str | None = Field(
-        default=None, description="Target workspace UUID or workspace_name (defaults to user's first workspace)"
+        default=None, description="Target workspace UUID or workspace_name"
     )
 
 
 class TableResponse(SQLModel):
     """Table response model for API"""
 
-    table_id: UUID = Field(..., description="Unique identifier")
     workspace_id: UUID = Field(..., description="Workspace UUID")
-    table_name: str = Field(..., description="Table name")
+    table_id: str = Field(..., description="Table name (PK)")
     columns: list[dict[str, Any]] = Field(default_factory=list, description="Column definitions")
     views: list[dict[str, Any]] = Field(default_factory=list, description="View configurations")
     created_at: datetime = Field(..., description="Creation timestamp")
@@ -43,6 +41,6 @@ class TableResponse(SQLModel):
 
 
 class TableUpdate(SQLModel):
-    """Schema for updating a table"""
+    """Schema for updating a table — rename table_id"""
 
-    table_name: str = Field(..., description="New table name")
+    table_id: str = Field(..., description="New table name")

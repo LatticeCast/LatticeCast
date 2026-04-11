@@ -31,14 +31,14 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 
 export async function fetchTables(): Promise<Table[]> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables`, { headers });
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables`, { headers });
 	if (!response.ok) throw new Error(`Failed to fetch tables: ${response.statusText}`);
 	return response.json();
 }
 
 export async function createTable(data: CreateTable): Promise<Table> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables`, {
 		method: 'POST',
 		headers,
 		body: JSON.stringify(data)
@@ -49,14 +49,14 @@ export async function createTable(data: CreateTable): Promise<Table> {
 
 export async function fetchTable(tableId: string): Promise<Table> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}`, { headers });
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}`, { headers });
 	if (!response.ok) throw new Error(`Failed to fetch table: ${response.statusText}`);
 	return response.json();
 }
 
 export async function updateTable(tableId: string, data: UpdateTable): Promise<Table> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}`, {
 		method: 'PUT',
 		headers,
 		body: JSON.stringify(data)
@@ -70,7 +70,7 @@ export async function updateTable(tableId: string, data: UpdateTable): Promise<T
 
 export async function deleteTable(tableId: string): Promise<void> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}`, {
 		method: 'DELETE',
 		headers
 	});
@@ -81,7 +81,7 @@ export async function deleteTable(tableId: string): Promise<void> {
 
 export async function createColumn(tableId: string, data: CreateColumn): Promise<Column> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/columns`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/columns`, {
 		method: 'POST',
 		headers,
 		body: JSON.stringify(data)
@@ -96,7 +96,7 @@ export async function updateColumn(
 	data: UpdateColumn
 ): Promise<Column> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/columns/${columnId}`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/columns/${columnId}`, {
 		method: 'PUT',
 		headers,
 		body: JSON.stringify(data)
@@ -107,7 +107,7 @@ export async function updateColumn(
 
 export async function deleteColumn(tableId: string, columnId: string): Promise<void> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/columns/${columnId}`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/columns/${columnId}`, {
 		method: 'DELETE',
 		headers
 	});
@@ -119,7 +119,7 @@ export async function deleteColumn(tableId: string, columnId: string): Promise<v
 export async function fetchRows(tableId: string, offset = 0, limit = 100): Promise<Row[]> {
 	const headers = await getAuthHeaders();
 	const response = await fetch(
-		`${BACKEND_URL}/api/tables/${tableId}/rows?offset=${offset}&limit=${limit}`,
+		`${BACKEND_URL}/api/v1/tables/${tableId}/rows?offset=${offset}&limit=${limit}`,
 		{ headers }
 	);
 	if (!response.ok) throw new Error(`Failed to fetch rows: ${response.statusText}`);
@@ -128,7 +128,7 @@ export async function fetchRows(tableId: string, offset = 0, limit = 100): Promi
 
 export async function createRow(tableId: string, data: CreateRow): Promise<Row> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/rows`, {
 		method: 'POST',
 		headers,
 		body: JSON.stringify(data)
@@ -139,7 +139,7 @@ export async function createRow(tableId: string, data: CreateRow): Promise<Row> 
 
 export async function updateRow(tableId: string, rowNumber: number, data: UpdateRow): Promise<Row> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowNumber}`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}`, {
 		method: 'PUT',
 		headers,
 		body: JSON.stringify(data)
@@ -150,7 +150,7 @@ export async function updateRow(tableId: string, rowNumber: number, data: Update
 
 export async function deleteRow(tableId: string, rowNumber: number): Promise<void> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowNumber}`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}`, {
 		method: 'DELETE',
 		headers
 	});
@@ -162,7 +162,7 @@ export async function deleteRow(tableId: string, rowNumber: number): Promise<voi
 export async function fetchDoc(tableId: string, rowNumber: number): Promise<string> {
 	const auth = get(authStore);
 	if (!auth?.accessToken) throw new Error('Not authenticated');
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowNumber}/doc`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/doc`, {
 		headers: { Authorization: `Bearer ${auth.accessToken}` }
 	});
 	if (!response.ok) throw new Error(`Failed to fetch doc: ${response.statusText}`);
@@ -176,7 +176,7 @@ export async function saveDoc(
 ): Promise<string> {
 	const auth = get(authStore);
 	if (!auth?.accessToken) throw new Error('Not authenticated');
-	const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowNumber}/doc`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/doc`, {
 		method: 'PUT',
 		headers: {
 			Authorization: `Bearer ${auth.accessToken}`,
@@ -192,7 +192,7 @@ export async function checkDocExists(tableId: string, rowNumber: number): Promis
 	const auth = get(authStore);
 	if (!auth?.accessToken) return false;
 	try {
-		const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/rows/${rowNumber}/doc`, {
+		const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/doc`, {
 			method: 'HEAD',
 			headers: { Authorization: `Bearer ${auth.accessToken}` }
 		});
@@ -208,7 +208,7 @@ export async function batchDocsExist(tableId: string): Promise<Set<number>> {
 	const auth = get(authStore);
 	if (!auth?.accessToken) return new Set();
 	try {
-		const response = await fetch(`${BACKEND_URL}/api/tables/${tableId}/docs-exist`, {
+		const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/docs-exist`, {
 			headers: { Authorization: `Bearer ${auth.accessToken}` }
 		});
 		if (!response.ok) return new Set();
@@ -229,7 +229,7 @@ export async function fetchColDoc(
 	const auth = get(authStore);
 	if (!auth?.accessToken) throw new Error('Not authenticated');
 	const response = await fetch(
-		`${BACKEND_URL}/api/tables/${tableId}/rows/${rowNumber}/col-doc/${columnId}`,
+		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/col-doc/${columnId}`,
 		{ headers: { Authorization: `Bearer ${auth.accessToken}` } }
 	);
 	if (!response.ok) throw new Error(`Failed to fetch col doc: ${response.statusText}`);
@@ -245,7 +245,7 @@ export async function saveColDoc(
 	const auth = get(authStore);
 	if (!auth?.accessToken) throw new Error('Not authenticated');
 	const response = await fetch(
-		`${BACKEND_URL}/api/tables/${tableId}/rows/${rowNumber}/col-doc/${columnId}`,
+		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/col-doc/${columnId}`,
 		{
 			method: 'PUT',
 			headers: {
@@ -263,7 +263,7 @@ export async function saveColDoc(
 
 export async function createPmTemplate(table_name: string, workspaceId: string): Promise<Table> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/tables/template/pm`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/template/pm`, {
 		method: 'POST',
 		headers,
 		body: JSON.stringify({ table_name, workspace_id: workspaceId })

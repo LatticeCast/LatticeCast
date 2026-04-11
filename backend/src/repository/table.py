@@ -18,37 +18,23 @@ class TableRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, workspace_id: UUID, table_name: str) -> Table:
-        table = Table(workspace_id=workspace_id, table_name=table_name)
+    async def create(self, workspace_id: UUID, table_id: str) -> Table:
+        table = Table(workspace_id=workspace_id, table_id=table_id)
         self.session.add(table)
         await self.session.commit()
         await self.session.refresh(table)
         return table
 
-    async def get_by_id(self, table_id: UUID) -> Table | None:
+    async def get_by_id(self, table_id: str) -> Table | None:
         result = await self.session.execute(select(Table).where(Table.table_id == table_id))
         return result.scalar_one_or_none()
 
     async def resolve_table(self, workspace_id: UUID, identifier: str) -> Table | None:
-        """Resolve a table within a workspace by UUID first, then case-insensitive name."""
-        try:
-            table_uuid = UUID(identifier)
-            result = await self.session.execute(
-                select(Table).where(
-                    Table.table_id == table_uuid,
-                    Table.workspace_id == workspace_id,
-                )
-            )
-            table = result.scalar_one_or_none()
-            if table:
-                return table
-        except (ValueError, AttributeError):
-            pass
-        # Fallback: case-insensitive name match within workspace
+        """Resolve a table by table_id (case-insensitive) within a workspace."""
         result = await self.session.execute(
             select(Table).where(
                 Table.workspace_id == workspace_id,
-                func.lower(Table.table_name) == identifier.lower(),
+                func.lower(Table.table_id) == identifier.lower(),
             )
         )
         return result.scalar_one_or_none()
@@ -65,7 +51,7 @@ class TableRepository:
         result = await self.session.execute(
             select(Table).where(
                 Table.workspace_id.in_(workspace_ids),
-                func.lower(Table.table_name) == identifier.lower(),
+                func.lower(Table.table_id) == identifier.lower(),
             )
         )
         return result.scalar_one_or_none()
@@ -74,8 +60,8 @@ class TableRepository:
         result = await self.session.execute(select(Table).where(Table.workspace_id == workspace_id))
         return list(result.scalars().all())
 
-    async def update(self, table: Table, table_name: str) -> Table:
-        table.table_name = table_name
+    async def update(self, table: Table, table_id: str) -> Table:
+        table.table_id = table_id
         table.updated_at = datetime.utcnow()
         self.session.add(table)
         await self.session.commit()

@@ -63,7 +63,7 @@ async def create_table(
             )
         workspace_id = workspace.workspace_id
     table_repo = TableRepository(session)
-    table = await table_repo.create(workspace_id=workspace_id, table_name=data.table_name)
+    table = await table_repo.create(workspace_id=workspace_id, table_id=data.table_id)
 
     # Default template: Title + Description (if no columns specified)
     if not table.columns:
@@ -124,11 +124,11 @@ async def update_table(
     table = await _get_table_for_member(table_id, user, session)
     table_repo = TableRepository(session)
     existing = await table_repo.list_by_workspace(table.workspace_id)
-    if any(t.table_name == data.table_name and t.table_id != table.table_id for t in existing):
+    if any(t.table_id == data.table_id and t.table_id != table.table_id for t in existing):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="A table with that name already exists in this workspace"
         )
-    return await table_repo.update(table, data.table_name)
+    return await table_repo.update(table, data.table_id)
 
 
 @router.delete("/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -364,9 +364,9 @@ async def create_pm_template(
     session: AsyncSession = Depends(get_session),
 ):
     """Create a PM project table with pre-configured columns and default views"""
-    table_name = data.get("table_name", "") or data.get("name", "")
-    if not table_name:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="table_name is required")
+    table_id = data.get("table_id", "") or data.get("table_name", "") or data.get("name", "")
+    if not table_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="table_id is required")
     ws_repo = WorkspaceRepository(session)
     raw_workspace = data.get("workspace_name") or data.get("workspace_id")
     if raw_workspace:
@@ -385,7 +385,7 @@ async def create_pm_template(
         workspace_id = workspace.workspace_id
 
     table_repo = TableRepository(session)
-    table = await table_repo.create(workspace_id=workspace_id, table_name=table_name)
+    table = await table_repo.create(workspace_id=workspace_id, table_id=table_id)
 
     # Add columns and collect their generated IDs for view config
     col_ids: dict[str, str] = {}

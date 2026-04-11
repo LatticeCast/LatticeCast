@@ -21,7 +21,7 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 export async function loadJson<T>(path: string): Promise<T | null> {
 	try {
 		const headers = await getAuthHeaders();
-		const response = await fetch(`${BACKEND_URL}/api/storage/file/${path}`, {
+		const response = await fetch(`${BACKEND_URL}/api/v1/storage/file/${path}`, {
 			headers
 		});
 
@@ -50,7 +50,7 @@ export async function saveJson<T>(path: string, data: T): Promise<boolean> {
 		const formData = new FormData();
 		formData.append('file', blob, path.split('/').pop() || 'data.json');
 
-		const response = await fetch(`${BACKEND_URL}/api/storage/file/${path}`, {
+		const response = await fetch(`${BACKEND_URL}/api/v1/storage/file/${path}`, {
 			method: 'PUT',
 			headers,
 			body: formData
