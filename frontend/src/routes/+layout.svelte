@@ -125,7 +125,6 @@
 											<button
 												onclick={() => {
 													navigate(`/${ws.workspace_id}/${table.table_id}`);
-													menuOpen = false;
 												}}
 												class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs text-gray-600 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-blue-400 {$currentTable?.table_id ===
 												table.table_id
