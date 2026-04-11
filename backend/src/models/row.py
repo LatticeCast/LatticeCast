@@ -30,7 +30,7 @@ class RowUpdate(SQLModel):
 
 
 class RowResponse(SQLModel):
-    table_id: UUID = Field(..., description="Parent table ID")
+    table_id: str = Field(..., description="Parent table ID (string)")
     row_number: int = Field(..., description="Auto-increment row number per table")
     row_data: dict[str, Any] = Field(..., description="Row data keyed by column UUID")
     created_by: UUID | None = Field(default=None, description="UUID of user who created the row")
