@@ -96,6 +96,20 @@ async def _run_migrations(engine: AsyncEngine):
         print("⚠️ No migration files found")
         return
 
+    # Validate: migration numbers must be unique (extract number from <number>_<name>.sql)
+    seen_numbers: dict[int, str] = {}
+    for f in sql_files:
+        parts = f.stem.split("_", 1)
+        try:
+            num = int(parts[0])
+            if num in seen_numbers:
+                raise RuntimeError(
+                    f"❌ Duplicate migration number {num}: {seen_numbers[num]} and {f.name}"
+                )
+            seen_numbers[num] = f.name
+        except ValueError:
+            raise RuntimeError(f"❌ Invalid migration filename: {f.name} — must start with <number>_")
+
     async with engine.begin() as conn:
         # Create migration tracking table if it doesn't exist
         await conn.execute(text(
