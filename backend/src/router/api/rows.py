@@ -168,15 +168,17 @@ async def create_row(
     # Auto-populate Doc column with MinIO path if table has a "Doc" column
     # Use raw SQL to avoid session.add() on detached Row object (which causes duplicate insert)
     if doc_col:
+        import json as _json
         from sqlalchemy import text as sa_text
+        patch = _json.dumps({doc_col["column_id"]: minio_key})
         await session.execute(
             sa_text("""
                 UPDATE rows
-                SET row_data = jsonb_set(row_data, :path, to_jsonb(:val::text)),
+                SET row_data = row_data || CAST(:patch AS jsonb),
                     updated_at = NOW()
                 WHERE table_id = :tid AND row_number = :rn
             """),
-            {"path": f'{{{doc_col["column_id"]}}}', "val": minio_key, "tid": table.table_id, "rn": row.row_number},
+            {"patch": patch, "tid": table.table_id, "rn": row.row_number},
         )
         await session.commit()
         row.row_data[doc_col["column_id"]] = minio_key
