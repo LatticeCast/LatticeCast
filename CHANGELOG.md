@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.13 — 2026-04-11
+- `table_id` is now string PK (= table name, always lowercase) — no more UUIDs for tables
+- API prefix changed from `/api/` to `/api/v1/`
+- Removed `table_name` column — `table_id` IS the name
+- Doc column is first column (position 0) in all templates
+- Default table template: Doc + Title + Description
+
+## v0.12 — 2026-04-09
+- Simplified naming: `workspace_name` (no display_id), `user_name` (unique)
+- Added `doc` column type — inline markdown editor backed by MinIO
+- `url` column: external links open new tab, internal paths navigate to `/{path}`
+- Title is plain text cell — no special click behavior
+- Every table has at least 1 Table view (auto-created, can't delete last)
+- Add Row: optimistic UI, instant inline row creation
+- Add View: full-width panel overlay
+- PM template Status choices: todo, in_progress, testing, debugging, review, done, merged
+
+## v0.11 — 2026-04-07
+- `row_number` BIGSERIAL PK per table (replaces UUID `row_id`)
+- Composite PK `(table_id, row_number)`, auto-increment via PG trigger
+- UUID-based users: `user_id` UUID PK, `user_info` for display_id/email/name (GDPR)
+- Workspace UUID PK + `workspace_name`
+- Rows default sort: desc (newest first)
+- `filter_json` query param for server-side JSONB filter
+- Token resolution: UUID → display_id → email
+- Remove Key column — use `type-row_number` as ticket ID
+
+## v0.10 — 2026-04-05
+- Skills: claude-bot plan | prepare | running split
+- Skills: `pm_tools.sh` shared bash helpers
+- Skills: orchestrator pure rule-based (no LLM), worker bash infra + LLM code
+- Orchestrator: recovery of orphaned in_progress tickets on startup
+- Orchestrator: poll PM status for worker completion (no trigger files)
+- Worker: bash handles PM+git, LLM only writes code
+- Architecture docs: `llm.arch.airtable.md` (Layer 1) + `llm.arch.pm.md` (Layer 2)
+
 ## v0.9 — 2026-04-04
 - Perf: batch docs-exist endpoint (75 HEAD requests → 1 S3 list call)
 - Non-blocking doc flag loading — page renders immediately, doc icons appear async
