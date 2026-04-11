@@ -38,9 +38,8 @@ export interface WorkspaceMember {
 }
 
 export interface Table {
-	table_id: UUID;
+	table_id: string;
 	workspace_id: UUID;
-	table_name: string;
 	columns: Column[];
 	views: ViewConfig[];
 	created_at: string;
@@ -57,7 +56,7 @@ export interface Column {
 }
 
 export interface Row {
-	table_id: UUID;
+	table_id: string;
 	row_number: number;
 	row_data: Record<UUID, unknown>;
 	created_by: UUID | null;
@@ -67,7 +66,7 @@ export interface Row {
 }
 
 export interface CreateTable {
-	table_name: string;
+	table_id: string;
 	workspace_id: UUID;
 }
 
@@ -83,7 +82,7 @@ export interface CreateRow {
 }
 
 export interface UpdateTable {
-	table_name?: string;
+	table_id?: string;
 }
 
 export interface UpdateColumn {

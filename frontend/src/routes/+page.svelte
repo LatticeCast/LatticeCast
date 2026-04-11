@@ -116,7 +116,7 @@
 		creating = { ...creating, [wsId]: true };
 		error = '';
 		try {
-			const table = await createTable({ table_name: name, workspace_id: wsId });
+			const table = await createTable({ table_id: name, workspace_id: wsId });
 			tables = [...tables, table];
 			newTableNames = { ...newTableNames, [wsId]: '' };
 		} catch (e) {
@@ -135,7 +135,7 @@
 	function openTableSettings(table: Table, e: MouseEvent) {
 		e.stopPropagation();
 		tableSettingsTarget = table;
-		tableRenameValue = table.table_name;
+		tableRenameValue = table.table_id;
 		tableSettingsError = '';
 	}
 
@@ -148,10 +148,10 @@
 	async function handleTableRename() {
 		if (!tableSettingsTarget) return;
 		const name = tableRenameValue.trim();
-		if (!name || name === tableSettingsTarget.table_name) { closeTableSettings(); return; }
+		if (!name || name === tableSettingsTarget.table_id) { closeTableSettings(); return; }
 		const wsId = tableSettingsTarget.workspace_id;
 		const duplicate = tables.some(
-			(t) => t.workspace_id === wsId && t.table_name === name && t.table_id !== tableSettingsTarget!.table_id
+			(t) => t.workspace_id === wsId && t.table_id === name && t.table_id !== tableSettingsTarget!.table_id
 		);
 		if (duplicate) {
 			tableSettingsError = `A table named "${name}" already exists in this workspace.`;
@@ -160,7 +160,7 @@
 		tableSaving = true;
 		tableSettingsError = '';
 		try {
-			const updated = await updateTable(tableSettingsTarget.table_id, { table_name: name });
+			const updated = await updateTable(tableSettingsTarget.table_id, { table_id: name });
 			tables = tables.map((t) => t.table_id === updated.table_id ? updated : t);
 			closeTableSettings();
 		} catch (e) {
@@ -172,7 +172,7 @@
 
 	async function handleTableDelete() {
 		if (!tableSettingsTarget) return;
-		if (!confirm(`Delete table "${tableSettingsTarget.table_name}"? This cannot be undone.`)) return;
+		if (!confirm(`Delete table "${tableSettingsTarget.table_id}"? This cannot be undone.`)) return;
 		tableSaving = true;
 		tableSettingsError = '';
 		try {
@@ -284,7 +284,7 @@
 											onclick={() => goto(`/${table.workspace_id}/${table.table_id}`)}
 											class="flex-1 text-left font-medium text-gray-800"
 										>
-											{table.table_name}
+											{table.table_id}
 										</button>
 										<button
 											onclick={(e) => openTableSettings(table, e)}

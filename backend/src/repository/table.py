@@ -19,7 +19,7 @@ class TableRepository:
         self.session = session
 
     async def create(self, workspace_id: UUID, table_id: str) -> Table:
-        table = Table(workspace_id=workspace_id, table_id=table_id)
+        table = Table(workspace_id=workspace_id, table_id=table_id.lower())
         self.session.add(table)
         await self.session.commit()
         await self.session.refresh(table)
@@ -61,7 +61,7 @@ class TableRepository:
         return list(result.scalars().all())
 
     async def update(self, table: Table, table_id: str) -> Table:
-        table.table_id = table_id
+        table.table_id = table_id.lower()
         table.updated_at = datetime.utcnow()
         self.session.add(table)
         await self.session.commit()

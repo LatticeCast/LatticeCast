@@ -261,12 +261,12 @@ export async function saveColDoc(
 
 // Templates
 
-export async function createPmTemplate(table_name: string, workspaceId: string): Promise<Table> {
+export async function createPmTemplate(table_id: string, workspaceId: string): Promise<Table> {
 	const headers = await getAuthHeaders();
 	const response = await fetch(`${BACKEND_URL}/api/v1/tables/template/pm`, {
 		method: 'POST',
 		headers,
-		body: JSON.stringify({ table_name, workspace_id: workspaceId })
+		body: JSON.stringify({ table_id: table_name, workspace_id: workspaceId })
 	});
 	if (!response.ok) throw new Error(`Failed to create PM template: ${response.statusText}`);
 	return response.json();

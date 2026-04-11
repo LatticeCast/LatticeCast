@@ -145,7 +145,7 @@
 														d="M3 10h18M3 14h18M10 3v18M6 3h12a1 1 0 011 1v16a1 1 0 01-1 1H6a1 1 0 01-1-1V4a1 1 0 011-1z"
 													/>
 												</svg>
-												<span class="truncate">{table.table_name}</span>
+												<span class="truncate">{table.table_id}</span>
 											</button>
 										{:else}
 											<p class="px-2 py-1 text-xs text-gray-400 dark:text-gray-500">No tables</p>
@@ -313,7 +313,7 @@
 				>{wsName}</button>
 				{#if $page.params.table_id}
 					{@const tableId = $page.params.table_id}
-					{@const tableName = tablesByWorkspace[wsId]?.find((t) => t.table_id === tableId)?.table_name ?? $currentTable?.table_name ?? tableId}
+					{@const tableName = tablesByWorkspace[wsId]?.find((t) => t.table_id === tableId)?.table_id ?? $currentTable?.table_id ?? tableId}
 					<span class="shrink-0 text-white/40">/</span>
 					<button
 						onclick={() => navigate(`/${wsId}/${tableId}`)}
