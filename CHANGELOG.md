@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.14 — 2026-04-11
+- Fix: duplicate row on create — `session.add(detached)` caused second INSERT instead of UPDATE
+- Fix: Doc column cell paths migrated from UUID-based to string table_id (one-time script)
+
 ## v0.13 — 2026-04-11
 - `table_id` is now string PK (= table name, always lowercase) — no more UUIDs for tables
 - API prefix changed from `/api/` to `/api/v1/`
