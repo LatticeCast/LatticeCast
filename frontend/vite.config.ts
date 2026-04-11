@@ -25,8 +25,8 @@ type BackendUrlMode = keyof typeof backendUrls;
 
 export default defineConfig(({ mode }) => {
 	const safeMode = mode as BackendUrlMode;
-	const backendUrl = backendUrls[safeMode] || backendUrls.production;
-	const frontendUrl = frontendUrls[safeMode] || frontendUrls.production;
+	const backendUrl = backendUrls[safeMode] ?? backendUrls.production;
+	const frontendUrl = frontendUrls[safeMode] ?? frontendUrls.production;
 
 	const isProduction = mode === 'production';
 
