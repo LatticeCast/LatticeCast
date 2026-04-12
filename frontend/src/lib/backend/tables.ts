@@ -266,7 +266,7 @@ export async function createPmTemplate(table_id: string, workspaceId: string): P
 	const response = await fetch(`${BACKEND_URL}/api/v1/tables/template/pm`, {
 		method: 'POST',
 		headers,
-		body: JSON.stringify({ table_id: table_name, workspace_id: workspaceId })
+		body: JSON.stringify({ table_id: table_id, workspace_id: workspaceId })
 	});
 	if (!response.ok) throw new Error(`Failed to create PM template: ${response.statusText}`);
 	return response.json();
