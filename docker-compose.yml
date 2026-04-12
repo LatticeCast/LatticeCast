@@ -123,13 +123,12 @@ services:
       - browser
     build:
       context: ./browser
+    user: "1000:1000"
+    network_mode: host
     volumes:
       - ./.browser:/output
     environment:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
-    networks:
-      - shared-network
-      - app-network
     tty: true
     stdin_open: true
 
