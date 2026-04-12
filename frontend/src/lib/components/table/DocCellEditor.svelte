@@ -59,11 +59,11 @@
 
 <Portal>
 <!-- Backdrop -->
-<div class="fixed inset-0 z-40 bg-black/30" onclick={handleClose} role="presentation"></div>
+<div class="fixed inset-0 z-[9999] bg-black/30" onclick={handleClose} role="presentation"></div>
 
 <!-- Editor panel -->
 <div
-	class="fixed top-1/2 left-1/2 z-50 flex h-[70vh] w-[80vw] max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl shadow-2xl {isDark.value
+	class="fixed top-1/2 left-1/2 z-[10000] flex h-[70vh] w-[80vw] max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl shadow-2xl {isDark.value
 		? 'bg-gray-800'
 		: 'bg-white'}"
 	role="dialog"
