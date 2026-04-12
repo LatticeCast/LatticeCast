@@ -1,26 +1,15 @@
 // lib/backend/storage.ts
 // Storage API client for persisting JSON data to backend
 
-import { get } from 'svelte/store';
-import { authStore } from '$lib/stores/auth.store';
 import { BACKEND_URL } from './config';
-
-async function getAuthHeaders(): Promise<HeadersInit> {
-	const auth = get(authStore);
-	if (!auth?.accessToken) {
-		throw new Error('Not authenticated');
-	}
-	return {
-		Authorization: `Bearer ${auth.accessToken}`
-	};
-}
+import { getBearerHeader } from './http';
 
 /**
  * Load JSON data from storage
  */
 export async function loadJson<T>(path: string): Promise<T | null> {
 	try {
-		const headers = await getAuthHeaders();
+		const headers = await getBearerHeader();
 		const response = await fetch(`${BACKEND_URL}/api/v1/storage/file/${path}`, {
 			headers
 		});
@@ -45,7 +34,7 @@ export async function loadJson<T>(path: string): Promise<T | null> {
  */
 export async function saveJson<T>(path: string, data: T): Promise<boolean> {
 	try {
-		const headers = await getAuthHeaders();
+		const headers = await getBearerHeader();
 		const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
 		const formData = new FormData();
 		formData.append('file', blob, path.split('/').pop() || 'data.json');

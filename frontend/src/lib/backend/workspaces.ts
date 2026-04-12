@@ -1,21 +1,9 @@
 // lib/backend/workspaces.ts
 // API client for workspaces + members CRUD
 
-import { get } from 'svelte/store';
-import { authStore } from '$lib/stores/auth.store';
 import { BACKEND_URL } from './config';
+import { getAuthHeaders } from './http';
 import type { Workspace, WorkspaceMember } from '$lib/types/table';
-
-async function getAuthHeaders(): Promise<HeadersInit> {
-	const auth = get(authStore);
-	if (!auth?.accessToken) {
-		throw new Error('Not authenticated');
-	}
-	return {
-		Authorization: `Bearer ${auth.accessToken}`,
-		'Content-Type': 'application/json'
-	};
-}
 
 export interface CreateWorkspace {
 	workspace_name: string;

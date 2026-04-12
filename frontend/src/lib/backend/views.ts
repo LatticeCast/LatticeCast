@@ -1,21 +1,9 @@
 // lib/backend/views.ts
 // API client for table views CRUD
 
-import { get } from 'svelte/store';
-import { authStore } from '$lib/stores/auth.store';
 import { BACKEND_URL } from './config';
+import { getAuthHeaders } from './http';
 import type { ViewConfig } from '$lib/types/table';
-
-async function getAuthHeaders(): Promise<HeadersInit> {
-	const auth = get(authStore);
-	if (!auth?.accessToken) {
-		throw new Error('Not authenticated');
-	}
-	return {
-		Authorization: `Bearer ${auth.accessToken}`,
-		'Content-Type': 'application/json'
-	};
-}
 
 export async function fetchViews(tableId: string): Promise<ViewConfig[]> {
 	const headers = await getAuthHeaders();

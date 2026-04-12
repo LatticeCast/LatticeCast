@@ -4,6 +4,7 @@
 import { get } from 'svelte/store';
 import { authStore } from '$lib/stores/auth.store';
 import { BACKEND_URL } from './config';
+import { getAuthHeaders, getBearerHeader } from './http';
 import type {
 	Table,
 	Column,
@@ -15,17 +16,6 @@ import type {
 	UpdateColumn,
 	UpdateRow
 } from '$lib/types/table';
-
-async function getAuthHeaders(): Promise<HeadersInit> {
-	const auth = get(authStore);
-	if (!auth?.accessToken) {
-		throw new Error('Not authenticated');
-	}
-	return {
-		Authorization: `Bearer ${auth.accessToken}`,
-		'Content-Type': 'application/json'
-	};
-}
 
 // Tables
 
@@ -160,10 +150,9 @@ export async function deleteRow(tableId: string, rowNumber: number): Promise<voi
 // Docs
 
 export async function fetchDoc(tableId: string, rowNumber: number): Promise<string> {
-	const auth = get(authStore);
-	if (!auth?.accessToken) throw new Error('Not authenticated');
+	const headers = await getBearerHeader();
 	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/doc`, {
-		headers: { Authorization: `Bearer ${auth.accessToken}` }
+		headers
 	});
 	if (!response.ok) throw new Error(`Failed to fetch doc: ${response.statusText}`);
 	return response.text();
@@ -174,14 +163,10 @@ export async function saveDoc(
 	rowNumber: number,
 	content: string
 ): Promise<string> {
-	const auth = get(authStore);
-	if (!auth?.accessToken) throw new Error('Not authenticated');
+	const headers = await getBearerHeader();
 	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/doc`, {
 		method: 'PUT',
-		headers: {
-			Authorization: `Bearer ${auth.accessToken}`,
-			'Content-Type': 'text/plain'
-		},
+		headers: { ...headers, 'Content-Type': 'text/plain' },
 		body: content
 	});
 	if (!response.ok) throw new Error(`Failed to save doc: ${response.statusText}`);
