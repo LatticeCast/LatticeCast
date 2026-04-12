@@ -158,7 +158,8 @@
 					{#each sortedColumns as col, i (col.column_id)}
 						<th
 							class="relative border-b px-3 py-2 text-left text-xs font-semibold tracking-wide uppercase {isDark.value ? 'border-gray-700 text-gray-400' : 'border-gray-200 text-gray-500'}
-								{i === 0 ? (isDark.value ? 'sticky left-12 z-10 border-r border-gray-700 bg-gray-800' : 'sticky left-12 z-10 border-r border-gray-200 bg-gray-50') : (isDark.value ? 'bg-gray-800' : 'bg-gray-50')}"
+								{i === 0 ? (isDark.value ? 'sticky left-12 border-r border-gray-700 bg-gray-800' : 'sticky left-12 border-r border-gray-200 bg-gray-50') : (isDark.value ? 'bg-gray-800' : 'bg-gray-50')}
+								{colMenuId === col.column_id ? 'z-30' : (i === 0 ? 'z-10' : '')}"
 							style="width: {getColWidth(col)}px;"
 							oncontextmenu={(e) => onOpenContextMenu(e, 'col', col.column_id)}
 						>
