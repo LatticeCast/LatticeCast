@@ -4,6 +4,7 @@
 	import { updateRow } from '$lib/backend/tables';
 	import { updateView } from '$lib/backend/views';
 	import { isDark } from '$lib/UI/theme.svelte';
+	import GroupBySelector from './GroupBySelector.svelte';
 
 	let {
 		tableId,
@@ -36,9 +37,8 @@
 		onViewUpdate(updated);
 	}
 
-	async function handleGroupByChange(e: Event) {
-		const val = (e.target as HTMLSelectElement).value;
-		await saveConfig({ group_by: val || undefined, card_fields: [] });
+	async function handleGroupByChange(colId: string | null) {
+		await saveConfig({ group_by: colId || undefined, card_fields: [] });
 	}
 
 	async function toggleCardField(colId: string) {
@@ -48,8 +48,6 @@
 			: [...current, colId];
 		await saveConfig({ card_fields: next });
 	}
-
-	const selectColumns = $derived(columns.filter((c) => c.type === 'select'));
 
 	// Drag state
 	let dragRowId = $state<number | null>(null);
@@ -199,23 +197,11 @@
 	}}
 >
 	<!-- Group by -->
-	<div class="flex items-center gap-2">
-		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}"
-			>Group by</span
-		>
-		<select
-			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
-				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
-				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
-			value={groupByColId ?? ''}
-			onchange={handleGroupByChange}
-		>
-			<option value="">— none —</option>
-			{#each selectColumns as col (col.column_id)}
-				<option value={col.column_id}>{col.name}</option>
-			{/each}
-		</select>
-	</div>
+	<GroupBySelector
+		{columns}
+		value={groupByColId ?? null}
+		onchange={handleGroupByChange}
+	/>
 
 	<!-- Sort -->
 	<div class="flex items-center gap-2">

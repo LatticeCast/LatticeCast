@@ -2,6 +2,7 @@
 	import type { Column } from '$lib/types/table';
 	import type { FilterCondition } from './table.utils';
 	import { SvelteSet } from 'svelte/reactivity';
+	import GroupBySelector from './GroupBySelector.svelte';
 
 	let {
 		columns,
@@ -52,7 +53,6 @@
 	} = $props();
 
 	let showSortMenu = $state(false);
-	let showGroupMenu = $state(false);
 	let showHideMenu = $state(false);
 	let showExportMenu = $state(false);
 
@@ -71,7 +71,6 @@
 			onclick={(e) => {
 				e.stopPropagation();
 				showSortMenu = !showSortMenu;
-				showGroupMenu = false;
 				showHideMenu = false;
 			}}
 			class="{btnBase} {sortConfig ? btnActive : btnInactive}"
@@ -141,122 +140,11 @@
 	</div>
 
 	<!-- Group -->
-	<div class="relative">
-		<button
-			onclick={(e) => {
-				e.stopPropagation();
-				showGroupMenu = !showGroupMenu;
-				showSortMenu = false;
-				showHideMenu = false;
-			}}
-			class="{btnBase} {groupConfig ? btnActive : btnInactive}"
-		>
-			<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M4 6h16M4 10h16M4 14h8M4 18h8"
-				/>
-			</svg>
-			Group
-			{#if groupConfig}
-				<span
-					class="flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-xs font-bold text-white"
-					>1</span
-				>
-			{/if}
-		</button>
-		{#if showGroupMenu}
-			<div
-				class="absolute top-full left-0 z-30 mt-1 min-w-[200px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
-				onclick={(e) => e.stopPropagation()}
-				role="menu"
-			>
-				<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">
-					Group by
-				</div>
-				{#each sortedCols.filter((c) => c.type === 'select' || c.type === 'date') as col (col.column_id)}
-					{#if col.type === 'date'}
-						<div class="px-3 py-1 text-xs font-medium text-gray-500">
-							{col.name} <span class="text-gray-400">(date)</span>
-						</div>
-						<button
-							class="flex w-full items-center gap-2 px-5 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId ===
-								col.column_id && groupConfig?.granularity === 'month'
-								? 'font-semibold text-blue-600'
-								: ''}"
-							onclick={() => {
-								onGroupChange(
-									groupConfig?.colId === col.column_id && groupConfig?.granularity === 'month'
-										? null
-										: { colId: col.column_id, granularity: 'month' }
-								);
-								showGroupMenu = false;
-							}}
-							role="menuitem"
-						>
-							by month
-							{#if groupConfig?.colId === col.column_id && groupConfig?.granularity === 'month'}
-								<span class="ml-auto text-xs text-blue-500">✓</span>
-							{/if}
-						</button>
-						<button
-							class="flex w-full items-center gap-2 px-5 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId ===
-								col.column_id && groupConfig?.granularity === 'day'
-								? 'font-semibold text-blue-600'
-								: ''}"
-							onclick={() => {
-								onGroupChange(
-									groupConfig?.colId === col.column_id && groupConfig?.granularity === 'day'
-										? null
-										: { colId: col.column_id, granularity: 'day' }
-								);
-								showGroupMenu = false;
-							}}
-							role="menuitem"
-						>
-							by day
-							{#if groupConfig?.colId === col.column_id && groupConfig?.granularity === 'day'}
-								<span class="ml-auto text-xs text-blue-500">✓</span>
-							{/if}
-						</button>
-					{:else}
-						<button
-							class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {groupConfig?.colId ===
-							col.column_id
-								? 'font-semibold text-blue-600'
-								: ''}"
-							onclick={() => {
-								onGroupChange(groupConfig?.colId === col.column_id ? null : { colId: col.column_id });
-								showGroupMenu = false;
-							}}
-							role="menuitem"
-						>
-							{col.name}
-							<span class="ml-1 text-xs text-gray-400">({col.type})</span>
-							{#if groupConfig?.colId === col.column_id}
-								<span class="ml-auto text-xs text-blue-500">✓</span>
-							{/if}
-						</button>
-					{/if}
-				{:else}
-					<div class="px-3 py-2 text-xs text-gray-400">No select or date columns</div>
-				{/each}
-				{#if groupConfig}
-					<hr class="my-1 border-gray-100" />
-					<button
-						class="w-full px-3 py-1.5 text-left text-xs text-red-500 hover:bg-red-50"
-						onclick={() => {
-							onGroupChange(null);
-							showGroupMenu = false;
-						}}
-						role="menuitem">Clear group</button
-					>
-				{/if}
-			</div>
-		{/if}
-	</div>
+	<GroupBySelector
+		{columns}
+		value={groupConfig?.colId ?? null}
+		onchange={(colId) => onGroupChange(colId ? { colId } : null)}
+	/>
 
 	<!-- Hide Fields -->
 	<div class="relative">
@@ -265,7 +153,6 @@
 				e.stopPropagation();
 				showHideMenu = !showHideMenu;
 				showSortMenu = false;
-				showGroupMenu = false;
 			}}
 			class="{btnBase} {hiddenCols.size > 0 ? btnActive : btnInactive}"
 		>
@@ -372,7 +259,6 @@
 				e.stopPropagation();
 				showExportMenu = !showExportMenu;
 				showSortMenu = false;
-				showGroupMenu = false;
 				showHideMenu = false;
 			}}
 			class="{btnBase} {btnInactive}"
