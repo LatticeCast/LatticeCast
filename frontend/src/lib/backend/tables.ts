@@ -219,46 +219,6 @@ export async function batchDocsExist(tableId: string): Promise<Set<number>> {
 	}
 }
 
-// Column docs (per-column doc cells stored in MinIO)
-
-export async function fetchColDoc(
-	tableId: string,
-	rowNumber: number,
-	columnId: string
-): Promise<string> {
-	const auth = get(authStore);
-	if (!auth?.accessToken) throw new Error('Not authenticated');
-	const response = await fetch(
-		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/col-doc/${columnId}`,
-		{ headers: { Authorization: `Bearer ${auth.accessToken}` } }
-	);
-	if (!response.ok) throw new Error(`Failed to fetch col doc: ${response.statusText}`);
-	return response.text();
-}
-
-export async function saveColDoc(
-	tableId: string,
-	rowNumber: number,
-	columnId: string,
-	content: string
-): Promise<string> {
-	const auth = get(authStore);
-	if (!auth?.accessToken) throw new Error('Not authenticated');
-	const response = await fetch(
-		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/col-doc/${columnId}`,
-		{
-			method: 'PUT',
-			headers: {
-				Authorization: `Bearer ${auth.accessToken}`,
-				'Content-Type': 'text/plain'
-			},
-			body: content
-		}
-	);
-	if (!response.ok) throw new Error(`Failed to save col doc: ${response.statusText}`);
-	return response.text();
-}
-
 // Templates
 
 export async function createPmTemplate(table_id: string, workspaceId: string): Promise<Table> {

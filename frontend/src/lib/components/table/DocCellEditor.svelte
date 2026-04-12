@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Column, Row } from '$lib/types/table';
 	import { isDark } from '$lib/UI/theme.svelte';
-	import { fetchColDoc, saveColDoc } from '$lib/backend/tables';
+	import { fetchDoc, saveDoc } from '$lib/backend/tables';
 	import { marked } from 'marked';
 	import Portal from '$lib/components/Portal.svelte';
 
@@ -25,7 +25,7 @@
 
 	$effect(() => {
 		docLoading = true;
-		fetchColDoc(tableId, row.row_number, column.column_id)
+		fetchDoc(tableId, row.row_number)
 			.then((content) => {
 				docContent = content;
 				if (content) docEditing = true;
@@ -41,7 +41,7 @@
 		if (docSaving) return;
 		docSaving = true;
 		try {
-			await saveColDoc(tableId, row.row_number, column.column_id, docContent);
+			await saveDoc(tableId, row.row_number, docContent);
 		} catch {
 			// best-effort
 		} finally {
