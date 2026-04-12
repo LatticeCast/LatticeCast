@@ -3,6 +3,7 @@
 	import { isDark } from '$lib/UI/theme.svelte';
 	import { fetchColDoc, saveColDoc } from '$lib/backend/tables';
 	import { marked } from 'marked';
+	import Portal from '$lib/components/Portal.svelte';
 
 	let {
 		row,
@@ -56,6 +57,7 @@
 	const docPreview = $derived(marked(docContent) as string);
 </script>
 
+<Portal>
 <!-- Backdrop -->
 <div class="fixed inset-0 z-40 bg-black/30" onclick={handleClose} role="presentation"></div>
 
@@ -168,3 +170,4 @@
 		</div>
 	{/if}
 </div>
+</Portal>
