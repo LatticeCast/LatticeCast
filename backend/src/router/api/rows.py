@@ -4,7 +4,7 @@ import re
 from uuid import UUID
 
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -145,32 +145,38 @@ async def create_row(
         table_id=table.table_id, row_data=data.row_data, created_by=user.user_id, updated_by=user.user_id
     )
 
-    # Auto-create doc template in MinIO based on Type column
-    type_col = next((c for c in table.columns if c.get("name") == "Type"), None)
-    title_col = next((c for c in table.columns if c.get("name") == "Title"), None)
-    doc_col = next((c for c in table.columns if c.get("name") == "Doc"), None)
-    row_type = row.row_data.get(type_col["column_id"], "") if type_col else ""
-    row_key = f"{row_type}-{row.row_number}" if row_type else str(row.row_number)
-    row_title = row.row_data.get(title_col["column_id"], "") if title_col else ""
-    minio_key = f"{table.workspace_id}/{table.table_id}/{row.row_number}.md"
-    if row_type in ("epic", "story", "task", "bug"):
-        doc_content = _build_doc_template(row_type, row_key, row_title)
-        try:
-            get_s3_client().put_object(
-                Bucket=settings.minio.bucket,
-                Key=minio_key,
-                Body=doc_content.encode("utf-8"),
-                ContentType="text/markdown",
-            )
-        except Exception:
-            pass  # doc creation is best-effort; don't fail row creation
-
-    # Auto-populate Doc column with MinIO path if table has a "Doc" column
-    # Use raw SQL to avoid session.add() on detached Row object (which causes duplicate insert)
-    if doc_col:
+    # Auto-create MinIO object and fill cell for every doc-type column
+    doc_cols = [c for c in table.columns if c.get("type") == "doc"]
+    if doc_cols:
         import json as _json
+
         from sqlalchemy import text as sa_text
-        patch = _json.dumps({doc_col["column_id"]: minio_key})
+
+        type_col = next((c for c in table.columns if c.get("name") == "Type"), None)
+        title_col = next((c for c in table.columns if c.get("name") == "Title"), None)
+        row_type = row.row_data.get(type_col["column_id"], "") if type_col else ""
+        row_title = row.row_data.get(title_col["column_id"], "") if title_col else ""
+        row_key = f"{row_type}-{row.row_number}" if row_type else str(row.row_number)
+
+        patch: dict = {}
+        for doc_col in doc_cols:
+            minio_key = f"{table.workspace_id}/{table.table_id}/{row.row_number}.md"
+            if row_type in ("epic", "story", "task", "bug"):
+                doc_content = _build_doc_template(row_type, row_key, row_title)
+            else:
+                doc_content = ""
+            try:
+                get_s3_client().put_object(
+                    Bucket=settings.minio.bucket,
+                    Key=minio_key,
+                    Body=doc_content.encode("utf-8"),
+                    ContentType="text/markdown",
+                )
+            except Exception:
+                pass  # best-effort; don't fail row creation
+            patch[doc_col["column_id"]] = minio_key
+            row.row_data[doc_col["column_id"]] = minio_key
+
         await session.execute(
             sa_text("""
                 UPDATE rows
@@ -178,10 +184,9 @@ async def create_row(
                     updated_at = NOW()
                 WHERE table_id = :tid AND row_number = :rn
             """),
-            {"patch": patch, "tid": table.table_id, "rn": row.row_number},
+            {"patch": _json.dumps(patch), "tid": table.table_id, "rn": row.row_number},
         )
         await session.commit()
-        row.row_data[doc_col["column_id"]] = minio_key
 
     return row
 
@@ -231,6 +236,10 @@ async def update_row(
     row = await repo.get_by_number(table.table_id, row_number)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+    # Silently drop any attempts to change doc-type column values (system-managed)
+    doc_col_ids = {c["column_id"] for c in table.columns if c.get("type") == "doc"}
+    if doc_col_ids:
+        data = RowUpdate(row_data={k: v for k, v in data.row_data.items() if k not in doc_col_ids})
     return await repo.update(row=row, data=data, updated_by=user.user_id)
 
 
@@ -280,7 +289,9 @@ async def put_row_doc(
         form = await request.form()
         file_field = form.get("file")
         if file_field is None:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Missing 'file' field in multipart form")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Missing 'file' field in multipart form"
+            )
         body = (await file_field.read()).decode("utf-8")
     else:
         body = (await request.body()).decode("utf-8")
@@ -407,4 +418,13 @@ async def delete_row(
     row = await repo.get_by_number(table.table_id, row_number)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+    # Delete MinIO objects for any doc-type columns (best-effort)
+    doc_cols = [c for c in table.columns if c.get("type") == "doc"]
+    for doc_col in doc_cols:
+        minio_key = row.row_data.get(doc_col["column_id"])
+        if minio_key:
+            try:
+                get_s3_client().delete_object(Bucket=settings.minio.bucket, Key=str(minio_key))
+            except Exception:
+                pass
     await repo.delete(row=row)

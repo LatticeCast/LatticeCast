@@ -70,7 +70,7 @@ async def create_table(
         from uuid import uuid4
 
         default_cols = [
-            {"column_id": str(uuid4()), "name": "Doc", "type": "url", "options": {}, "position": 0},
+            {"column_id": str(uuid4()), "name": "Doc", "type": "doc", "options": {}, "position": 0},
             {"column_id": str(uuid4()), "name": "Title", "type": "text", "options": {}, "position": 1},
             {"column_id": str(uuid4()), "name": "Description", "type": "text", "options": {}, "position": 2},
         ]
@@ -306,7 +306,7 @@ async def delete_view(
 # --------------------------------------------------
 
 _PM_COLUMNS: list[dict[str, Any]] = [
-    {"name": "Doc", "type": "url"},
+    {"name": "Doc", "type": "doc"},
     {"name": "Title", "type": "text"},
     {
         "name": "Type",
