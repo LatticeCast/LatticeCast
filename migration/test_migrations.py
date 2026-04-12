@@ -33,7 +33,12 @@ MIGRATION_DIR = Path(__file__).parent
 # table_name.  Running it after 0019 would fail (SELECT table_name on a non-existent column).
 # Override its sort key so it is applied between 0018 and 0019.
 MIGRATION_SORT_OVERRIDES: dict[str, str] = {
-    "0021_tables_reorder.sql": "0018.5_tables_reorder.sql",
+    # 0022 was applied in production between 0017 and 0018 (0018 requires workspace_name)
+    "0022_workspace_merge_name.sql": "0017a_workspace_merge_name.sql",
+    # 0021 was applied in production between 0018 and 0019 (0019 drops table_name)
+    "0021_tables_reorder.sql": "0018a_tables_reorder.sql",
+    # 0023 was applied in production between 0019 and 0020 (0020 requires user_name column)
+    "0023_user_info_rename_display_id.sql": "0019a_user_info_rename_display_id.sql",
 }
 
 
