@@ -28,6 +28,19 @@ PG_PORT = 15433  # unlikely to clash with a running dev DB
 
 MIGRATION_DIR = Path(__file__).parent
 
+# 0021_tables_reorder was applied in production AFTER 0018 (when table_id was still UUID
+# and table_name existed), but BEFORE 0019 converted table_id to VARCHAR and dropped
+# table_name.  Running it after 0019 would fail (SELECT table_name on a non-existent column).
+# Override its sort key so it is applied between 0018 and 0019.
+MIGRATION_SORT_OVERRIDES: dict[str, str] = {
+    "0021_tables_reorder.sql": "0018.5_tables_reorder.sql",
+}
+
+
+def _migration_sort_key(path: Path) -> str:
+    return MIGRATION_SORT_OVERRIDES.get(path.name, path.name)
+
+
 # ── Expected final schema ─────────────────────────────────────────────────────
 # Each entry: (table_name, column_name, data_type_fragment)
 # data_type_fragment is a substring match against pg information_schema data_type.
@@ -54,14 +67,13 @@ EXPECTED_COLUMNS: list[tuple[str, str, str]] = [
     ("workspace_members", "role", "character varying"),
     # tables
     ("tables", "workspace_id", "uuid"),
-    ("tables", "table_id", "uuid"),
-    ("tables", "table_name", "character varying"),
+    ("tables", "table_id", "character varying"),  # string PK — table_id IS the name (0019)
     ("tables", "columns", "jsonb"),
     ("tables", "views", "jsonb"),
     ("tables", "created_at", "timestamp"),
     ("tables", "updated_at", "timestamp"),
     # rows
-    ("rows", "table_id", "uuid"),
+    ("rows", "table_id", "character varying"),  # string FK matching tables.table_id (0019)
     ("rows", "row_number", "bigint"),
     ("rows", "row_data", "jsonb"),
     ("rows", "created_by", "uuid"),
@@ -79,6 +91,7 @@ FORBIDDEN_COLUMNS: list[tuple[str, str]] = [
     ("workspaces", "display_id"), # merged into workspace_name in 0017
     ("workspaces", "name"),       # merged into workspace_name in 0017
     ("tables", "name"),           # renamed to table_name in 0018
+    ("tables", "table_name"),     # removed in 0019 (table_id IS the name now)
 ]
 
 
@@ -159,7 +172,7 @@ def stop_container() -> None:
 # ── Migration runner ──────────────────────────────────────────────────────────
 
 def run_migrations() -> None:
-    sql_files = sorted(MIGRATION_DIR.glob("*.sql"))
+    sql_files = sorted(MIGRATION_DIR.glob("*.sql"), key=_migration_sort_key)
     if not sql_files:
         raise RuntimeError(f"No *.sql files found in {MIGRATION_DIR}")
 
