@@ -1,4 +1,4 @@
-import type { Column, ColumnChoice, Row } from '$lib/types/table';
+import type { Column, ColumnChoice, ColumnType, Row } from '$lib/types/table';
 import { TAG_COLORS } from '$lib/UI/theme.svelte';
 
 export const COLUMN_TYPES = [
@@ -75,6 +75,53 @@ export function getChoiceColor(col: Column, value: string): (typeof TAG_COLORS)[
 export function getTagValues(row: { row_data: Record<string, unknown> }, colId: string): string[] {
 	const val = row.row_data[colId];
 	return Array.isArray(val) ? (val as string[]) : [];
+}
+
+/** Parse a string edit value to the correct runtime type for the given column type. */
+export function parseEditValue(editVal: string, colType: ColumnType): unknown {
+	if (colType === 'number') return editVal === '' ? null : Number(editVal);
+	if (colType === 'checkbox') return editVal === 'true';
+	if (editVal === '') return null;
+	return editVal;
+}
+
+/** Return new row_data with the edit applied (parsed by column type). */
+export function applyEditToRowData(
+	rowData: Record<string, unknown>,
+	colId: string,
+	editVal: string,
+	colType: ColumnType
+): Record<string, unknown> {
+	return { ...rowData, [colId]: parseEditValue(editVal, colType) };
+}
+
+/** Return new row_data with the checkbox toggled. */
+export function toggleCheckboxInRowData(
+	rowData: Record<string, unknown>,
+	colId: string
+): Record<string, unknown> {
+	return { ...rowData, [colId]: !rowData[colId] };
+}
+
+/** Return new row_data with the tag removed (no-op if not present). */
+export function removeTagFromRowData(
+	rowData: Record<string, unknown>,
+	colId: string,
+	tag: string
+): Record<string, unknown> {
+	const current = Array.isArray(rowData[colId]) ? (rowData[colId] as string[]) : [];
+	return { ...rowData, [colId]: current.filter((t) => t !== tag) };
+}
+
+/** Return new row_data with the tag added (no-op if already present). */
+export function addTagToRowData(
+	rowData: Record<string, unknown>,
+	colId: string,
+	tag: string
+): Record<string, unknown> {
+	const current = Array.isArray(rowData[colId]) ? (rowData[colId] as string[]) : [];
+	if (current.includes(tag)) return rowData;
+	return { ...rowData, [colId]: [...current, tag] };
 }
 
 export function formatDate(raw: string): string {

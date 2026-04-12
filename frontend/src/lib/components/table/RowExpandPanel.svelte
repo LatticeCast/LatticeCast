@@ -1,7 +1,16 @@
 <script lang="ts">
 	import type { Column, Row } from '$lib/types/table';
 	import { TAG_COLORS, isDark } from '$lib/UI/theme.svelte';
-	import { getChoices, getChoiceColor, getTagValues, formatDate } from './table.utils';
+	import {
+		getChoices,
+		getChoiceColor,
+		getTagValues,
+		formatDate,
+		applyEditToRowData,
+		toggleCheckboxInRowData,
+		removeTagFromRowData,
+		addTagToRowData
+	} from './table.utils';
 	import { fetchDoc, saveDoc } from '$lib/backend/tables';
 	import { marked } from 'marked';
 
@@ -81,36 +90,29 @@
 	async function commitEdit(col: Column) {
 		if (editField !== col.column_id) return;
 		editField = null;
-		let parsed: unknown = editVal;
-		if (col.type === 'number') parsed = editVal === '' ? null : Number(editVal);
-		else if (col.type === 'checkbox') parsed = editVal === 'true';
-		else if (editVal === '') parsed = null;
-		const newData = { ...localRow.row_data, [col.column_id]: parsed };
+		const newData = applyEditToRowData(localRow.row_data, col.column_id, editVal, col.type);
 		localRow = { ...localRow, row_data: newData };
 		await onUpdateRow(localRow.row_number, newData);
 		await onRefreshRows(tableId);
 	}
 
 	async function toggleCheckbox(col: Column) {
-		const current = !!localRow.row_data[col.column_id];
-		const newData = { ...localRow.row_data, [col.column_id]: !current };
+		const newData = toggleCheckboxInRowData(localRow.row_data, col.column_id);
 		localRow = { ...localRow, row_data: newData };
 		await onUpdateRow(localRow.row_number, newData);
 		await onRefreshRows(tableId);
 	}
 
 	async function removeTag(col: Column, tag: string) {
-		const current = getTagValues(localRow, col.column_id);
-		const newData = { ...localRow.row_data, [col.column_id]: current.filter((t) => t !== tag) };
+		const newData = removeTagFromRowData(localRow.row_data, col.column_id, tag);
 		localRow = { ...localRow, row_data: newData };
 		await onUpdateRow(localRow.row_number, newData);
 		await onRefreshRows(tableId);
 	}
 
 	async function addTag(col: Column, tag: string) {
-		const current = getTagValues(localRow, col.column_id);
-		if (current.includes(tag)) return;
-		const newData = { ...localRow.row_data, [col.column_id]: [...current, tag] };
+		const newData = addTagToRowData(localRow.row_data, col.column_id, tag);
+		if (newData === localRow.row_data) return; // tag already present
 		tagsPopup = null;
 		localRow = { ...localRow, row_data: newData };
 		await onUpdateRow(localRow.row_number, newData);

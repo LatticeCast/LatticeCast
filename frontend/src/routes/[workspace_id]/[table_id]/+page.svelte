@@ -47,9 +47,12 @@
 		getItemKey,
 		getChoices,
 		getChoiceColor,
-		getTagValues,
 		formatDate,
-		parseCSV
+		parseCSV,
+		applyEditToRowData,
+		toggleCheckboxInRowData,
+		removeTagFromRowData,
+		addTagToRowData
 	} from '$lib/components/table/table.utils';
 
 	// Components
@@ -505,11 +508,7 @@
 		const tableId = $page.params.table_id!;
 		const row = $rows.find((r) => r.row_number === rowId);
 		if (!row) return;
-		let parsed: unknown = editValue;
-		if (col.type === 'number') parsed = editValue === '' ? null : Number(editValue);
-		else if (col.type === 'checkbox') parsed = editValue === 'true';
-		else if (editValue === '') parsed = null;
-		const newData = { ...row.row_data, [col.column_id]: parsed };
+		const newData = applyEditToRowData(row.row_data, col.column_id, editValue, col.type);
 		error.set(null);
 		try {
 			await updateRow(tableId, row.row_number, { row_data: newData });
@@ -523,7 +522,7 @@
 		const tableId = $page.params.table_id!;
 		const row = $rows.find((r) => r.row_number === rowId);
 		if (!row) return;
-		const newData = { ...row.row_data, [col.column_id]: !row.row_data[col.column_id] };
+		const newData = toggleCheckboxInRowData(row.row_data, col.column_id);
 		error.set(null);
 		try {
 			await updateRow(tableId, row.row_number, { row_data: newData });
@@ -537,8 +536,7 @@
 		const tableId = $page.params.table_id!;
 		const row = $rows.find((r) => r.row_number === rowId);
 		if (!row) return;
-		const current = getTagValues(row, col.column_id);
-		const newData = { ...row.row_data, [col.column_id]: current.filter((t) => t !== tag) };
+		const newData = removeTagFromRowData(row.row_data, col.column_id, tag);
 		try {
 			await updateRow(tableId, row.row_number, { row_data: newData });
 			await refreshRows(tableId);
@@ -551,9 +549,8 @@
 		const tableId = $page.params.table_id!;
 		const row = $rows.find((r) => r.row_number === rowId);
 		if (!row) return;
-		const current = getTagValues(row, col.column_id);
-		if (current.includes(tag)) return;
-		const newData = { ...row.row_data, [col.column_id]: [...current, tag] };
+		const newData = addTagToRowData(row.row_data, col.column_id, tag);
+		if (newData === row.row_data) return; // tag already present
 		tagsPopupCell = null;
 		try {
 			await updateRow(tableId, row.row_number, { row_data: newData });
