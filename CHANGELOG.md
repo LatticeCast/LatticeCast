@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.16 — 2026-04-13
+- PG schema-based permission model: `public` (data), `auth` (users), `private` (internal)
+- PG native roles: `dba` (DDL all schemas), `app` (CRUD public, SELECT auth), `login_mgr` (CRUD auth)
+- Separate DB engines per role: dba for migrations, app for API, login_mgr for auth
+- Row-Level Security on `rows` + `tables` — workspace membership enforced at DB level
+- `users` + `user_info` moved to `auth` schema
+- PG native logging enabled (`log_statement=all`, connections/disconnections)
+- `init-roles.sh` for new DB setup, migration SQL for existing DBs
+
 ## v0.15 — 2026-04-12
 - New column type `doc` — read-only cell, auto-creates MinIO .md on row insert (Layer 1)
 - PM template uses `type="doc"` instead of `type="url"` for Doc column
