@@ -7,8 +7,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.db import get_session
-from middleware.auth import get_current_user
+from middleware.auth import get_current_user, get_rls_session
 from models.table import Table, TableCreate, TableResponse, TableUpdate
 from models.user import User
 from repository.table import TableRepository
@@ -44,7 +43,7 @@ async def _get_table_for_member(
 async def create_table(
     data: TableCreate,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Create a new table in the specified workspace (or user's first workspace)"""
     ws_repo = WorkspaceRepository(session)
@@ -86,7 +85,7 @@ async def create_table(
 @router.get("", response_model=list[TableResponse])
 async def list_tables(
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """List all tables across workspaces the current user is a member of"""
     ws_repo = WorkspaceRepository(session)
@@ -102,7 +101,7 @@ async def list_tables(
 async def get_table(
     table_id: str,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Get a table by ID (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
@@ -118,7 +117,7 @@ async def update_table(
     table_id: str,
     data: TableUpdate,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Update a table name (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
@@ -135,7 +134,7 @@ async def update_table(
 async def delete_table(
     table_id: str,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Delete a table (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
@@ -152,7 +151,7 @@ async def delete_table(
 async def list_columns(
     table_id: str,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> list[dict[str, Any]]:
     """List columns for a table (sorted by position)"""
     table = await _get_table_for_member(table_id, user, session)
@@ -164,7 +163,7 @@ async def create_column(
     table_id: str,
     data: dict[str, Any],
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
     """Add a column to a table"""
     table = await _get_table_for_member(table_id, user, session)
@@ -188,7 +187,7 @@ async def update_column(
     column_id: str,
     data: dict[str, Any],
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
     """Update a column in the table's columns JSONB array"""
     table = await _get_table_for_member(table_id, user, session)
@@ -213,7 +212,7 @@ async def delete_column(
     table_id: str,
     column_id: str,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Delete a column from the table's columns JSONB array"""
     table = await _get_table_for_member(table_id, user, session)
@@ -233,7 +232,7 @@ async def delete_column(
 async def list_views(
     table_id: str,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> list[dict[str, Any]]:
     """List views for a table"""
     table = await _get_table_for_member(table_id, user, session)
@@ -245,7 +244,7 @@ async def create_view(
     table_id: str,
     data: dict[str, Any],
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
     """Add a view to a table"""
     table = await _get_table_for_member(table_id, user, session)
@@ -270,7 +269,7 @@ async def update_view(
     view_name: str,
     data: dict[str, Any],
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
     """Update a view's config in the table's views JSONB array"""
     table = await _get_table_for_member(table_id, user, session)
@@ -287,7 +286,7 @@ async def delete_view(
     table_id: str,
     view_name: str,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Remove a view from the table's views JSONB array"""
     table = await _get_table_for_member(table_id, user, session)
@@ -361,7 +360,7 @@ _PM_COLUMNS: list[dict[str, Any]] = [
 async def create_pm_template(
     data: dict[str, Any],
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Create a PM project table with pre-configured columns and default views"""
     table_id = data.get("table_id", "") or data.get("table_name", "") or data.get("name", "")

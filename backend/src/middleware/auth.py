@@ -4,7 +4,7 @@ User authentication middleware.
 """
 
 from fastapi import Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
@@ -84,6 +84,28 @@ async def require_admin(
 
     logger.debug(f"Admin access granted: {user.user_id}")
     return user
+
+
+async def get_rls_session(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AsyncSession:
+    """
+    FastAPI dependency — app session with PG RLS user context set.
+
+    Uses session-level SET (not SET LOCAL) so the context survives the
+    intermediate session.commit() calls in our repository methods.
+    The RESET in the finally block clears the context before the connection
+    returns to the pool, preventing leakage to subsequent requests.
+    """
+    await session.execute(text("SET app.current_user_id = :uid"), {"uid": str(user.user_id)})
+    try:
+        yield session
+    finally:
+        try:
+            await session.execute(text("RESET app.current_user_id"))
+        except Exception:
+            pass
 
 
 async def require_user(
