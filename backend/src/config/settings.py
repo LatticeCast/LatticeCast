@@ -20,6 +20,11 @@ class DatabaseSettings(BaseSettings):
     password: str = Field(default="")
     db: str = Field(default="postgres")
 
+    # Role-specific login users (created by postgres/init-roles.sh)
+    dba_password: str = Field(default="", description="Password for dba_user (POSTGRES_DBA_PASSWORD)")
+    app_password: str = Field(default="", description="Password for app_user (POSTGRES_APP_PASSWORD)")
+    login_password: str = Field(default="", description="Password for login_user (POSTGRES_LOGIN_PASSWORD)")
+
     @field_validator("url")
     @classmethod
     def validate_url_format(cls, v: str) -> str:
@@ -32,9 +37,27 @@ class DatabaseSettings(BaseSettings):
 
     @property
     def async_url(self) -> str:
-        """Build async SQLAlchemy URL"""
+        """Build async SQLAlchemy URL (superuser, used as fallback)"""
         host, port = self.url.split(":")
         return f"postgresql+asyncpg://{self.user}:{self.password}@{host}:{port}/{self.db}"
+
+    @property
+    def dba_async_url(self) -> str:
+        """Build async SQLAlchemy URL for dba_user (migrations, full access)"""
+        host, port = self.url.split(":")
+        return f"postgresql+asyncpg://dba_user:{self.dba_password}@{host}:{port}/{self.db}"
+
+    @property
+    def app_async_url(self) -> str:
+        """Build async SQLAlchemy URL for app_user (general API, CRUD on public, SELECT on auth)"""
+        host, port = self.url.split(":")
+        return f"postgresql+asyncpg://app_user:{self.app_password}@{host}:{port}/{self.db}"
+
+    @property
+    def login_async_url(self) -> str:
+        """Build async SQLAlchemy URL for login_user (auth endpoints, CRUD on auth schema)"""
+        host, port = self.url.split(":")
+        return f"postgresql+asyncpg://login_user:{self.login_password}@{host}:{port}/{self.db}"
 
 
 class RedisSettings(BaseSettings):

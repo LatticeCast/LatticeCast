@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
-from core.db import get_session
+from core.db import get_login_session
 from middleware.auth import get_current_user
 from models.user import User
 
@@ -103,7 +103,7 @@ class MeResponse(BaseModel):
 )
 async def me(
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_login_session),
 ) -> MeResponse:
     """
     Get current user information.

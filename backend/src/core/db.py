@@ -13,6 +13,19 @@ from sqlalchemy.orm import sessionmaker
 
 from config.settings import settings
 
+# dba_engine: migrations only — full access (public, auth, private)
+dba_engine: AsyncEngine | None = None
+dba_session_factory: sessionmaker | None = None
+
+# app_engine: general API — CRUD on public, SELECT on auth
+app_engine: AsyncEngine | None = None
+app_session_factory: sessionmaker | None = None
+
+# login_engine: auth endpoints — CRUD on auth schema only
+login_engine: AsyncEngine | None = None
+login_session_factory: sessionmaker | None = None
+
+# Backward-compat alias — callers importing `engine` still work
 engine: AsyncEngine | None = None
 async_session_factory: sessionmaker | None = None
 
@@ -151,43 +164,63 @@ async def _run_migrations(engine: AsyncEngine):
 # --------------------------------------------------
 
 
+def _make_engine(url: str, search_path: str) -> AsyncEngine:
+    return create_async_engine(
+        url,
+        echo=False,
+        pool_size=5,
+        max_overflow=10,
+        connect_args={"server_settings": {"search_path": search_path}},
+    )
+
+
 async def init_db(run_migrations: bool = False):
     """
-    Initialize async engine & session factory.
-    Optionally run SQL migrations from migration/*.sql files.
+    Initialize async engines & session factories for all three DB roles:
+      - dba_engine:   migrations only (search_path=public,auth,private)
+      - app_engine:   general API     (search_path=public,auth)
+      - login_engine: auth endpoints  (search_path=auth)
+    Optionally run SQL migrations from migration/*.sql files via dba_engine.
     """
     global engine, async_session_factory
+    global dba_engine, dba_session_factory
+    global app_engine, app_session_factory
+    global login_engine, login_session_factory
 
-    if engine:
-        return engine
+    if app_engine:
+        return app_engine
 
-    database_url = settings.database.async_url
+    db = settings.database
+
+    # Decide URLs: fall back to superuser if role passwords not configured
+    dba_url = db.dba_async_url if db.dba_password else db.async_url
+    app_url = db.app_async_url if db.app_password else db.async_url
+    login_url = db.login_async_url if db.login_password else db.async_url
 
     for attempt in range(5):
         try:
-            engine = create_async_engine(
-                database_url,
-                echo=False,
-                pool_size=5,
-                max_overflow=10,
-            )
+            dba_engine = _make_engine(dba_url, "public,auth,private")
+            app_engine = _make_engine(app_url, "public,auth")
+            login_engine = _make_engine(login_url, "auth")
 
-            async_session_factory = sessionmaker(
-                engine,
-                class_=AsyncSession,
-                expire_on_commit=False,
-            )
+            dba_session_factory = sessionmaker(dba_engine, class_=AsyncSession, expire_on_commit=False)
+            app_session_factory = sessionmaker(app_engine, class_=AsyncSession, expire_on_commit=False)
+            login_session_factory = sessionmaker(login_engine, class_=AsyncSession, expire_on_commit=False)
 
-            # Test connection
-            async with engine.begin() as conn:
+            # Test connection via app_engine
+            async with app_engine.begin() as conn:
                 await conn.run_sync(lambda _: None)
+
+            # Backward-compat aliases
+            engine = app_engine
+            async_session_factory = app_session_factory
 
             print("✅ Connected to PostgreSQL")
 
             if run_migrations:
-                await _run_migrations(engine)
+                await _run_migrations(dba_engine)
 
-            return engine
+            return app_engine
 
         except Exception as e:
             print(f"⚠️ Attempt {attempt + 1}/5 DB init failed: {e}")
@@ -203,14 +236,29 @@ async def init_db(run_migrations: bool = False):
 
 async def get_session() -> AsyncSession:
     """
-    FastAPI dependency for DB session
+    FastAPI dependency — app_engine session (CRUD on public, SELECT on auth).
+    Used by general API routes.
     """
-    global async_session_factory
+    global app_session_factory
 
-    if not async_session_factory:
+    if not app_session_factory:
         await init_db(run_migrations=False)
 
-    async with async_session_factory() as session:
+    async with app_session_factory() as session:
+        yield session
+
+
+async def get_login_session() -> AsyncSession:
+    """
+    FastAPI dependency — login_engine session (CRUD on auth schema only).
+    Used by auth/login routes.
+    """
+    global login_session_factory
+
+    if not login_session_factory:
+        await init_db(run_migrations=False)
+
+    async with login_session_factory() as session:
         yield session
 
 
@@ -220,10 +268,15 @@ async def get_session() -> AsyncSession:
 
 
 async def close_db():
-    """Dispose SQLAlchemy engine."""
-    global engine
+    """Dispose all SQLAlchemy engines."""
+    global engine, dba_engine, app_engine, login_engine
 
-    if engine:
-        await engine.dispose()
-        engine = None
-        print("✅ Database engine closed")
+    for eng, name in [
+        (dba_engine, "dba"),
+        (app_engine, "app"),
+        (login_engine, "login"),
+    ]:
+        if eng:
+            await eng.dispose()
+    dba_engine = app_engine = login_engine = engine = None
+    print("✅ Database engines closed")
