@@ -6,7 +6,7 @@ All environment variables are validated and typed.
 
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -35,11 +35,22 @@ class DatabaseSettings(BaseSettings):
             raise ValueError(f"Invalid format: {v}. Expected 'host:port'") from None
         return v
 
-    @property
-    def async_url(self) -> str:
-        """Build async SQLAlchemy URL (superuser, used as fallback)"""
-        host, port = self.url.split(":")
-        return f"postgresql+asyncpg://{self.user}:{self.password}@{host}:{port}/{self.db}"
+    @model_validator(mode="after")
+    def validate_role_passwords(self) -> "DatabaseSettings":
+        missing = [
+            name for name, val in [
+                ("POSTGRES_DBA_PASSWORD", self.dba_password),
+                ("POSTGRES_APP_PASSWORD", self.app_password),
+                ("POSTGRES_LOGIN_PASSWORD", self.login_password),
+            ]
+            if not val
+        ]
+        if missing:
+            raise ValueError(
+                f"❌ Missing required DB role passwords: {', '.join(missing)}. "
+                "Run: docker compose up -d --force-recreate backend"
+            )
+        return self
 
     @property
     def dba_async_url(self) -> str:

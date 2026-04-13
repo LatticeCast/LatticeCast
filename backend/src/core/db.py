@@ -192,10 +192,9 @@ async def init_db(run_migrations: bool = False):
 
     db = settings.database
 
-    # Decide URLs: fall back to superuser if role passwords not configured
-    dba_url = db.dba_async_url if db.dba_password else db.async_url
-    app_url = db.app_async_url if db.app_password else db.async_url
-    login_url = db.login_async_url if db.login_password else db.async_url
+    dba_url = db.dba_async_url
+    app_url = db.app_async_url
+    login_url = db.login_async_url
 
     for attempt in range(5):
         try:
