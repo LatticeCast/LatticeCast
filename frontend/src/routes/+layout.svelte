@@ -19,7 +19,6 @@
 	let tablesByWorkspace = $state<Record<string, Table[]>>({});
 	let expandedWorkspaces = $state<Set<string>>(new Set());
 
-
 	$effect(() => {
 		if (browser) {
 			document.documentElement.classList.toggle('dark', isDark.value);
@@ -102,7 +101,9 @@
 									class="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm text-gray-700 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-400"
 								>
 									<svg
-										class="h-3.5 w-3.5 shrink-0 transition-transform {isExpanded ? 'rotate-90' : ''}"
+										class="h-3.5 w-3.5 shrink-0 transition-transform {isExpanded
+											? 'rotate-90'
+											: ''}"
 										fill="none"
 										stroke="currentColor"
 										viewBox="0 0 24 24"
@@ -205,7 +206,11 @@
 						<div class="flex items-center gap-2">
 							<!-- Avatar -->
 							{#if $authStore.userInfo?.picture}
-								<img src={$authStore.userInfo.picture} alt="Profile" class="h-7 w-7 shrink-0 rounded-full" />
+								<img
+									src={$authStore.userInfo.picture}
+									alt="Profile"
+									class="h-7 w-7 shrink-0 rounded-full"
+								/>
 							{:else}
 								<div
 									class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs text-blue-600 dark:bg-blue-900 dark:text-blue-300"
@@ -266,75 +271,86 @@
 
 	<!-- Right column: top bar + content -->
 	<div class="flex min-w-0 flex-1 flex-col">
-	<!-- Top bar -->
-	<header class="z-30 flex h-12 shrink-0 items-center bg-blue-600 px-3 shadow">
-		{#if menuOpen}
-			<button
-				onclick={() => (menuOpen = false)}
-				data-testid="menu-close"
-				class="relative h-8 w-8 shrink-0 rounded-md text-white hover:bg-blue-500 focus:outline-none"
-				aria-label="Close menu"
-			>
-				<span class="absolute inset-0 flex items-center justify-center">«</span>
-			</button>
-		{:else}
-			<button
-				onclick={() => (menuOpen = true)}
-				data-testid="menu-toggle"
-				class="relative h-8 w-8 shrink-0 rounded-md text-white hover:bg-blue-500 focus:outline-none"
-				aria-label="Open menu"
-			>
-				<span class="absolute inset-0 flex items-center justify-center">☰</span>
-			</button>
-		{/if}
-		<!-- Home icon — always visible next to ☰ -->
-		<button
-			onclick={() => navigate('/')}
-			data-testid="nav-home"
-			class="relative h-8 w-8 shrink-0 rounded-md text-white hover:bg-blue-500 focus:outline-none"
-			aria-label="Home"
-		>
-			<span class="absolute inset-0 flex items-center justify-center">
-				<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-				</svg>
-			</span>
-		</button>
-<nav class="ml-1 flex min-w-0 items-center gap-1 overflow-hidden" aria-label="Breadcrumb">
-			<span class="shrink-0 text-white/40">/</span>
-			{#if $page.params.workspace_id}
-				{@const wsId = $page.params.workspace_id}
-				{@const wsName = workspaces.find((w) => w.workspace_id === wsId)?.workspace_name ?? wsId}
+		<!-- Top bar -->
+		<header class="z-30 flex h-12 shrink-0 items-center bg-blue-600 px-3 shadow">
+			{#if menuOpen}
 				<button
-					onclick={() => navigate(`/${wsId}`)}
-					data-testid="breadcrumb-workspace"
-					class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
-				>{wsName}</button>
-				{#if $page.params.table_id}
-					{@const tableId = $page.params.table_id}
-					{@const tableName = tablesByWorkspace[wsId]?.find((t) => t.table_id === tableId)?.table_id ?? $currentTable?.table_id ?? tableId}
-					<span class="shrink-0 text-white/40">/</span>
+					onclick={() => (menuOpen = false)}
+					data-testid="menu-close"
+					class="relative h-8 w-8 shrink-0 rounded-md text-white hover:bg-blue-500 focus:outline-none"
+					aria-label="Close menu"
+				>
+					<span class="absolute inset-0 flex items-center justify-center">«</span>
+				</button>
+			{:else}
+				<button
+					onclick={() => (menuOpen = true)}
+					data-testid="menu-toggle"
+					class="relative h-8 w-8 shrink-0 rounded-md text-white hover:bg-blue-500 focus:outline-none"
+					aria-label="Open menu"
+				>
+					<span class="absolute inset-0 flex items-center justify-center">☰</span>
+				</button>
+			{/if}
+			<!-- Home icon — always visible next to ☰ -->
+			<button
+				onclick={() => navigate('/')}
+				data-testid="nav-home"
+				class="relative h-8 w-8 shrink-0 rounded-md text-white hover:bg-blue-500 focus:outline-none"
+				aria-label="Home"
+			>
+				<span class="absolute inset-0 flex items-center justify-center">
+					<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
+						/>
+					</svg>
+				</span>
+			</button>
+			<nav class="ml-1 flex min-w-0 items-center gap-1 overflow-hidden" aria-label="Breadcrumb">
+				<span class="shrink-0 text-white/40">/</span>
+				{#if $page.params.workspace_id}
+					{@const wsId = $page.params.workspace_id}
+					{@const wsName = workspaces.find((w) => w.workspace_id === wsId)?.workspace_name ?? wsId}
 					<button
-						onclick={() => navigate(`/${wsId}/${tableId}`)}
-						data-testid="breadcrumb-table"
-						class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white hover:text-white/80"
-					>{tableName}</button>
-					{#if $page.params.row_number}
+						onclick={() => navigate(`/${wsId}`)}
+						data-testid="breadcrumb-workspace"
+						class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
+						>{wsName}</button
+					>
+					{#if $page.params.table_id}
+						{@const tableId = $page.params.table_id}
+						{@const tableName =
+							tablesByWorkspace[wsId]?.find((t) => t.table_id === tableId)?.table_id ??
+							$currentTable?.table_id ??
+							tableId}
 						<span class="shrink-0 text-white/40">/</span>
 						<button
-							onclick={() => navigate(`/${wsId}/${tableId}/${$page.params.row_number}`)}
-							data-testid="breadcrumb-row"
-							class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
-						>{$page.params.row_number}</button>
+							onclick={() => navigate(`/${wsId}/${tableId}`)}
+							data-testid="breadcrumb-table"
+							class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white hover:text-white/80"
+							>{tableName}</button
+						>
+						{#if $page.params.row_number}
+							<span class="shrink-0 text-white/40">/</span>
+							<button
+								onclick={() => navigate(`/${wsId}/${tableId}/${$page.params.row_number}`)}
+								data-testid="breadcrumb-row"
+								class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
+								>{$page.params.row_number}</button
+							>
+						{/if}
 					{/if}
 				{/if}
-			{/if}
-		</nav>
-	</header>
+			</nav>
+		</header>
 
-	<!-- Main content -->
-	<main class="flex-1 overflow-auto dark:bg-gray-950">
-		{@render children?.()}
-	</main>
+		<!-- Main content -->
+		<main class="flex-1 overflow-auto dark:bg-gray-950">
+			{@render children?.()}
+		</main>
 	</div>
 </div>

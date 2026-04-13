@@ -38,7 +38,10 @@ export async function createWorkspace(data: CreateWorkspace): Promise<Workspace>
 	return response.json();
 }
 
-export async function updateWorkspace(workspaceId: string, data: UpdateWorkspace): Promise<Workspace> {
+export async function updateWorkspace(
+	workspaceId: string,
+	data: UpdateWorkspace
+): Promise<Workspace> {
 	const headers = await getAuthHeaders();
 	const response = await fetch(`${BACKEND_URL}/api/v1/workspaces/${workspaceId}`, {
 		method: 'PUT',
@@ -65,7 +68,9 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
 
 export async function fetchMembers(workspaceId: string): Promise<WorkspaceMember[]> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/v1/workspaces/${workspaceId}/members`, { headers });
+	const response = await fetch(`${BACKEND_URL}/api/v1/workspaces/${workspaceId}/members`, {
+		headers
+	});
 	if (!response.ok) throw new Error(`Failed to fetch members: ${response.statusText}`);
 	return response.json();
 }
@@ -83,9 +88,12 @@ export async function addMember(workspaceId: string, data: AddMember): Promise<W
 
 export async function removeMember(workspaceId: string, userId: string): Promise<void> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/v1/workspaces/${workspaceId}/members/${userId}`, {
-		method: 'DELETE',
-		headers
-	});
+	const response = await fetch(
+		`${BACKEND_URL}/api/v1/workspaces/${workspaceId}/members/${userId}`,
+		{
+			method: 'DELETE',
+			headers
+		}
+	);
 	if (!response.ok) throw new Error(`Failed to remove member: ${response.statusText}`);
 }

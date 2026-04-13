@@ -108,7 +108,10 @@
 							: ''}"
 						onclick={() => {
 							if (sortConfig?.colId === col.column_id) {
-								onSortChange({ colId: col.column_id, dir: sortConfig.dir === 'asc' ? 'desc' : 'asc' });
+								onSortChange({
+									colId: col.column_id,
+									dir: sortConfig.dir === 'asc' ? 'desc' : 'asc'
+								});
 							} else {
 								onSortChange({ colId: col.column_id, dir: 'asc' });
 							}

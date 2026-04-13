@@ -1156,7 +1156,10 @@
 		onRefreshRows={handleRefreshRows}
 		tableId={$page.params.table_id!}
 		workspaceId={$page.params.workspace_id!}
-		onOpenDocCell={(row, col) => { expandedRow = null; docCellState = { row, col }; }}
+		onOpenDocCell={(row, col) => {
+			expandedRow = null;
+			docCellState = { row, col };
+		}}
 	/>
 {/if}
 

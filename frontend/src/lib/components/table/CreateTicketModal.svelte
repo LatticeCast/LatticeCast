@@ -36,9 +36,7 @@
 			titleValue = titleCol ? String(initialData[titleCol.column_id] ?? '') : '';
 			const init: Record<string, string> = {};
 			for (const col of selectCols) {
-				init[col.column_id] = initialData[col.column_id]
-					? String(initialData[col.column_id])
-					: '';
+				init[col.column_id] = initialData[col.column_id] ? String(initialData[col.column_id]) : '';
 			}
 			selectValues = init;
 		}
@@ -77,9 +75,7 @@
 		aria-label="Create ticket"
 	>
 		<div
-			class="w-full max-w-sm rounded-3xl p-8 shadow-2xl {isDark.value
-				? 'bg-gray-800'
-				: 'bg-white'}"
+			class="w-full max-w-sm rounded-3xl p-8 shadow-2xl {isDark.value ? 'bg-gray-800' : 'bg-white'}"
 		>
 			<h2 class="mb-6 text-xl font-bold {isDark.value ? 'text-gray-100' : 'text-gray-800'}">
 				New Ticket
@@ -88,7 +84,9 @@
 			{#if titleCol}
 				<div class="mb-4">
 					<label
-						class="mb-1 block text-sm font-medium {isDark.value ? 'text-gray-300' : 'text-gray-600'}"
+						class="mb-1 block text-sm font-medium {isDark.value
+							? 'text-gray-300'
+							: 'text-gray-600'}"
 						for="ticket-title">{titleCol.name}</label
 					>
 					<input
@@ -111,7 +109,9 @@
 				{@const choices = getChoices(col)}
 				<div class="mb-4">
 					<label
-						class="mb-1 block text-sm font-medium {isDark.value ? 'text-gray-300' : 'text-gray-600'}"
+						class="mb-1 block text-sm font-medium {isDark.value
+							? 'text-gray-300'
+							: 'text-gray-600'}"
 						for="ticket-{col.column_id}">{col.name}</label
 					>
 					<select
@@ -121,7 +121,10 @@
 							: 'border-gray-200 bg-white text-gray-800 focus:border-blue-500'}"
 						value={selectValues[col.column_id] ?? ''}
 						onchange={(e) => {
-							selectValues = { ...selectValues, [col.column_id]: (e.target as HTMLSelectElement).value };
+							selectValues = {
+								...selectValues,
+								[col.column_id]: (e.target as HTMLSelectElement).value
+							};
 						}}
 					>
 						<option value="">— none —</option>

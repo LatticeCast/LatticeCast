@@ -10,6 +10,4 @@
 	});
 </script>
 
-<div class="min-h-screen bg-gray-50 flex items-center justify-center text-gray-400">
-	Loading...
-</div>
+<div class="flex min-h-screen items-center justify-center bg-gray-50 text-gray-400">Loading...</div>

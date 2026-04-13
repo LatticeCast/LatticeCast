@@ -73,7 +73,9 @@
 						disabled={loggingIn}
 						onkeydown={(e) => e.key === 'Enter' && simpleLogin()}
 						class="w-full rounded-2xl border-2 bg-gray-50 px-4 py-4 text-center text-lg text-gray-800 placeholder-gray-400 focus:outline-none disabled:opacity-50
-							{validationError && userId.trim() ? 'border-red-400 focus:border-red-500' : 'border-gray-200 focus:border-blue-500'}"
+							{validationError && userId.trim()
+							? 'border-red-400 focus:border-red-500'
+							: 'border-gray-200 focus:border-blue-500'}"
 					/>
 					{#if validationError && userId.trim()}
 						<p class="text-center text-sm text-red-500">{validationError}</p>

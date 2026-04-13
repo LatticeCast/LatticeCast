@@ -4,7 +4,13 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth.store';
-	import { fetchTables, createTable, updateTable, deleteTable, createPmTemplate } from '$lib/backend/tables';
+	import {
+		fetchTables,
+		createTable,
+		updateTable,
+		deleteTable,
+		createPmTemplate
+	} from '$lib/backend/tables';
 	import { fetchWorkspaces, updateWorkspace, deleteWorkspace } from '$lib/backend/workspaces';
 	import { currentTable, pageTitle } from '$lib/stores/tables.store';
 	import type { Table, Workspace } from '$lib/types/table';
@@ -46,12 +52,17 @@
 	async function handleWsRename() {
 		if (!wsSettingsTarget) return;
 		const name = wsRenameValue.trim();
-		if (!name || name === wsSettingsTarget.workspace_name) { closeWsSettings(); return; }
+		if (!name || name === wsSettingsTarget.workspace_name) {
+			closeWsSettings();
+			return;
+		}
 		wsSaving = true;
 		wsSettingsError = '';
 		try {
-			const updated = await updateWorkspace(wsSettingsTarget.workspace_id, { workspace_name: name });
-			workspaces = workspaces.map((w) => w.workspace_id === updated.workspace_id ? updated : w);
+			const updated = await updateWorkspace(wsSettingsTarget.workspace_id, {
+				workspace_name: name
+			});
+			workspaces = workspaces.map((w) => (w.workspace_id === updated.workspace_id ? updated : w));
 			closeWsSettings();
 		} catch (e) {
 			wsSettingsError = e instanceof Error ? e.message : 'Failed to rename workspace';
@@ -62,7 +73,8 @@
 
 	async function handleWsDelete() {
 		if (!wsSettingsTarget) return;
-		if (!confirm(`Delete workspace "${wsSettingsTarget.workspace_name}"? This cannot be undone.`)) return;
+		if (!confirm(`Delete workspace "${wsSettingsTarget.workspace_name}"? This cannot be undone.`))
+			return;
 		wsSaving = true;
 		wsSettingsError = '';
 		try {
@@ -148,10 +160,16 @@
 	async function handleTableRename() {
 		if (!tableSettingsTarget) return;
 		const name = tableRenameValue.trim();
-		if (!name || name === tableSettingsTarget.table_id) { closeTableSettings(); return; }
+		if (!name || name === tableSettingsTarget.table_id) {
+			closeTableSettings();
+			return;
+		}
 		const wsId = tableSettingsTarget.workspace_id;
 		const duplicate = tables.some(
-			(t) => t.workspace_id === wsId && t.table_id === name && t.table_id !== tableSettingsTarget!.table_id
+			(t) =>
+				t.workspace_id === wsId &&
+				t.table_id === name &&
+				t.table_id !== tableSettingsTarget!.table_id
 		);
 		if (duplicate) {
 			tableSettingsError = `A table named "${name}" already exists in this workspace.`;
@@ -161,7 +179,7 @@
 		tableSettingsError = '';
 		try {
 			const updated = await updateTable(tableSettingsTarget.table_id, { table_id: name });
-			tables = tables.map((t) => t.table_id === updated.table_id ? updated : t);
+			tables = tables.map((t) => (t.table_id === updated.table_id ? updated : t));
 			closeTableSettings();
 		} catch (e) {
 			tableSettingsError = e instanceof Error ? e.message : 'Failed to rename table';
@@ -214,7 +232,6 @@
 
 <div class="min-h-screen bg-gray-50 p-6">
 	<div class="mx-auto max-w-2xl pt-4">
-
 		{#if error}
 			<div class="mb-4 rounded-xl bg-red-50 px-4 py-3 text-red-600">{error}</div>
 		{/if}
@@ -240,9 +257,18 @@
 								title="Workspace settings"
 							>
 								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-										d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+									/>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+									/>
 								</svg>
 							</button>
 						</div>
@@ -252,13 +278,16 @@
 							<input
 								type="text"
 								bind:value={newTableNames[ws.workspace_id]}
-								onkeydown={(e) => { if (e.key === 'Enter') handleCreate(ws.workspace_id); }}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') handleCreate(ws.workspace_id);
+								}}
 								placeholder="New table name..."
 								class="flex-1 rounded-2xl border-2 border-gray-200 bg-white px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
 							/>
 							<button
 								onclick={() => handleCreate(ws.workspace_id)}
-								disabled={creating[ws.workspace_id] || !(newTableNames[ws.workspace_id] ?? '').trim()}
+								disabled={creating[ws.workspace_id] ||
+									!(newTableNames[ws.workspace_id] ?? '').trim()}
 								class="rounded-2xl bg-blue-600 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
 							>
 								{creating[ws.workspace_id] ? 'Creating...' : 'Create'}
@@ -273,13 +302,17 @@
 
 						<!-- Tables -->
 						{#if wsTables.length === 0}
-							<div class="rounded-2xl bg-white px-4 py-4 text-center text-sm text-gray-400 shadow-sm">
+							<div
+								class="rounded-2xl bg-white px-4 py-4 text-center text-sm text-gray-400 shadow-sm"
+							>
 								No tables yet.
 							</div>
 						{:else}
 							<div class="space-y-2">
 								{#each wsTables as table (table.table_id)}
-									<div class="flex items-center gap-3 rounded-2xl bg-white px-4 py-4 shadow-sm transition hover:bg-blue-50">
+									<div
+										class="flex items-center gap-3 rounded-2xl bg-white px-4 py-4 shadow-sm transition hover:bg-blue-50"
+									>
 										<button
 											onclick={() => goto(`/${table.workspace_id}/${table.table_id}`)}
 											class="flex-1 text-left font-medium text-gray-800"
@@ -293,9 +326,18 @@
 											title="Table settings"
 										>
 											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-													d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+												/>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+												/>
 											</svg>
 										</button>
 									</div>
@@ -324,18 +366,25 @@
 			<h2 class="mb-4 text-lg font-bold text-gray-900">Table Settings</h2>
 
 			<div class="mb-4">
-				<label class="mb-1 block text-sm font-medium text-gray-700" for="table-rename-input">Name</label>
+				<label class="mb-1 block text-sm font-medium text-gray-700" for="table-rename-input"
+					>Name</label
+				>
 				<input
 					id="table-rename-input"
 					type="text"
 					bind:value={tableRenameValue}
-					onkeydown={(e) => { if (e.key === 'Enter') handleTableRename(); if (e.key === 'Escape') closeTableSettings(); }}
+					onkeydown={(e) => {
+						if (e.key === 'Enter') handleTableRename();
+						if (e.key === 'Escape') closeTableSettings();
+					}}
 					class="w-full rounded-xl border-2 border-gray-200 px-3 py-2 text-gray-800 focus:border-blue-500 focus:outline-none"
 				/>
 			</div>
 
 			{#if tableSettingsError}
-				<div class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{tableSettingsError}</div>
+				<div class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
+					{tableSettingsError}
+				</div>
 			{/if}
 
 			<div class="flex items-center justify-between gap-2">
@@ -381,18 +430,25 @@
 			<h2 class="mb-4 text-lg font-bold text-gray-900">Workspace Settings</h2>
 
 			<div class="mb-4">
-				<label class="mb-1 block text-sm font-medium text-gray-700" for="ws-rename-input">Name</label>
+				<label class="mb-1 block text-sm font-medium text-gray-700" for="ws-rename-input"
+					>Name</label
+				>
 				<input
 					id="ws-rename-input"
 					type="text"
 					bind:value={wsRenameValue}
-					onkeydown={(e) => { if (e.key === 'Enter') handleWsRename(); if (e.key === 'Escape') closeWsSettings(); }}
+					onkeydown={(e) => {
+						if (e.key === 'Enter') handleWsRename();
+						if (e.key === 'Escape') closeWsSettings();
+					}}
 					class="w-full rounded-xl border-2 border-gray-200 px-3 py-2 text-gray-800 focus:border-blue-500 focus:outline-none"
 				/>
 			</div>
 
 			{#if wsSettingsError}
-				<div class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{wsSettingsError}</div>
+				<div class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
+					{wsSettingsError}
+				</div>
 			{/if}
 
 			<div class="flex items-center justify-between gap-2">
@@ -444,7 +500,8 @@
 					<span class="font-semibold text-blue-800">PM Project</span>
 				</div>
 				<p class="mb-3 text-sm text-blue-700">
-					Project management with Key, Title, Status, Priority, Assignee, dates, and Sprint Board + Roadmap views.
+					Project management with Key, Title, Status, Priority, Assignee, dates, and Sprint Board +
+					Roadmap views.
 				</p>
 				<input
 					type="text"

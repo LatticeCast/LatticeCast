@@ -132,10 +132,7 @@
 		<div class="mx-auto max-w-4xl px-6 py-6">
 			<!-- Actions bar -->
 			<div class="mb-4 flex items-center justify-between">
-				<a
-					href="/{workspaceId}/{tableId}"
-					class="text-sm text-blue-600 hover:underline"
-				>← Back</a>
+				<a href="/{workspaceId}/{tableId}" class="text-sm text-blue-600 hover:underline">← Back</a>
 				<button
 					onclick={() => (showCreateTicket = true)}
 					class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100"

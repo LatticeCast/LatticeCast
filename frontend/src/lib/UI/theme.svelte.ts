@@ -110,6 +110,15 @@ export const theme = {
 	} satisfies Record<string, string>
 } as const;
 
+/** Reactive current theme tokens — auto-switches between light/dark.
+ *  Usage: `{T.cardBg}` in templates — no .value needed. */
+export const T: ThemeTokens = new Proxy({} as ThemeTokens, {
+	get(_target, prop: string) {
+		const tokens = _isDark ? theme.dark : theme.light;
+		return tokens[prop as keyof ThemeTokens];
+	}
+});
+
 // TAG_COLORS — 12 preset colors for auto-assigning to tags/select options.
 // Each entry: { bg, text, border } as Tailwind classes.
 export const TAG_COLORS = [

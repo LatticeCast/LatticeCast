@@ -197,11 +197,7 @@
 	}}
 >
 	<!-- Group by -->
-	<GroupBySelector
-		{columns}
-		value={groupByColId ?? null}
-		onchange={handleGroupByChange}
-	/>
+	<GroupBySelector {columns} value={groupByColId ?? null} onchange={handleGroupByChange} />
 
 	<!-- Sort -->
 	<div class="flex items-center gap-2">

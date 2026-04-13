@@ -73,15 +73,27 @@
 			{#each choices as choice, i (choice.value)}
 				{@const color = TAG_COLORS[i % TAG_COLORS.length]}
 				<div
-					class="flex items-center gap-2 rounded transition-opacity {draggedIdx === i ? 'opacity-40' : ''}"
+					class="flex items-center gap-2 rounded transition-opacity {draggedIdx === i
+						? 'opacity-40'
+						: ''}"
 					draggable="true"
 					ondragstart={() => onDragStart(i)}
 					ondragover={(e) => onDragOver(e, i)}
 					ondragend={onDragEnd}
 				>
 					<!-- drag handle -->
-					<svg class="h-3.5 w-3.5 shrink-0 cursor-grab text-gray-300 active:cursor-grabbing" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16" />
+					<svg
+						class="h-3.5 w-3.5 shrink-0 cursor-grab text-gray-300 active:cursor-grabbing"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M4 8h16M4 16h16"
+						/>
 					</svg>
 					<span
 						class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"

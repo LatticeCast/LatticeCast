@@ -295,12 +295,19 @@
 </script>
 
 <!-- Config bar -->
-<div class="flex flex-wrap items-center gap-3 border-b px-4 py-2 {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}">
+<div
+	class="flex flex-wrap items-center gap-3 border-b px-4 py-2 {isDark.value
+		? 'border-gray-700 bg-gray-800'
+		: 'border-gray-200 bg-white'}"
+>
 	<!-- Start date -->
 	<div class="flex items-center gap-2">
-		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}">Start</span>
+		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}">Start</span
+		>
 		<select
-			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value ? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400' : 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
+				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
+				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
 			value={startColId ?? ''}
 			onchange={(e) =>
 				saveConfig({ start_col: (e.target as HTMLSelectElement).value || undefined })}
@@ -316,7 +323,9 @@
 	<div class="flex items-center gap-2">
 		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}">End</span>
 		<select
-			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value ? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400' : 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
+				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
+				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
 			value={endColId ?? ''}
 			onchange={(e) => saveConfig({ end_col: (e.target as HTMLSelectElement).value || undefined })}
 		>
@@ -329,9 +338,13 @@
 
 	<!-- Color by -->
 	<div class="flex items-center gap-2">
-		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}">Color by</span>
+		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}"
+			>Color by</span
+		>
 		<select
-			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value ? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400' : 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
+				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
+				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
 			value={colorByColId ?? ''}
 			onchange={(e) => saveConfig({ color_by: (e.target as HTMLSelectElement).value || undefined })}
 		>
@@ -344,9 +357,13 @@
 
 	<!-- Group by -->
 	<div class="flex items-center gap-2">
-		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}">Group by</span>
+		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}"
+			>Group by</span
+		>
 		<select
-			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value ? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400' : 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
+				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
+				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
 			value={groupByColId ?? ''}
 			onchange={(e) => saveConfig({ group_by: (e.target as HTMLSelectElement).value || undefined })}
 		>
@@ -368,12 +385,20 @@
 	</button>
 
 	<!-- Granularity toggle -->
-	<div class="ml-auto flex items-center gap-0.5 rounded-lg border p-0.5 {isDark.value ? 'border-gray-600 bg-gray-700' : 'border-gray-200 bg-gray-50'}">
+	<div
+		class="ml-auto flex items-center gap-0.5 rounded-lg border p-0.5 {isDark.value
+			? 'border-gray-600 bg-gray-700'
+			: 'border-gray-200 bg-gray-50'}"
+	>
 		{#each GRANULARITIES as g (g)}
 			<button
 				class="rounded-md px-2.5 py-1 text-xs font-medium capitalize transition {granularity === g
-					? (isDark.value ? 'bg-gray-600 text-blue-300 shadow-sm' : 'bg-white text-blue-600 shadow-sm')
-					: (isDark.value ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-700')}"
+					? isDark.value
+						? 'bg-gray-600 text-blue-300 shadow-sm'
+						: 'bg-white text-blue-600 shadow-sm'
+					: isDark.value
+						? 'text-gray-400 hover:text-gray-200'
+						: 'text-gray-500 hover:text-gray-700'}"
 				onclick={() => (granularity = g)}
 			>
 				{g}
@@ -383,7 +408,9 @@
 </div>
 
 {#if !startColId}
-	<div class="flex h-64 items-center justify-center {isDark.value ? 'text-gray-500' : 'text-gray-400'}">
+	<div
+		class="flex h-64 items-center justify-center {isDark.value ? 'text-gray-500' : 'text-gray-400'}"
+	>
 		<div class="text-center">
 			<p class="text-sm">Select a "Start" date column above to activate the Timeline view.</p>
 		</div>
@@ -394,20 +421,31 @@
 		<div style="min-width: {SIDEBAR_WIDTH + totalGridWidth}px">
 			<!-- Header row -->
 			<div
-				class="sticky top-0 z-20 flex border-b {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}"
+				class="sticky top-0 z-20 flex border-b {isDark.value
+					? 'border-gray-700 bg-gray-800'
+					: 'border-gray-200 bg-white'}"
 				style="height: {HEADER_HEIGHT}px"
 			>
 				<!-- Sidebar corner -->
 				<div
-					class="sticky left-0 z-30 flex-shrink-0 border-r {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-white'}"
+					class="sticky left-0 z-30 flex-shrink-0 border-r {isDark.value
+						? 'border-gray-700 bg-gray-800'
+						: 'border-gray-200 bg-white'}"
 					style="width: {SIDEBAR_WIDTH}px"
 				></div>
 				<!-- Time header cells -->
 				{#each timeColumns as col, i (i)}
 					<div
-						class="flex-shrink-0 border-r px-1 text-center text-xs leading-none font-medium {isToday(col, granularity)
-							? (isDark.value ? 'border-gray-700 bg-blue-900/40 text-blue-400' : 'border-gray-100 bg-blue-50 text-blue-600')
-							: (isDark.value ? 'border-gray-700 text-gray-400' : 'border-gray-100 text-gray-500')}"
+						class="flex-shrink-0 border-r px-1 text-center text-xs leading-none font-medium {isToday(
+							col,
+							granularity
+						)
+							? isDark.value
+								? 'border-gray-700 bg-blue-900/40 text-blue-400'
+								: 'border-gray-100 bg-blue-50 text-blue-600'
+							: isDark.value
+								? 'border-gray-700 text-gray-400'
+								: 'border-gray-100 text-gray-500'}"
 						style="width: {cellWidth}px; line-height: {HEADER_HEIGHT}px"
 					>
 						{formatColHeader(col, granularity)}
@@ -420,7 +458,9 @@
 				<!-- Group header (only when grouped) -->
 				{#if groupByColId && groupByCol}
 					<div
-						class="sticky left-0 z-10 flex items-center gap-2 border-b px-3 {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}"
+						class="sticky left-0 z-10 flex items-center gap-2 border-b px-3 {isDark.value
+							? 'border-gray-700 bg-gray-800'
+							: 'border-gray-200 bg-gray-50'}"
 						style="height: {ROW_HEIGHT - 4}px; width: {SIDEBAR_WIDTH + totalGridWidth}px"
 					>
 						{#if groupByCol.type === 'select' && group.key}
@@ -431,7 +471,9 @@
 								{group.label}
 							</span>
 						{:else}
-							<span class="text-xs font-semibold {isDark.value ? 'text-gray-300' : 'text-gray-600'}">{group.label}</span>
+							<span class="text-xs font-semibold {isDark.value ? 'text-gray-300' : 'text-gray-600'}"
+								>{group.label}</span
+							>
 						{/if}
 						<span class="text-xs text-gray-400">{group.rows.length}</span>
 					</div>
@@ -441,12 +483,16 @@
 				{#each group.rows as { row, startDate: rawStart, endDate: rawEnd } (row.row_number)}
 					{@const { startDate, endDate } = getEffectiveDates(row, rawStart, rawEnd)}
 					<div
-						class="flex border-b {isDark.value ? 'border-gray-700 hover:bg-gray-800/80' : 'border-gray-100 hover:bg-gray-50'}"
+						class="flex border-b {isDark.value
+							? 'border-gray-700 hover:bg-gray-800/80'
+							: 'border-gray-100 hover:bg-gray-50'}"
 						style="height: {ROW_HEIGHT}px"
 					>
 						<!-- Sidebar label -->
 						<div
-							class="sticky left-0 z-10 flex flex-shrink-0 items-center border-r px-2 {isDark.value ? 'border-gray-700 bg-gray-900 hover:bg-gray-800' : 'border-gray-200 bg-white hover:bg-gray-50'}"
+							class="sticky left-0 z-10 flex flex-shrink-0 items-center border-r px-2 {isDark.value
+								? 'border-gray-700 bg-gray-900 hover:bg-gray-800'
+								: 'border-gray-200 bg-white hover:bg-gray-50'}"
 							style="width: {SIDEBAR_WIDTH}px"
 						>
 							<span class="truncate text-xs {isDark.value ? 'text-gray-300' : 'text-gray-700'}">
@@ -463,8 +509,12 @@
 							{#each timeColumns as col, i (i)}
 								<div
 									class="absolute top-0 bottom-0 border-r {isToday(col, granularity)
-										? (isDark.value ? 'border-blue-700 bg-blue-900/20' : 'border-blue-200 bg-blue-50/40')
-										: (isDark.value ? 'border-gray-700' : 'border-gray-100')}"
+										? isDark.value
+											? 'border-blue-700 bg-blue-900/20'
+											: 'border-blue-200 bg-blue-50/40'
+										: isDark.value
+											? 'border-gray-700'
+											: 'border-gray-100'}"
 									style="left: {i * cellWidth}px; width: {cellWidth}px"
 								></div>
 							{/each}

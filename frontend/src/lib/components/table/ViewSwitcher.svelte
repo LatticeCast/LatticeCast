@@ -64,10 +64,18 @@
 		<!-- Scrollable view tabs -->
 		<div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-4">
 			{#each views as view (view.name)}
-				<div class="group flex shrink-0 items-center border-b-2 transition {activeViewName === view.name ? 'border-blue-500' : 'border-transparent hover:border-gray-300'}">
+				<div
+					class="group flex shrink-0 items-center border-b-2 transition {activeViewName ===
+					view.name
+						? 'border-blue-500'
+						: 'border-transparent hover:border-gray-300'}"
+				>
 					<button
 						onclick={() => onViewChange(view)}
-						class="flex items-center gap-1.5 px-3 py-2 text-sm transition {activeViewName === view.name ? 'text-blue-600 font-medium' : 'text-gray-500 hover:text-gray-700'}"
+						class="flex items-center gap-1.5 px-3 py-2 text-sm transition {activeViewName ===
+						view.name
+							? 'font-medium text-blue-600'
+							: 'text-gray-500 hover:text-gray-700'}"
 					>
 						{#if view.type === 'table'}
 							<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -101,14 +109,26 @@
 					</button>
 					{#if onDeleteView}
 						<button
-							onclick={(e) => { e.stopPropagation(); if (canDelete(view)) onDeleteView(view); }}
+							onclick={(e) => {
+								e.stopPropagation();
+								if (canDelete(view)) onDeleteView(view);
+							}}
 							disabled={!canDelete(view)}
 							title={canDelete(view) ? `Delete ${view.name}` : 'Cannot delete the last Table view'}
-							class="mr-1 rounded p-0.5 opacity-0 transition group-hover:opacity-100 {canDelete(view) ? 'text-gray-400 hover:bg-red-50 hover:text-red-500' : 'cursor-not-allowed text-gray-200'}"
+							class="mr-1 rounded p-0.5 opacity-0 transition group-hover:opacity-100 {canDelete(
+								view
+							)
+								? 'text-gray-400 hover:bg-red-50 hover:text-red-500'
+								: 'cursor-not-allowed text-gray-200'}"
 							aria-label="Delete view"
 						>
 							<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M6 18L18 6M6 6l12 12"
+								/>
 							</svg>
 						</button>
 					{/if}
@@ -137,7 +157,7 @@
 	<!-- Full-width panel overlay — sibling of tab bar so overflow-x-auto doesn't clip it -->
 	{#if showAddPanel}
 		<div
-			class="absolute top-full left-0 right-0 z-40 border-b border-gray-200 bg-white shadow-lg"
+			class="absolute top-full right-0 left-0 z-40 border-b border-gray-200 bg-white shadow-lg"
 			onclick={(e) => e.stopPropagation()}
 			role="dialog"
 			aria-label="Add a view"

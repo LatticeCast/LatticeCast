@@ -16,7 +16,9 @@
 </script>
 
 <div class="flex items-center gap-2">
-	<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}">Group by</span>
+	<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}"
+		>Group by</span
+	>
 	<select
 		data-testid="group-by-selector"
 		class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
