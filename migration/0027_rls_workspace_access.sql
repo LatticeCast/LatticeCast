@@ -65,4 +65,8 @@ CREATE POLICY rows_workspace_member ON public.rows
 
 -- ── DBA bypasses RLS (migrations, admin tasks) ────────────────────────────────
 
-ALTER ROLE dba BYPASSRLS;
+DO $$ BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'dba') THEN
+    ALTER ROLE dba BYPASSRLS;
+  END IF;
+END $$;

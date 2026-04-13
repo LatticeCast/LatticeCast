@@ -1,3 +1,4 @@
+*.pyc
 .ruff_cache/
 
 .browser/
