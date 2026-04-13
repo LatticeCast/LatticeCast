@@ -10,8 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
 from config.storage import get_s3_client
-from core.db import get_session
-from middleware.auth import get_current_user
+from middleware.auth import get_current_user, get_rls_session
 from models.row import Row, RowCreate, RowResponse, RowUpdate
 from models.user import User
 from repository.row import RowRepository
@@ -135,7 +134,7 @@ async def create_row(
     table_id: str,
     data: RowCreate,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Create a new row in a table (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
@@ -199,7 +198,7 @@ async def list_rows(
     sort: str = "desc",
     filter_json: str | None = None,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """List rows. sort=desc|asc. filter_json = JSONB containment filter e.g. {"col_id":"value"}"""
     table = await _get_table_for_member(table_id, user, session)
@@ -228,7 +227,7 @@ async def update_row(
     row_number: int,
     data: RowUpdate,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Update a row's data by row_number (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
@@ -248,7 +247,7 @@ async def get_row_doc(
     table_id: str,
     row_number: int,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> str:
     """Get markdown doc for a row from MinIO by row_number (returns empty string if not found)"""
     table = await _get_table_for_member(table_id, user, session)
@@ -280,7 +279,7 @@ async def put_row_doc(
     row_number: int,
     request: Request,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> str:
     """Save markdown doc for a row to MinIO by row_number.
     Accepts text/plain body or multipart/form-data with a 'file' field."""
@@ -321,7 +320,7 @@ async def put_row_doc(
 async def batch_docs_exist(
     table_id: str,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, list[int]]:
     """Return list of row_numbers that have non-empty docs in MinIO (single S3 list, no DB lookup)"""
     table = await _get_table_for_member(table_id, user, session)
@@ -351,7 +350,7 @@ async def get_col_doc(
     row_number: int,
     column_id: str,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> str:
     """Get markdown doc for a specific column cell from MinIO (returns empty string if not found)"""
     table = await _get_table_for_member(table_id, user, session)
@@ -379,7 +378,7 @@ async def put_col_doc(
     column_id: str,
     request: Request,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> str:
     """Save markdown doc for a specific column cell to MinIO."""
     body = (await request.body()).decode("utf-8")
@@ -410,7 +409,7 @@ async def delete_row(
     table_id: str,
     row_number: int,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Delete a row by row_number (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)

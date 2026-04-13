@@ -7,8 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.db import get_session
-from middleware.auth import get_current_user
+from middleware.auth import get_current_user, get_rls_session
 from models.user import User
 from models.workspace import MemberCreate, MemberResponse, Workspace, WorkspaceCreate, WorkspaceMember, WorkspaceResponse
 from repository.workspace import WorkspaceRepository
@@ -68,7 +67,7 @@ async def _require_owner(workspace_id: UUID, user_id: UUID, session: AsyncSessio
 async def create_workspace(
     data: WorkspaceCreate,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Create a new workspace; creator becomes owner"""
     repo = WorkspaceRepository(session)
@@ -85,7 +84,7 @@ async def create_workspace(
 @router.get("", response_model=list[WorkspaceResponse])
 async def list_workspaces(
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """List all workspaces the current user is a member of"""
     repo = WorkspaceRepository(session)
@@ -96,7 +95,7 @@ async def list_workspaces(
 async def list_members(
     workspace_id: str,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """List all members of a workspace (must be a member)"""
     repo = WorkspaceRepository(session)
@@ -111,7 +110,7 @@ async def add_member(
     workspace_id: str,
     data: MemberCreate,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Add a member to a workspace (owner only)"""
     repo = WorkspaceRepository(session)
@@ -128,7 +127,7 @@ async def remove_member(
     workspace_id: str,
     member_user_id: str,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Remove a member from a workspace (owner only). member_user_id can be UUID or user_name."""
     repo = WorkspaceRepository(session)
@@ -150,7 +149,7 @@ async def remove_member(
 async def get_workspace(
     workspace_id: str,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Get a workspace by ID (must be a member)"""
     repo = WorkspaceRepository(session)
@@ -165,7 +164,7 @@ async def update_workspace(
     workspace_id: str,
     data: WorkspaceCreate,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Update workspace name (owner only). workspace_name must be globally unique."""
     repo = WorkspaceRepository(session)
@@ -194,7 +193,7 @@ async def update_workspace(
 async def delete_workspace(
     workspace_id: str,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ):
     """Delete a workspace (owner only)"""
     repo = WorkspaceRepository(session)
