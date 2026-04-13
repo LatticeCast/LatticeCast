@@ -36,7 +36,14 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
   END \$\$;
 
   -- ── DBA: full access on all schemas ──────────────────────────────────────────
+  ALTER ROLE dba BYPASSRLS;
   GRANT ALL ON SCHEMA public, auth, private TO dba;
+  GRANT ALL ON ALL TABLES    IN SCHEMA public  TO dba;
+  GRANT ALL ON ALL TABLES    IN SCHEMA auth    TO dba;
+  GRANT ALL ON ALL TABLES    IN SCHEMA private TO dba;
+  GRANT ALL ON ALL SEQUENCES IN SCHEMA public  TO dba;
+  GRANT ALL ON ALL SEQUENCES IN SCHEMA auth    TO dba;
+  GRANT ALL ON ALL SEQUENCES IN SCHEMA private TO dba;
   ALTER DEFAULT PRIVILEGES IN SCHEMA public  GRANT ALL ON TABLES    TO dba;
   ALTER DEFAULT PRIVILEGES IN SCHEMA auth    GRANT ALL ON TABLES    TO dba;
   ALTER DEFAULT PRIVILEGES IN SCHEMA private GRANT ALL ON TABLES    TO dba;
@@ -47,12 +54,17 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-E
   -- ── App: CRUD on public, SELECT on auth ───────────────────────────────────────
   GRANT USAGE ON SCHEMA public TO app;
   GRANT USAGE ON SCHEMA auth   TO app;
+  GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES    IN SCHEMA public TO app;
+  GRANT USAGE                          ON ALL SEQUENCES IN SCHEMA public TO app;
+  GRANT SELECT                         ON ALL TABLES    IN SCHEMA auth   TO app;
   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES    TO app;
   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE                          ON SEQUENCES TO app;
   ALTER DEFAULT PRIVILEGES IN SCHEMA auth   GRANT SELECT                         ON TABLES    TO app;
 
   -- ── Login manager: CRUD on auth only ─────────────────────────────────────────
   GRANT USAGE ON SCHEMA auth TO login_mgr;
+  GRANT SELECT, INSERT, UPDATE ON ALL TABLES    IN SCHEMA auth TO login_mgr;
+  GRANT USAGE                  ON ALL SEQUENCES IN SCHEMA auth TO login_mgr;
   ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT SELECT, INSERT, UPDATE ON TABLES    TO login_mgr;
   ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT USAGE                  ON SEQUENCES TO login_mgr;
 EOSQL
