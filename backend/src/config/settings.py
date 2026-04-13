@@ -16,8 +16,6 @@ class DatabaseSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="POSTGRES_")
 
     url: str = Field(default="localhost:5432", description="host:port format")
-    user: str = Field(default="postgres")
-    password: str = Field(default="")
     db: str = Field(default="postgres")
 
     # Role-specific login users (created by postgres/init-roles.sh)
