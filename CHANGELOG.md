@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.15 — 2026-04-12
+- New column type `doc` — read-only cell, auto-creates MinIO .md on row insert (Layer 1)
+- PM template uses `type="doc"` instead of `type="url"` for Doc column
+- Fix: column dropdown menu hidden behind doc cell buttons (z-index stacking context)
+- Theme manager exports reactive `T` proxy — components use `T.cardBg` directly
+- Fix: sidebar menu stays open on table click (navigate without closing)
+- Fix: Table view grouping — shared `GroupBySelector` component with Kanban
+- Browser container: `network_mode: host` + `user: 1000:1000` for Playwright snapshots
+- Skills: all API paths updated `/api/` → `/api/v1/`
+
 ## v0.14 — 2026-04-11
 - Fix: duplicate row on create — `session.add(detached)` caused second INSERT instead of UPDATE
 - Fix: Doc column cell paths migrated from UUID-based to string table_id (one-time script)
