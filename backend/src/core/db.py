@@ -156,6 +156,25 @@ async def _run_migrations(engine: AsyncEngine):
             )
             print(f"✅ Applied migration: {sql_file.name}")
 
+        # Post-migration: re-grant on all tables so newly created tables
+        # (created by dba_user) are accessible to app and login_mgr roles.
+        await conn.execute(text(
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES    IN SCHEMA public TO app"
+        ))
+        await conn.execute(text(
+            "GRANT USAGE                          ON ALL SEQUENCES IN SCHEMA public TO app"
+        ))
+        await conn.execute(text(
+            "GRANT SELECT                         ON ALL TABLES    IN SCHEMA auth   TO app"
+        ))
+        await conn.execute(text(
+            "GRANT SELECT, INSERT, UPDATE         ON ALL TABLES    IN SCHEMA auth   TO login_mgr"
+        ))
+        await conn.execute(text(
+            "GRANT USAGE                          ON ALL SEQUENCES IN SCHEMA auth   TO login_mgr"
+        ))
+        print("✅ Post-migration grants applied")
+
     print(f"✅ Migration check complete ({len(sql_files)} file(s) checked)")
 
 
