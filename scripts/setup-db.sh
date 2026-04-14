@@ -1,10 +1,33 @@
 #!/bin/bash
-# postgres/init-roles.sh
-# Creates schemas, roles, login users, and grants.
-# Runs once at container init via docker-entrypoint-initdb.d.
+# scripts/setup-db.sh
+# One-time bootstrap: connect as pg_init and create schemas, roles, login users, grants.
+# Run after: docker compose up -d db
+# Idempotent — safe to re-run.
+#
+# Usage:
+#   source .env && docker compose exec db bash -c "$(cat scripts/setup-db.sh)"
+# Or directly via psql:
+#   PGPASSWORD=pg_init_bootstrap psql -h localhost -U pg_init -d $POSTGRES_DB -f scripts/setup-db.sql
 set -e
 
-psql -v ON_ERROR_STOP=1 --username "pg_init" --dbname "$POSTGRES_DB" <<-EOSQL
+: "${POSTGRES_DB:?POSTGRES_DB must be set}"
+: "${POSTGRES_DBA_PASSWORD:?POSTGRES_DBA_PASSWORD must be set}"
+: "${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD must be set}"
+: "${POSTGRES_LOGIN_PASSWORD:?POSTGRES_LOGIN_PASSWORD must be set}"
+
+POSTGRES_HOST="${POSTGRES_URL%%:*}"
+POSTGRES_PORT="${POSTGRES_URL##*:}"
+POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
+POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+
+echo "Setting up database roles and schemas on ${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}..."
+
+PGPASSWORD=pg_init_bootstrap psql \
+  -v ON_ERROR_STOP=1 \
+  -h "$POSTGRES_HOST" \
+  -p "$POSTGRES_PORT" \
+  -U pg_init \
+  -d "$POSTGRES_DB" <<-EOSQL
   -- ── Schemas ──────────────────────────────────────────────────────────────────
   CREATE SCHEMA IF NOT EXISTS auth;
   CREATE SCHEMA IF NOT EXISTS private;
@@ -68,3 +91,5 @@ psql -v ON_ERROR_STOP=1 --username "pg_init" --dbname "$POSTGRES_DB" <<-EOSQL
   ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT SELECT, INSERT, UPDATE ON TABLES    TO login_mgr;
   ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT USAGE                  ON SEQUENCES TO login_mgr;
 EOSQL
+
+echo "Done. Database roles and schemas are set up."
