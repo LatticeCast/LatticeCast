@@ -172,20 +172,21 @@ def step_test() -> bool:
             PG_IMAGE,
         ])
 
-        # Wait for ready
-        for _ in range(30):
-            r = run(["docker", "exec", TEST_CONTAINER, "pg_isready", "-U", TEST_USER, "-d", TEST_DB],
-                    check=False, capture=True)
-            if r.returncode == 0:
+        # Wait for ready — retry actual connection, not just pg_isready
+        test_dsn = f"postgresql://{TEST_USER}:{TEST_PASSWORD}@{TEST_CONTAINER}:5432/{TEST_DB}"
+        for attempt in range(20):
+            try:
+                conn = psycopg2.connect(test_dsn)
+                conn.close()
                 break
-            time.sleep(1)
+            except psycopg2.OperationalError:
+                time.sleep(1)
         else:
             print("  ✗ PostgreSQL did not start")
             return False
 
         # Apply to temp DB
         print("  Applying migrations…")
-        test_dsn = f"postgresql://{TEST_USER}:{TEST_PASSWORD}@{TEST_CONTAINER}:5432/{TEST_DB}"
         apply_migrations(test_dsn)
         print("  ✓ Migrations applied")
 
