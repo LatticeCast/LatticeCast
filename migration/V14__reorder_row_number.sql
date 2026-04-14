@@ -1,3 +1,4 @@
+-- upgrade
 -- 0014_reorder_row_number.sql
 -- Move row_number to second column position (after table_id)
 -- PG doesn't support column reorder natively — recreate table

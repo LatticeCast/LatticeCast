@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.17 — 2026-04-14
+- Migration runner: lint (SQLFluff) → test (temp DB + schema/RLS verify) → apply
+- DBA credentials removed from `.env` — hardcoded in docker-compose only, backend never sees them
+- Backend no longer runs migrations — separate `migration` container with `--profile migration`
+- Migration files renamed to Flyway format (`V1__name.sql`)
+- Fixed migration ordering bugs: 0018/0020/0021 referenced columns from later migrations
+- Removed `setup-db.sh` — roles/schemas bootstrapped via `V1__bootstrap_roles.sql`
+- Removed Atlas dependency (lint is Pro-only since v0.38)
+
 ## v0.16 — 2026-04-13
 - PG schema-based permission model: `public` (data), `auth` (users), `private` (internal)
 - PG native roles: `dba` (DDL all schemas), `app` (CRUD public, SELECT auth), `login_mgr` (CRUD auth)

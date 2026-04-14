@@ -1,3 +1,4 @@
+-- upgrade
 -- 0005_users_uuid.sql
 -- Migrate users table: add UUID PK, create user_info table
 -- Steps:

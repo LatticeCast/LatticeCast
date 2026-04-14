@@ -1,3 +1,4 @@
+-- upgrade
 -- 0010_user_info.sql
 -- L-84: Add user_info table (user_id UUID FK → users, display_id, email, name)
 

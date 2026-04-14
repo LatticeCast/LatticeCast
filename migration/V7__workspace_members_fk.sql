@@ -1,3 +1,4 @@
+-- upgrade
 -- 0007_workspace_members_fk.sql
 -- Ensure workspace_members FK columns reference new UUID PKs for both workspace_id and user_id.
 -- The actual column migrations were done in 0005 (user_id) and 0006 (workspace_id).

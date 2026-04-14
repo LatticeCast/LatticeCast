@@ -1,3 +1,4 @@
+-- upgrade
 -- 0016_workspaces_reorder.sql
 -- Reorder workspaces columns: workspace_id first
 

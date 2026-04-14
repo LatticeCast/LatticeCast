@@ -1,3 +1,4 @@
+-- upgrade
 -- 0009_rows_row_number_uuid_refs.sql
 -- L-82: Add per-table row_number, convert created_by/updated_by to UUID FKs
 

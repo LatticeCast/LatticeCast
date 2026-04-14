@@ -1,3 +1,4 @@
+-- upgrade
 -- 0011_rows_composite_pk.sql
 -- Change rows PK from row_id UUID to (table_id, row_number)
 -- PG trigger handles per-table auto-increment (already in 0009)

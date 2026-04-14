@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
     print("🚀 Starting up services...")
 
     # Initialize database
-    await init_db(run_migrations=True)
+    await init_db()
     print("✓ Database initialized")
 
     # Initialize Valkey

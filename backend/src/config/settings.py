@@ -18,8 +18,7 @@ class DatabaseSettings(BaseSettings):
     url: str = Field(default="localhost:5432", description="host:port format")
     db: str = Field(default="postgres")
 
-    # Role-specific login users (created by postgres/init-roles.sh)
-    dba_password: str = Field(default="", description="Password for dba_user (POSTGRES_DBA_PASSWORD)")
+    # Role-specific login users (created by migrate container)
     app_password: str = Field(default="", description="Password for app_user (POSTGRES_APP_PASSWORD)")
     login_password: str = Field(default="", description="Password for login_user (POSTGRES_LOGIN_PASSWORD)")
 
@@ -37,7 +36,6 @@ class DatabaseSettings(BaseSettings):
     def validate_role_passwords(self) -> "DatabaseSettings":
         missing = [
             name for name, val in [
-                ("POSTGRES_DBA_PASSWORD", self.dba_password),
                 ("POSTGRES_APP_PASSWORD", self.app_password),
                 ("POSTGRES_LOGIN_PASSWORD", self.login_password),
             ]
@@ -45,16 +43,10 @@ class DatabaseSettings(BaseSettings):
         ]
         if missing:
             raise ValueError(
-                f"❌ Missing required DB role passwords: {', '.join(missing)}. "
-                "Run: docker compose up -d --force-recreate backend"
+                f"❌ Missing required DB passwords: {', '.join(missing)}. "
+                "Check .env file."
             )
         return self
-
-    @property
-    def dba_async_url(self) -> str:
-        """Build async SQLAlchemy URL for dba_user (migrations, full access)"""
-        host, port = self.url.split(":")
-        return f"postgresql+asyncpg://dba_user:{self.dba_password}@{host}:{port}/{self.db}"
 
     @property
     def app_async_url(self) -> str:

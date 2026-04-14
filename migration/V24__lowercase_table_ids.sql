@@ -1,3 +1,4 @@
+-- upgrade
 -- 0024_lowercase_table_ids.sql
 -- Convert all table_id to lowercase
 

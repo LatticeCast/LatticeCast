@@ -1,3 +1,4 @@
+-- upgrade
 -- 0017_remove_key_column.sql
 -- Remove "Key" column from all tables' columns JSONB + remove Key data from row_data
 -- One-time cleanup — Key is replaced by type-row_number

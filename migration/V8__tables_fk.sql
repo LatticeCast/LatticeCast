@@ -1,3 +1,4 @@
+-- upgrade
 -- 0008_tables_fk.sql
 -- Ensure tables.workspace_id FK references new UUID PK on workspaces(workspace_id).
 -- The actual column migration was done in 0006 (Step 5).

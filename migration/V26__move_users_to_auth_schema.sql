@@ -1,3 +1,4 @@
+-- upgrade
 -- 0026_move_users_to_auth_schema.sql
 -- task-241: Move users + user_info into auth schema (PG roles restructure)
 

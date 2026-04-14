@@ -1,3 +1,4 @@
+-- upgrade
 -- 0003_add_views.sql
 -- Add views JSONB column to tables for storing named view configurations
 

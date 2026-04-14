@@ -1,3 +1,4 @@
+-- upgrade
 -- 0027_rls_workspace_access.sql
 -- task-244: Enable RLS on rows and tables — workspace membership enforced at DB
 --
@@ -63,10 +64,3 @@ CREATE POLICY rows_workspace_member ON public.rows
     )
   );
 
--- ── DBA bypasses RLS (migrations, admin tasks) ────────────────────────────────
-
-DO $$ BEGIN
-  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'dba') THEN
-    ALTER ROLE dba BYPASSRLS;
-  END IF;
-END $$;

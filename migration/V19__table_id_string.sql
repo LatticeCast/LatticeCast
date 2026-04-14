@@ -1,3 +1,4 @@
+-- upgrade
 -- 0019_table_id_string.sql
 -- Change table_id from UUID to VARCHAR (= the table name, human-readable PK)
 -- Drop table_name column (table_id IS the name now)

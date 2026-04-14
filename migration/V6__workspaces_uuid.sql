@@ -1,3 +1,4 @@
+-- upgrade
 -- 0006_workspaces_uuid.sql
 -- Migrate workspaces table: add UUID PK, create workspace_info table
 -- Steps:

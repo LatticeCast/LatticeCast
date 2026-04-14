@@ -1,3 +1,4 @@
+-- upgrade
 -- 0012_users_cleanup.sql
 -- Remove email and name from users table — these live in user_info only
 -- users table should only have: user_id UUID PK, role, timestamps

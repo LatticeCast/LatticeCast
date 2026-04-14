@@ -1,3 +1,4 @@
+-- upgrade
 -- 0015_users_reorder.sql
 -- Reorder users columns: user_id first, add UNIQUE(user_id, role)
 

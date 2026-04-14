@@ -1,3 +1,4 @@
+-- upgrade
 -- Migration 0025: update Doc columns from type=url to type=doc
 -- Targets any column named "Doc" with type "url" in any table's columns JSONB array
 

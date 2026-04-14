@@ -1,3 +1,4 @@
+-- upgrade
 -- 0017_workspace_merge_name.sql
 -- Merge display_id + name into workspace_name on workspaces, drop workspace_info (redundant)
 
@@ -18,5 +19,9 @@ ALTER TABLE workspaces DROP COLUMN IF EXISTS name;
 -- 3. Drop workspace_info table (was just a duplicate of workspaces.display_id + name)
 DROP TABLE IF EXISTS workspace_info CASCADE;
 
--- 4. Index on workspace_name for fast case-insensitive lookup
+-- 4. Unique constraint on workspace_name (moved from 0018)
+ALTER TABLE workspaces DROP CONSTRAINT IF EXISTS uq_workspaces_workspace_name;
+ALTER TABLE workspaces ADD CONSTRAINT uq_workspaces_workspace_name UNIQUE (workspace_name);
+
+-- 5. Index on workspace_name for fast case-insensitive lookup
 CREATE INDEX IF NOT EXISTS ix_workspaces_workspace_name ON workspaces(LOWER(workspace_name));
