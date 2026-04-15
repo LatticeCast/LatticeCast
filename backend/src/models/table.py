@@ -12,8 +12,8 @@ class Table(SQLModel, table=True):
 
     __tablename__ = "tables"
 
-    workspace_id: UUID = Field(index=True, foreign_key="workspaces.workspace_id", description="Workspace UUID (FK)")
-    table_id: str = Field(primary_key=True, description="Table name (human-readable string PK)")
+    workspace_id: UUID = Field(primary_key=True, foreign_key="workspaces.workspace_id", description="Workspace UUID (composite PK)")
+    table_id: str = Field(primary_key=True, description="Table name (composite PK with workspace_id)")
     columns: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="Column definitions")
     views: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="View configurations")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")

@@ -18,15 +18,29 @@ class TableRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, workspace_id: UUID, table_id: str) -> Table:
-        table = Table(workspace_id=workspace_id, table_id=table_id.lower())
+    async def create(
+        self,
+        workspace_id: UUID,
+        table_id: str,
+        columns: list[dict[str, Any]] | None = None,
+        views: list[dict[str, Any]] | None = None,
+    ) -> Table:
+        """Atomic create — columns and views set in initial insert."""
+        table = Table(
+            workspace_id=workspace_id,
+            table_id=table_id.lower(),
+            columns=columns or [],
+            views=views or [],
+        )
         self.session.add(table)
         await self.session.commit()
         await self.session.refresh(table)
         return table
 
-    async def get_by_id(self, table_id: str) -> Table | None:
-        result = await self.session.execute(select(Table).where(Table.table_id == table_id))
+    async def get_by_id(self, workspace_id: UUID, table_id: str) -> Table | None:
+        result = await self.session.execute(
+            select(Table).where(Table.workspace_id == workspace_id, Table.table_id == table_id)
+        )
         return result.scalar_one_or_none()
 
     async def resolve_table(self, workspace_id: UUID, identifier: str) -> Table | None:
@@ -40,12 +54,8 @@ class TableRepository:
         return result.scalar_one_or_none()
 
     async def resolve_table_global(self, identifier: str, workspace_ids: list[UUID]) -> Table | None:
-        """Resolve a table by UUID (global) or case-insensitive name across the given workspaces."""
-        try:
-            table_uuid = UUID(identifier)
-            return await self.get_by_id(table_uuid)
-        except (ValueError, AttributeError):
-            pass
+        """Resolve a table by case-insensitive name across the given workspaces.
+        If the same table_id exists in multiple workspaces, returns the first match."""
         if not workspace_ids:
             return None
         result = await self.session.execute(
@@ -54,7 +64,7 @@ class TableRepository:
                 func.lower(Table.table_id) == identifier.lower(),
             )
         )
-        return result.scalar_one_or_none()
+        return result.scalars().first()
 
     async def list_by_workspace(self, workspace_id: UUID) -> list[Table]:
         result = await self.session.execute(select(Table).where(Table.workspace_id == workspace_id))
@@ -130,13 +140,13 @@ class TableRepository:
 
     # ── Index management ─────────────────────────────────────────────────
 
-    def _index_name(self, table_id: UUID, column_id: str) -> str:
+    def _index_name(self, table_id: str, column_id: str) -> str:
         """Generate a deterministic index name from table_id + column_id."""
-        tid = str(table_id).replace("-", "")[:12]
+        tid = table_id.replace("-", "")[:12]
         cid = column_id.replace("-", "")[:12]
         return f"idx_rd_{tid}_{cid}"
 
-    async def create_column_index(self, table_id: UUID, column_id: str, col_type: str) -> None:
+    async def create_column_index(self, table_id: str, column_id: str, col_type: str) -> None:
         """Create a PG index on row_data->column_id based on column type."""
         idx_name = self._index_name(table_id, column_id)
         table_id_str = str(table_id)
@@ -159,7 +169,7 @@ class TableRepository:
         await self.session.execute(text(sql))
         await self.session.commit()
 
-    async def drop_column_index(self, table_id: UUID, column_id: str) -> None:
+    async def drop_column_index(self, table_id: str, column_id: str) -> None:
         """Drop the PG index for a column if it exists."""
         idx_name = self._index_name(table_id, column_id)
         await self.session.execute(text(f"DROP INDEX IF EXISTS {idx_name}"))

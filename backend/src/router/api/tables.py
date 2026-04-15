@@ -61,23 +61,28 @@ async def create_table(
                 status_code=status.HTTP_403_FORBIDDEN, detail="No workspace found — create a workspace first"
             )
         workspace_id = workspace.workspace_id
+    # Default template: Doc + Title + Description + Table view (atomic insert)
+    default_cols = [
+        {"column_id": str(uuid4()), "name": "Doc", "type": "doc", "options": {}, "position": 0},
+        {"column_id": str(uuid4()), "name": "Title", "type": "text", "options": {}, "position": 1},
+        {"column_id": str(uuid4()), "name": "Description", "type": "text", "options": {}, "position": 2},
+    ]
+    default_views = [{"name": "Table", "type": "table", "config": {}}]
+
     table_repo = TableRepository(session)
-    table = await table_repo.create(workspace_id=workspace_id, table_id=data.table_id)
+    table = await table_repo.create(
+        workspace_id=workspace_id,
+        table_id=data.table_id,
+        columns=default_cols,
+        views=default_views,
+    )
 
-    # Default template: Title + Description (if no columns specified)
-    if not table.columns:
-        from uuid import uuid4
-
-        default_cols = [
-            {"column_id": str(uuid4()), "name": "Doc", "type": "doc", "options": {}, "position": 0},
-            {"column_id": str(uuid4()), "name": "Title", "type": "text", "options": {}, "position": 1},
-            {"column_id": str(uuid4()), "name": "Description", "type": "text", "options": {}, "position": 2},
-        ]
-        table = await table_repo.set_columns(table, default_cols)
-
-    # Ensure every table has at least one Table view
-    if not any(v.get("type") == "table" for v in (table.views or [])):
-        table = await table_repo.add_view(table, {"name": "Table", "type": "table", "config": {}})
+    # Create column indexes (failure here shouldn't break the table row)
+    for col in default_cols:
+        try:
+            await table_repo.create_column_index(table.table_id, col["column_id"], col["type"])
+        except Exception:
+            pass
 
     return table
 

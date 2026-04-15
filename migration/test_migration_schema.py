@@ -32,6 +32,7 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "tables", "created_at", "timestamp"),
     ("public", "tables", "updated_at", "timestamp"),
     # public.rows
+    ("public", "rows", "workspace_id", "uuid"),
     ("public", "rows", "table_id", "character varying"),
     ("public", "rows", "row_number", "bigint"),
     ("public", "rows", "row_data", "jsonb"),

@@ -90,24 +90,25 @@ async def get_rls_session(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> AsyncSession:
-    """
-    FastAPI dependency — app session with PG RLS user context set.
-
-    Uses session-level SET (not SET LOCAL) so the context survives the
-    intermediate session.commit() calls in our repository methods.
-    The RESET in the finally block clears the context before the connection
-    returns to the pool, preventing leakage to subsequent requests.
-    """
-    # SET doesn't support bind params in asyncpg — use f-string (safe: user_id is a validated UUID)
+    """App session with PG RLS user context set. Rollback in finally prevents idle-in-tx leaks."""
     uid = str(user.user_id).replace("'", "")
-    await session.execute(text(f"SET app.current_user_id = '{uid}'"))
+    # Use set_config with is_local=false → persists across commits on this connection
+    # Pin connection by running inside a single begin() to prevent pool swap
+    await session.execute(text("SELECT set_config('app.current_user_id', :uid, false)").bindparams(uid=uid))
+    check = await session.execute(text("SELECT current_setting('app.current_user_id', true)"))
+    logger.info(f"RLS session uid={uid} setting={check.scalar()!r}")
     try:
         yield session
     finally:
         try:
+            await session.rollback()
             await session.execute(text("RESET app.current_user_id"))
+            await session.commit()
         except Exception:
-            pass
+            try:
+                await session.rollback()
+            except Exception:
+                pass
 
 
 async def require_user(

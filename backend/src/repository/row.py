@@ -17,7 +17,8 @@ class RowRepository:
 
     async def create(
         self,
-        table_id: UUID,
+        workspace_id: UUID,
+        table_id: str,
         row_data: dict[str, Any] | None = None,
         created_by: UUID | None = None,
         updated_by: UUID | None = None,
@@ -27,11 +28,12 @@ class RowRepository:
         from sqlalchemy import text
         result = await self.session.execute(
             text("""
-                INSERT INTO rows (table_id, row_data, created_by, updated_by)
-                VALUES (:table_id, CAST(:row_data AS jsonb), :created_by, :updated_by)
-                RETURNING table_id, row_number, row_data, created_by, updated_by, created_at, updated_at
+                INSERT INTO rows (workspace_id, table_id, row_data, created_by, updated_by)
+                VALUES (:workspace_id, :table_id, CAST(:row_data AS jsonb), :created_by, :updated_by)
+                RETURNING workspace_id, table_id, row_number, row_data, created_by, updated_by, created_at, updated_at
             """),
             {
+                "workspace_id": str(workspace_id),
                 "table_id": str(table_id),
                 "row_data": json.dumps(row_data or {}),
                 "created_by": str(created_by) if created_by else None,
@@ -41,6 +43,7 @@ class RowRepository:
         await self.session.commit()
         r = result.mappings().one()
         return Row(
+            workspace_id=r["workspace_id"],
             table_id=r["table_id"],
             row_number=r["row_number"],
             row_data=r["row_data"],
@@ -50,13 +53,15 @@ class RowRepository:
             updated_at=r["updated_at"],
         )
 
-    async def get_by_number(self, table_id: UUID, row_number: int) -> Row | None:
-        result = await self.session.execute(select(Row).where(Row.table_id == table_id, Row.row_number == row_number))
+    async def get_by_number(self, workspace_id: UUID, table_id: str, row_number: int) -> Row | None:
+        result = await self.session.execute(
+            select(Row).where(Row.workspace_id == workspace_id, Row.table_id == table_id, Row.row_number == row_number)
+        )
         return result.scalar_one_or_none()
 
-    async def list_by_table(self, table_id: UUID, offset: int = 0, limit: int = 100, sort: str = "desc") -> list[Row]:
+    async def list_by_table(self, workspace_id: UUID, table_id: str, offset: int = 0, limit: int = 100, sort: str = "desc") -> list[Row]:
         order = Row.row_number.desc() if sort == "desc" else Row.row_number.asc()
-        statement = select(Row).where(Row.table_id == table_id).order_by(order).offset(offset).limit(limit)
+        statement = select(Row).where(Row.workspace_id == workspace_id, Row.table_id == table_id).order_by(order).offset(offset).limit(limit)
         result = await self.session.execute(statement)
         return list(result.scalars().all())
 
@@ -73,21 +78,21 @@ class RowRepository:
         await self.session.delete(row)
         await self.session.commit()
 
-    async def count_by_table(self, table_id: UUID) -> int:
+    async def count_by_table(self, workspace_id: UUID, table_id: str) -> int:
         """Return total number of rows in a table."""
         from sqlalchemy import func
 
-        statement = select(func.count()).where(Row.table_id == table_id)
+        statement = select(func.count()).where(Row.workspace_id == workspace_id, Row.table_id == table_id)
         result = await self.session.execute(statement)
         return result.scalar_one()
 
     async def filter_by_jsonb(
-        self, table_id: UUID, contains: dict[str, Any], offset: int = 0, limit: int = 100
+        self, workspace_id: UUID, table_id: str, contains: dict[str, Any], offset: int = 0, limit: int = 100
     ) -> list[Row]:
         """Filter rows where row_data @> contains (JSONB containment query using GIN index)."""
         statement = (
             select(Row)
-            .where(Row.table_id == table_id)
+            .where(Row.workspace_id == workspace_id, Row.table_id == table_id)
             .where(text("row_data @> cast(:contains as jsonb)").bindparams(contains=json.dumps(contains)))
             .order_by(Row.row_number)
             .offset(offset)

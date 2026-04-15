@@ -1,5 +1,6 @@
 # router/api/rows.py
 
+import asyncio
 import re
 from uuid import UUID
 
@@ -93,7 +94,7 @@ async def _inject_hierarchy(content: str, table, row: Row, session: AsyncSession
     # Inject children links
     if parent_col_id and re.search(r"<!--\s*Links to child", content):
         repo = RowRepository(session)
-        children = await repo.filter_by_jsonb(table.table_id, {parent_col_id: str(row.row_id)})
+        children = await repo.filter_by_jsonb(table.workspace_id, table.table_id, {parent_col_id: str(row.row_id)})
         if children:
             lines = []
             for child in children:
@@ -141,7 +142,7 @@ async def create_row(
 
     repo = RowRepository(session)
     row = await repo.create(
-        table_id=table.table_id, row_data=data.row_data, created_by=user.user_id, updated_by=user.user_id
+        workspace_id=table.workspace_id, table_id=table.table_id, row_data=data.row_data, created_by=user.user_id, updated_by=user.user_id
     )
 
     # Auto-create MinIO object and fill cell for every doc-type column
@@ -165,7 +166,8 @@ async def create_row(
             else:
                 doc_content = ""
             try:
-                get_s3_client().put_object(
+                await asyncio.to_thread(
+                    get_s3_client().put_object,
                     Bucket=settings.minio.bucket,
                     Key=minio_key,
                     Body=doc_content.encode("utf-8"),
@@ -181,9 +183,9 @@ async def create_row(
                 UPDATE rows
                 SET row_data = row_data || CAST(:patch AS jsonb),
                     updated_at = NOW()
-                WHERE table_id = :tid AND row_number = :rn
+                WHERE workspace_id = :wid AND table_id = :tid AND row_number = :rn
             """),
-            {"patch": _json.dumps(patch), "tid": table.table_id, "rn": row.row_number},
+            {"patch": _json.dumps(patch), "wid": str(table.workspace_id), "tid": table.table_id, "rn": row.row_number},
         )
         await session.commit()
 
@@ -212,8 +214,8 @@ async def list_rows(
         except Exception:
             contains = {}
         if contains:
-            return await repo.filter_by_jsonb(table_id=table.table_id, contains=contains, offset=offset, limit=limit)
-    return await repo.list_by_table(table_id=table.table_id, offset=offset, limit=limit, sort=sort)
+            return await repo.filter_by_jsonb(workspace_id=table.workspace_id, table_id=table.table_id, contains=contains, offset=offset, limit=limit)
+    return await repo.list_by_table(workspace_id=table.workspace_id, table_id=table.table_id, offset=offset, limit=limit, sort=sort)
 
 
 # --------------------------------------------------
@@ -232,7 +234,7 @@ async def update_row(
     """Update a row's data by row_number (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.table_id, row_number)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_number)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     # Silently drop any attempts to change doc-type column values (system-managed)
@@ -252,7 +254,7 @@ async def get_row_doc(
     """Get markdown doc for a row from MinIO by row_number (returns empty string if not found)"""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.table_id, row_number)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_number)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
@@ -260,7 +262,7 @@ async def get_row_doc(
     key = f"{workspace_id}/{table.table_id}/{row.row_number}.md"
     client = get_s3_client()
     try:
-        response = client.get_object(Bucket=settings.minio.bucket, Key=key)
+        response = await asyncio.to_thread(client.get_object, Bucket=settings.minio.bucket, Key=key)
         content = response["Body"].read().decode("utf-8")
     except ClientError as e:
         if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
@@ -297,7 +299,7 @@ async def put_row_doc(
 
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.table_id, row_number)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_number)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
@@ -305,7 +307,8 @@ async def put_row_doc(
     key = f"{workspace_id}/{table.table_id}/{row.row_number}.md"
     client = get_s3_client()
     try:
-        client.put_object(
+        await asyncio.to_thread(
+            client.put_object,
             Bucket=settings.minio.bucket,
             Key=key,
             Body=body.encode("utf-8"),
@@ -328,7 +331,7 @@ async def batch_docs_exist(
     prefix = f"{workspace_id}/{table.table_id}/"
     client = get_s3_client()
     try:
-        response = client.list_objects_v2(Bucket=settings.minio.bucket, Prefix=prefix, MaxKeys=1000)
+        response = await asyncio.to_thread(client.list_objects_v2, Bucket=settings.minio.bucket, Prefix=prefix, MaxKeys=1000)
         row_numbers = []
         for obj in response.get("Contents", []):
             key = obj["Key"]
@@ -355,7 +358,7 @@ async def get_col_doc(
     """Get markdown doc for a specific column cell from MinIO (returns empty string if not found)"""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.table_id, row_number)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_number)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
@@ -363,7 +366,7 @@ async def get_col_doc(
     key = f"{workspace_id}/{table.table_id}/col-{column_id}/{row.row_number}.md"
     client = get_s3_client()
     try:
-        response = client.get_object(Bucket=settings.minio.bucket, Key=key)
+        response = await asyncio.to_thread(client.get_object, Bucket=settings.minio.bucket, Key=key)
         return response["Body"].read().decode("utf-8")
     except ClientError as e:
         if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
@@ -385,7 +388,7 @@ async def put_col_doc(
 
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.table_id, row_number)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_number)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
@@ -393,7 +396,8 @@ async def put_col_doc(
     key = f"{workspace_id}/{table.table_id}/col-{column_id}/{row.row_number}.md"
     client = get_s3_client()
     try:
-        client.put_object(
+        await asyncio.to_thread(
+            client.put_object,
             Bucket=settings.minio.bucket,
             Key=key,
             Body=body.encode("utf-8"),
@@ -414,7 +418,7 @@ async def delete_row(
     """Delete a row by row_number (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.table_id, row_number)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_number)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     # Delete MinIO objects for any doc-type columns (best-effort)
@@ -423,7 +427,7 @@ async def delete_row(
         minio_key = row.row_data.get(doc_col["column_id"])
         if minio_key:
             try:
-                get_s3_client().delete_object(Bucket=settings.minio.bucket, Key=str(minio_key))
+                await asyncio.to_thread(get_s3_client().delete_object, Bucket=settings.minio.bucket, Key=str(minio_key))
             except Exception:
                 pass
     await repo.delete(row=row)
