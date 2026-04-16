@@ -7,14 +7,24 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.db import get_login_session
 from middleware.auth import get_current_user, get_rls_session
 from models.user import User
 from models.workspace import MemberCreate, MemberResponse, Workspace, WorkspaceCreate, WorkspaceMember, WorkspaceResponse
+from repository.user import resolve_user_by_email
 from repository.workspace import WorkspaceRepository
 
 
-async def _resolve_member_user(data: MemberCreate, session: AsyncSession) -> User:
-    """Resolve user by user_id (UUID), user_name, or user_email"""
+async def _resolve_member_user(
+    data: MemberCreate,
+    session: AsyncSession,
+    login_session: AsyncSession,
+) -> User:
+    """Resolve user by user_id (UUID), user_name, or user_email.
+
+    Email lookups go through auth.gdpr (login session). Other lookups
+    stay on the app session.
+    """
     from models.user import UserInfo
     if data.user_id:
         user = await session.get(User, data.user_id)
@@ -30,12 +40,7 @@ async def _resolve_member_user(data: MemberCreate, session: AsyncSession) -> Use
         if user:
             return user
     elif data.user_email:
-        result = await session.execute(
-            select(User).join(UserInfo, User.user_id == UserInfo.user_id).where(
-                func.lower(UserInfo.email) == data.user_email.lower()
-            )
-        )
-        user = result.scalar_one_or_none()
+        user = await resolve_user_by_email(data.user_email, login_session)
         if user:
             return user
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found — provide user_id, user_name, or user_email")
@@ -111,12 +116,13 @@ async def add_member(
     data: MemberCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
+    login_session: AsyncSession = Depends(get_login_session),
 ):
     """Add a member to a workspace (owner only)"""
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, session)
-    new_member = await _resolve_member_user(data, session)
+    new_member = await _resolve_member_user(data, session, login_session)
     if await repo.is_member(workspace.workspace_id, new_member.user_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User is already a member")
     return await repo.add_member(workspace_id=workspace.workspace_id, user_id=new_member.user_id, role=data.role)
@@ -139,7 +145,10 @@ async def remove_member(
         member_data.user_name = None
     except ValueError:
         pass
-    member = await _resolve_member_user(member_data, session)
+    # remove_member doesn't accept email, so login_session is unused but
+    # required by the helper signature. Passing session works too since the
+    # email branch is unreachable here, but we keep the contract clean.
+    member = await _resolve_member_user(member_data, session, session)
     if not await repo.is_member(workspace.workspace_id, member.user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
     await repo.remove_member(workspace_id=workspace.workspace_id, user_id=member.user_id)

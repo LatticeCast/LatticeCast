@@ -1,6 +1,5 @@
 # router/api/rows.py
 
-import asyncio
 import re
 from uuid import UUID
 
@@ -10,7 +9,7 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
-from config.storage import get_s3_client
+from config.storage import s3_client
 from middleware.auth import get_current_user, get_rls_session
 from models.row import Row, RowCreate, RowResponse, RowUpdate
 from models.user import User
@@ -166,13 +165,13 @@ async def create_row(
             else:
                 doc_content = ""
             try:
-                await asyncio.to_thread(
-                    get_s3_client().put_object,
-                    Bucket=settings.minio.bucket,
-                    Key=minio_key,
-                    Body=doc_content.encode("utf-8"),
-                    ContentType="text/markdown",
-                )
+                async with s3_client() as s3:
+                    await s3.put_object(
+                        Bucket=settings.minio.bucket,
+                        Key=minio_key,
+                        Body=doc_content.encode("utf-8"),
+                        ContentType="text/markdown",
+                    )
             except Exception:
                 pass  # best-effort; don't fail row creation
             patch[doc_col["column_id"]] = minio_key
@@ -260,10 +259,10 @@ async def get_row_doc(
 
     workspace_id = table.workspace_id
     key = f"{workspace_id}/{table.table_id}/{row.row_number}.md"
-    client = get_s3_client()
     try:
-        response = await asyncio.to_thread(client.get_object, Bucket=settings.minio.bucket, Key=key)
-        content = response["Body"].read().decode("utf-8")
+        async with s3_client() as s3:
+            response = await s3.get_object(Bucket=settings.minio.bucket, Key=key)
+            content = (await response["Body"].read()).decode("utf-8")
     except ClientError as e:
         if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
             return ""
@@ -305,15 +304,14 @@ async def put_row_doc(
 
     workspace_id = table.workspace_id
     key = f"{workspace_id}/{table.table_id}/{row.row_number}.md"
-    client = get_s3_client()
     try:
-        await asyncio.to_thread(
-            client.put_object,
-            Bucket=settings.minio.bucket,
-            Key=key,
-            Body=body.encode("utf-8"),
-            ContentType="text/markdown",
-        )
+        async with s3_client() as s3:
+            await s3.put_object(
+                Bucket=settings.minio.bucket,
+                Key=key,
+                Body=body.encode("utf-8"),
+                ContentType="text/markdown",
+            )
         return body
     except ClientError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
@@ -329,9 +327,9 @@ async def batch_docs_exist(
     table = await _get_table_for_member(table_id, user, session)
     workspace_id = table.workspace_id
     prefix = f"{workspace_id}/{table.table_id}/"
-    client = get_s3_client()
     try:
-        response = await asyncio.to_thread(client.list_objects_v2, Bucket=settings.minio.bucket, Prefix=prefix, MaxKeys=1000)
+        async with s3_client() as s3:
+            response = await s3.list_objects_v2(Bucket=settings.minio.bucket, Prefix=prefix, MaxKeys=1000)
         row_numbers = []
         for obj in response.get("Contents", []):
             key = obj["Key"]
@@ -364,10 +362,10 @@ async def get_col_doc(
 
     workspace_id = table.workspace_id
     key = f"{workspace_id}/{table.table_id}/col-{column_id}/{row.row_number}.md"
-    client = get_s3_client()
     try:
-        response = await asyncio.to_thread(client.get_object, Bucket=settings.minio.bucket, Key=key)
-        return response["Body"].read().decode("utf-8")
+        async with s3_client() as s3:
+            response = await s3.get_object(Bucket=settings.minio.bucket, Key=key)
+            return (await response["Body"].read()).decode("utf-8")
     except ClientError as e:
         if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
             return ""
@@ -394,15 +392,14 @@ async def put_col_doc(
 
     workspace_id = table.workspace_id
     key = f"{workspace_id}/{table.table_id}/col-{column_id}/{row.row_number}.md"
-    client = get_s3_client()
     try:
-        await asyncio.to_thread(
-            client.put_object,
-            Bucket=settings.minio.bucket,
-            Key=key,
-            Body=body.encode("utf-8"),
-            ContentType="text/markdown",
-        )
+        async with s3_client() as s3:
+            await s3.put_object(
+                Bucket=settings.minio.bucket,
+                Key=key,
+                Body=body.encode("utf-8"),
+                ContentType="text/markdown",
+            )
         return body
     except ClientError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
@@ -427,7 +424,8 @@ async def delete_row(
         minio_key = row.row_data.get(doc_col["column_id"])
         if minio_key:
             try:
-                await asyncio.to_thread(get_s3_client().delete_object, Bucket=settings.minio.bucket, Key=str(minio_key))
+                async with s3_client() as s3:
+                    await s3.delete_object(Bucket=settings.minio.bucket, Key=str(minio_key))
             except Exception:
                 pass
     await repo.delete(row=row)

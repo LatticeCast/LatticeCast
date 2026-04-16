@@ -77,9 +77,7 @@ services:
     networks:
       - app-network
 
-  # docker compose --profile migration run --rm migration           → lint + test + apply
-  # docker compose --profile migration run --rm migration --test-only  → lint + test only
-  # docker compose --profile migration run --rm migration --apply-only → apply only
+  # See Skill(developing-db-sql) for migration commands (lint/test/apply/hash).
   migration:
     profiles:
       - migration

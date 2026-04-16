@@ -10,11 +10,13 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("auth", "users", "role", "character varying"),
     ("auth", "users", "created_at", "timestamp"),
     ("auth", "users", "updated_at", "timestamp"),
-    # auth.user_info
-    ("auth", "user_info", "user_id", "uuid"),
-    ("auth", "user_info", "user_name", "character varying"),
-    ("auth", "user_info", "email", "character varying"),
-    ("auth", "user_info", "name", "character varying"),
+    # auth.gdpr — PII (login_mgr only)
+    ("auth", "gdpr", "user_id", "uuid"),
+    ("auth", "gdpr", "email", "character varying"),
+    ("auth", "gdpr", "legal_name", "character varying"),
+    # public.user_info — public handle only
+    ("public", "user_info", "user_id", "uuid"),
+    ("public", "user_info", "user_name", "character varying"),
     # public.workspaces
     ("public", "workspaces", "workspace_id", "uuid"),
     ("public", "workspaces", "workspace_name", "character varying"),
@@ -44,9 +46,12 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
 
 # Columns that must NOT exist
 FORBIDDEN_COLUMNS: list[tuple[str, str, str]] = [
-    ("public", "users", "user_id"),       # moved to auth
-    ("public", "user_info", "user_id"),   # moved to auth
-    ("auth", "user_info", "display_id"),  # renamed to user_name
+    ("public", "users", "user_id"),          # moved to auth
+    ("auth", "user_info", "user_id"),        # stays in public
+    ("auth", "user_info", "display_id"),     # renamed to user_name
+    ("public", "user_info", "email"),        # moved to auth.gdpr
+    ("public", "user_info", "name"),         # removed (legal_name in auth.gdpr)
+    ("public", "user_info", "display_name"), # removed — user_name is the only handle
     ("public", "workspaces", "display_id"),
     ("public", "workspaces", "name"),
     ("public", "tables", "name"),
@@ -88,16 +93,27 @@ def verify(psql_fn) -> list[str]:
         if result:
             errors.append(f"FORBIDDEN COLUMN still present: {schema}.{table}.{column}")
 
-    # Check unique constraint on user_info.user_name
+    # Check unique constraint on public.user_info.user_name
     result = psql_fn(
         "SELECT 1 FROM information_schema.table_constraints tc "
         "JOIN information_schema.constraint_column_usage ccu "
         "  ON tc.constraint_name = ccu.constraint_name "
-        "WHERE tc.table_schema='auth' AND tc.table_name='user_info' "
+        "WHERE tc.table_schema='public' AND tc.table_name='user_info' "
         "  AND ccu.column_name='user_name' AND tc.constraint_type='UNIQUE';"
     )
     if not result:
-        errors.append("MISSING CONSTRAINT: auth.user_info.user_name UNIQUE")
+        errors.append("MISSING CONSTRAINT: public.user_info.user_name UNIQUE")
+
+    # Check unique constraint on auth.gdpr.email
+    result = psql_fn(
+        "SELECT 1 FROM information_schema.table_constraints tc "
+        "JOIN information_schema.constraint_column_usage ccu "
+        "  ON tc.constraint_name = ccu.constraint_name "
+        "WHERE tc.table_schema='auth' AND tc.table_name='gdpr' "
+        "  AND ccu.column_name='email' AND tc.constraint_type='UNIQUE';"
+    )
+    if not result:
+        errors.append("MISSING CONSTRAINT: auth.gdpr.email UNIQUE")
 
     # Check trigger on rows table
     result = psql_fn(

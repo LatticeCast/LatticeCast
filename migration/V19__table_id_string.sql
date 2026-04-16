@@ -18,16 +18,21 @@ END $$;
 
 -- Handle duplicates: append workspace_id prefix if names collide globally
 UPDATE tables t1
-SET table_id_new = t1.table_id_new || '-' || LEFT(t1.workspace_id::text, 8)
+SET table_id_new = t1.table_id_new || '-' || LEFT(t1.workspace_id::TEXT, 8)
 WHERE EXISTS (
-  SELECT 1 FROM tables t2
-  WHERE t2.table_id_new = t1.table_id_new
-  AND t2.table_id != t1.table_id
+    SELECT 1 FROM tables AS t2
+    WHERE
+        t2.table_id_new = t1.table_id_new
+        AND t2.table_id != t1.table_id
 );
 
 -- 3. Update rows FK: add new column, populate, drop old
 ALTER TABLE rows ADD COLUMN IF NOT EXISTS table_id_new VARCHAR;
-UPDATE rows r SET table_id_new = (SELECT t.table_id_new FROM tables t WHERE t.table_id = r.table_id);
+UPDATE rows r SET
+    table_id_new = (
+        SELECT t.table_id_new FROM tables AS t
+        WHERE t.table_id = r.table_id
+    );
 
 -- 4. Drop old constraints and columns
 ALTER TABLE rows DROP CONSTRAINT IF EXISTS rows_table_id_fkey;
@@ -54,18 +59,20 @@ ALTER TABLE tables ALTER COLUMN table_id SET NOT NULL;
 ALTER TABLE tables ADD PRIMARY KEY (table_id);
 
 -- Unique within workspace
-ALTER TABLE tables ADD CONSTRAINT uq_tables_workspace_id UNIQUE (workspace_id, table_id);
-CREATE INDEX IF NOT EXISTS idx_tables_workspace_id ON tables(workspace_id);
+ALTER TABLE tables ADD CONSTRAINT uq_tables_workspace_id UNIQUE (
+    workspace_id, table_id
+);
+CREATE INDEX IF NOT EXISTS idx_tables_workspace_id ON tables (workspace_id);
 
 -- 7. Rows: set NOT NULL, PK, FK
 ALTER TABLE rows ALTER COLUMN table_id SET NOT NULL;
 ALTER TABLE rows ADD PRIMARY KEY (table_id, row_number);
 ALTER TABLE rows ADD CONSTRAINT rows_table_id_fkey
-    FOREIGN KEY (table_id) REFERENCES tables(table_id) ON DELETE CASCADE;
-CREATE INDEX IF NOT EXISTS idx_rows_table_id ON rows(table_id);
+FOREIGN KEY (table_id) REFERENCES tables (table_id) ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_rows_table_id ON rows (table_id);
 
 -- 8. Recreate trigger (row_number auto-increment)
 DROP TRIGGER IF EXISTS trg_rows_row_number ON rows;
 CREATE TRIGGER trg_rows_row_number
-    BEFORE INSERT ON rows
-    FOR EACH ROW EXECUTE FUNCTION trg_set_row_number_fn();
+BEFORE INSERT ON rows
+FOR EACH ROW EXECUTE FUNCTION TRG_SET_ROW_NUMBER_FN();

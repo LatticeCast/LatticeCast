@@ -147,30 +147,25 @@ class TableRepository:
         return f"idx_rd_{tid}_{cid}"
 
     async def create_column_index(self, table_id: str, column_id: str, col_type: str) -> None:
-        """Create a PG index on row_data->column_id based on column type."""
+        """Create a PG index on row_data->column_id via SECURITY DEFINER function.
+
+        app_user has no DDL; the migration (V27) defines create_row_data_index
+        as SECURITY DEFINER owned by dba, so we call it via SELECT.
+        """
         idx_name = self._index_name(table_id, column_id)
-        table_id_str = str(table_id)
-
-        if col_type in BTREE_TYPES:
-            if col_type == "number":
-                expr = f"((row_data->>'{column_id}')::numeric)"
-            else:  # date → B-tree on text (ISO dates sort correctly as text)
-                expr = f"((row_data->>'{column_id}'))"
-            sql = f"CREATE INDEX IF NOT EXISTS {idx_name} ON rows ({expr}) WHERE table_id = '{table_id_str}'"
-        elif col_type in GIN_TYPES:
-            sql = (
-                f"CREATE INDEX IF NOT EXISTS {idx_name} "
-                f"ON rows USING GIN ((row_data->'{column_id}')) "
-                f"WHERE table_id = '{table_id_str}'"
-            )
-        else:
+        if col_type not in BTREE_TYPES and col_type not in GIN_TYPES:
             return
-
-        await self.session.execute(text(sql))
+        await self.session.execute(
+            text(
+                "SELECT create_row_data_index(:idx, :tid, :cid, :ct)"
+            ).bindparams(idx=idx_name, tid=str(table_id), cid=column_id, ct=col_type)
+        )
         await self.session.commit()
 
     async def drop_column_index(self, table_id: str, column_id: str) -> None:
-        """Drop the PG index for a column if it exists."""
+        """Drop the PG index via SECURITY DEFINER function."""
         idx_name = self._index_name(table_id, column_id)
-        await self.session.execute(text(f"DROP INDEX IF EXISTS {idx_name}"))
+        await self.session.execute(
+            text("SELECT drop_row_data_index(:idx)").bindparams(idx=idx_name)
+        )
         await self.session.commit()

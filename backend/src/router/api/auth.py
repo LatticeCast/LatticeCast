@@ -13,9 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
-from core.db import get_login_session
+from core.db import get_login_session, get_session
 from middleware.auth import get_current_user
-from models.user import User
+from models.user import Gdpr, User
 
 router = APIRouter(prefix="/login", tags=["auth"])
 
@@ -103,25 +103,34 @@ class MeResponse(BaseModel):
 )
 async def me(
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_login_session),
+    session: AsyncSession = Depends(get_session),
+    login_session: AsyncSession = Depends(get_login_session),
 ) -> MeResponse:
     """
     Get current user information.
     Requires valid Bearer token and user must be registered in database.
+
+    - email + legal_name come from auth.gdpr (login session)
+    - user_name comes from public.user_info (app session)
     """
     token_payload = getattr(user, "_token_payload", {})
     provider = token_payload.get("_provider", "authentik")
 
-    # Get email/name from user_info
+    # public handle/display from app session
     from models.user import UserInfo
     result = await session.execute(select(UserInfo).where(UserInfo.user_id == user.user_id))
     info = result.scalar_one_or_none()
 
+    # PII from login session
+    gdpr_result = await login_session.execute(select(Gdpr).where(Gdpr.user_id == user.user_id))
+    gdpr = gdpr_result.scalar_one_or_none()
+
     return MeResponse(
         user_id=user.user_id,
         sub=token_payload.get("sub"),
-        email=info.email if info else token_payload.get("email", ""),
-        name=info.name if info else token_payload.get("name", ""),
+        email=gdpr.email if gdpr else token_payload.get("email", ""),
+        name=(gdpr.legal_name if gdpr and gdpr.legal_name else None)
+        or token_payload.get("name", ""),
         picture=token_payload.get("picture"),
         provider=provider,
         role=user.role,

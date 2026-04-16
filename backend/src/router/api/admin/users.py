@@ -4,12 +4,13 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.db import get_session
+from core.db import get_login_session, get_session
 from middleware.auth import require_admin
-from models.user import User, UserResponse
+from models.user import Gdpr, User, UserInfo, UserResponse
+from repository.user import GdprRepository, bootstrap_user
 
 router = APIRouter(
     prefix="/admin/users",
@@ -29,6 +30,10 @@ class UserCreate(BaseModel):
 
     email: str = Field(..., description="User email address (used as unique identifier)")
     role: RoleType = Field(default="user", description="User role")
+    legal_name: str = Field(default="", description="Optional legal name (GDPR)")
+    user_name: str | None = Field(
+        default=None, description="Optional handle; auto-slugged from email if omitted"
+    )
 
     model_config = {"json_schema_extra": {"examples": [{"email": "user@example.com", "role": "user"}]}}
 
@@ -51,6 +56,28 @@ class UserListResponse(BaseModel):
 
 
 # --------------------------------------------------
+# HELPERS
+# --------------------------------------------------
+
+
+async def _build_response(
+    user: User,
+    app_session: AsyncSession,
+    login_session: AsyncSession,
+) -> UserResponse:
+    info_res = await app_session.execute(select(UserInfo).where(UserInfo.user_id == user.user_id))
+    info = info_res.scalar_one_or_none()
+    gdpr = await GdprRepository(login_session).get_by_user_id(user.user_id)
+    return UserResponse(
+        user_id=user.user_id,
+        email=gdpr.email if gdpr else "",
+        legal_name=gdpr.legal_name if gdpr else "",
+        role=user.role,  # type: ignore[arg-type]
+        user_name=info.user_name if info else None,
+    )
+
+
+# --------------------------------------------------
 # ROUTES
 # --------------------------------------------------
 
@@ -63,22 +90,25 @@ class UserListResponse(BaseModel):
 async def create_user(
     data: UserCreate,
     session: AsyncSession = Depends(get_session),
+    login_session: AsyncSession = Depends(get_login_session),
 ):
-    """Create a new user by email"""
-    result = await session.execute(select(User).where(User.email == data.email))
-    existing = result.scalar_one_or_none()
-
+    """Create a new user by email (bootstraps auth.users + auth.gdpr + user_info + workspace)."""
+    existing = await GdprRepository(login_session).get_by_email(data.email)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="User already exists",
         )
 
-    user = User(email=data.email, role=data.role)
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    return user
+    user = await bootstrap_user(
+        login_session=login_session,
+        app_session=session,
+        email=data.email,
+        role=data.role,
+        legal_name=data.legal_name,
+        user_name=data.user_name,
+    )
+    return await _build_response(user, session, login_session)
 
 
 @router.get(
@@ -89,18 +119,18 @@ async def list_users(
     offset: int = Query(default=0, ge=0, description="Number of records to skip"),
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of records to return"),
     session: AsyncSession = Depends(get_session),
+    login_session: AsyncSession = Depends(get_login_session),
 ) -> UserListResponse:
     """List all users (paginated)"""
-    from sqlalchemy import func
+    count_result = await login_session.execute(select(func.count()).select_from(User))
+    total = count_result.scalar() or 0
 
-    count_result = await session.execute(select(func.count()).select_from(User))
-    total = count_result.scalar()
-
-    result = await session.execute(select(User).offset(offset).limit(limit))
+    result = await login_session.execute(select(User).offset(offset).limit(limit))
     users = result.scalars().all()
 
+    out = [await _build_response(u, session, login_session) for u in users]
     return UserListResponse(
-        users=users,
+        users=out,
         total=total,
         offset=offset,
         limit=limit,
@@ -114,17 +144,16 @@ async def list_users(
 async def get_user(
     user_email: str,
     session: AsyncSession = Depends(get_session),
+    login_session: AsyncSession = Depends(get_login_session),
 ):
     """Get user by email"""
-    result = await session.execute(select(User).where(User.email == user_email))
-    user = result.scalar_one_or_none()
-
+    gdpr = await GdprRepository(login_session).get_by_email(user_email)
+    if not gdpr:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user = (await login_session.execute(select(User).where(User.user_id == gdpr.user_id))).scalar_one_or_none()
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-    return user
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return await _build_response(user, session, login_session)
 
 
 @router.put(
@@ -135,24 +164,22 @@ async def update_user(
     user_email: str,
     data: UserUpdate,
     session: AsyncSession = Depends(get_session),
+    login_session: AsyncSession = Depends(get_login_session),
 ):
     """Update user role by email"""
-    result = await session.execute(select(User).where(User.email == user_email))
-    user = result.scalar_one_or_none()
-
+    gdpr = await GdprRepository(login_session).get_by_email(user_email)
+    if not gdpr:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user = (await login_session.execute(select(User).where(User.user_id == gdpr.user_id))).scalar_one_or_none()
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     if data.role is not None:
         user.role = data.role
-
-    session.add(user)
-    await session.commit()
-    await session.refresh(user)
-    return user
+        login_session.add(user)
+        await login_session.commit()
+        await login_session.refresh(user)
+    return await _build_response(user, session, login_session)
 
 
 @router.delete(
@@ -161,17 +188,15 @@ async def update_user(
 )
 async def delete_user(
     user_email: str,
-    session: AsyncSession = Depends(get_session),
+    login_session: AsyncSession = Depends(get_login_session),
 ):
-    """Delete user by email"""
-    result = await session.execute(select(User).where(User.email == user_email))
-    user = result.scalar_one_or_none()
-
+    """Delete user by email (cascades to gdpr, user_info, workspace_members)."""
+    gdpr_repo = GdprRepository(login_session)
+    gdpr = await gdpr_repo.get_by_email(user_email)
+    if not gdpr:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    user = (await login_session.execute(select(User).where(User.user_id == gdpr.user_id))).scalar_one_or_none()
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-
-    await session.delete(user)
-    await session.commit()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    await login_session.delete(user)
+    await login_session.commit()

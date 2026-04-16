@@ -4,58 +4,52 @@ User authentication middleware.
 """
 
 from fastapi import Depends, HTTPException, status
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
-from core.db import get_session
+from core.db import get_login_session, get_session
 from middleware.token import verify_bearer_token
 from models.user import User
-from repository.user import UserRepository
+from repository.user import UserRepository, resolve_user_by_email
 from util import logger
 
 
 async def get_current_user(
     token_payload: dict = Depends(verify_bearer_token),
     session: AsyncSession = Depends(get_session),
+    login_session: AsyncSession = Depends(get_login_session),
 ) -> User:
     """
     Middleware: Verify token and check user exists in database.
-    Returns the User object if found.
+
+    - `user_id` token (UUID or user_name) → resolved via app session.
+    - `email` token → resolved via auth.gdpr (login session required).
+
+    Auto-creation in AUTH_REQUIRED=false mode is disabled: it races across
+    multi-worker setups. Admins must bootstrap users via the admin API.
+    TODO: consider an idempotent INSERT ON CONFLICT DO NOTHING path.
     """
     user_id_str = token_payload.get("user_id")
     email = token_payload.get("email")
 
     if user_id_str:
-        # No-auth mode: resolve by UUID or user_name
         user = await UserRepository(session).resolve_user(user_id_str)
         if not user:
-            if not settings.auth_required:
-                user = await UserRepository(session).create(user_id_str)
-                logger.info(f"Auto-created user: {user_id_str}")
-            else:
-                logger.warn(f"User not found: {user_id_str}")
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="User not registered",
-                )
+            logger.warn(f"User not found: {user_id_str}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User not registered — bootstrap required (auto-create disabled)",
+            )
         logger.debug(f"Authenticated user: {user.user_id} via user_id token (role={user.role})")
     elif email:
-        from models.user import UserInfo
-        result = await session.execute(
-            select(User).join(UserInfo, User.user_id == UserInfo.user_id).where(UserInfo.email == email)
-        )
-        user = result.scalar_one_or_none()
+        user = await resolve_user_by_email(email, login_session)
         if not user:
-            if not settings.auth_required:
-                user = await UserRepository(session).create(email)
-                logger.info(f"Auto-created user: {email}")
-            else:
-                logger.warn(f"User not registered: {email}")
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="User not registered",
-                )
+            logger.warn(f"User not registered: {email}")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User not registered — bootstrap required (auto-create disabled)",
+            )
         logger.debug(f"Authenticated user: {email} (role={user.role})")
     else:
         logger.warn("Token does not contain user_id or email")
@@ -90,25 +84,18 @@ async def get_rls_session(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> AsyncSession:
-    """App session with PG RLS user context set. Rollback in finally prevents idle-in-tx leaks."""
-    uid = str(user.user_id).replace("'", "")
-    # Use set_config with is_local=false → persists across commits on this connection
-    # Pin connection by running inside a single begin() to prevent pool swap
-    await session.execute(text("SELECT set_config('app.current_user_id', :uid, false)").bindparams(uid=uid))
-    check = await session.execute(text("SELECT current_setting('app.current_user_id', true)"))
-    logger.info(f"RLS session uid={uid} setting={check.scalar()!r}")
-    try:
-        yield session
-    finally:
-        try:
-            await session.rollback()
-            await session.execute(text("RESET app.current_user_id"))
-            await session.commit()
-        except Exception:
-            try:
-                await session.rollback()
-            except Exception:
-                pass
+    """App session with PG RLS user context set via set_config.
+
+    No manual reset: when the session closes and returns the connection to
+    the asyncpg pool, the pool runs `DISCARD ALL` on release, which clears
+    all session-level settings (incl. `app.current_user_id`). So the next
+    request starts clean even if this one aborted.
+    """
+    uid = str(user.user_id)
+    await session.execute(
+        text("SELECT set_config('app.current_user_id', :uid, false)").bindparams(uid=uid)
+    )
+    yield session
 
 
 async def require_user(

@@ -25,7 +25,7 @@ class WorkspaceMember(SQLModel, table=True):
     __tablename__ = "workspace_members"
 
     workspace_id: UUID = Field(primary_key=True, foreign_key="workspaces.workspace_id", description="Workspace UUID")
-    user_id: UUID = Field(primary_key=True, foreign_key="users.user_id", description="User UUID")
+    user_id: UUID = Field(primary_key=True, foreign_key="auth.users.user_id", description="User UUID")
     role: str = Field(default="member", description="Member role (owner/member)")
 
 

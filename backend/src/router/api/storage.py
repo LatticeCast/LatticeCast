@@ -16,7 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from config.settings import settings
-from config.storage import get_s3_client
+from config.storage import s3_client
 from middleware.auth import get_current_user, require_admin
 from models.user import User
 
@@ -29,8 +29,8 @@ router = APIRouter(prefix="/storage", tags=["storage"])
 
 
 def get_user_prefix(user: User) -> str:
-    """Get user's storage prefix (first 20 chars of UUID, no dashes)"""
-    return user.user_id.replace("@", "_at_").replace(".", "_")[:20]
+    """Get user's storage prefix (first 20 hex chars of UUID, no dashes)."""
+    return str(user.user_id).replace("-", "")[:20]
 
 
 def normalize_path(path: str) -> str:
@@ -104,7 +104,6 @@ async def list_files(
     - Admin: lists all files or files under specified prefix
     - User: lists only files under user's UUID prefix
     """
-    client = get_s3_client()
     bucket = settings.minio.bucket
 
     # Build full prefix
@@ -117,11 +116,12 @@ async def list_files(
         full_prefix = get_user_prefix(user) + "/"
 
     try:
-        response = client.list_objects_v2(
-            Bucket=bucket,
-            Prefix=full_prefix if full_prefix != "/" else "",
-            MaxKeys=max_keys,
-        )
+        async with s3_client() as s3:
+            response = await s3.list_objects_v2(
+                Bucket=bucket,
+                Prefix=full_prefix if full_prefix != "/" else "",
+                MaxKeys=max_keys,
+            )
 
         files = []
         user_prefix = get_user_prefix(user) if user.role != "admin" else ""
@@ -163,16 +163,14 @@ async def download_file(
     - Admin: can download any file
     - User: can only download files under their UUID prefix
     """
-    client = get_s3_client()
     bucket = settings.minio.bucket
     full_path = get_full_path(user, path)
 
     try:
-        response = client.get_object(Bucket=bucket, Key=full_path)
-        content = response["Body"].read()
-
-        # Determine content type
-        content_type = response.get("ContentType", "application/octet-stream")
+        async with s3_client() as s3:
+            response = await s3.get_object(Bucket=bucket, Key=full_path)
+            content = await response["Body"].read()
+            content_type = response.get("ContentType", "application/octet-stream")
 
         # Get filename from path
         filename = path.split("/")[-1] if "/" in path else path
@@ -203,7 +201,6 @@ async def upload_file(
     - Admin: can upload to any path
     - User: uploads are prefixed with user's UUID
     """
-    client = get_s3_client()
     bucket = settings.minio.bucket
     full_path = get_full_path(user, path)
 
@@ -211,12 +208,13 @@ async def upload_file(
         content = await file.read()
         content_type = file.content_type or "application/octet-stream"
 
-        client.put_object(
-            Bucket=bucket,
-            Key=full_path,
-            Body=content,
-            ContentType=content_type,
-        )
+        async with s3_client() as s3:
+            await s3.put_object(
+                Bucket=bucket,
+                Key=full_path,
+                Body=content,
+                ContentType=content_type,
+            )
 
         return UploadResponse(
             key=path,  # Return user-visible path
@@ -239,16 +237,13 @@ async def delete_file(
     - Admin: can delete any file
     - User: can only delete files under their UUID prefix
     """
-    client = get_s3_client()
     bucket = settings.minio.bucket
     full_path = get_full_path(user, path)
 
     try:
-        # Check if file exists first
-        client.head_object(Bucket=bucket, Key=full_path)
-
-        # Delete the file
-        client.delete_object(Bucket=bucket, Key=full_path)
+        async with s3_client() as s3:
+            await s3.head_object(Bucket=bucket, Key=full_path)
+            await s3.delete_object(Bucket=bucket, Key=full_path)
 
         return DeleteResponse(deleted=path)
 
@@ -275,7 +270,6 @@ async def admin_list_all_files(
     """
     Admin: List all files in storage with full paths.
     """
-    client = get_s3_client()
     bucket = settings.minio.bucket
 
     try:
@@ -283,11 +277,12 @@ async def admin_list_all_files(
         if list_prefix and not list_prefix.endswith("/"):
             list_prefix += "/"
 
-        response = client.list_objects_v2(
-            Bucket=bucket,
-            Prefix=list_prefix if list_prefix != "/" else "",
-            MaxKeys=max_keys,
-        )
+        async with s3_client() as s3:
+            response = await s3.list_objects_v2(
+                Bucket=bucket,
+                Prefix=list_prefix if list_prefix != "/" else "",
+                MaxKeys=max_keys,
+            )
 
         files = [
             FileInfo(

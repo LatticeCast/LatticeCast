@@ -14,7 +14,7 @@ dependencies = [
     "python-jose",
     "passlib",
     "redis[hiredis]",
-    "boto3",
+    "aioboto3",
 ]
 
 [project.optional-dependencies]

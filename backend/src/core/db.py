@@ -89,37 +89,21 @@ async def init_db():
 
 
 async def get_session() -> AsyncSession:
-    """FastAPI dependency — app_engine session. Force rollback to prevent idle-in-tx leaks."""
+    """FastAPI dependency — app_engine session (CRUD on public, SELECT on auth)."""
     global app_session_factory
-
     if not app_session_factory:
         await init_db()
-
     async with app_session_factory() as session:
-        try:
-            yield session
-        finally:
-            try:
-                await session.rollback()
-            except Exception:
-                pass
+        yield session
 
 
 async def get_login_session() -> AsyncSession:
-    """FastAPI dependency — login_engine session. Force rollback to prevent idle-in-tx leaks."""
+    """FastAPI dependency — login_engine session (CRUD on auth schema only)."""
     global login_session_factory
-
     if not login_session_factory:
         await init_db()
-
     async with login_session_factory() as session:
-        try:
-            yield session
-        finally:
-            try:
-                await session.rollback()
-            except Exception:
-                pass
+        yield session
 
 
 # --------------------------------------------------
