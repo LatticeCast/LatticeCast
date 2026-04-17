@@ -237,6 +237,9 @@ def apply_migrations(dsn: str) -> None:
     print(f"  DB at V{current_ver} ({len(applied)} applied), "
           f"{len(pending)} pending")
 
+    # Each migration runs in its own transaction — partial failure rolls back.
+    conn.autocommit = False
+
     for sql_file in sql_files:
         content = sql_file.read_text()
         csum = _checksum(content)
@@ -249,6 +252,7 @@ def apply_migrations(dsn: str) -> None:
         if row is not None:
             stored = row[0]
             if stored and stored != csum:
+                conn.rollback()
                 raise RuntimeError(
                     f"❌ Checksum mismatch: {sql_file.name}\n"
                     f"   stored:  {stored}\n"
@@ -261,25 +265,32 @@ def apply_migrations(dsn: str) -> None:
                     "WHERE filename = %s",
                     (csum, sql_file.name),
                 )
+                conn.commit()
+            else:
+                conn.rollback()
             print(f"  ⏭️  {sql_file.name}")
             continue
 
         print(f"  📄 {sql_file.name}")
         body = re.sub(r'^-- upgrade\s*\n', '', content)
-        body = re.sub(r'\n-- rollback[\s\S]*$', '', body)
 
-        for stmt in split_sql(body):
-            try:
-                cur.execute(stmt)
-            except Exception:
-                print(f"  FAILED on stmt: {stmt[:300]}")
-                raise
+        try:
+            for stmt in split_sql(body):
+                try:
+                    cur.execute(stmt)
+                except Exception:
+                    print(f"  FAILED on stmt: {stmt[:300]}")
+                    raise
 
-        cur.execute(
-            "INSERT INTO private.schema_migrations (filename, checksum) "
-            "VALUES (%s, %s)",
-            (sql_file.name, csum),
-        )
+            cur.execute(
+                "INSERT INTO private.schema_migrations (filename, checksum) "
+                "VALUES (%s, %s)",
+                (sql_file.name, csum),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
 
     cur.close()
     conn.close()
