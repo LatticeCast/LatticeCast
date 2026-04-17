@@ -361,18 +361,24 @@ def step_test() -> bool:
 
     try:
         print("  Starting temp PostgreSQL…")
-        run([
+        pg_host = os.environ.get("TEST_PG_HOST", TEST_CONTAINER)
+        pg_port = os.environ.get("TEST_PG_PORT", "5432")
+        run_args = [
             "docker", "run", "--rm", "--detach",
             "--name", TEST_CONTAINER,
-            "--network", os.environ.get("TEST_NETWORK", "bridge"),
             "--env", f"POSTGRES_USER={TEST_USER}",
             "--env", f"POSTGRES_PASSWORD={TEST_PASSWORD}",
             "--env", f"POSTGRES_DB={TEST_DB}",
-            PG_IMAGE,
-        ])
+        ]
+        if pg_host == "localhost":
+            run_args += ["--publish", f"{pg_port}:5432"]
+        else:
+            run_args += ["--network", os.environ.get("TEST_NETWORK", "bridge")]
+        run_args.append(PG_IMAGE)
+        run(run_args)
 
         # Wait for ready — retry actual connection, not just pg_isready
-        test_dsn = f"postgresql://{TEST_USER}:{TEST_PASSWORD}@{TEST_CONTAINER}:5432/{TEST_DB}"
+        test_dsn = f"postgresql://{TEST_USER}:{TEST_PASSWORD}@{pg_host}:{pg_port}/{TEST_DB}"
         for attempt in range(20):
             try:
                 conn = psycopg2.connect(test_dsn)

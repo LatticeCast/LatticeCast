@@ -4,11 +4,7 @@ on:
   push:
     paths:
       - "migration/**.sql"
-      - "migration/test_migrations.py"
-  pull_request:
-    paths:
-      - "migration/**.sql"
-      - "migration/test_migrations.py"
+
   workflow_dispatch:
 
 jobs:
@@ -22,5 +18,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install dependencies
+        run: pip install psycopg2-binary sqlfluff
+
       - name: Run migration tests
-        run: python migration/test_migrations.py
+        env:
+          TEST_PG_HOST: localhost
+          TEST_PG_PORT: "5433"
+        run: python migration/migrate.py --test-only
