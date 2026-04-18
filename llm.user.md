@@ -6,15 +6,15 @@
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/login/config` | None | App config (auth_required flag) |
-| POST | `/api/login/google/token` | None | Exchange Google auth code for tokens |
-| POST | `/api/login/authentik/token` | None | Exchange Authentik auth code for tokens |
-| GET | `/api/login/me` | Bearer | Get current user info |
+| GET | `/api/v1/login/config` | None | App config (auth_required flag) |
+| POST | `/api/v1/login/google/token` | None | Exchange Google auth code for tokens |
+| POST | `/api/v1/login/authentik/token` | None | Exchange Authentik auth code for tokens |
+| GET | `/api/v1/login/me` | Bearer | Get current user info |
 
 ### App Config
 
 ```bash
-GET /api/login/config
+GET /api/v1/login/config
 
 # Response
 {"auth_required": true}
@@ -24,7 +24,7 @@ GET /api/login/config
 
 ```python
 # Request
-POST /api/login/{provider}/token
+POST /api/v1/login/{provider}/token
 {
     "code": "auth_code_from_redirect",
     "redirect_uri": "https://lattice-cast.posetmage.com/callback/google",
@@ -49,7 +49,7 @@ POST /api/login/{provider}/token
 ### Get Current User
 
 ```bash
-curl -X GET https://lattice-cast.posetmage.com/api/login/me \
+curl -X GET https://lattice-cast.posetmage.com/api/v1/login/me \
   -H "Authorization: Bearer $TOKEN"
 
 # Response
@@ -69,11 +69,11 @@ All endpoints require admin role (Bearer token from admin user).
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/admin/users` | Create user |
-| GET | `/api/admin/users` | List users (paginated) |
-| GET | `/api/admin/users/{user_id}` | Get user by ID (email) |
-| PUT | `/api/admin/users/{user_id}` | Update user role |
-| DELETE | `/api/admin/users/{user_id}` | Delete user |
+| POST | `/api/v1/admin/users` | Create user |
+| GET | `/api/v1/admin/users` | List users (paginated) |
+| GET | `/api/v1/admin/users/{user_id}` | Get user by user_id (UUID), user_name, or email |
+| PUT | `/api/v1/admin/users/{user_id}` | Update user role |
+| DELETE | `/api/v1/admin/users/{user_id}` | Delete user |
 
 ## Add User via curl
 
@@ -82,7 +82,7 @@ All endpoints require admin role (Bearer token from admin user).
 TOKEN="ya29.xxx..."
 
 # Add user
-curl -X POST https://lattice-cast.posetmage.com/api/admin/users \
+curl -X POST https://lattice-cast.posetmage.com/api/v1/admin/users \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"id": "user@example.com", "role": "user"}'
@@ -101,14 +101,14 @@ curl -X POST https://lattice-cast.posetmage.com/api/admin/users \
 ## List Users
 
 ```bash
-curl -X GET "https://lattice-cast.posetmage.com/api/admin/users?offset=0&limit=100" \
+curl -X GET "https://lattice-cast.posetmage.com/api/v1/admin/users?offset=0&limit=100" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Update User Role
 
 ```bash
-curl -X PUT https://lattice-cast.posetmage.com/api/admin/users/user@example.com \
+curl -X PUT https://lattice-cast.posetmage.com/api/v1/admin/users/user@example.com \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"role": "admin"}'
@@ -117,26 +117,42 @@ curl -X PUT https://lattice-cast.posetmage.com/api/admin/users/user@example.com 
 ## Delete User
 
 ```bash
-curl -X DELETE https://lattice-cast.posetmage.com/api/admin/users/user@example.com \
+curl -X DELETE https://lattice-cast.posetmage.com/api/v1/admin/users/user@example.com \
   -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Database Schema
 
 ```sql
--- users table
-user_id     VARCHAR PRIMARY KEY  -- email address
-name        VARCHAR NOT NULL DEFAULT ''
-role        VARCHAR NOT NULL DEFAULT 'user'  -- 'user' | 'admin'
-created_at  TIMESTAMP DEFAULT NOW()
-updated_at  TIMESTAMP DEFAULT NOW()
+-- auth.users (login_mgr-writable, app readable)
+auth.users (
+    user_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    role        VARCHAR NOT NULL DEFAULT 'user',   -- 'user' | 'admin'
+    created_at  TIMESTAMP DEFAULT NOW(),
+    updated_at  TIMESTAMP DEFAULT NOW()
+)
+
+-- auth.gdpr (PII — login_mgr only, NOT exposed via app engine)
+auth.gdpr (
+    user_id     UUID PK FK auth.users,
+    email       VARCHAR UNIQUE NOT NULL,
+    legal_name  VARCHAR NOT NULL DEFAULT '',
+    created_at  TIMESTAMP,
+    updated_at  TIMESTAMP
+)
+
+-- public.user_info (public handle — visible to app role)
+public.user_info (
+    user_id     UUID PK FK auth.users,
+    user_name   VARCHAR(32) UNIQUE NOT NULL    -- CHECK: ^[a-z0-9][a-z0-9_-]{2,31}$
+)
 ```
 
 ## Auto-created Workspace
 
 When a user is created (via admin API or `get_or_create` on first login), a default workspace is automatically created:
-- `workspace_id` = user's email (same as `user_id`)
-- `name` = user's email
+- `workspace_id` = fresh UUID
+- `workspace_name` = user's `user_name`
 - User is added to `workspace_members` with `role = 'owner'`
 
 ## Admin User Setup

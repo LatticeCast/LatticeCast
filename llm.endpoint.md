@@ -14,10 +14,10 @@
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/status` | None | Valkey & DB health check |
-| GET | `/api/settings` | None | Current settings (non-sensitive) |
-| GET | `/api/run-task/{seconds}` | None | Blocking task executor (debug) |
-| GET | `/api/openapi-export` | None | Export OpenAPI spec to file |
+| GET | `/api/v1/status` | None | Valkey & DB health check |
+| GET | `/api/v1/settings` | None | Current settings (non-sensitive) |
+| GET | `/api/v1/run-task/{seconds}` | None | Blocking task executor (debug) |
+| GET | `/api/v1/openapi-export` | None | Export OpenAPI spec to file |
 
 ## Authentication
 
@@ -25,28 +25,28 @@ See `llm.user.md` for full details.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/login/config` | None | App config (auth_required flag) |
-| POST | `/api/login/{provider}/token` | None | Exchange OAuth code for tokens |
-| GET | `/api/login/me` | Bearer | Get current user info |
+| GET | `/api/v1/login/config` | None | App config (auth_required flag) |
+| POST | `/api/v1/login/{provider}/token` | None | Exchange OAuth code for tokens |
+| GET | `/api/v1/login/me` | Bearer | Get current user info |
 
 ## Workspaces
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/api/workspaces` | User | Create workspace |
-| GET | `/api/workspaces` | User | List user's workspaces |
-| GET | `/api/workspaces/{workspace_id}` | User | Get workspace |
-| PUT | `/api/workspaces/{workspace_id}` | Owner | Update workspace name |
-| DELETE | `/api/workspaces/{workspace_id}` | Owner | Delete workspace |
-| POST | `/api/workspaces/{workspace_id}/members` | Owner | Add member |
-| DELETE | `/api/workspaces/{workspace_id}/members/{user_id}` | Owner | Remove member |
-| GET | `/api/workspaces/{workspace_id}/members` | User | List members |
+| POST | `/api/v1/workspaces` | User | Create workspace |
+| GET | `/api/v1/workspaces` | User | List user's workspaces |
+| GET | `/api/v1/workspaces/{workspace_id}` | User | Get workspace |
+| PUT | `/api/v1/workspaces/{workspace_id}` | Owner | Update workspace name |
+| DELETE | `/api/v1/workspaces/{workspace_id}` | Owner | Delete workspace |
+| POST | `/api/v1/workspaces/{workspace_id}/members` | Owner | Add member |
+| DELETE | `/api/v1/workspaces/{workspace_id}/members/{user_id}` | Owner | Remove member |
+| GET | `/api/v1/workspaces/{workspace_id}/members` | User | List members |
 
 ### Workspace Request/Response Examples
 
 ```python
 # Create workspace
-POST /api/workspaces
+POST /api/v1/workspaces
 Authorization: Bearer {token}
 Content-Type: application/json
 {"name": "My Workspace"}
@@ -55,14 +55,14 @@ Content-Type: application/json
 {"workspace_id": "...", "name": "My Workspace", "created_at": "...", "updated_at": "..."}
 
 # List workspaces
-GET /api/workspaces
+GET /api/v1/workspaces
 Authorization: Bearer {token}
 
 # Response
 [{"workspace_id": "user@example.com", "name": "user@example.com", ...}]
 
 # Add member
-POST /api/workspaces/{workspace_id}/members
+POST /api/v1/workspaces/{workspace_id}/members
 Authorization: Bearer {token}
 Content-Type: application/json
 {"user_id": "other@example.com", "role": "member"}
@@ -74,37 +74,37 @@ Content-Type: application/json
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/api/tables` | User | Create new table |
-| GET | `/api/tables` | User | List user's tables (all workspaces) |
-| GET | `/api/tables/{table_id}` | Member | Get table by ID |
-| PUT | `/api/tables/{table_id}` | Member | Update table name |
-| DELETE | `/api/tables/{table_id}` | Member | Delete table |
-| GET | `/api/tables/{table_id}/columns` | Member | List columns (from table.columns) |
-| POST | `/api/tables/{table_id}/columns` | Member | Add column |
-| PUT | `/api/tables/{table_id}/columns/{column_id}` | Member | Update column |
-| DELETE | `/api/tables/{table_id}/columns/{column_id}` | Member | Delete column |
-| GET | `/api/tables/{table_id}/views` | Member | List views |
-| POST | `/api/tables/{table_id}/views` | Member | Create view |
-| PUT | `/api/tables/{table_id}/views/{view_name}` | Member | Update view config |
-| DELETE | `/api/tables/{table_id}/views/{view_name}` | Member | Delete view |
-| POST | `/api/tables/template/pm` | User | Create PM template table |
+| POST | `/api/v1/tables` | User | Create new table |
+| GET | `/api/v1/tables` | User | List user's tables (all workspaces) |
+| GET | `/api/v1/tables/{table_id}` | Member | Get table by ID |
+| PUT | `/api/v1/tables/{table_id}` | Member | Update table name |
+| DELETE | `/api/v1/tables/{table_id}` | Member | Delete table |
+| GET | `/api/v1/tables/{table_id}/columns` | Member | List columns (from table.columns) |
+| POST | `/api/v1/tables/{table_id}/columns` | Member | Add column |
+| PUT | `/api/v1/tables/{table_id}/columns/{column_id}` | Member | Update column |
+| DELETE | `/api/v1/tables/{table_id}/columns/{column_id}` | Member | Delete column |
+| GET | `/api/v1/tables/{table_id}/views` | Member | List views |
+| POST | `/api/v1/tables/{table_id}/views` | Member | Create view |
+| PUT | `/api/v1/tables/{table_id}/views/{view_name}` | Member | Update view config |
+| DELETE | `/api/v1/tables/{table_id}/views/{view_name}` | Member | Delete view |
+| POST | `/api/v1/tables/template/pm` | User | Create PM template table |
 
 ## Rows
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/api/tables/{table_id}/rows` | Member | Create row (auto-generates Key if PM table) |
-| GET | `/api/tables/{table_id}/rows` | Member | List rows (paginated) |
-| PUT | `/api/rows/{row_id}` | Member | Update row data |
-| DELETE | `/api/rows/{row_id}` | Member | Delete row |
-| GET | `/api/tables/{table_id}/rows/{row_id}/doc` | Member | Get ticket doc (markdown from MinIO) |
-| PUT | `/api/tables/{table_id}/rows/{row_id}/doc` | Member | Save ticket doc (markdown to MinIO) |
+| POST | `/api/v1/tables/{table_id}/rows` | Member | Create row (row_number auto-set by trigger) |
+| GET | `/api/v1/tables/{table_id}/rows` | Member | List rows (paginated) |
+| PUT | `/api/v1/tables/{table_id}/rows/{row_number}` | Member | Update row data |
+| DELETE | `/api/v1/tables/{table_id}/rows/{row_number}` | Member | Delete row |
+| GET | `/api/v1/tables/{table_id}/rows/{row_number}/doc` | Member | Get ticket doc (markdown from MinIO) |
+| PUT | `/api/v1/tables/{table_id}/rows/{row_number}/doc` | Member | Save ticket doc (markdown to MinIO) |
 
 ### Table Request/Response Examples
 
 ```python
 # Create table
-POST /api/tables
+POST /api/v1/tables
 Authorization: Bearer {token}
 Content-Type: application/json
 {"name": "My Project", "workspace_id": "user@example.com"}
@@ -113,7 +113,7 @@ Content-Type: application/json
 {"table_id": "uuid", "workspace_id": "user@example.com", "name": "My Project", "columns": [], "created_at": "...", "updated_at": "..."}
 
 # List tables
-GET /api/tables
+GET /api/v1/tables
 Authorization: Bearer {token}
 
 # Response
@@ -124,7 +124,7 @@ Authorization: Bearer {token}
 
 ```python
 # Add column
-POST /api/tables/{table_id}/columns
+POST /api/v1/tables/{table_id}/columns
 Authorization: Bearer {token}
 Content-Type: application/json
 {"name": "Status", "type": "select", "options": {"choices": [{"value": "todo", "color": "..."}, {"value": "done", "color": "..."}]}, "position": 0}
@@ -156,17 +156,17 @@ User files are prefixed with UUID (first 20 chars, no dashes).
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/storage/files` | User | List user's files |
-| GET | `/api/storage/file/{path}` | User | Download file |
-| PUT | `/api/storage/file/{path}` | User | Upload file (multipart) |
-| DELETE | `/api/storage/file/{path}` | User | Delete file |
-| GET | `/api/storage/admin/files` | Admin | List all files (full paths) |
+| GET | `/api/v1/storage/files` | User | List user's files |
+| GET | `/api/v1/storage/file/{path}` | User | Download file |
+| PUT | `/api/v1/storage/file/{path}` | User | Upload file (multipart) |
+| DELETE | `/api/v1/storage/file/{path}` | User | Delete file |
+| GET | `/api/v1/storage/admin/files` | Admin | List all files (full paths) |
 
 ### Storage Request/Response Examples
 
 ```python
 # Upload file
-PUT /api/storage/file/my-folder/data.json
+PUT /api/v1/storage/file/my-folder/data.json
 Content-Type: multipart/form-data
 Authorization: Bearer {token}
 
@@ -174,7 +174,7 @@ Authorization: Bearer {token}
 {"key": "my-folder/data.json", "size": 1234}
 
 # List files
-GET /api/storage/files?prefix=my-folder&max_keys=100
+GET /api/v1/storage/files?prefix=my-folder&max_keys=100
 Authorization: Bearer {token}
 
 # Response
@@ -193,17 +193,17 @@ Requires `admin` role. See `llm.user.md` for details.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/admin/users` | Create user |
-| GET | `/api/admin/users` | List users (paginated) |
-| GET | `/api/admin/users/{user_id}` | Get user by ID (email) |
-| PUT | `/api/admin/users/{user_id}` | Update user role |
-| DELETE | `/api/admin/users/{user_id}` | Delete user |
+| POST | `/api/v1/admin/users` | Create user |
+| GET | `/api/v1/admin/users` | List users (paginated) |
+| GET | `/api/v1/admin/users/{user_id}` | Get user by ID (email) |
+| PUT | `/api/v1/admin/users/{user_id}` | Update user role |
+| DELETE | `/api/v1/admin/users/{user_id}` | Delete user |
 
 ### Admin Request/Response Examples
 
 ```python
 # Create user
-POST /api/admin/users
+POST /api/v1/admin/users
 Authorization: Bearer {admin_token}
 Content-Type: application/json
 {"id": "user@example.com", "role": "user"}
@@ -212,7 +212,7 @@ Content-Type: application/json
 {"user_id": "user@example.com", "name": "", "role": "user"}
 
 # List users
-GET /api/admin/users?offset=0&limit=100
+GET /api/v1/admin/users?offset=0&limit=100
 Authorization: Bearer {admin_token}
 
 # Response
@@ -224,7 +224,7 @@ Authorization: Bearer {admin_token}
 }
 
 # Update user
-PUT /api/admin/users/user@example.com
+PUT /api/v1/admin/users/user@example.com
 Authorization: Bearer {admin_token}
 Content-Type: application/json
 {"role": "admin"}

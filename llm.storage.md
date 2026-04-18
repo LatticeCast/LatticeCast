@@ -13,7 +13,7 @@ Frontend (storage.ts) → Backend (router/api/storage.py) → MinIO (:9000)
 ## Backend
 
 ### Files
-- `config/storage.py` - S3 client singleton (boto3)
+- `config/storage.py` - Async S3 client (aioboto3)
 - `router/api/storage.py` - REST API endpoints
 
 ### Path Isolation
@@ -25,25 +25,25 @@ Frontend (storage.ts) → Backend (router/api/storage.py) → MinIO (:9000)
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/storage/files` | List files (with prefix filter) |
-| GET | `/api/storage/file/{path}` | Download file |
-| PUT | `/api/storage/file/{path}` | Upload file |
-| DELETE | `/api/storage/file/{path}` | Delete file |
-| GET | `/api/storage/admin/files` | Admin: list all files |
+| GET | `/api/v1/storage/files` | List files (with prefix filter) |
+| GET | `/api/v1/storage/file/{path}` | Download file |
+| PUT | `/api/v1/storage/file/{path}` | Upload file |
+| DELETE | `/api/v1/storage/file/{path}` | Delete file |
+| GET | `/api/v1/storage/admin/files` | Admin: list all files |
 
 ### Request/Response
 
 ```python
 # List files
-GET /api/storage/files?prefix=&max_keys=1000
+GET /api/v1/storage/files?prefix=&max_keys=1000
 → { files: [{key, size, last_modified}], prefix, truncated }
 
 # Upload (multipart/form-data)
-PUT /api/storage/file/entries.json
+PUT /api/v1/storage/file/entries.json
 ← { key: "entries.json", size: 1234 }
 
 # Download
-GET /api/storage/file/entries.json
+GET /api/v1/storage/file/entries.json
 ← StreamingResponse (file content)
 ```
 

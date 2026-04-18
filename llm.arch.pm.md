@@ -4,11 +4,11 @@ Built ON the Airtable core. PM is just a template + conventions — no special c
 
 ## PM Template
 
-`POST /api/tables/template/pm` creates a table with these columns:
+`POST /api/v1/tables/template/pm` creates a table with these columns:
 
 | Position | Column | Type |
 |----------|--------|------|
-| 0 | Doc | url (MinIO path, clickable) |
+| 0 | Doc | doc (read-only, auto-creates MinIO .md on row insert) |
 | 1 | Title | text (short summary) |
 | 2 | Type | select (epic/story/task/bug) |
 | 3 | Status | select (todo/in_progress/testing/debugging/review/done/merged) |

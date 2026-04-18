@@ -6,26 +6,30 @@ The generic table engine. Everything here works for ANY table — PM, CRM, or cu
 
 ```sql
 -- Tables with embedded column definitions + view configs
-tables (
+public.tables (
     workspace_id  UUID FK,
-    table_id      UUID PK,
-    table_name    VARCHAR UNIQUE(workspace_id, table_name),
+    table_id      VARCHAR,           -- string PK = table name, always lowercase
     columns       JSONB DEFAULT '[]',  -- [{column_id, name, type, options, position}]
     views         JSONB DEFAULT '[]',  -- [{name, type, config}]
-    timestamps
+    timestamps,
+    PK (workspace_id, table_id)
 )
 
 -- Rows with flexible JSONB data
-rows (
-    table_id    UUID FK (CASCADE),
-    row_number  BIGINT (auto-increment per table, PG trigger),
-    row_data    JSONB DEFAULT '{}',  -- {"col_id": value, ...}
-    created_by  UUID FK,
-    updated_by  UUID FK,
-    timestamps
-    PK (table_id, row_number)
+public.rows (
+    workspace_id UUID,
+    table_id     VARCHAR,
+    row_number   BIGINT,               -- auto-set by trigger: MAX(row_number)+1 per (workspace_id, table_id)
+    row_data     JSONB DEFAULT '{}',   -- {"col_id": value, ...}
+    created_by   UUID FK auth.users,
+    updated_by   UUID FK auth.users,
+    timestamps,
+    PK (workspace_id, table_id, row_number),
+    FK (workspace_id, table_id) REFERENCES tables ON DELETE CASCADE
 )
 ```
+
+RLS enabled on both tables — policies check workspace membership via `current_setting('app.current_user_id')`.
 
 ## Column Types
 
@@ -45,7 +49,7 @@ rows (
 Auto-managed on column create/delete:
 - Number/Date → B-tree expression index
 - Select/Tags/Text → GIN index
-- All partial: `WHERE table_id = '{uuid}'`
+- All partial: `WHERE workspace_id = '{uuid}' AND table_id = '{name}'`
 
 ## Views
 
@@ -59,13 +63,14 @@ Stored in `tables.views` JSONB. Every table has at least 1 Table view (auto-crea
 
 ## Default Template
 
-New table without template gets: Doc (url) + Title (text) + Description (text) + 1 Table view.
+New table without template gets: Doc (doc) + Title (text) + Description (text) + 1 Table view.
+`doc` column is system-managed: on row insert, backend auto-creates an empty `.md` at MinIO key `{workspace_id}/{table_id}/{row_number}.md` and writes the path into the cell. Users cannot edit `doc` cell values directly.
 
 ## URL Pattern
 
 ```
-/<workspace_name>/<table_name>              → table view
-/<workspace_name>/<table_name>/<row_number> → row detail
+/<workspace_id>/<table_id>              → table view
+/<workspace_id>/<table_id>/<row_number> → row detail
 ```
 
-Both UUID and name work (resolver: UUID → name → case-insensitive).
+`table_id` is the lowercase table name (string). `workspace_id` is UUID.

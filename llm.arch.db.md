@@ -4,9 +4,11 @@
 
 | Schema | Purpose | Tables |
 |--------|---------|--------|
-| `public` | User-facing data | `workspaces`, `workspace_members`, `tables`, `rows` |
-| `auth` | Authentication | `users`, `user_info` |
+| `public` | User-facing data | `workspaces`, `workspace_members`, `tables`, `rows`, `user_info` |
+| `auth` | Authentication + PII | `users` (UUID + role), `gdpr` (email + legal_name) |
 | `private` | DBA-only internal | `schema_migrations` |
+
+`public.user_info` holds the public handle (`user_name`). PII (`email`, `legal_name`) is in `auth.gdpr`, readable only by `login_mgr`.
 
 ## Roles
 

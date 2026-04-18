@@ -23,7 +23,7 @@ sequenceDiagram
     P->>U: Login prompt
     U->>P: Credentials
     P->>FE: Redirect to /callback/{provider} with auth code
-    FE->>BE: POST /api/login/{provider}/token
+    FE->>BE: POST /api/v1/login/{provider}/token
     BE->>P: Exchange code + verifier
     P->>BE: Tokens + userinfo
     BE->>FE: TokenResponse
@@ -82,13 +82,21 @@ sequenceDiagram
 # middleware/auth.py
 
 # get_current_user - Basic auth (registered users only)
+# Bearer token is resolved in order: UUID → user_name → email
 async def get_current_user(token_payload, session) -> User:
-    email = token_payload.get("email")
+    identifier = token_payload.get("sub") or token_payload.get("email")
     # If AUTH_REQUIRED=false: auto-creates user via get_or_create
-    user = await UserRepository.get_by_id(email)
+    user = await UserRepository.resolve(identifier)  # tries user_id, user_name, email
     if not user:
         raise 403 "User not registered"
     return user
+
+# get_rls_session - App session with RLS user context
+# Sets app.current_user_id so Postgres RLS policies can identify the caller
+async def get_rls_session(user, session):
+    await session.execute(text(f"SET app.current_user_id = '{user.user_id}'"))
+    yield session
+    await session.execute(text("RESET app.current_user_id"))
 
 # require_admin - Admin role required
 async def require_admin(user: User) -> User:
@@ -162,11 +170,28 @@ AUTH_REQUIRED=true  # Set false for dev (skip OAuth, token = user_id)
 ## Database Schema
 
 ```sql
--- users table (auth-relevant fields)
-user_id     VARCHAR PRIMARY KEY  -- email address
-name        VARCHAR NOT NULL DEFAULT ''
-role        VARCHAR NOT NULL DEFAULT 'user'  -- 'user' | 'admin'
+-- auth.users (auth-relevant fields, owned by login_mgr)
+auth.users (
+    user_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    role       VARCHAR NOT NULL DEFAULT 'user',  -- 'user' | 'admin'
+    timestamps
+)
+
+-- auth.gdpr (PII — login_mgr only, app role cannot SELECT)
+auth.gdpr (
+    user_id    UUID PK FK auth.users,
+    email      VARCHAR UNIQUE NOT NULL,
+    legal_name VARCHAR NOT NULL DEFAULT ''
+)
+
+-- public.user_info (public handle — visible to app role)
+public.user_info (
+    user_id    UUID PK FK auth.users,
+    user_name  VARCHAR(32) UNIQUE NOT NULL
+)
 ```
+
+**Split rationale**: `login_mgr` role has CRUD on `auth.*` (needs email for OAuth flow). `app` role has SELECT on `auth.users` (to verify user exists) but cannot read `auth.gdpr` (PII). Everyone can read `public.user_info` for display purposes.
 
 ## Adding Auth to New Endpoints
 
@@ -210,7 +235,7 @@ onMount(() => {
 ## Making Authenticated API Calls
 
 ```typescript
-const response = await fetch(`${BACKEND_URL}/api/endpoint`, {
+const response = await fetch(`${BACKEND_URL}/api/v1/endpoint`, {
     headers: {
         'Authorization': `Bearer ${$authStore.accessToken}`,
         'Content-Type': 'application/json'
