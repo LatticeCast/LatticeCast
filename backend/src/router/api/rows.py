@@ -1,7 +1,6 @@
 # router/api/rows.py
 
 import re
-from uuid import UUID
 
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -73,39 +72,42 @@ async def _inject_hierarchy(content: str, table, row: Row, session: AsyncSession
     title_col_id = cols.get("Title", "")
     parent_col_id = cols.get("Parent", "")
     status_col_id = cols.get("Status", "")
+    repo = RowRepository(session)
 
-    # Inject parent link
+    # Inject parent link — parent column stores row_number (integer)
     if parent_col_id and re.search(r"<!--\s*\[PARENT-KEY\]", content):
-        parent_row_id_str = row.row_data.get(parent_col_id)
+        parent_row_num_str = row.row_data.get(parent_col_id)
         parent_link = ""
-        if parent_row_id_str:
+        if parent_row_num_str:
             try:
-                parent_row = await session.get(Row, UUID(str(parent_row_id_str)))
+                parent_row = await repo.get_by_number(table.workspace_id, table.table_id, int(str(parent_row_num_str)))
                 if parent_row:
                     p_key = parent_row.row_data.get(key_col_id, "") if key_col_id else ""
-                    p_title = parent_row.row_data.get(title_col_id, "") if title_col_id else str(parent_row_id_str)
+                    p_title = parent_row.row_data.get(title_col_id, "") if title_col_id else str(parent_row_num_str)
                     parent_link = f"[{p_key}] {p_title}" if p_key else p_title
             except (ValueError, Exception):
                 pass
         if parent_link:
             content = re.sub(r"<!--\s*\[PARENT-KEY\][^>]*-->", parent_link, content)
 
-    # Inject children links
+    # Inject children links — filter by row_number (integer) stored in parent column
     if parent_col_id and re.search(r"<!--\s*Links to child", content):
-        repo = RowRepository(session)
-        children = await repo.filter_by_jsonb(table.workspace_id, table.table_id, {parent_col_id: str(row.row_id)})
-        if children:
-            lines = []
-            for child in children:
-                c_key = child.row_data.get(key_col_id, "") if key_col_id else ""
-                c_title = child.row_data.get(title_col_id, "") if title_col_id else ""
-                c_status = child.row_data.get(status_col_id, "") if status_col_id else ""
-                line = f"- [{c_key}] {c_title}"
-                if c_status:
-                    line += f" — {c_status}"
-                lines.append(line)
-            children_text = "\n".join(lines)
-            content = re.sub(r"<!--\s*Links to child[^>]*-->", children_text, content)
+        try:
+            children = await repo.filter_by_jsonb(table.workspace_id, table.table_id, {parent_col_id: row.row_number})
+            if children:
+                lines = []
+                for child in children:
+                    c_key = child.row_data.get(key_col_id, "") if key_col_id else ""
+                    c_title = child.row_data.get(title_col_id, "") if title_col_id else ""
+                    c_status = child.row_data.get(status_col_id, "") if status_col_id else ""
+                    line = f"- [{c_key}] {c_title}"
+                    if c_status:
+                        line += f" — {c_status}"
+                    lines.append(line)
+                children_text = "\n".join(lines)
+                content = re.sub(r"<!--\s*Links to child[^>]*-->", children_text, content)
+        except Exception:
+            pass
 
     return content
 
@@ -141,7 +143,11 @@ async def create_row(
 
     repo = RowRepository(session)
     row = await repo.create(
-        workspace_id=table.workspace_id, table_id=table.table_id, row_data=data.row_data, created_by=user.user_id, updated_by=user.user_id
+        workspace_id=table.workspace_id,
+        table_id=table.table_id,
+        row_data=data.row_data,
+        created_by=user.user_id,
+        updated_by=user.user_id,
     )
 
     # Auto-create MinIO object and fill cell for every doc-type column
@@ -213,8 +219,12 @@ async def list_rows(
         except Exception:
             contains = {}
         if contains:
-            return await repo.filter_by_jsonb(workspace_id=table.workspace_id, table_id=table.table_id, contains=contains, offset=offset, limit=limit)
-    return await repo.list_by_table(workspace_id=table.workspace_id, table_id=table.table_id, offset=offset, limit=limit, sort=sort)
+            return await repo.filter_by_jsonb(
+                workspace_id=table.workspace_id, table_id=table.table_id, contains=contains, offset=offset, limit=limit
+            )
+    return await repo.list_by_table(
+        workspace_id=table.workspace_id, table_id=table.table_id, offset=offset, limit=limit, sort=sort
+    )
 
 
 # --------------------------------------------------
