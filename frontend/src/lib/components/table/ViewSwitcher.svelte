@@ -71,6 +71,7 @@
 						: 'border-transparent hover:border-gray-300'}"
 				>
 					<button
+						data-testid="view-tab-{view.name}"
 						onclick={() => onViewChange(view)}
 						class="flex items-center gap-1.5 px-3 py-2 text-sm transition {activeViewName ===
 						view.name
@@ -138,6 +139,7 @@
 
 		<!-- Add view button — outside overflow-x-auto, always visible -->
 		<button
+			data-testid="view-switcher-add-btn"
 			onclick={(e) => {
 				e.stopPropagation();
 				showAddPanel = !showAddPanel;

@@ -52,7 +52,16 @@
 		applyEditToRowData,
 		toggleCheckboxInRowData,
 		removeTagFromRowData,
-		addTagToRowData
+		addTagToRowData,
+		applyFilters,
+		sortRows,
+		buildGroupedRows,
+		buildRenderItems,
+		buildSortedColumns,
+		buildTemplateJSON,
+		buildCSV,
+		buildExportJSON,
+		triggerDownload
 	} from '$lib/components/table/table.utils';
 
 	// Components
@@ -120,78 +129,10 @@
 
 	// ─── Derived ─────────────────────────────────────────────────────────────────
 
-	const sortedColumns = $derived(
-		[...$columns]
-			.sort((a, b) => {
-				if (viewColOrder && viewColOrder.length > 0) {
-					const ai = viewColOrder.indexOf(a.column_id);
-					const bi = viewColOrder.indexOf(b.column_id);
-					return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
-				}
-				return a.position - b.position;
-			})
-			.filter((c) => !hiddenCols.has(c.column_id))
-	);
+	const sortedColumns = $derived(buildSortedColumns($columns, viewColOrder, hiddenCols));
 
 	const sortedRows = $derived(
-		(() => {
-			let result = $rows;
-			if (searchQuery.trim()) {
-				const q = searchQuery.trim().toLowerCase();
-				result = result.filter((r) =>
-					Object.values(r.row_data).some((v) => {
-						if (v === null || v === undefined) return false;
-						if (Array.isArray(v)) return v.some((item) => String(item).toLowerCase().includes(q));
-						return String(v).toLowerCase().includes(q);
-					})
-				);
-			}
-			for (const cond of filterConditions) {
-				if (!cond.colId) continue;
-				if (cond.operator !== 'is_empty' && cond.operator !== 'not_empty' && !cond.value.trim())
-					continue;
-				const lv = cond.value.toLowerCase();
-				result = result.filter((r) => {
-					const cell = r.row_data[cond.colId];
-					const isEmpty =
-						cell === null ||
-						cell === undefined ||
-						(typeof cell === 'string' && cell === '') ||
-						(Array.isArray(cell) && cell.length === 0);
-					if (cond.operator === 'is_empty') return isEmpty;
-					if (cond.operator === 'not_empty') return !isEmpty;
-					if (isEmpty) return false;
-					if (cond.operator === 'equals') {
-						if (Array.isArray(cell)) return cell.some((v) => String(v).toLowerCase() === lv);
-						return String(cell).toLowerCase() === lv;
-					}
-					if (Array.isArray(cell)) return cell.some((v) => String(v).toLowerCase().includes(lv));
-					return String(cell).toLowerCase().includes(lv);
-				});
-			}
-			if (!sortConfig) return result;
-			const { colId, dir } = sortConfig;
-			const sortCol = $columns.find((c) => c.column_id === colId);
-			const choiceOrder =
-				sortCol?.type === 'select' ? getChoices(sortCol).map((c) => c.value) : null;
-			return [...result].sort((a, b) => {
-				const av = a.row_data[colId];
-				const bv = b.row_data[colId];
-				if (choiceOrder) {
-					const getIdx = (v: unknown) => {
-						if (v == null) return choiceOrder!.length;
-						const i = choiceOrder!.indexOf(String(v));
-						return i === -1 ? choiceOrder!.length : i;
-					};
-					const cmp = getIdx(av) - getIdx(bv);
-					return dir === 'asc' ? cmp : -cmp;
-				}
-				const as = av === null || av === undefined ? '' : String(av);
-				const bs = bv === null || bv === undefined ? '' : String(bv);
-				const cmp = as.localeCompare(bs, undefined, { numeric: true, sensitivity: 'base' });
-				return dir === 'asc' ? cmp : -cmp;
-			});
-		})()
+		sortRows(applyFilters($rows, filterConditions, searchQuery), sortConfig, $columns)
 	);
 
 	const tableMinWidth = $derived(
@@ -204,61 +145,9 @@
 			({ name: 'Table', type: 'table', config: {} } satisfies ViewConfig)
 	);
 
-	function getGroupKey(row: Row, colId: string, col: Column): string {
-		const val = row.row_data[colId];
-		if (val === null || val === undefined || val === '') return '(empty)';
-		if (col.type === 'date') {
-			const normalized = formatDate(String(val));
-			const granularity = groupConfig?.granularity ?? 'month';
-			if (granularity === 'month') return normalized.slice(0, 7);
-			return normalized.slice(0, 10);
-		}
-		return String(val);
-	}
+	const groupedRows = $derived(buildGroupedRows(sortedRows, groupConfig, $columns));
 
-	const groupedRows = $derived(
-		(() => {
-			if (!groupConfig) return null;
-			const { colId: gcColId, granularity: gcGranularity } = groupConfig;
-			const col = $columns.find((c) => c.column_id === gcColId);
-			if (!col) return null;
-			const keyOrder: string[] = [];
-			const keyMap: Record<string, Row[]> = {};
-			for (const row of sortedRows) {
-				const key = getGroupKey(row, col.column_id, col);
-				if (!keyMap[key]) {
-					keyMap[key] = [];
-					keyOrder.push(key);
-				}
-				keyMap[key].push(row);
-			}
-			return { groups: keyOrder.map((key) => ({ key, rows: keyMap[key] })), col };
-		})()
-	);
-
-	const renderItems = $derived(
-		(() => {
-			if (!groupedRows) {
-				return sortedRows.map((row, rowIdx): RenderItem => ({ type: 'row', row, rowIdx }));
-			}
-			const items: RenderItem[] = [];
-			for (const group of groupedRows.groups) {
-				items.push({
-					type: 'group-header',
-					key: group.key,
-					count: group.rows.length,
-					col: groupedRows.col
-				});
-				if (!collapsedGroups.has(group.key)) {
-					group.rows.forEach((row, rowIdx) => {
-						items.push({ type: 'row', row, rowIdx });
-					});
-					items.push({ type: 'group-add', key: group.key, col: groupedRows.col });
-				}
-			}
-			return items;
-		})()
-	);
+	const renderItems = $derived(buildRenderItems(sortedRows, groupedRows, collapsedGroups));
 
 	// ─── Lifecycle ───────────────────────────────────────────────────────────────
 
@@ -799,21 +688,11 @@
 
 	// Export / Import
 	function handleExportTemplate() {
-		const template = [...$columns]
-			.sort((a, b) => a.position - b.position)
-			.map((col) => ({
-				name: col.name,
-				type: col.type,
-				options: col.options,
-				position: col.position
-			}));
-		const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = `${$currentTable?.table_id ?? 'table'}-template.json`;
-		a.click();
-		URL.revokeObjectURL(url);
+		triggerDownload(
+			buildTemplateJSON($columns),
+			`${$currentTable?.table_id ?? 'table'}-template.json`,
+			'application/json'
+		);
 	}
 
 	async function handleImportTemplate(file: File) {
@@ -840,45 +719,19 @@
 	}
 
 	function exportCSV() {
-		const cols = [...$columns].sort((a, b) => a.position - b.position);
-		const headers = cols.map((c) => c.name);
-		const escapeCSV = (v: string) => `"${v.replace(/"/g, '""')}"`;
-		const csvRows = [
-			headers.map(escapeCSV).join(','),
-			...$rows.map((row) =>
-				cols
-					.map((col) => {
-						const val = row.row_data[col.column_id];
-						if (val === null || val === undefined) return '';
-						if (Array.isArray(val)) return escapeCSV(val.join(','));
-						return escapeCSV(String(val));
-					})
-					.join(',')
-			)
-		];
-		const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = `${$currentTable?.table_id ?? 'table'}.csv`;
-		a.click();
-		URL.revokeObjectURL(url);
+		triggerDownload(
+			buildCSV($columns, $rows),
+			`${$currentTable?.table_id ?? 'table'}.csv`,
+			'text/csv'
+		);
 	}
 
 	function exportJSON() {
-		const cols = [...$columns].sort((a, b) => a.position - b.position);
-		const data = $rows.map((row) => {
-			const obj: Record<string, unknown> = {};
-			for (const col of cols) obj[col.name] = row.row_data[col.column_id] ?? null;
-			return obj;
-		});
-		const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = `${$currentTable?.table_id ?? 'table'}-data.json`;
-		a.click();
-		URL.revokeObjectURL(url);
+		triggerDownload(
+			buildExportJSON($columns, $rows),
+			`${$currentTable?.table_id ?? 'table'}-data.json`,
+			'application/json'
+		);
 	}
 
 	function handleImportFile(e: Event) {
