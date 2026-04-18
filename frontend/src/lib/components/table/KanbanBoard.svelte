@@ -205,6 +205,7 @@
 			>Sort by</span
 		>
 		<select
+			data-testid="kanban-sort-col-select"
 			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
 				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
 				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
@@ -218,6 +219,7 @@
 		</select>
 		{#if sortColId}
 			<select
+				data-testid="kanban-sort-dir-select"
 				class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
 					? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
 					: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
@@ -233,6 +235,7 @@
 	<!-- Card fields -->
 	<div class="card-fields-panel relative">
 		<button
+			data-testid="kanban-card-fields-btn"
 			class="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs {isDark.value
 				? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600'
 				: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}"
@@ -273,6 +276,7 @@
 							: 'hover:bg-gray-50'}"
 					>
 						<input
+							data-testid="kanban-card-field-{col.column_id}-checkbox"
 							type="checkbox"
 							class="accent-blue-500"
 							checked={cardFields.includes(col.column_id)}
@@ -340,6 +344,7 @@
 					{:else}
 						{#each sortRows(lane.rows) as row (row.row_number)}
 							<button
+								data-testid="kanban-card-{row.row_number}-btn"
 								draggable="true"
 								ondragstart={(e) => onDragStart(e, row)}
 								ondragend={onDragEnd}
@@ -401,6 +406,7 @@
 
 					<!-- Add row / New ticket button per lane -->
 					<button
+						data-testid="kanban-add-row-{lane.value || 'empty'}-btn"
 						onclick={() =>
 							onAddRow(groupByColId && lane.value ? { [groupByColId]: lane.value } : {})}
 						class="mt-1 w-full rounded-lg px-3 py-1.5 text-left text-xs transition {isDark.value

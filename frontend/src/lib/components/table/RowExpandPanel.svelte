@@ -141,6 +141,7 @@
 		<h2 class="text-lg font-semibold text-white">Row Details</h2>
 		<div class="flex items-center gap-2">
 			<a
+				data-testid="row-panel-open-fullpage-link"
 				href="/{workspaceId}/{tableId}/{row.row_number}"
 				class="rounded-lg px-3 py-1.5 text-sm font-medium text-white/80 transition hover:bg-white/20 hover:text-white"
 				aria-label="Open full page">Open full page</a
@@ -229,6 +230,7 @@
 						No doc yet for this row.
 					</p>
 					<button
+						data-testid="row-panel-doc-start-btn"
 						onclick={() => (docEditing = true)}
 						class="rounded-lg px-4 py-2 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 {isDark.value
 							? 'hover:bg-blue-900/20'
@@ -245,6 +247,7 @@
 				>
 					<!-- Editor pane -->
 					<textarea
+						data-testid="row-panel-doc-textarea"
 						class="flex-1 resize-none border-none px-5 py-4 font-mono text-sm outline-none {isDark.value
 							? 'bg-gray-800 text-gray-200'
 							: 'text-gray-800'}"
@@ -279,6 +282,7 @@
 
 					{#if col.type === 'checkbox'}
 						<button
+							data-testid="row-panel-field-{col.column_id}-toggle"
 							class="relative inline-flex h-6 w-10 items-center rounded-full transition {localRow
 								.row_data[col.column_id]
 								? 'bg-blue-500'
@@ -314,6 +318,7 @@
 						{:else}
 							{@const selVal = (localRow.row_data[col.column_id] as string) ?? ''}
 							<button
+								data-testid="row-panel-field-{col.column_id}-select-btn"
 								class="flex min-h-[2.25rem] w-full items-center rounded-xl border px-3 py-2 text-left text-sm {isDark.value
 									? 'border-gray-600 hover:border-blue-500'
 									: 'border-gray-200 hover:border-blue-300'}"

@@ -1,6 +1,17 @@
 <script lang="ts">
 	import type { Column, Row, ViewConfig } from '$lib/types/table';
-	import { getChoices, getChoiceColor, formatDate } from './table.utils';
+	import { getChoiceColor, formatDate } from './table.utils';
+	import {
+		type Granularity,
+		GRANULARITIES,
+		parseTimelineDate,
+		generateTimeColumns,
+		formatColHeader,
+		isToday,
+		getBarLeft,
+		getBarWidth,
+		getBarColorClasses
+	} from './timeline.utils';
 	import { updateRow } from '$lib/backend/tables';
 	import { updateView } from '$lib/backend/views';
 	import { isDark } from '$lib/UI/theme.svelte';
@@ -27,7 +38,6 @@
 
 	const isTicketTable = $derived(columns.some((c) => c.name === 'Key'));
 
-	type Granularity = 'day' | 'week' | 'month';
 	let granularity = $state<Granularity>('month');
 
 	// Config
@@ -53,20 +63,13 @@
 		onViewUpdate(updated);
 	}
 
-	function parseDate(raw: unknown): Date | null {
-		if (!raw) return null;
-		const normalized = formatDate(String(raw));
-		const d = new Date(normalized.slice(0, 10));
-		return isNaN(d.getTime()) ? null : d;
-	}
-
 	const rowsWithDates = $derived.by(() => {
 		if (!startColId) return [];
 		const result: { row: Row; startDate: Date; endDate: Date }[] = [];
 		for (const r of rows) {
-			const startDate = parseDate(r.row_data[startColId]);
+			const startDate = parseTimelineDate(r.row_data[startColId]);
 			if (!startDate) continue;
-			const rawEnd = endColId ? parseDate(r.row_data[endColId]) : null;
+			const rawEnd = endColId ? parseTimelineDate(r.row_data[endColId]) : null;
 			result.push({ row: r, startDate, endDate: rawEnd ?? startDate });
 		}
 		return result;
@@ -96,100 +99,10 @@
 		return new Date(max.getFullYear(), max.getMonth() + 2, 0);
 	});
 
-	function generateTimeColumns(start: Date, end: Date, gran: Granularity): Date[] {
-		const cols: Date[] = [];
-		let cur = start;
-		while (cur <= end) {
-			cols.push(cur);
-			if (gran === 'day') {
-				cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 1);
-			} else if (gran === 'week') {
-				cur = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + 7);
-			} else {
-				cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-			}
-		}
-		return cols;
-	}
-
 	const timeColumns = $derived(generateTimeColumns(viewportStart, viewportEnd, granularity));
 
 	const cellWidth = $derived(granularity === 'day' ? 40 : granularity === 'week' ? 80 : 120);
 	const totalGridWidth = $derived(timeColumns.length * cellWidth);
-
-	function dateToX(date: Date): number {
-		const totalMs = viewportEnd.getTime() - viewportStart.getTime();
-		if (totalMs === 0) return 0;
-		const offsetMs = date.getTime() - viewportStart.getTime();
-		return Math.max(0, Math.min(totalGridWidth, (offsetMs / totalMs) * totalGridWidth));
-	}
-
-	function getBarLeft(startDate: Date): number {
-		return dateToX(startDate);
-	}
-
-	function getBarWidth(startDate: Date, endDate: Date): number {
-		const endInclusive = new Date(endDate.getTime() + 86400000);
-		return Math.max(cellWidth / 2, dateToX(endInclusive) - dateToX(startDate));
-	}
-
-	function getBarColorClasses(row: Row): string {
-		if (!colorByCol || !colorByColId) return 'bg-blue-400 text-white';
-		const val = row.row_data[colorByColId];
-		if (!val) return 'bg-blue-400 text-white';
-		const choices = getChoices(colorByCol);
-		const idx = choices.findIndex((c) => c.value === String(val));
-		// Map TAG_COLORS index to a saturated bar color
-		const COLORS = [
-			'bg-blue-400 text-white',
-			'bg-green-400 text-white',
-			'bg-yellow-400 text-gray-800',
-			'bg-red-400 text-white',
-			'bg-purple-400 text-white',
-			'bg-pink-400 text-white',
-			'bg-orange-400 text-white',
-			'bg-teal-400 text-white',
-			'bg-cyan-400 text-gray-800',
-			'bg-indigo-400 text-white',
-			'bg-lime-400 text-gray-800',
-			'bg-rose-400 text-white'
-		];
-		return COLORS[idx >= 0 ? idx % COLORS.length : 0];
-	}
-
-	function formatColHeader(date: Date, gran: Granularity): string {
-		if (gran === 'day') {
-			return `${date.getMonth() + 1}/${date.getDate()}`;
-		} else if (gran === 'week') {
-			const weekNum = getWeekNumber(date);
-			return `W${weekNum} ${date.getFullYear()}`;
-		} else {
-			return date.toLocaleString('default', { month: 'short', year: 'numeric' });
-		}
-	}
-
-	function getWeekNumber(d: Date): number {
-		const dayOfWeek =
-			new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).getUTCDay() || 7;
-		const thursday = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() + 4 - dayOfWeek));
-		const yearStart = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1));
-		return Math.ceil(((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-	}
-
-	function isToday(date: Date, gran: Granularity): boolean {
-		if (gran === 'day') {
-			return (
-				date.getFullYear() === today.getFullYear() &&
-				date.getMonth() === today.getMonth() &&
-				date.getDate() === today.getDate()
-			);
-		} else if (gran === 'week') {
-			const weekEnd = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 6);
-			return today >= date && today <= weekEnd;
-		} else {
-			return date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth();
-		}
-	}
 
 	const groupedRows = $derived.by(() => {
 		if (!groupByColId || !groupByCol) {
@@ -208,13 +121,11 @@
 		}));
 	});
 
-	const todayX = $derived(dateToX(today));
+	const todayX = $derived(getBarLeft(today, viewportStart, viewportEnd, totalGridWidth));
 
 	const SIDEBAR_WIDTH = 180;
 	const ROW_HEIGHT = 44;
 	const HEADER_HEIGHT = 36;
-
-	const GRANULARITIES: Granularity[] = ['day', 'week', 'month'];
 
 	// ── Drag resize ───────────────────────────────────────────────────────
 
@@ -305,6 +216,7 @@
 		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}">Start</span
 		>
 		<select
+			data-testid="timeline-start-col-select"
 			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
 				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
 				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
@@ -323,6 +235,7 @@
 	<div class="flex items-center gap-2">
 		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}">End</span>
 		<select
+			data-testid="timeline-end-col-select"
 			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
 				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
 				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
@@ -342,6 +255,7 @@
 			>Color by</span
 		>
 		<select
+			data-testid="timeline-color-by-select"
 			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
 				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
 				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
@@ -361,6 +275,7 @@
 			>Group by</span
 		>
 		<select
+			data-testid="timeline-group-by-select"
 			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
 				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
 				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
@@ -376,6 +291,7 @@
 
 	<!-- Add row / New ticket button -->
 	<button
+		data-testid="timeline-add-row-btn"
 		onclick={() => onAddRow({})}
 		class="flex items-center gap-1 rounded-lg border px-3 py-1 text-xs font-medium transition {isDark.value
 			? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600'
@@ -392,6 +308,7 @@
 	>
 		{#each GRANULARITIES as g (g)}
 			<button
+				data-testid="timeline-granularity-{g}-btn"
 				class="rounded-md px-2.5 py-1 text-xs font-medium capitalize transition {granularity === g
 					? isDark.value
 						? 'bg-gray-600 text-blue-300 shadow-sm'
@@ -438,7 +355,8 @@
 					<div
 						class="flex-shrink-0 border-r px-1 text-center text-xs leading-none font-medium {isToday(
 							col,
-							granularity
+							granularity,
+							today
 						)
 							? isDark.value
 								? 'border-gray-700 bg-blue-900/40 text-blue-400'
@@ -508,7 +426,7 @@
 							<!-- Column grid lines -->
 							{#each timeColumns as col, i (i)}
 								<div
-									class="absolute top-0 bottom-0 border-r {isToday(col, granularity)
+									class="absolute top-0 bottom-0 border-r {isToday(col, granularity, today)
 										? isDark.value
 											? 'border-blue-700 bg-blue-900/20'
 											: 'border-blue-200 bg-blue-50/40'
@@ -521,10 +439,13 @@
 
 							<!-- Bar -->
 							<div
+								data-testid="timeline-bar-{row.row_number}"
 								class="absolute top-2 bottom-2 flex cursor-pointer items-center overflow-hidden rounded text-xs font-medium shadow-sm {getBarColorClasses(
-									row
+									row,
+									colorByCol,
+									colorByColId
 								)} {dragState?.rowId === row.row_number ? 'opacity-80' : ''}"
-								style="left: {getBarLeft(startDate)}px; width: {getBarWidth(startDate, endDate)}px"
+								style="left: {getBarLeft(startDate, viewportStart, viewportEnd, totalGridWidth)}px; width: {getBarWidth(startDate, endDate, viewportStart, viewportEnd, totalGridWidth, cellWidth)}px"
 								title="{labelCol
 									? String(row.row_data[labelCol.column_id] ?? '')
 									: ''} ({formatDate(String(startDate.toISOString().slice(0, 10)))} → {formatDate(
