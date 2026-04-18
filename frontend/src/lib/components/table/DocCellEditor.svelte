@@ -9,11 +9,13 @@
 		row,
 		column,
 		tableId,
+		workspaceId,
 		onClose
 	}: {
 		row: Row;
 		column: Column;
 		tableId: string;
+		workspaceId: string;
 		onClose: () => void;
 	} = $props();
 
@@ -88,6 +90,11 @@
 				<span class="text-xs text-white/60">· Row {row.row_number}</span>
 			</div>
 			<div class="flex items-center gap-2">
+				<a
+					data-testid="doc-cell-open-full-editor-link"
+					href="/{workspaceId}/{tableId}/{row.row_number}/doc"
+					class="rounded px-2 py-1 text-xs text-white/70 transition hover:bg-white/20 hover:text-white"
+				>Open full editor ↗</a>
 				<span class="text-xs {isDark.value ? 'text-white/40' : 'text-white/60'}">
 					{docSaving ? 'saving…' : 'Markdown'}
 				</span>

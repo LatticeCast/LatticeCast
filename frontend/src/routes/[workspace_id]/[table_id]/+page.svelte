@@ -1021,6 +1021,7 @@
 		row={docCellState.row}
 		column={docCellState.col}
 		tableId={$page.params.table_id!}
+		workspaceId={$page.params.workspace_id!}
 		onClose={() => (docCellState = null)}
 	/>
 {/if}

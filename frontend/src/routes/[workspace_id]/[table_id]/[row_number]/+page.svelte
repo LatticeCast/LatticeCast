@@ -193,12 +193,19 @@
 						Doc
 						{#if docSaving}<span class="ml-2 text-xs text-gray-400">saving…</span>{/if}
 					</span>
-					<button
-						onclick={() => (editingDoc = !editingDoc)}
-						class="rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
-					>
-						{editingDoc ? 'Preview' : 'Edit'}
-					</button>
+					<div class="flex items-center gap-2">
+						<a
+							data-testid="row-detail-edit-doc-link"
+							href="/{workspaceId}/{tableId}/{rowNumberParam}/doc"
+							class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-100"
+						>Edit doc ↗</a>
+						<button
+							onclick={() => (editingDoc = !editingDoc)}
+							class="rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
+						>
+							{editingDoc ? 'Preview' : 'Edit'}
+						</button>
+					</div>
 				</div>
 
 				{#if docLoading}

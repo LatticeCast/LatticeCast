@@ -194,13 +194,18 @@
 		<!-- Doc tab — split view -->
 		<div class="flex flex-1 flex-col overflow-hidden">
 			<div
-				class="flex items-center border-b px-4 py-2 {isDark.value
+				class="flex items-center justify-between border-b px-4 py-2 {isDark.value
 					? 'border-gray-700'
 					: 'border-gray-100'}"
 			>
 				<span class="text-xs {isDark.value ? 'text-gray-500' : 'text-gray-400'}"
 					>Markdown {docSaving ? '· saving…' : ''}</span
 				>
+				<a
+					data-testid="row-panel-doc-full-editor-link"
+					href="/{workspaceId}/{tableId}/{row.row_number}/doc"
+					class="text-xs text-blue-500 transition hover:underline"
+				>Edit full doc ↗</a>
 			</div>
 			{#if docLoading || !docLoaded}
 				<div
