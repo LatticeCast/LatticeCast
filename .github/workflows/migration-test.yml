@@ -3,7 +3,7 @@ name: Migration Test
 on:
   push:
     paths:
-      - "migration/**.sql"
+      - "migration/**"
 
   workflow_dispatch:
 
