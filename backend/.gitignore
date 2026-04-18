@@ -1,7 +1,6 @@
 tests/tokens.json
 openapi.json
 .python-version
-uv.lock
 supervisord.pid
 log/
 workspace/

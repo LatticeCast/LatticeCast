@@ -30,12 +30,16 @@ services:
     command: npm run dev
     tty: true
     stdin_open: true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
 
   backend:
     build:
       context: ./backend
     volumes:
       - ./backend/:/app/
+      - /app/.venv
     env_file:
       - .env
     environment:
