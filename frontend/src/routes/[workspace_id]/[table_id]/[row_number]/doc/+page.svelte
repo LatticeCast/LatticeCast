@@ -104,7 +104,7 @@
 				href="/{workspaceId}/{tableId}"
 				class="text-blue-500 hover:underline"
 				data-testid="doc-breadcrumb-table"
-			>{table?.name ?? tableId}</a>
+			>{tableId}</a>
 			<span class="text-gray-400">/</span>
 			<a
 				href="/{workspaceId}/{tableId}/{rowNumber}"
