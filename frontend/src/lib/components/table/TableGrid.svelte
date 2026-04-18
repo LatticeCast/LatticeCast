@@ -481,6 +481,7 @@
 						style="width: 40px;"
 					>
 						<button
+							data-testid="grid-add-column-btn"
 							onclick={onShowAddColumn}
 							class="flex h-full w-full items-center justify-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
 							title="Add column"
@@ -577,6 +578,7 @@
 								style="width: 48px;"
 							>
 								<button
+									data-testid="grid-expand-row-{row.row_number}-btn"
 									onclick={() => onOpenExpand(row)}
 									class="group relative flex h-full w-full items-center justify-center rounded px-1 py-0.5 text-xs text-gray-400 hover:bg-gray-200 hover:text-gray-600"
 									title="Expand row"
@@ -866,6 +868,7 @@
 							<!-- Actions (delete) -->
 							<td class="px-1 py-1 text-center" style="width: 40px;">
 								<button
+									data-testid="grid-delete-row-{row.row_number}-btn"
 									onclick={() => onDeleteRow(row.row_number)}
 									disabled={deletingRowId === row.row_number}
 									class="rounded p-1 text-gray-300 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
@@ -901,6 +904,7 @@
 						style="width: 48px;"
 					>
 						<button
+							data-testid="grid-add-row-btn"
 							onclick={onAddRow}
 							disabled={addingRow}
 							class="flex h-full w-full items-center justify-center rounded px-1 py-0.5 text-sm font-medium text-blue-500 hover:bg-blue-100 hover:text-blue-700 disabled:opacity-50"

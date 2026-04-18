@@ -44,6 +44,7 @@
 				<label class="mb-1 block text-sm font-medium text-gray-600" for="col-name">Name</label>
 				<input
 					id="col-name"
+					data-testid="add-column-name-input"
 					class="w-full rounded-xl border border-gray-200 px-4 py-2 text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
 					bind:value={newColName}
 					placeholder="Column name"
@@ -67,12 +68,14 @@
 			</div>
 			<div class="flex gap-3">
 				<button
+					data-testid="add-column-cancel-btn"
 					onclick={handleClose}
 					class="flex-1 rounded-2xl border border-gray-200 px-4 py-2 font-semibold text-gray-600 transition hover:bg-gray-50"
 				>
 					Cancel
 				</button>
 				<button
+					data-testid="add-column-submit-btn"
 					onclick={handleAdd}
 					disabled={!newColName.trim()}
 					class="flex-1 rounded-2xl bg-blue-600 px-4 py-2 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"

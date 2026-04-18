@@ -187,6 +187,7 @@
 			<div class="grid grid-cols-3 gap-3 p-4">
 				{#each VIEW_TYPES as vt (vt.type)}
 					<button
+						data-testid="view-type-{vt.type}-btn"
 						onclick={() => addView(vt.type, vt.label)}
 						class="flex flex-col items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-4 text-left transition hover:border-blue-300 hover:bg-blue-50"
 					>

@@ -68,6 +68,7 @@
 	<!-- Sort -->
 	<div class="relative">
 		<button
+			data-testid="toolbar-sort-btn"
 			onclick={(e) => {
 				e.stopPropagation();
 				showSortMenu = !showSortMenu;
@@ -152,6 +153,7 @@
 	<!-- Hide Fields -->
 	<div class="relative">
 		<button
+			data-testid="toolbar-hide-fields-btn"
 			onclick={(e) => {
 				e.stopPropagation();
 				showHideMenu = !showHideMenu;
@@ -209,6 +211,7 @@
 
 	<!-- Filter -->
 	<button
+		data-testid="toolbar-filter-btn"
 		onclick={() => onShowFilterPanelChange(!showFilterPanel)}
 		class="{btnBase} {filterConditions.length > 0 ? btnActive : btnInactive}"
 	>
@@ -230,7 +233,7 @@
 	</button>
 
 	<!-- Export Template -->
-	<button onclick={onExportTemplate} class="{btnBase} {btnInactive}">
+	<button data-testid="toolbar-export-template-btn" onclick={onExportTemplate} class="{btnBase} {btnInactive}">
 		<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 			<path
 				stroke-linecap="round"
@@ -243,7 +246,7 @@
 	</button>
 
 	<!-- Import Template -->
-	<button onclick={onShowImportTemplate} class="{btnBase} {btnInactive}">
+	<button data-testid="toolbar-import-template-btn" onclick={onShowImportTemplate} class="{btnBase} {btnInactive}">
 		<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 			<path
 				stroke-linecap="round"
@@ -258,6 +261,7 @@
 	<!-- Export Data -->
 	<div class="relative">
 		<button
+			data-testid="toolbar-export-btn"
 			onclick={(e) => {
 				e.stopPropagation();
 				showExportMenu = !showExportMenu;
@@ -335,6 +339,7 @@
 			/>
 		</svg>
 		<input
+			data-testid="toolbar-search-input"
 			type="text"
 			placeholder="Search..."
 			value={searchQuery}

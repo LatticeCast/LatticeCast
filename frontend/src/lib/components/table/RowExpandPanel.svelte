@@ -146,6 +146,7 @@
 				aria-label="Open full page">Open full page</a
 			>
 			<button
+				data-testid="row-panel-close-btn"
 				onclick={onClose}
 				class="rounded-lg p-1.5 text-white/70 transition hover:bg-white/20 hover:text-white"
 				aria-label="Close panel"
@@ -165,6 +166,7 @@
 	<!-- Tabs -->
 	<div class="flex border-b {isDark.value ? 'border-gray-700' : 'border-gray-200'}">
 		<button
+			data-testid="row-panel-tab-fields"
 			class="px-5 py-2.5 text-sm font-medium transition {activeTab === 'fields'
 				? 'border-b-2 border-blue-600 text-blue-600'
 				: isDark.value
@@ -175,6 +177,7 @@
 			Fields
 		</button>
 		<button
+			data-testid="row-panel-tab-doc"
 			class="px-5 py-2.5 text-sm font-medium transition {activeTab === 'doc'
 				? 'border-b-2 border-blue-600 text-blue-600'
 				: isDark.value
