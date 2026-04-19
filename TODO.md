@@ -1,5 +1,9 @@
 # TODO
 
+## Token saving
+use anthropic prompt caching.
+claude-bot need design caching prompt
+
 ## Performance Tuning
 
 - [ ] Evaluate `gin_pending_list_limit` for GIN indexes on JSONB columns (select/tags)
