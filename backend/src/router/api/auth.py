@@ -8,7 +8,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +16,8 @@ from config.settings import settings
 from core.db import get_login_session, get_session
 from middleware.auth import get_current_user
 from models.user import Gdpr, User
+from models.user import UserInfo as UserInfoModel
+from repository.user import UserRepository, resolve_user_by_email
 
 router = APIRouter(prefix="/login", tags=["auth"])
 
@@ -56,11 +58,18 @@ class TokenRequest(BaseModel):
     code_verifier: str = Field(..., min_length=43, max_length=128, description="PKCE code verifier (43-128 chars)")
 
 
+class PasswordLoginRequest(BaseModel):
+    """Request body for password login (sole FE-visible flow)."""
+
+    user_name: str = Field(..., min_length=1, max_length=64, description="User handle or email")
+    password: str = Field(..., description="User password (ignored in AUTH_REQUIRED=false mode)")
+
+
 class UserInfo(BaseModel):
     """User info from OAuth provider"""
 
     sub: str = Field(..., description="User ID from provider")
-    email: EmailStr = Field(..., description="User email address")
+    email: str = Field(..., description="User email or handle (OAuth provides a real address; password login may return the handle)")
     name: str | None = Field(default=None, description="Full name")
     picture: str | None = Field(default=None, description="Profile picture URL")
 
@@ -93,6 +102,58 @@ class MeResponse(BaseModel):
 # --------------------------------------------------
 
 
+@router.post(
+    "/password",
+    response_model=TokenResponse,
+    responses={
+        404: {"model": HTTPErrorResponse, "description": "User not registered"},
+        501: {"model": HTTPErrorResponse, "description": "Password login disabled — use OAuth"},
+    },
+)
+async def password_login(
+    request: PasswordLoginRequest,
+    session: AsyncSession = Depends(get_session),
+    login_session: AsyncSession = Depends(get_login_session),
+) -> TokenResponse:
+    """Username+password login. In AUTH_REQUIRED=false mode, the password is
+    ignored and the resolved user_id UUID is returned as the access token.
+    In AUTH_REQUIRED=true mode, returns 501 — clients must use OAuth.
+    """
+    if settings.auth_required:
+        raise HTTPException(
+            status_code=501,
+            detail="Password login disabled in AUTH_REQUIRED=true mode — use OAuth",
+        )
+
+    ident = request.user_name.strip()
+    user = await UserRepository(session).resolve_user(ident)
+    if not user:
+        user = await resolve_user_by_email(ident, login_session)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not registered")
+
+    info_result = await session.execute(select(UserInfoModel).where(UserInfoModel.user_id == user.user_id))
+    info = info_result.scalar_one_or_none()
+    gdpr_result = await login_session.execute(select(Gdpr).where(Gdpr.user_id == user.user_id))
+    gdpr = gdpr_result.scalar_one_or_none()
+
+    email = gdpr.email if gdpr else ident
+    name = (gdpr.legal_name if gdpr and gdpr.legal_name else None) or (info.user_name if info else ident)
+
+    return TokenResponse(
+        access_token=str(user.user_id),
+        refresh_token=None,
+        id_token=None,
+        expires_in=None,
+        userinfo=UserInfo(
+            sub=str(user.user_id),
+            email=email,
+            name=name,
+            picture=None,
+        ),
+    )
+
+
 @router.get(
     "/me",
     response_model=MeResponse,
@@ -117,8 +178,7 @@ async def me(
     provider = token_payload.get("_provider", "authentik")
 
     # public handle/display from app session
-    from models.user import UserInfo
-    result = await session.execute(select(UserInfo).where(UserInfo.user_id == user.user_id))
+    result = await session.execute(select(UserInfoModel).where(UserInfoModel.user_id == user.user_id))
     info = result.scalar_one_or_none()
 
     # PII from login session
