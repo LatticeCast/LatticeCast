@@ -4,21 +4,6 @@
 import { BACKEND_URL } from './config';
 import type { AuthProvider } from '$lib/types/auth';
 
-export interface AppConfig {
-	auth_required: boolean;
-}
-
-/**
- * Fetch public app config (no auth required).
- */
-export async function fetchAppConfig(): Promise<AppConfig> {
-	const response = await fetch(`${BACKEND_URL}/api/v1/login/config`);
-	if (!response.ok) {
-		throw new Error('Failed to fetch app config');
-	}
-	return response.json();
-}
-
 export interface TokenResponse {
 	access_token: string;
 	refresh_token?: string;
@@ -41,6 +26,25 @@ export interface MeResponse {
 	provider: 'google' | 'authentik' | 'none';
 	role?: string;
 	user_name?: string;
+}
+
+/**
+ * Username + password login. In AUTH_REQUIRED=false mode the backend ignores
+ * the password and returns the resolved user_id UUID as access_token.
+ */
+export async function login(user_name: string, password: string): Promise<TokenResponse> {
+	const response = await fetch(`${BACKEND_URL}/api/v1/login/password`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ user_name, password })
+	});
+
+	if (!response.ok) {
+		const error = await response.json().catch(() => ({ detail: 'Login failed' }));
+		throw new Error(error.detail || 'Login failed');
+	}
+
+	return response.json();
 }
 
 /**

@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.22 — 2026-04-23
+- **FE auth simplified — one path, no build-time branch.** Dropped `VITE_AUTH_REQUIRED` from `vite.config.ts`; FE no longer reads `auth_required`. Login page always shows `user_name + password` inputs; OAuth (Authentik, Google) buttons kept as alternatives on the same card (code retained, not gated).
+- **New BE endpoint `POST /api/v1/login/password`** — accepts `{user_name, password}`. In `AUTH_REQUIRED=false` mode: ignores password, resolves user by user_name or email, returns the user_id UUID as `access_token`. In `AUTH_REQUIRED=true` mode: returns 501 (clients should use OAuth). Relaxed `UserInfo.email` in auth responses from `EmailStr` to `str` to accommodate non-email handles.
+- **Dead code removed** — `AppConfig` / `fetchAppConfig` in `frontend/src/lib/backend/auth.ts` (no callers).
+- **Svelte logic split per skill** — extracted login orchestration from `login/+page.svelte`:
+  - `frontend/src/lib/auth/validation.ts` — `USER_NAME_RE`, `validateUserName()` (pure TS, testable).
+  - `frontend/src/lib/auth/login.svelte.ts` — `loginState` runes + `submit()` orchestration.
+  - `.svelte` file now UI-only with `data-testid` on every interactive element (`login-userid`, `login-password`, `login-start`, `login-error`, `login-authentik`, `login-google`).
+
 ## v0.21 — 2026-04-15
 - **GDPR-aware user schema split** — three tables with role-gated access:
   - `auth.users` (user_id UUID PK, role) — identity core
