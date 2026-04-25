@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.db import get_login_session, get_session
+from core.db import get_login_session, get_session  # login_session kept for create/delete only
 from middleware.auth import require_admin
 from models.user import Gdpr, User, UserInfo, UserResponse
 from repository.user import GdprRepository, bootstrap_user
@@ -63,11 +63,10 @@ class UserListResponse(BaseModel):
 async def _build_response(
     user: User,
     app_session: AsyncSession,
-    login_session: AsyncSession,
 ) -> UserResponse:
     info_res = await app_session.execute(select(UserInfo).where(UserInfo.user_id == user.user_id))
     info = info_res.scalar_one_or_none()
-    gdpr = await GdprRepository(login_session).get_by_user_id(user.user_id)
+    gdpr = await GdprRepository(app_session).get_by_user_id(user.user_id)
     return UserResponse(
         user_id=user.user_id,
         email=gdpr.email if gdpr else "",
@@ -108,7 +107,7 @@ async def create_user(
         legal_name=data.legal_name,
         user_name=data.user_name,
     )
-    return await _build_response(user, session, login_session)
+    return await _build_response(user, session)
 
 
 @router.get(
@@ -119,16 +118,15 @@ async def list_users(
     offset: int = Query(default=0, ge=0, description="Number of records to skip"),
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of records to return"),
     session: AsyncSession = Depends(get_session),
-    login_session: AsyncSession = Depends(get_login_session),
 ) -> UserListResponse:
     """List all users (paginated)"""
-    count_result = await login_session.execute(select(func.count()).select_from(User))
+    count_result = await session.execute(select(func.count()).select_from(User))
     total = count_result.scalar() or 0
 
-    result = await login_session.execute(select(User).offset(offset).limit(limit))
+    result = await session.execute(select(User).offset(offset).limit(limit))
     users = result.scalars().all()
 
-    out = [await _build_response(u, session, login_session) for u in users]
+    out = [await _build_response(u, session) for u in users]
     return UserListResponse(
         users=out,
         total=total,
@@ -144,16 +142,15 @@ async def list_users(
 async def get_user(
     user_email: str,
     session: AsyncSession = Depends(get_session),
-    login_session: AsyncSession = Depends(get_login_session),
 ):
     """Get user by email"""
-    gdpr = await GdprRepository(login_session).get_by_email(user_email)
+    gdpr = await GdprRepository(session).get_by_email(user_email)
     if not gdpr:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    user = (await login_session.execute(select(User).where(User.user_id == gdpr.user_id))).scalar_one_or_none()
+    user = (await session.execute(select(User).where(User.user_id == gdpr.user_id))).scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return await _build_response(user, session, login_session)
+    return await _build_response(user, session)
 
 
 @router.put(
@@ -164,22 +161,21 @@ async def update_user(
     user_email: str,
     data: UserUpdate,
     session: AsyncSession = Depends(get_session),
-    login_session: AsyncSession = Depends(get_login_session),
 ):
     """Update user role by email"""
-    gdpr = await GdprRepository(login_session).get_by_email(user_email)
+    gdpr = await GdprRepository(session).get_by_email(user_email)
     if not gdpr:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    user = (await login_session.execute(select(User).where(User.user_id == gdpr.user_id))).scalar_one_or_none()
+    user = (await session.execute(select(User).where(User.user_id == gdpr.user_id))).scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     if data.role is not None:
         user.role = data.role
-        login_session.add(user)
-        await login_session.commit()
-        await login_session.refresh(user)
-    return await _build_response(user, session, login_session)
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+    return await _build_response(user, session)
 
 
 @router.delete(

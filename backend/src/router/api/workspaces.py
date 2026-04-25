@@ -7,7 +7,6 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.db import get_login_session
 from middleware.auth import get_current_user, get_rls_session
 from models.user import User
 from models.workspace import MemberCreate, MemberResponse, Workspace, WorkspaceCreate, WorkspaceMember, WorkspaceResponse
@@ -116,13 +115,12 @@ async def add_member(
     data: MemberCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
-    login_session: AsyncSession = Depends(get_login_session),
 ):
     """Add a member to a workspace (owner only)"""
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, session)
-    new_member = await _resolve_member_user(data, session, login_session)
+    new_member = await _resolve_member_user(data, session, session)
     if await repo.is_member(workspace.workspace_id, new_member.user_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User is already a member")
     return await repo.add_member(workspace_id=workspace.workspace_id, user_id=new_member.user_id, role=data.role)

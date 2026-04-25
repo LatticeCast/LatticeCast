@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
-from core.db import get_login_session, get_session
+from core.db import get_session
 from middleware.token import verify_bearer_token
 from models.user import User
 from repository.user import UserRepository, resolve_user_by_email
@@ -18,13 +18,12 @@ from util import logger
 async def get_current_user(
     token_payload: dict = Depends(verify_bearer_token),
     session: AsyncSession = Depends(get_session),
-    login_session: AsyncSession = Depends(get_login_session),
 ) -> User:
     """
     Middleware: Verify token and check user exists in database.
 
     - `user_id` token (UUID or user_name) → resolved via app session.
-    - `email` token → resolved via auth.gdpr (login session required).
+    - `email` token → resolved via auth.gdpr (app session, SELECT granted in V32).
 
     Auto-creation in AUTH_REQUIRED=false mode is disabled: it races across
     multi-worker setups. Admins must bootstrap users via the admin API.
@@ -43,7 +42,7 @@ async def get_current_user(
             )
         logger.debug(f"Authenticated user: {user.user_id} via user_id token (role={user.role})")
     elif email:
-        user = await resolve_user_by_email(email, login_session)
+        user = await resolve_user_by_email(email, session)
         if not user:
             logger.warn(f"User not registered: {email}")
             raise HTTPException(

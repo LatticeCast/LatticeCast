@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
-from core.db import get_login_session, get_session
+from core.db import get_session
 from middleware.auth import get_current_user
 from models.user import Gdpr, User
 from models.user import UserInfo as UserInfoModel
@@ -113,7 +113,6 @@ class MeResponse(BaseModel):
 async def password_login(
     request: PasswordLoginRequest,
     session: AsyncSession = Depends(get_session),
-    login_session: AsyncSession = Depends(get_login_session),
 ) -> TokenResponse:
     """Username+password login. In AUTH_REQUIRED=false mode, the password is
     ignored and the resolved user_id UUID is returned as the access token.
@@ -128,13 +127,13 @@ async def password_login(
     ident = request.user_name.strip()
     user = await UserRepository(session).resolve_user(ident)
     if not user:
-        user = await resolve_user_by_email(ident, login_session)
+        user = await resolve_user_by_email(ident, session)
     if not user:
         raise HTTPException(status_code=404, detail="User not registered")
 
     info_result = await session.execute(select(UserInfoModel).where(UserInfoModel.user_id == user.user_id))
     info = info_result.scalar_one_or_none()
-    gdpr_result = await login_session.execute(select(Gdpr).where(Gdpr.user_id == user.user_id))
+    gdpr_result = await session.execute(select(Gdpr).where(Gdpr.user_id == user.user_id))
     gdpr = gdpr_result.scalar_one_or_none()
 
     email = gdpr.email if gdpr else ident
@@ -165,13 +164,12 @@ async def password_login(
 async def me(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-    login_session: AsyncSession = Depends(get_login_session),
 ) -> MeResponse:
     """
     Get current user information.
     Requires valid Bearer token and user must be registered in database.
 
-    - email + legal_name come from auth.gdpr (login session)
+    - email + legal_name come from auth.gdpr (app session, SELECT granted in V32)
     - user_name comes from public.user_info (app session)
     """
     token_payload = getattr(user, "_token_payload", {})
@@ -181,8 +179,8 @@ async def me(
     result = await session.execute(select(UserInfoModel).where(UserInfoModel.user_id == user.user_id))
     info = result.scalar_one_or_none()
 
-    # PII from login session
-    gdpr_result = await login_session.execute(select(Gdpr).where(Gdpr.user_id == user.user_id))
+    # PII from app session (app has SELECT on auth.gdpr after V32)
+    gdpr_result = await session.execute(select(Gdpr).where(Gdpr.user_id == user.user_id))
     gdpr = gdpr_result.scalar_one_or_none()
 
     return MeResponse(
