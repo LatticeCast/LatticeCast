@@ -7,7 +7,6 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from config.settings import settings
 from core.db import get_session
 from middleware.token import verify_bearer_token
 from models.user import User
@@ -91,9 +90,7 @@ async def get_rls_session(
     request starts clean even if this one aborted.
     """
     uid = str(user.user_id)
-    await session.execute(
-        text("SELECT set_config('app.current_user_id', :uid, false)").bindparams(uid=uid)
-    )
+    await session.execute(text("SELECT set_config('app.current_user_id', :uid, false)").bindparams(uid=uid))
     yield session
 
 

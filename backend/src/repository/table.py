@@ -156,16 +156,14 @@ class TableRepository:
         if col_type not in BTREE_TYPES and col_type not in GIN_TYPES:
             return
         await self.session.execute(
-            text(
-                "SELECT create_row_data_index(:idx, :tid, :cid, :ct)"
-            ).bindparams(idx=idx_name, tid=str(table_id), cid=column_id, ct=col_type)
+            text("SELECT create_row_data_index(:idx, :tid, :cid, :ct)").bindparams(
+                idx=idx_name, tid=str(table_id), cid=column_id, ct=col_type
+            )
         )
         await self.session.commit()
 
     async def drop_column_index(self, table_id: str, column_id: str) -> None:
         """Drop the PG index via SECURITY DEFINER function."""
         idx_name = self._index_name(table_id, column_id)
-        await self.session.execute(
-            text("SELECT drop_row_data_index(:idx)").bindparams(idx=idx_name)
-        )
+        await self.session.execute(text("SELECT drop_row_data_index(:idx)").bindparams(idx=idx_name))
         await self.session.commit()

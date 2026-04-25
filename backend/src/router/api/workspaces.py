@@ -9,7 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from middleware.auth import get_current_user, get_rls_session
 from models.user import User
-from models.workspace import MemberCreate, MemberResponse, Workspace, WorkspaceCreate, WorkspaceMember, WorkspaceResponse
+from models.workspace import (
+    MemberCreate,
+    MemberResponse,
+    Workspace,
+    WorkspaceCreate,
+    WorkspaceMember,
+    WorkspaceResponse,
+)
 from repository.user import resolve_user_by_email
 from repository.workspace import WorkspaceRepository
 
@@ -23,15 +30,16 @@ async def _resolve_member_user(
     app has SELECT on auth.gdpr after V32, so email lookups no longer need login_session.
     """
     from models.user import UserInfo
+
     if data.user_id:
         user = await session.get(User, data.user_id)
         if user:
             return user
     elif data.user_name:
         result = await session.execute(
-            select(User).join(UserInfo, User.user_id == UserInfo.user_id).where(
-                func.lower(UserInfo.user_name) == data.user_name.lower()
-            )
+            select(User)
+            .join(UserInfo, User.user_id == UserInfo.user_id)
+            .where(func.lower(UserInfo.user_name) == data.user_name.lower())
         )
         user = result.scalar_one_or_none()
         if user:
@@ -40,7 +48,9 @@ async def _resolve_member_user(
         user = await resolve_user_by_email(data.user_email, session)
         if user:
             return user
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found — provide user_id, user_name, or user_email")
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND, detail="User not found — provide user_id, user_name, or user_email"
+    )
 
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])

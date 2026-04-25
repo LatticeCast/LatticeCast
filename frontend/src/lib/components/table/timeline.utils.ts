@@ -29,8 +29,7 @@ export function generateTimeColumns(start: Date, end: Date, gran: Granularity): 
 }
 
 export function getWeekNumber(d: Date): number {
-	const dayOfWeek =
-		new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).getUTCDay() || 7;
+	const dayOfWeek = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).getUTCDay() || 7;
 	const thursday = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate() + 4 - dayOfWeek));
 	const yearStart = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1));
 	return Math.ceil(((thursday.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);

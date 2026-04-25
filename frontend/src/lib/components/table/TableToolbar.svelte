@@ -233,7 +233,11 @@
 	</button>
 
 	<!-- Export Template -->
-	<button data-testid="toolbar-export-template-btn" onclick={onExportTemplate} class="{btnBase} {btnInactive}">
+	<button
+		data-testid="toolbar-export-template-btn"
+		onclick={onExportTemplate}
+		class="{btnBase} {btnInactive}"
+	>
 		<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 			<path
 				stroke-linecap="round"
@@ -246,7 +250,11 @@
 	</button>
 
 	<!-- Import Template -->
-	<button data-testid="toolbar-import-template-btn" onclick={onShowImportTemplate} class="{btnBase} {btnInactive}">
+	<button
+		data-testid="toolbar-import-template-btn"
+		onclick={onShowImportTemplate}
+		class="{btnBase} {btnInactive}"
+	>
 		<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 			<path
 				stroke-linecap="round"

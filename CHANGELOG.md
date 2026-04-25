@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.23 — 2026-04-25
+- **Role rebalance: `login_mgr` is now register/delete-only** — all other auth lookups go through the `app` role. Affected routes: `get_current_user`, `POST /password`, `GET /me`, `add_member`, `list_users`, `get_user`, `update_user` all dropped `login_session`. `create_user`, `delete_user`, OAuth `/{provider}/token` kept it. Rationale: once logged in, every API call runs with `app` permissions — `login_mgr` is only for PII-writing boundaries (register/delete).
+- **Migration V32** — `GRANT SELECT ON auth.gdpr TO app` + `GRANT UPDATE (role) ON auth.users TO app` + default-privileges for future auth tables. Enables app to resolve users by email and admins to change user roles without `login_mgr`.
+- **Browser test script** — `browser/` entrypoint now accepts an optional URL argument for screenshots (easier ad-hoc snapshots without editing scripts).
+- **Skills — lint enforcement before commit**:
+  - `developing-programming` v0.9.0: all lint runs inside Docker containers (FE `docker compose exec frontend npm run lint`, BE `uv run ruff`, PG `migration --test-only`). Local host has no Node/Python/sqlfluff.
+  - `developing-svelte` v0.5.0: FE dev rule — `no-unused-vars` MUST be clean, `{@html}` must be sanitized, `// eslint-disable` is forbidden.
+
 ## v0.22 — 2026-04-23
 - **FE auth simplified — one path, no build-time branch.** Dropped `VITE_AUTH_REQUIRED` from `vite.config.ts`; FE no longer reads `auth_required`. Login page always shows `user_name + password` inputs; OAuth (Authentik, Google) buttons kept as alternatives on the same card (code retained, not gated).
 - **New BE endpoint `POST /api/v1/login/password`** — accepts `{user_name, password}`. In `AUTH_REQUIRED=false` mode: ignores password, resolves user by user_name or email, returns the user_id UUID as `access_token`. In `AUTH_REQUIRED=true` mode: returns 501 (clients should use OAuth). Relaxed `UserInfo.email` in auth responses from `EmailStr` to `str` to accommodate non-email handles.

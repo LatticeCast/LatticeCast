@@ -194,8 +194,7 @@ export function sortRows(
 	if (!sortConfig) return rowList;
 	const { colId, dir } = sortConfig;
 	const sortCol = colList.find((c) => c.column_id === colId);
-	const choiceOrder =
-		sortCol?.type === 'select' ? getChoices(sortCol).map((c) => c.value) : null;
+	const choiceOrder = sortCol?.type === 'select' ? getChoices(sortCol).map((c) => c.value) : null;
 	return [...rowList].sort((a, b) => {
 		const av = a.row_data[colId];
 		const bv = b.row_data[colId];
@@ -215,11 +214,7 @@ export function sortRows(
 	});
 }
 
-export function getGroupKey(
-	row: Row,
-	col: Column,
-	granularity: 'month' | 'day' = 'month'
-): string {
+export function getGroupKey(row: Row, col: Column, granularity: 'month' | 'day' = 'month'): string {
 	const val = row.row_data[col.column_id];
 	if (val === null || val === undefined || val === '') return '(empty)';
 	if (col.type === 'date') {
@@ -299,7 +294,12 @@ export function buildSortedColumns(
 export function buildTemplateJSON(colList: Column[]): string {
 	const template = [...colList]
 		.sort((a, b) => a.position - b.position)
-		.map((col) => ({ name: col.name, type: col.type, options: col.options, position: col.position }));
+		.map((col) => ({
+			name: col.name,
+			type: col.type,
+			options: col.options,
+			position: col.position
+		}));
 	return JSON.stringify(template, null, 2);
 }
 

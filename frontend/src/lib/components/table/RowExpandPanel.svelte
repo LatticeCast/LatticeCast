@@ -204,8 +204,8 @@
 				<a
 					data-testid="row-panel-doc-full-editor-link"
 					href="/{workspaceId}/{tableId}/{row.row_number}/doc"
-					class="text-xs text-blue-500 transition hover:underline"
-				>Edit full doc ↗</a>
+					class="text-xs text-blue-500 transition hover:underline">Edit full doc ↗</a
+				>
 			</div>
 			{#if docLoading || !docLoaded}
 				<div

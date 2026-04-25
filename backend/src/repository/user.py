@@ -82,9 +82,7 @@ class GdprRepository:
         return result.scalar_one_or_none()
 
     async def get_by_email(self, email: str) -> Gdpr | None:
-        result = await self.session.execute(
-            select(Gdpr).where(func.lower(Gdpr.email) == email.lower())
-        )
+        result = await self.session.execute(select(Gdpr).where(func.lower(Gdpr.email) == email.lower()))
         return result.scalar_one_or_none()
 
     async def upsert(self, user_id: UUID, email: str, legal_name: str = "") -> Gdpr:
@@ -104,9 +102,7 @@ class GdprRepository:
 async def resolve_user_by_email(email: str, login_session: AsyncSession) -> User | None:
     """Look up a User via auth.gdpr. REQUIRES a login session."""
     result = await login_session.execute(
-        select(User)
-        .join(Gdpr, User.user_id == Gdpr.user_id)
-        .where(func.lower(Gdpr.email) == email.lower())
+        select(User).join(Gdpr, User.user_id == Gdpr.user_id).where(func.lower(Gdpr.email) == email.lower())
     )
     return result.scalar_one_or_none()
 
@@ -137,9 +133,7 @@ async def bootstrap_user(
     workspace = Workspace(workspace_name=email)
     app_session.add(workspace)
     await app_session.flush()
-    member = WorkspaceMember(
-        workspace_id=workspace.workspace_id, user_id=user.user_id, role="owner"
-    )
+    member = WorkspaceMember(workspace_id=workspace.workspace_id, user_id=user.user_id, role="owner")
     app_session.add(member)
     await app_session.commit()
     return user

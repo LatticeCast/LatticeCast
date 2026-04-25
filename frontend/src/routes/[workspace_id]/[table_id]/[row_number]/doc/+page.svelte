@@ -23,15 +23,17 @@
 
 	const docPreview = $derived(marked(docContent) as string);
 
-	const rowTitle = $derived((() => {
-		if (!row || !table) return String(rowNumber);
-		const keyCol = table.columns.find((c) => c.name === 'Key');
-		const titleCol = table.columns.find((c) => c.name === 'Title');
-		const key = keyCol ? ((row.row_data[keyCol.column_id] as string) ?? '') : '';
-		const title = titleCol ? ((row.row_data[titleCol.column_id] as string) ?? '') : '';
-		if (key && title) return `${key}: ${title}`;
-		return title || key || String(rowNumber);
-	})());
+	const rowTitle = $derived(
+		(() => {
+			if (!row || !table) return String(rowNumber);
+			const keyCol = table.columns.find((c) => c.name === 'Key');
+			const titleCol = table.columns.find((c) => c.name === 'Title');
+			const key = keyCol ? ((row.row_data[keyCol.column_id] as string) ?? '') : '';
+			const title = titleCol ? ((row.row_data[titleCol.column_id] as string) ?? '') : '';
+			if (key && title) return `${key}: ${title}`;
+			return title || key || String(rowNumber);
+		})()
+	);
 
 	onMount(async () => {
 		const auth = get(authStore);
@@ -40,10 +42,7 @@
 			return;
 		}
 		try {
-			const [t, rows] = await Promise.all([
-				fetchTable(tableId),
-				fetchRows(tableId, 0, 200)
-			]);
+			const [t, rows] = await Promise.all([fetchTable(tableId), fetchRows(tableId, 0, 200)]);
 			table = t;
 			row = rows.find((r) => r.row_number === rowNumber) ?? null;
 		} catch (e) {
@@ -85,7 +84,11 @@
 	<title>{rowTitle} · Doc — LatticeCast</title>
 </svelte:head>
 
-<div class="flex h-screen flex-col {isDark.value ? 'bg-gray-900 text-gray-100' : 'bg-white text-gray-900'}">
+<div
+	class="flex h-screen flex-col {isDark.value
+		? 'bg-gray-900 text-gray-100'
+		: 'bg-white text-gray-900'}"
+>
 	<!-- Top bar -->
 	<div
 		class="flex shrink-0 items-center justify-between border-b px-5 py-3 {isDark.value
@@ -93,32 +96,39 @@
 			: 'border-gray-200 bg-gray-50'}"
 	>
 		<!-- Breadcrumb -->
-		<nav class="flex items-center gap-1 text-sm" aria-label="Breadcrumb" data-testid="doc-breadcrumb">
+		<nav
+			class="flex items-center gap-1 text-sm"
+			aria-label="Breadcrumb"
+			data-testid="doc-breadcrumb"
+		>
 			<a
 				href="/{workspaceId}"
 				class="text-blue-500 hover:underline"
-				data-testid="doc-breadcrumb-workspace"
-			>{workspaceId}</a>
+				data-testid="doc-breadcrumb-workspace">{workspaceId}</a
+			>
 			<span class="text-gray-400">/</span>
 			<a
 				href="/{workspaceId}/{tableId}"
 				class="text-blue-500 hover:underline"
-				data-testid="doc-breadcrumb-table"
-			>{tableId}</a>
+				data-testid="doc-breadcrumb-table">{tableId}</a
+			>
 			<span class="text-gray-400">/</span>
 			<a
 				href="/{workspaceId}/{tableId}/{rowNumber}"
 				class="text-blue-500 hover:underline"
-				data-testid="doc-breadcrumb-row"
-			>{rowTitle}</a>
+				data-testid="doc-breadcrumb-row">{rowTitle}</a
+			>
 			<span class="text-gray-400">/</span>
-			<span class="{isDark.value ? 'text-gray-300' : 'text-gray-600'}">Doc</span>
+			<span class={isDark.value ? 'text-gray-300' : 'text-gray-600'}>Doc</span>
 		</nav>
 
 		<!-- Actions -->
 		<div class="flex items-center gap-3">
 			{#if unsaved}
-				<span class="text-xs {isDark.value ? 'text-yellow-400' : 'text-yellow-600'}" data-testid="doc-unsaved-indicator">
+				<span
+					class="text-xs {isDark.value ? 'text-yellow-400' : 'text-yellow-600'}"
+					data-testid="doc-unsaved-indicator"
+				>
 					Unsaved changes
 				</span>
 			{/if}
@@ -138,17 +148,25 @@
 
 	<!-- Body -->
 	{#if loading}
-		<div class="flex flex-1 items-center justify-center text-sm text-gray-400" data-testid="doc-loading">
+		<div
+			class="flex flex-1 items-center justify-center text-sm text-gray-400"
+			data-testid="doc-loading"
+		>
 			Loading…
 		</div>
 	{:else if error}
-		<div class="flex flex-1 items-center justify-center text-sm text-red-500" data-testid="doc-error">
+		<div
+			class="flex flex-1 items-center justify-center text-sm text-red-500"
+			data-testid="doc-error"
+		>
 			{error}
 		</div>
 	{:else}
 		<!-- Split pane -->
 		<div
-			class="flex flex-1 divide-x overflow-hidden {isDark.value ? 'divide-gray-700' : 'divide-gray-200'}"
+			class="flex flex-1 divide-x overflow-hidden {isDark.value
+				? 'divide-gray-700'
+				: 'divide-gray-200'}"
 			data-testid="doc-split-pane"
 		>
 			<!-- Editor pane -->
@@ -167,8 +185,8 @@
 			<div
 				data-testid="doc-preview-pane"
 				class="prose prose-sm max-w-none flex-1 overflow-y-auto px-6 py-5 text-sm {isDark.value
-					? 'prose-invert text-gray-200 bg-gray-900'
-					: 'text-gray-800 bg-white'}"
+					? 'bg-gray-900 text-gray-200 prose-invert'
+					: 'bg-white text-gray-800'}"
 			>
 				{#if docContent}
 					{@html docPreview}

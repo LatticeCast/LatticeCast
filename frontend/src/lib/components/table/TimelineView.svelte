@@ -445,7 +445,19 @@
 									colorByCol,
 									colorByColId
 								)} {dragState?.rowId === row.row_number ? 'opacity-80' : ''}"
-								style="left: {getBarLeft(startDate, viewportStart, viewportEnd, totalGridWidth)}px; width: {getBarWidth(startDate, endDate, viewportStart, viewportEnd, totalGridWidth, cellWidth)}px"
+								style="left: {getBarLeft(
+									startDate,
+									viewportStart,
+									viewportEnd,
+									totalGridWidth
+								)}px; width: {getBarWidth(
+									startDate,
+									endDate,
+									viewportStart,
+									viewportEnd,
+									totalGridWidth,
+									cellWidth
+								)}px"
 								title="{labelCol
 									? String(row.row_data[labelCol.column_id] ?? '')
 									: ''} ({formatDate(String(startDate.toISOString().slice(0, 10)))} → {formatDate(

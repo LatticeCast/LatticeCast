@@ -12,7 +12,9 @@ class Table(SQLModel, table=True):
 
     __tablename__ = "tables"
 
-    workspace_id: UUID = Field(primary_key=True, foreign_key="workspaces.workspace_id", description="Workspace UUID (composite PK)")
+    workspace_id: UUID = Field(
+        primary_key=True, foreign_key="workspaces.workspace_id", description="Workspace UUID (composite PK)"
+    )
     table_id: str = Field(primary_key=True, description="Table name (composite PK with workspace_id)")
     columns: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="Column definitions")
     views: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON, description="View configurations")
@@ -24,9 +26,7 @@ class TableCreate(SQLModel):
     """Schema for creating a table"""
 
     table_id: str = Field(..., description="Table name (becomes the PK)")
-    workspace_id: str | None = Field(
-        default=None, description="Target workspace UUID or workspace_name"
-    )
+    workspace_id: str | None = Field(default=None, description="Target workspace UUID or workspace_name")
 
 
 class TableResponse(SQLModel):

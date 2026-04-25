@@ -93,7 +93,9 @@ async def _inject_hierarchy(content: str, table, row: Row, session: AsyncSession
     # Inject children links — filter by row_number (integer) stored in parent column
     if parent_col_id and re.search(r"<!--\s*Links to child", content):
         try:
-            children = await repo.filter_by_jsonb(table.workspace_id, table.table_id, {parent_col_id: str(row.row_number)})
+            children = await repo.filter_by_jsonb(
+                table.workspace_id, table.table_id, {parent_col_id: str(row.row_number)}
+            )
             if children:
                 lines = []
                 for child in children:

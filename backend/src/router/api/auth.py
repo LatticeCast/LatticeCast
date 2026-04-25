@@ -69,7 +69,9 @@ class UserInfo(BaseModel):
     """User info from OAuth provider"""
 
     sub: str = Field(..., description="User ID from provider")
-    email: str = Field(..., description="User email or handle (OAuth provides a real address; password login may return the handle)")
+    email: str = Field(
+        ..., description="User email or handle (OAuth provides a real address; password login may return the handle)"
+    )
     name: str | None = Field(default=None, description="Full name")
     picture: str | None = Field(default=None, description="Profile picture URL")
 
@@ -187,8 +189,7 @@ async def me(
         user_id=user.user_id,
         sub=token_payload.get("sub"),
         email=gdpr.email if gdpr else token_payload.get("email", ""),
-        name=(gdpr.legal_name if gdpr and gdpr.legal_name else None)
-        or token_payload.get("name", ""),
+        name=(gdpr.legal_name if gdpr and gdpr.legal_name else None) or token_payload.get("name", ""),
         picture=token_payload.get("picture"),
         provider=provider,
         role=user.role,

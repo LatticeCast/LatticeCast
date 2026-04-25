@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.db import get_login_session, get_session  # login_session kept for create/delete only
 from middleware.auth import require_admin
-from models.user import Gdpr, User, UserInfo, UserResponse
+from models.user import User, UserInfo, UserResponse
 from repository.user import GdprRepository, bootstrap_user
 
 router = APIRouter(
@@ -31,9 +31,7 @@ class UserCreate(BaseModel):
     email: str = Field(..., description="User email address (used as unique identifier)")
     role: RoleType = Field(default="user", description="User role")
     legal_name: str = Field(default="", description="Optional legal name (GDPR)")
-    user_name: str | None = Field(
-        default=None, description="Optional handle; auto-slugged from email if omitted"
-    )
+    user_name: str | None = Field(default=None, description="Optional handle; auto-slugged from email if omitted")
 
     model_config = {"json_schema_extra": {"examples": [{"email": "user@example.com", "role": "user"}]}}
 

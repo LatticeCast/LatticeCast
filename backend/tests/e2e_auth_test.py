@@ -14,9 +14,10 @@ Usage:
 
 import json
 import os
+from pathlib import Path
+
 import httpx
 import pytest
-from pathlib import Path
 
 BACKEND_PORT = os.environ.get("BACKEND_PORT", "13491")
 BASE_URL = os.environ.get("BASE_URL", f"http://localhost:{BACKEND_PORT}")
@@ -55,10 +56,7 @@ class TestHealthCheck:
 class TestAdminAuth:
     def test_admin_can_access_me(self, client, tokens):
         """Admin user can access /api/login/me"""
-        resp = client.get(
-            "/api/login/me",
-            headers={"Authorization": f"Bearer {tokens['admin']}"}
-        )
+        resp = client.get("/api/login/me", headers={"Authorization": f"Bearer {tokens['admin']}"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["role"] == "admin"
@@ -68,10 +66,7 @@ class TestAdminAuth:
 
     def test_admin_can_list_users(self, client, tokens):
         """Admin can list all users"""
-        resp = client.get(
-            "/admin/users",
-            headers={"Authorization": f"Bearer {tokens['admin']}"}
-        )
+        resp = client.get("/admin/users", headers={"Authorization": f"Bearer {tokens['admin']}"})
         assert resp.status_code == 200
         data = resp.json()
         assert "users" in data
@@ -83,16 +78,13 @@ class TestUserManagement:
     def test_admin_can_create_user(self, client, tokens):
         """Admin can create a new user"""
         # First try to delete if exists (cleanup from previous run)
-        client.delete(
-            "/admin/users/homunmage@gmail.com",
-            headers={"Authorization": f"Bearer {tokens['admin']}"}
-        )
+        client.delete("/admin/users/homunmage@gmail.com", headers={"Authorization": f"Bearer {tokens['admin']}"})
 
         # Create user
         resp = client.post(
             "/admin/users",
             headers={"Authorization": f"Bearer {tokens['admin']}"},
-            json={"id": "homunmage@gmail.com", "role": "user"}
+            json={"id": "homunmage@gmail.com", "role": "user"},
         )
         assert resp.status_code == 201
         data = resp.json()
@@ -102,10 +94,7 @@ class TestUserManagement:
 
     def test_registered_user_can_access_me(self, client, tokens):
         """Registered user can access /api/login/me"""
-        resp = client.get(
-            "/api/login/me",
-            headers={"Authorization": f"Bearer {tokens['user']}"}
-        )
+        resp = client.get("/api/login/me", headers={"Authorization": f"Bearer {tokens['user']}"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["role"] == "user"
@@ -114,10 +103,7 @@ class TestUserManagement:
 
     def test_registered_user_cannot_access_admin(self, client, tokens):
         """Regular user cannot access admin endpoints"""
-        resp = client.get(
-            "/admin/users",
-            headers={"Authorization": f"Bearer {tokens['user']}"}
-        )
+        resp = client.get("/admin/users", headers={"Authorization": f"Bearer {tokens['user']}"})
         assert resp.status_code == 403
         assert resp.json()["detail"] == "Admin access required"
         print("✓ User correctly denied admin access")
@@ -126,20 +112,14 @@ class TestUserManagement:
 class TestUnregisteredUser:
     def test_unregistered_user_rejected(self, client, tokens):
         """Unregistered user gets 403 on /me"""
-        resp = client.get(
-            "/api/login/me",
-            headers={"Authorization": f"Bearer {tokens['unregistered']}"}
-        )
+        resp = client.get("/api/login/me", headers={"Authorization": f"Bearer {tokens['unregistered']}"})
         assert resp.status_code == 403
         assert resp.json()["detail"] == "User not registered"
         print("✓ Unregistered user correctly rejected")
 
     def test_unregistered_user_cannot_access_admin(self, client, tokens):
         """Unregistered user cannot access admin endpoints"""
-        resp = client.get(
-            "/admin/users",
-            headers={"Authorization": f"Bearer {tokens['unregistered']}"}
-        )
+        resp = client.get("/admin/users", headers={"Authorization": f"Bearer {tokens['unregistered']}"})
         assert resp.status_code == 403
         print("✓ Unregistered user correctly denied admin access")
 
@@ -154,10 +134,7 @@ class TestInvalidAuth:
 
     def test_invalid_token_rejected(self, client):
         """Request with invalid token is rejected"""
-        resp = client.get(
-            "/api/login/me",
-            headers={"Authorization": "Bearer invalid_token_here"}
-        )
+        resp = client.get("/api/login/me", headers={"Authorization": "Bearer invalid_token_here"})
         assert resp.status_code == 401
         print("✓ Invalid token correctly rejected")
 
@@ -167,9 +144,9 @@ def run_all_tests():
     tokens = load_tokens()
     client = httpx.Client(base_url=BASE_URL, timeout=30.0)
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("E2E Authentication Tests")
-    print("="*60)
+    print("=" * 60)
 
     # Health check
     print("\n--- Health Check ---")
@@ -193,10 +170,10 @@ def run_all_tests():
     resp = client.post(
         "/admin/users",
         headers={"Authorization": f"Bearer {tokens['admin']}"},
-        json={"id": "homunmage@gmail.com", "role": "user"}
+        json={"id": "homunmage@gmail.com", "role": "user"},
     )
     assert resp.status_code == 201, f"Create user failed: {resp.text}"
-    print(f"✓ Created user: homunmage@gmail.com")
+    print("✓ Created user: homunmage@gmail.com")
 
     # Test registered user
     resp = client.get("/api/login/me", headers={"Authorization": f"Bearer {tokens['user']}"})
@@ -230,12 +207,12 @@ def run_all_tests():
     resp = client.get("/admin/users", headers={"Authorization": f"Bearer {tokens['admin']}"})
     users = resp.json()
     print(f"✓ Total users in DB: {users['total']}")
-    for u in users['users']:
+    for u in users["users"]:
         print(f"  - {u['id']} (role={u['role']})")
 
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("All tests passed!")
-    print("="*60 + "\n")
+    print("=" * 60 + "\n")
 
 
 if __name__ == "__main__":

@@ -21,10 +21,18 @@ class Row(SQLModel, table=True):
 
     workspace_id: UUID = Field(primary_key=True, description="Workspace UUID (composite PK/FK)")
     table_id: str = Field(primary_key=True, description="Parent table ID (composite PK/FK)")
-    row_number: int = Field(default=0, primary_key=True, description="Auto-increment row number per table (set by DB trigger)")
-    row_data: dict[str, Any] = Field(default_factory=dict, sa_type=JSON, description="Row data keyed by column UUID (JSONB)")
-    created_by: UUID | None = Field(default=None, foreign_key="auth.users.user_id", description="UUID of user who created the row")
-    updated_by: UUID | None = Field(default=None, foreign_key="auth.users.user_id", description="UUID of user who last updated the row")
+    row_number: int = Field(
+        default=0, primary_key=True, description="Auto-increment row number per table (set by DB trigger)"
+    )
+    row_data: dict[str, Any] = Field(
+        default_factory=dict, sa_type=JSON, description="Row data keyed by column UUID (JSONB)"
+    )
+    created_by: UUID | None = Field(
+        default=None, foreign_key="auth.users.user_id", description="UUID of user who created the row"
+    )
+    updated_by: UUID | None = Field(
+        default=None, foreign_key="auth.users.user_id", description="UUID of user who last updated the row"
+    )
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
 
@@ -34,7 +42,9 @@ class RowCreate(SQLModel):
 
 
 class RowUpdate(SQLModel):
-    row_data: dict[str, Any] = Field(..., description="Partial row data to merge into existing row_data (unset fields are preserved)")
+    row_data: dict[str, Any] = Field(
+        ..., description="Partial row data to merge into existing row_data (unset fields are preserved)"
+    )
 
 
 class RowResponse(SQLModel):

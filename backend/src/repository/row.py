@@ -26,6 +26,7 @@ class RowRepository:
         # Use raw INSERT + RETURNING because PG trigger sets row_number
         # and SQLAlchemy can't track the PK change from 0 → actual value
         from sqlalchemy import text
+
         result = await self.session.execute(
             text("""
                 INSERT INTO rows (workspace_id, table_id, row_data, created_by, updated_by)
@@ -59,9 +60,17 @@ class RowRepository:
         )
         return result.scalar_one_or_none()
 
-    async def list_by_table(self, workspace_id: UUID, table_id: str, offset: int = 0, limit: int = 100, sort: str = "desc") -> list[Row]:
+    async def list_by_table(
+        self, workspace_id: UUID, table_id: str, offset: int = 0, limit: int = 100, sort: str = "desc"
+    ) -> list[Row]:
         order = Row.row_number.desc() if sort == "desc" else Row.row_number.asc()
-        statement = select(Row).where(Row.workspace_id == workspace_id, Row.table_id == table_id).order_by(order).offset(offset).limit(limit)
+        statement = (
+            select(Row)
+            .where(Row.workspace_id == workspace_id, Row.table_id == table_id)
+            .order_by(order)
+            .offset(offset)
+            .limit(limit)
+        )
         result = await self.session.execute(statement)
         return list(result.scalars().all())
 

@@ -12,12 +12,13 @@ Usage:
        Or:  python -m pytest tests/e2e_storage_test.py -v
 """
 
+import io
 import json
 import os
-import io
+from pathlib import Path
+
 import httpx
 import pytest
-from pathlib import Path
 
 BACKEND_PORT = os.environ.get("BACKEND_PORT", "13491")
 BASE_URL = os.environ.get("BASE_URL", f"http://localhost:{BACKEND_PORT}")
@@ -46,14 +47,11 @@ def client():
 def user_uuid(client, tokens):
     """Get the user's UUID from the database"""
     # First ensure user exists
-    client.delete(
-        "/admin/users/homunmage@gmail.com",
-        headers={"Authorization": f"Bearer {tokens['admin']}"}
-    )
+    client.delete("/admin/users/homunmage@gmail.com", headers={"Authorization": f"Bearer {tokens['admin']}"})
     resp = client.post(
         "/admin/users",
         headers={"Authorization": f"Bearer {tokens['admin']}"},
-        json={"id": "homunmage@gmail.com", "role": "user"}
+        json={"id": "homunmage@gmail.com", "role": "user"},
     )
     assert resp.status_code == 201
     return resp.json()["uuid"]
@@ -303,14 +301,11 @@ def run_all_tests():
 
     # Ensure user exists
     print("\n--- Setup ---")
-    client.delete(
-        "/admin/users/homunmage@gmail.com",
-        headers={"Authorization": f"Bearer {tokens['admin']}"}
-    )
+    client.delete("/admin/users/homunmage@gmail.com", headers={"Authorization": f"Bearer {tokens['admin']}"})
     resp = client.post(
         "/admin/users",
         headers={"Authorization": f"Bearer {tokens['admin']}"},
-        json={"id": "homunmage@gmail.com", "role": "user"}
+        json={"id": "homunmage@gmail.com", "role": "user"},
     )
     assert resp.status_code == 201
     user_uuid = resp.json()["uuid"]
@@ -327,7 +322,7 @@ def run_all_tests():
         files=files,
     )
     assert resp.status_code == 200
-    print(f"✓ Admin uploaded: admin-test/admin.txt")
+    print("✓ Admin uploaded: admin-test/admin.txt")
 
     resp = client.get(
         "/api/storage/admin/files",
@@ -353,7 +348,7 @@ def run_all_tests():
         files=files,
     )
     assert resp.status_code == 200
-    print(f"✓ User uploaded: my-data/user.txt")
+    print("✓ User uploaded: my-data/user.txt")
 
     resp = client.get(
         "/api/storage/files",

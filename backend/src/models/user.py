@@ -25,9 +25,7 @@ class UserInfo(SQLModel, table=True):
 
     __tablename__ = "user_info"
 
-    user_id: UUID = Field(
-        primary_key=True, foreign_key="auth.users.user_id", description="UUID FK → auth.users"
-    )
+    user_id: UUID = Field(primary_key=True, foreign_key="auth.users.user_id", description="UUID FK → auth.users")
     user_name: str = Field(index=True, unique=True, description="URL-safe slug (unique)")
 
 
@@ -37,9 +35,7 @@ class Gdpr(SQLModel, table=True):
     __tablename__ = "gdpr"
     __table_args__ = {"schema": "auth"}
 
-    user_id: UUID = Field(
-        primary_key=True, foreign_key="auth.users.user_id", description="UUID FK → auth.users"
-    )
+    user_id: UUID = Field(primary_key=True, foreign_key="auth.users.user_id", description="UUID FK → auth.users")
     email: str = Field(unique=True, description="Email address (unique)")
     legal_name: str = Field(default="", description="Legal name")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
@@ -57,12 +53,14 @@ class UserResponse(SQLModel):
 
     model_config = {
         "json_schema_extra": {
-            "examples": [{
-                "user_id": "00000000-0000-0000-0000-000000000000",
-                "email": "user@example.com",
-                "legal_name": "User",
-                "role": "user",
-                "user_name": "user",
-            }]
+            "examples": [
+                {
+                    "user_id": "00000000-0000-0000-0000-000000000000",
+                    "email": "user@example.com",
+                    "legal_name": "User",
+                    "role": "user",
+                    "user_name": "user",
+                }
+            ]
         }
     }

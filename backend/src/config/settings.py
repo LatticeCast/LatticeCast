@@ -35,17 +35,15 @@ class DatabaseSettings(BaseSettings):
     @model_validator(mode="after")
     def validate_role_passwords(self) -> "DatabaseSettings":
         missing = [
-            name for name, val in [
+            name
+            for name, val in [
                 ("POSTGRES_APP_PASSWORD", self.app_password),
                 ("POSTGRES_LOGIN_PASSWORD", self.login_password),
             ]
             if not val
         ]
         if missing:
-            raise ValueError(
-                f"❌ Missing required DB passwords: {', '.join(missing)}. "
-                "Check .env file."
-            )
+            raise ValueError(f"❌ Missing required DB passwords: {', '.join(missing)}. Check .env file.")
         return self
 
     @property
