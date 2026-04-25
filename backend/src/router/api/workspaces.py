@@ -17,12 +17,10 @@ from repository.workspace import WorkspaceRepository
 async def _resolve_member_user(
     data: MemberCreate,
     session: AsyncSession,
-    login_session: AsyncSession,
 ) -> User:
-    """Resolve user by user_id (UUID), user_name, or user_email.
+    """Resolve user by user_id (UUID), user_name, or user_email using app session.
 
-    Email lookups go through auth.gdpr (login session). Other lookups
-    stay on the app session.
+    app has SELECT on auth.gdpr after V32, so email lookups no longer need login_session.
     """
     from models.user import UserInfo
     if data.user_id:
@@ -39,7 +37,7 @@ async def _resolve_member_user(
         if user:
             return user
     elif data.user_email:
-        user = await resolve_user_by_email(data.user_email, login_session)
+        user = await resolve_user_by_email(data.user_email, session)
         if user:
             return user
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found — provide user_id, user_name, or user_email")
@@ -120,7 +118,7 @@ async def add_member(
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, session)
-    new_member = await _resolve_member_user(data, session, session)
+    new_member = await _resolve_member_user(data, session)
     if await repo.is_member(workspace.workspace_id, new_member.user_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User is already a member")
     return await repo.add_member(workspace_id=workspace.workspace_id, user_id=new_member.user_id, role=data.role)
@@ -143,10 +141,7 @@ async def remove_member(
         member_data.user_name = None
     except ValueError:
         pass
-    # remove_member doesn't accept email, so login_session is unused but
-    # required by the helper signature. Passing session works too since the
-    # email branch is unreachable here, but we keep the contract clean.
-    member = await _resolve_member_user(member_data, session, session)
+    member = await _resolve_member_user(member_data, session)
     if not await repo.is_member(workspace.workspace_id, member.user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
     await repo.remove_member(workspace_id=workspace.workspace_id, user_id=member.user_id)
