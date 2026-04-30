@@ -13,6 +13,7 @@
 | Vite | 7.x | Build tool |
 | Playwright | 1.55.x | Browser testing |
 | Luxon | 3.x | Date/time utilities |
+| chart.js + svelte-chartjs | latest | Dashboard widgets (number/bar/pie/line/list — see `llm.arch.dashboard.md`) |
 
 ## Directory Structure
 

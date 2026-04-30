@@ -27,6 +27,7 @@ See `llm.user.md` for full details.
 |--------|------|------|-------------|
 | GET | `/api/v1/login/config` | None | App config (auth_required flag) |
 | POST | `/api/v1/login/{provider}/token` | None | Exchange OAuth code for tokens |
+| POST | `/api/v1/login/password` | None | `{user_name, password}` — dev mode returns user_id as access_token; AUTH_REQUIRED=true returns 501 |
 | GET | `/api/v1/login/me` | Bearer | Get current user info |
 
 ## Workspaces
@@ -87,7 +88,9 @@ Content-Type: application/json
 | POST | `/api/v1/tables/{table_id}/views` | Member | Create view |
 | PUT | `/api/v1/tables/{table_id}/views/{view_name}` | Member | Update view config |
 | DELETE | `/api/v1/tables/{table_id}/views/{view_name}` | Member | Delete view |
-| POST | `/api/v1/tables/template/pm` | User | Create PM template table |
+| POST | `/api/v1/tables/template/pm` | User | Create PM template table (Kanban+Timeline) |
+| POST | `/api/v1/tables/template/crm` | User | Create CRM template table (Dashboard view) |
+| POST | `/api/v1/tables/{table_id}/views/{view_name}/widgets/{widget_id}/query` | Member | Execute dashboard widget's LatticeQL query → aggregated rows |
 
 ## Rows
 

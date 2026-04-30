@@ -1,13 +1,11 @@
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends cron supervisor && \
+RUN apt-get update && apt-get install -y --no-install-recommends cron supervisor git && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install dependencies (lattice-ql is a vendored wheel)
 COPY pyproject.toml uv.lock ./
-COPY vendor/ ./vendor/
 RUN uv sync --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"

@@ -40,29 +40,30 @@ Authorization: Bearer <token>
 Flow:
 1. Load table row → read `views[view_name].config.widgets[wid].lql`
 2. Build workspace schema dict (table column map) → cache in Valkey 60s
-3. `lattice_ql.compile(lql, schema, workspace_id)` → `(sql, params)`
-4. `await session.execute(text(sql), params)` via `get_rls_session`
-5. Return rows as JSON array
+3. `lattice_ql.compile(lql, schema)` → SQL string with `$1` for workspace_id
+4. Adapter inlines `$1` as `'<workspace_uuid>'` and rewrites the
+   `table_id = (SELECT … FROM tables WHERE table_name = …)` subquery to a
+   direct `table_id = '…' AND workspace_id = '…'` filter (LatticeCast uses
+   the table name as the table_id PK)
+5. `await session.execute(text(sql))` via `get_rls_session` — RLS handles
+   the workspace-membership check
+6. Return rows as JSON array
 
-Files: `router/api/dashboard.py` (endpoint), `repository/dashboard.py` (compile + execute), `config/lattice_ql.py` (schema cache).
+Files: `router/api/dashboard.py` (endpoint), `repository/dashboard.py` (execute), `config/lattice_ql.py` (compile + schema cache + adapter).
 
 ## LatticeQL Integration
 
 ```python
 # config/lattice_ql.py
-from lattice_ql import compile  # installed from GitHub release wheel (v0.3.3)
-
-async def get_workspace_schema(workspace_id, session) -> dict:
-    key = f"lql_schema:{workspace_id}"
-    cached = await redis.get(key)
-    if cached:
-        return json.loads(cached)
-    schema = await build_schema(workspace_id, session)
-    await redis.setex(key, 60, json.dumps(schema))
-    return schema
+from lattice_ql import compile as _compile
+from lattice_ql.error import LatticeQLError
+# installed via: lattice-ql @ git+https://github.com/latticeCast/LatticeQL@v0.2.0
 ```
 
-**Adding new primitives to LatticeQL:** done in sibling repo `../LatticeQL`. Backend consumes published wheel only — no Rust toolchain here.
+**Adding new primitives to LatticeQL:** work in the upstream repo
+(https://github.com/latticeCast/LatticeQL), tag a new version, bump the
+git ref in `backend/pyproject.toml`. Upstream is pure Python (hatchling
+build) — no Rust toolchain involved.
 
 ## Adding a New Chart Kind
 

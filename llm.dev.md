@@ -80,13 +80,27 @@ curl http://localhost:13491/api/v1/status
 
 ### Deps change
 
-Backend mounts `./backend/:/app/` which overwrites the image's `.venv`.
-After pyproject.toml changes:
+Backend mounts `./backend/:/app/` which overwrites the image's `.venv`
+(an anonymous volume at `/app/.venv` keeps the venv from being clobbered).
+After `pyproject.toml` changes:
 
 ```bash
 docker compose run --rm --no-deps backend uv sync --no-dev
 docker compose restart backend
 ```
+
+If you also changed the **Dockerfile** (e.g. added a system package to
+support a new dep — `lattice-ql` needs `git` for git installs):
+
+```bash
+docker compose build backend
+docker compose run --rm --no-deps -T --entrypoint cat backend uv.lock > backend/uv.lock
+docker compose up -d --force-recreate backend
+```
+
+`lattice-ql` is pulled from `git+https://github.com/latticeCast/LatticeQL@<tag>`
+(see `backend/pyproject.toml`). To bump it, change the tag and re-run the
+sequence above.
 
 ### Async Rule (critical)
 

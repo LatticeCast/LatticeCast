@@ -60,6 +60,7 @@ Stored in `tables.views` JSONB. Every table has at least 1 Table view (auto-crea
 | `table` | TableGrid | sort, filter, group, hiddenCols, columnWidths |
 | `kanban` | KanbanBoard | group_by, card_fields, sort |
 | `timeline` | TimelineView | start_col, end_col, color_by, group_by |
+| `dashboard` | DashboardView | layout, widgets (each widget has `lql` LatticeQL query — see `llm.arch.dashboard.md`) |
 
 ## Default Template
 

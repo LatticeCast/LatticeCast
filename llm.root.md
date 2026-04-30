@@ -2,19 +2,28 @@
 
 ## Project Overview
 
-Self-hosted Airtable + Jira. Flexible tables with JSONB, customizable views
-(Table, Kanban, Timeline), built-in PM with ticket docs in MinIO.
+Self-hosted Airtable + Jira/CRM. Flexible tables with JSONB, customizable
+views (Table, Kanban, Timeline, **Dashboard**), built-in PM and CRM
+templates with ticket docs in MinIO. Two conceptual layers:
+
+- **Layer-1 (Airtable core)** — generic JSONB table engine. Sort, filter,
+  group, per-column auto-managed indexes, RLS by workspace.
+- **Layer-2 (PM / CRM)** — template seeders only (no special code paths):
+  `POST /api/v1/tables/template/{pm,crm}`.
 
 **Domain:** `lattice-cast.posetmage.com`
 
 > **Documentation:**
 > - `llm.dev.md` - Local dev workflow
 > - `llm.frontend.md` - Frontend (Svelte 5 + Tailwind 4)
+> - `llm.arch.airtable.md` - Layer-1 generic table engine
+> - `llm.arch.pm.md` - Layer-2 PM template
+> - `llm.arch.dashboard.md` - Dashboard view + LatticeQL widget queries
 > - `llm.arch.db.md` - DB schemas, roles, migrations, RLS
 > - `llm.arch.auth.md` - OAuth flow
-> - `llm.arch.dashboard.md` - Dashboard view + LatticeQL widget queries
 > - `llm.endpoint.md` - API endpoints
 > - `llm.storage.md` - MinIO storage (aioboto3 async)
+> - `llm.snapshot.md` - Browser snapshot guide (Playwright)
 > - `llm.user.md` - User management
 > - `llm.deploy.md` - Docker / k8s deployment
 
@@ -22,8 +31,9 @@ Self-hosted Airtable + Jira. Flexible tables with JSONB, customizable views
 
 | Layer | Tech |
 |-------|------|
-| Frontend | SvelteKit 2, Svelte 5 (Runes), Tailwind 4, Vite 7, TS 5.9 |
+| Frontend | SvelteKit 2, Svelte 5 (Runes), Tailwind 4, Vite 7, TS 5.9, chart.js (svelte-chartjs) |
 | Backend | FastAPI, Python 3.12, SQLModel, asyncpg, **aioboto3** (native async) |
+| DSL | `lattice-ql` (pure-Python, hatchling) — git dep `@v0.2.0` from `github.com/latticeCast/LatticeQL`; compiles dashboard widget queries to PG SQL |
 | DB | PostgreSQL 18 — JSONB, GIN/B-tree indexes, RLS policies |
 | Cache | Valkey 8 (redis-compat) |
 | Storage | MinIO (S3-compat) — ticket markdown docs |
@@ -47,8 +57,8 @@ Backend → PG (asyncpg, app/login roles)
 | Role | Use case | Schema access |
 |---|---|---|
 | `dba_user` | Migrations only (DBA pwd in docker-compose, NOT .env) | ALL |
-| `app_user` | General API | public CRUD + auth SELECT |
-| `login_user` | Auth endpoints | auth CRUD only |
+| `app_user` | General API (incl. login lookups, role updates) | `public` CRUD + `auth.users` SELECT/UPDATE(role) + `auth.gdpr` SELECT |
+| `login_user` | Register / delete only (PII-writing boundary) | `auth` INSERT/DELETE on user creation paths |
 
 ## Directory Structure
 
@@ -77,13 +87,14 @@ lattice-cast/
 └── docker-compose.yml      DBA creds hardcoded here (not .env)
 ```
 
-## Database Schema (current, after V30)
+## Database Schema (current, after V32)
 
 See `llm.arch.db.md` for full details.
 
 ```
 auth.users         (user_id UUID PK, role, created_at, updated_at)
-auth.user_info     (user_id UUID FK, user_name UNIQUE, email, name)
+auth.gdpr          (user_id FK, email UNIQUE, legal_name)        # PII — login_mgr write, app SELECT (V32)
+public.user_info   (user_id FK, user_name VARCHAR(32) UNIQUE)    # public handle
 public.workspaces  (workspace_id UUID PK, workspace_name UNIQUE)
 public.workspace_members  ((workspace_id, user_id) PK, role)
 public.tables      ((workspace_id, table_id) composite PK, columns JSONB, views JSONB)
@@ -122,10 +133,12 @@ All routes live under `/api/v1/*`:
 | Route | Purpose |
 |---|---|
 | `/api/v1/status` | Health check |
-| `/api/v1/auth/*` | OAuth endpoints |
+| `/api/v1/login/*` | OAuth + password token exchange |
 | `/api/v1/workspaces/*` | Workspace + members CRUD |
 | `/api/v1/tables/*` | Tables + columns + views |
+| `/api/v1/tables/template/{pm,crm}` | Template seeders (Layer-2) |
 | `/api/v1/tables/{id}/rows/*` | Row CRUD + doc endpoints |
+| `/api/v1/tables/{id}/views/{name}/widgets/{wid}/query` | Dashboard widget LatticeQL execution |
 | `/api/v1/storage/*` | User file upload/download |
 | `/api/v1/admin/*` | Admin-only endpoints |
 

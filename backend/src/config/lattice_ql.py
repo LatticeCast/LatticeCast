@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 from uuid import UUID
 
-from lattice_ql import LatticeQLError
 from lattice_ql import compile as _compile
+from lattice_ql.error import LatticeQLError
 
 from config.redis import get_redis
 from repository.table import TableRepository
@@ -45,10 +46,10 @@ async def invalidate_schema_cache(workspace_id: str) -> None:
     await redis.delete(f"lql:schema:{workspace_id}")
 
 
-_TABLE_SUBQ = __import__("re").compile(
+_TABLE_SUBQ = re.compile(
     r"table_id\s*=\s*\(SELECT\s+table_id\s+FROM\s+tables\s+"
     r"WHERE\s+table_name\s*=\s*'([^']+)'\s+AND\s+workspace_id\s*=\s*'([^']+)'\)",
-    __import__("re").IGNORECASE,
+    re.IGNORECASE,
 )
 
 
@@ -58,10 +59,14 @@ def _fix_table_name(sql: str) -> str:
     return _TABLE_SUBQ.sub(r"table_id = '\1' AND workspace_id = '\2'", sql)
 
 
+def _inline_workspace(sql: str, workspace_id: str) -> str:
+    return sql.replace("$1", f"'{workspace_id}'")
+
+
 async def compile_lql(lql: str, workspace_id: str, session: Any) -> tuple[str, list]:
     schema = await get_schema(workspace_id, session)
     try:
-        sql, params = _compile(lql, schema, workspace=workspace_id)
-        return _fix_table_name(sql), params
+        sql = _compile(lql, schema)
     except LatticeQLError as e:
-        raise ValueError(f"{e.kind}: {e.message}") from e
+        raise ValueError(str(e)) from e
+    return _fix_table_name(_inline_workspace(sql, workspace_id)), []
