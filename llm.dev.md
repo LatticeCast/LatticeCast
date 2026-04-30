@@ -94,9 +94,12 @@ support a new dep — `lattice-ql` needs `git` for git installs):
 
 ```bash
 docker compose build backend
-docker compose run --rm --no-deps -T --entrypoint cat backend uv.lock > backend/uv.lock
-docker compose up -d --force-recreate backend
+docker compose run --rm --no-deps backend uv sync --no-dev    # refresh .venv anon volume
+docker compose restart backend
 ```
+
+`backend/uv.lock` is gitignored — uv re-resolves it on every image build,
+no need to commit or sync it back to the host.
 
 `lattice-ql` is pulled from `git+https://github.com/latticeCast/LatticeQL@<tag>`
 (see `backend/pyproject.toml`). To bump it, change the tag and re-run the

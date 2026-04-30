@@ -635,7 +635,7 @@ requires-dist = [
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
-    { name = "lattice-ql", path = "vendor/lattice_ql-0.3.0-cp310-abi3-manylinux_2_34_x86_64.whl" },
+    { name = "lattice-ql", git = "https://github.com/latticeCast/LatticeQL?rev=v0.2.0" },
     { name = "passlib" },
     { name = "pydantic", extras = ["email"] },
     { name = "pydantic-settings" },
@@ -651,15 +651,8 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "lattice-ql"
-version = "0.3.0"
-source = { path = "vendor/lattice_ql-0.3.0-cp310-abi3-manylinux_2_34_x86_64.whl" }
-wheels = [
-    { filename = "lattice_ql-0.3.0-cp310-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:3e2a15d42dd353d48e1a69552cbbc9026dfc6f8518c71da6a8a8b13eb51dcc16" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "pytest", marker = "extra == 'test'", specifier = ">=8" }]
-provides-extras = ["test"]
+version = "0.1.0"
+source = { git = "https://github.com/latticeCast/LatticeQL?rev=v0.2.0#0cdb5971fa5cdb3909223f04e2a7fe2fc4bd293b" }
 
 [[package]]
 name = "multidict"
