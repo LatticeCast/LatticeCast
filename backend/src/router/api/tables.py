@@ -7,9 +7,11 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config.lattice_ql import invalidate_schema_cache
 from middleware.auth import get_current_user, get_rls_session
 from models.table import Table, TableCreate, TableResponse, TableUpdate
 from models.user import User
+from models.view import ViewCreate, validate_view_config
 from repository.table import TableRepository
 from repository.workspace import WorkspaceRepository
 
@@ -183,6 +185,7 @@ async def create_column(
     table_repo = TableRepository(session)
     updated = await table_repo.add_column(table, column_dict)
     await table_repo.create_column_index(table.table_id, column_dict["column_id"], column_dict["type"])
+    await invalidate_schema_cache(str(table.workspace_id))
     return updated.columns[-1]
 
 
@@ -208,6 +211,7 @@ async def update_column(
             await table_repo.drop_column_index(table.table_id, column_id)
             await table_repo.create_column_index(table.table_id, column_id, updates["type"])
     updated = await table_repo.update_column(table, column_id, updates)
+    await invalidate_schema_cache(str(table.workspace_id))
     col = next(c for c in updated.columns if c.get("column_id") == column_id)
     return col
 
@@ -226,6 +230,7 @@ async def delete_column(
     table_repo = TableRepository(session)
     await table_repo.drop_column_index(table.table_id, column_id)
     await table_repo.delete_column(table, column_id)
+    await invalidate_schema_cache(str(table.workspace_id))
 
 
 # --------------------------------------------------
@@ -247,21 +252,24 @@ async def list_views(
 @router.post("/{table_id}/views", status_code=status.HTTP_201_CREATED)
 async def create_view(
     table_id: str,
-    data: dict[str, Any],
+    data: ViewCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
     """Add a view to a table"""
     table = await _get_table_for_member(table_id, user, session)
-    name = data.get("name", "")
-    if not name:
+    if not data.name:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="View name is required")
-    if any(v.get("name") == name for v in table.views):
+    if any(v.get("name") == data.name for v in table.views):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="View name already exists")
+    try:
+        validate_view_config(data.type, data.config)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     view_dict: dict[str, Any] = {
-        "name": name,
-        "type": data.get("type", "table"),
-        "config": data.get("config", {}),
+        "name": data.name,
+        "type": data.type,
+        "config": data.config,
     }
     table_repo = TableRepository(session)
     updated = await table_repo.add_view(table, view_dict)
@@ -433,6 +441,168 @@ async def create_pm_template(
                 "end_col": due_col_id,
                 "color_by": status_col_id,
                 "group_by": col_ids.get("Type", ""),
+            },
+        },
+    ]
+    for view_dict in default_views:
+        table = await table_repo.add_view(table, view_dict)
+
+    return table
+
+
+# --------------------------------------------------
+# CRM TEMPLATE
+# --------------------------------------------------
+
+_CRM_COLUMNS: list[dict[str, Any]] = [
+    {"name": "Doc", "type": "doc"},
+    {"name": "Title", "type": "text"},
+    {
+        "name": "Stage",
+        "type": "select",
+        "options": {
+            "choices": [
+                {"value": "lead", "color": "bg-gray-100 text-gray-700"},
+                {"value": "qualified", "color": "bg-blue-100 text-blue-700"},
+                {"value": "proposal", "color": "bg-yellow-100 text-yellow-700"},
+                {"value": "won", "color": "bg-green-100 text-green-700"},
+                {"value": "lost", "color": "bg-red-100 text-red-700"},
+            ]
+        },
+    },
+    {"name": "Value", "type": "number"},
+    {"name": "Owner", "type": "text"},
+    {"name": "Close Date", "type": "date"},
+    {"name": "Tags", "type": "tags"},
+    {"name": "Description", "type": "text"},
+]
+
+
+@router.post("/template/crm", response_model=TableResponse, status_code=status.HTTP_201_CREATED)
+async def create_crm_template(
+    data: dict[str, Any],
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+):
+    """Create a CRM Deals table with pre-configured columns and default views including a dashboard"""
+    table_id = data.get("table_id", "") or data.get("table_name", "") or data.get("name", "")
+    if not table_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="table_id is required")
+
+    ws_repo = WorkspaceRepository(session)
+    raw_workspace = data.get("workspace_name") or data.get("workspace_id")
+    if raw_workspace:
+        workspace = await ws_repo.resolve_workspace(str(raw_workspace))
+        if not workspace:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+        if not await ws_repo.is_member(workspace.workspace_id, user.user_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of that workspace")
+        workspace_id = workspace.workspace_id
+    else:
+        workspace = await ws_repo.get_first_owned_workspace(user.user_id)
+        if not workspace:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="No workspace found — create a workspace first"
+            )
+        workspace_id = workspace.workspace_id
+
+    table_repo = TableRepository(session)
+    table = await table_repo.create(workspace_id=workspace_id, table_id=table_id)
+
+    col_ids: dict[str, str] = {}
+    for pos, col_def in enumerate(_CRM_COLUMNS):
+        column_dict: dict[str, Any] = {
+            "column_id": str(uuid4()),
+            "name": col_def["name"],
+            "type": col_def["type"],
+            "options": col_def.get("options", {}),
+            "position": pos,
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        table = await table_repo.add_column(table, column_dict)
+        await table_repo.create_column_index(table.table_id, column_dict["column_id"], column_dict["type"])
+        col_ids[col_def["name"]] = column_dict["column_id"]
+
+    stage_col_id = col_ids.get("Stage", "")
+    close_date_col_id = col_ids.get("Close Date", "")
+
+    default_views: list[dict[str, Any]] = [
+        {
+            "name": "Table",
+            "type": "table",
+            "config": {"sort": {"colId": close_date_col_id, "dir": "asc"}},
+        },
+        {
+            "name": "Pipeline",
+            "type": "kanban",
+            "config": {
+                "group_by": stage_col_id,
+                "card_fields": [
+                    col_ids.get("Title", ""),
+                    col_ids.get("Value", ""),
+                    col_ids.get("Owner", ""),
+                ],
+            },
+        },
+        {
+            "name": "Sales Dashboard",
+            "type": "dashboard",
+            "config": {
+                "layout": [
+                    {"widget_id": "pipeline_value", "x": 0, "y": 0, "w": 3, "h": 2},
+                    {"widget_id": "by_stage", "x": 3, "y": 0, "w": 6, "h": 4},
+                    {"widget_id": "by_owner", "x": 9, "y": 0, "w": 3, "h": 4},
+                    {"widget_id": "won_value", "x": 0, "y": 2, "w": 3, "h": 2},
+                    {"widget_id": "recent", "x": 0, "y": 4, "w": 12, "h": 4},
+                ],
+                "widgets": {
+                    "pipeline_value": {
+                        "title": "Pipeline Value",
+                        "chart": "number",
+                        "lql": (
+                            'table("deals")'
+                            ' | filter((r)->{r.stage in @["lead","qualified","proposal"]})'
+                            ' | aggregate(@{"value": sum(r.value)})'
+                        ),
+                        "binding": {"value": "value"},
+                    },
+                    "by_stage": {
+                        "title": "Value by Stage",
+                        "chart": "bar",
+                        "lql": (
+                            'table("deals")'
+                            " | group_by((r)->{r.stage})"
+                            ' | aggregate(@{"value": sum(r.value)})'
+                        ),
+                        "binding": {"x": "dim_0", "y": "value"},
+                    },
+                    "by_owner": {
+                        "title": "Deals by Owner",
+                        "chart": "bar",
+                        "lql": (
+                            'table("deals")'
+                            " | group_by((r)->{r.owner})"
+                            " | aggregate(count())"
+                        ),
+                        "binding": {"x": "dim_0", "y": "count"},
+                    },
+                    "won_value": {
+                        "title": "Won Value",
+                        "chart": "number",
+                        "lql": (
+                            'table("deals")'
+                            ' | filter((r)->{r.stage=="won"})'
+                            ' | aggregate(@{"value": sum(r.value)})'
+                        ),
+                        "binding": {"value": "value"},
+                    },
+                    "recent": {
+                        "title": "Recent Deals",
+                        "chart": "list",
+                        "lql": 'table("deals") | limit(10)',
+                        "binding": {},
+                    },
+                },
             },
         },
     ]

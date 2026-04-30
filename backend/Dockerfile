@@ -5,8 +5,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends cron supervisor
 
 WORKDIR /app
 
-# Install dependencies
-COPY pyproject.toml ./
+# Install dependencies (lattice-ql is a vendored wheel)
+COPY pyproject.toml uv.lock ./
+COPY vendor/ ./vendor/
 RUN uv sync --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"

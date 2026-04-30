@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.24 — 2026-04-30
+- **Dashboard view + CRM template**. New `dashboard` view type renders
+  aggregates over rows via LatticeQL widget queries (number / bar / pie /
+  line / list). New `POST /api/v1/tables/template/crm` seeds a CRM table
+  with a default dashboard.
+- **LatticeQL integration**. Backend imports the `lattice-ql` Python
+  wheel from GitHub release (v0.3.3). New `config/lattice_ql.py` caches
+  the per-workspace schema in Valkey (60s TTL).
+- New widget query endpoint:
+  `POST /api/v1/tables/{tid}/views/{name}/widgets/{wid}/query`.
+- Frontend chart lib: `chart.js` via `svelte-chartjs`.
+- Backend Dockerfile is now multi-stage: Rust toolchain in builder, slim
+  Python in runtime.
+
 ## v0.23 — 2026-04-25
 - **Role rebalance: `login_mgr` is now register/delete-only** — all other auth lookups go through the `app` role. Affected routes: `get_current_user`, `POST /password`, `GET /me`, `add_member`, `list_users`, `get_user`, `update_user` all dropped `login_session`. `create_user`, `delete_user`, OAuth `/{provider}/token` kept it. Rationale: once logged in, every API call runs with `app` permissions — `login_mgr` is only for PII-writing boundaries (register/delete).
 - **Migration V32** — `GRANT SELECT ON auth.gdpr TO app` + `GRANT UPDATE (role) ON auth.users TO app` + default-privileges for future auth tables. Enables app to resolve users by email and admins to change user roles without `login_mgr`.

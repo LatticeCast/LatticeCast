@@ -15,6 +15,7 @@ dependencies = [
     "passlib",
     "redis[hiredis]",
     "aioboto3",
+    "lattice-ql @ file:///app/vendor/lattice_ql-0.3.0-cp310-abi3-manylinux_2_34_x86_64.whl",
 ]
 
 [project.optional-dependencies]

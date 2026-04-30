@@ -12,6 +12,7 @@ Self-hosted Airtable + Jira. Flexible tables with JSONB, customizable views
 > - `llm.frontend.md` - Frontend (Svelte 5 + Tailwind 4)
 > - `llm.arch.db.md` - DB schemas, roles, migrations, RLS
 > - `llm.arch.auth.md` - OAuth flow
+> - `llm.arch.dashboard.md` - Dashboard view + LatticeQL widget queries
 > - `llm.endpoint.md` - API endpoints
 > - `llm.storage.md` - MinIO storage (aioboto3 async)
 > - `llm.user.md` - User management

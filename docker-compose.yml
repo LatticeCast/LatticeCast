@@ -1,6 +1,7 @@
 services:
   lattice-cast:
     image: nginx:alpine
+    restart: always
     ports:
       - "${BACKEND_PORT}:${BACKEND_PORT}"
     volumes:
@@ -22,7 +23,7 @@ services:
         - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
         - AUTHENTIK_URL=${AUTHENTIK_URL}
         - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID}
-
+    restart: always
     env_file:
       - .env
     networks:
@@ -37,6 +38,7 @@ services:
   backend:
     build:
       context: ./backend
+    restart: always
     volumes:
       - ./backend/:/app/
       - /app/.venv

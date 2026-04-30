@@ -98,6 +98,6 @@ export interface UpdateRow {
 
 export interface ViewConfig {
 	name: string;
-	type: 'table' | 'kanban' | 'timeline';
+	type: 'table' | 'kanban' | 'timeline' | 'dashboard';
 	config: Record<string, unknown>;
 }

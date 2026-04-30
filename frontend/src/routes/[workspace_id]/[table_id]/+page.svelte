@@ -78,6 +78,8 @@
 	import ManageOptionsModal from '$lib/components/table/ManageOptionsModal.svelte';
 	import CreateTicketModal from '$lib/components/table/CreateTicketModal.svelte';
 	import DocCellEditor from '$lib/components/table/DocCellEditor.svelte';
+	import DashboardView from '$lib/components/dashboard/DashboardView.svelte';
+	import type { DashboardView as DashboardViewType } from '$lib/types/dashboard';
 
 	// ─── State ───────────────────────────────────────────────────────────────────
 
@@ -970,6 +972,11 @@
 			onRowsRefresh={() => refreshRows($page.params.table_id!)}
 			onViewUpdate={handleViewUpdate}
 			onAddRow={openCreateTicket}
+		/>
+	{:else if activeView.type === 'dashboard'}
+		<DashboardView
+			view={activeView as unknown as DashboardViewType}
+			tableId={$page.params.table_id!}
 		/>
 	{/if}
 </div>

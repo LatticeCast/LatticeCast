@@ -1,5 +1,8 @@
 # TODO
 
+## ECharts 
+use ECharts for CRM system
+
 ## Token saving
 use anthropic prompt caching.
 claude-bot need design caching prompt
