@@ -23,14 +23,12 @@ class TableRepository:
         workspace_id: UUID,
         table_id: str,
         columns: list[dict[str, Any]] | None = None,
-        views: list[dict[str, Any]] | None = None,
     ) -> Table:
-        """Atomic create — columns and views set in initial insert."""
+        """Atomic create — columns set in initial insert; default view created by DB trigger."""
         table = Table(
             workspace_id=workspace_id,
             table_id=table_id.lower(),
             columns=columns or [],
-            views=views or [],
         )
         self.session.add(table)
         await self.session.commit()
@@ -108,30 +106,6 @@ class TableRepository:
 
     async def delete_column(self, table: Table, column_id: str) -> Table:
         table.columns = [col for col in table.columns if col.get("column_id") != column_id]
-        table.updated_at = datetime.utcnow()
-        self.session.add(table)
-        await self.session.commit()
-        await self.session.refresh(table)
-        return table
-
-    async def add_view(self, table: Table, view_dict: dict[str, Any]) -> Table:
-        table.views = [*table.views, view_dict]
-        table.updated_at = datetime.utcnow()
-        self.session.add(table)
-        await self.session.commit()
-        await self.session.refresh(table)
-        return table
-
-    async def update_view(self, table: Table, view_name: str, updates: dict[str, Any]) -> Table:
-        table.views = [{**v, **updates} if v.get("name") == view_name else v for v in table.views]
-        table.updated_at = datetime.utcnow()
-        self.session.add(table)
-        await self.session.commit()
-        await self.session.refresh(table)
-        return table
-
-    async def delete_view(self, table: Table, view_name: str) -> Table:
-        table.views = [v for v in table.views if v.get("name") != view_name]
         table.updated_at = datetime.utcnow()
         self.session.add(table)
         await self.session.commit()

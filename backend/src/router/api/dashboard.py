@@ -11,6 +11,7 @@ from middleware.auth import get_current_user, get_rls_session
 from models.user import User
 from repository.dashboard import DashboardRepository
 from repository.table import TableRepository
+from repository.table_view import TableViewRepository
 from repository.workspace import WorkspaceRepository
 
 router = APIRouter(prefix="/tables", tags=["dashboard"])
@@ -45,13 +46,14 @@ async def query_widget(
     """Execute a dashboard widget's LatticeQL query and return aggregated rows."""
     table = await _get_table_for_member(table_id, user, session)
 
-    view = next((v for v in (table.views or []) if v.get("name") == view_name), None)
+    view_repo = TableViewRepository(session)
+    view = await view_repo.get_by_name(table.workspace_id, table.table_id, view_name)
     if not view:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
-    if view.get("type") != "dashboard":
+    if view.type != "dashboard":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="View is not a dashboard")
 
-    widgets = view.get("config", {}).get("widgets", {})
+    widgets = (view.config or {}).get("widgets", {})
     if widget_id not in widgets:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Widget not found")
 
