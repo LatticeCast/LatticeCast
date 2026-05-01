@@ -41,7 +41,6 @@ export interface Table {
 	table_id: string;
 	workspace_id: UUID;
 	columns: Column[];
-	views: ViewConfig[];
 	created_at: string;
 	updated_at: string;
 }
@@ -96,8 +95,16 @@ export interface UpdateRow {
 	row_data: Record<string, unknown>;
 }
 
+export type ViewType = 'table' | 'kanban' | 'timeline' | 'dashboard';
+
 export interface ViewConfig {
 	name: string;
-	type: 'table' | 'kanban' | 'timeline' | 'dashboard';
+	type: ViewType;
 	config: Record<string, unknown>;
+}
+
+export interface UpdateView {
+	name?: string;
+	type?: ViewType;
+	config?: Record<string, unknown>;
 }

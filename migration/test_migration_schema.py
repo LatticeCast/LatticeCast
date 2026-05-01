@@ -26,18 +26,14 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "workspace_members", "workspace_id", "uuid"),
     ("public", "workspace_members", "user_id", "uuid"),
     ("public", "workspace_members", "role", "character varying"),
-    # public.tables
+    # public.tables (V34: identity only — columns moved to __schema__ row)
     ("public", "tables", "workspace_id", "uuid"),
     ("public", "tables", "table_id", "character varying"),
-    ("public", "tables", "columns", "jsonb"),
     ("public", "tables", "created_at", "timestamp"),
     ("public", "tables", "updated_at", "timestamp"),
-    # public.table_views
+    # public.table_views (V34 simplified shape)
     ("public", "table_views", "workspace_id", "uuid"),
     ("public", "table_views", "table_id", "character varying"),
-    ("public", "table_views", "view_number", "bigint"),
-    ("public", "table_views", "is_default", "boolean"),
-    ("public", "table_views", "next_view_id", "bigint"),
     ("public", "table_views", "name", "character varying"),
     ("public", "table_views", "type", "character varying"),
     ("public", "table_views", "config", "jsonb"),
@@ -69,6 +65,10 @@ FORBIDDEN_COLUMNS: list[tuple[str, str, str]] = [
     ("public", "tables", "name"),
     ("public", "tables", "table_name"),
     ("public", "tables", "views"),
+    ("public", "tables", "columns"),                  # V34: moved to __schema__ row
+    ("public", "table_views", "view_number"),         # V34: dropped
+    ("public", "table_views", "is_default"),          # V34: dropped
+    ("public", "table_views", "next_view_id"),        # V34: dropped
 ]
 
 
@@ -136,11 +136,10 @@ def verify(psql_fn) -> list[str]:
     if not result:
         errors.append("MISSING TRIGGER: rows.trg_rows_row_number")
 
-    # V33: Check triggers on table_views
+    # V34: Check triggers on table_views and tables
     for trg_name, tbl in [
-        ("trg_table_views_view_number", "table_views"),
-        ("trg_table_views_prevent_default_delete", "table_views"),
-        ("trg_tables_create_default_view", "tables"),
+        ("trg_table_views_prevent_schema_delete", "table_views"),
+        ("trg_tables_create_schema_and_order", "tables"),
     ]:
         result = psql_fn(
             f"SELECT 1 FROM information_schema.triggers "
@@ -149,16 +148,19 @@ def verify(psql_fn) -> list[str]:
         if not result:
             errors.append(f"MISSING TRIGGER: {tbl}.{trg_name}")
 
-    # V33: Check partial unique index table_views_one_default
+    # V33's partial unique index is dropped in V34
     result = psql_fn(
         "SELECT 1 FROM pg_indexes "
         "WHERE schemaname='public' AND tablename='table_views' "
         "  AND indexname='table_views_one_default';"
     )
-    if not result:
-        errors.append("MISSING INDEX: public.table_views.table_views_one_default")
+    if result:
+        errors.append(
+            "FORBIDDEN INDEX still present: "
+            "public.table_views.table_views_one_default (V34 drop)"
+        )
 
-    # V33: Check RLS policy on table_views
+    # RLS policy on table_views still in place
     result = psql_fn(
         "SELECT 1 FROM pg_policies "
         "WHERE schemaname='public' AND tablename='table_views' "
@@ -169,7 +171,7 @@ def verify(psql_fn) -> list[str]:
             "MISSING RLS POLICY: public.table_views.table_views_workspace_member"
         )
 
-    # V33: PK is (workspace_id, table_id, view_number)
+    # V34: PK is (workspace_id, table_id, name)
     result = psql_fn(
         "SELECT string_agg(kcu.column_name, ',' "
         "  ORDER BY kcu.ordinal_position) "
@@ -181,7 +183,7 @@ def verify(psql_fn) -> list[str]:
         "  AND tc.table_name='table_views' "
         "  AND tc.constraint_type='PRIMARY KEY';"
     )
-    expected_pk = "workspace_id,table_id,view_number"
+    expected_pk = "workspace_id,table_id,name"
     if result.strip() != expected_pk:
         errors.append(
             f"WRONG PK: table_views expected '{expected_pk}' "
@@ -203,36 +205,18 @@ def verify(psql_fn) -> list[str]:
             "(expected ON DELETE CASCADE)"
         )
 
-    # V33: self-FK next_view_id is DEFERRABLE INITIALLY DEFERRED
+    # V34: self-FK next_view_id is dropped — no longer present
     result = psql_fn(
         "SELECT 1 FROM pg_constraint "
-        "WHERE conname='table_views_next_fkey' "
-        "  AND condeferrable=true AND condeferred=true;"
+        "WHERE conname='table_views_next_fkey';"
     )
-    if not result:
-        errors.append(
-            "MISSING/WRONG FK: table_views_next_fkey "
-            "(expected DEFERRABLE INITIALLY DEFERRED)"
-        )
+    if result:
+        errors.append("FORBIDDEN FK still present: table_views_next_fkey")
 
-    # V33: UNIQUE (workspace_id, table_id, name)
-    result = psql_fn(
-        "SELECT 1 FROM information_schema.table_constraints "
-        "WHERE table_schema='public' "
-        "  AND table_name='table_views' "
-        "  AND constraint_name='table_views_name_unique' "
-        "  AND constraint_type='UNIQUE';"
-    )
-    if not result:
-        errors.append(
-            "MISSING CONSTRAINT: table_views_name_unique UNIQUE"
-        )
-
-    # V33: trigger functions exist
+    # V34 trigger functions exist
     for fn_name in (
-        "trg_set_view_number_fn",
-        "trg_prevent_default_view_delete_fn",
-        "trg_create_default_view_fn",
+        "trg_prevent_schema_delete_fn",
+        "trg_create_schema_and_order_fn",
     ):
         result = psql_fn(
             f"SELECT 1 FROM pg_proc WHERE proname='{fn_name}';"

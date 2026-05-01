@@ -1,4 +1,6 @@
 # router/api/tables.py
+# V34: columns live in the __schema__ row of public.table_views; views are
+# user-named rows in the same table; display order is the __order__ row.
 
 from datetime import datetime
 from typing import Any
@@ -11,6 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.lattice_ql import invalidate_schema_cache
 from middleware.auth import get_current_user, get_rls_session
 from models.table import Table, TableCreate, TableResponse, TableUpdate
+from models.table_view import (
+    ORDER_ROW_NAME,
+    RESERVED_NAMES,
+    SCHEMA_ROW_NAME,
+    USER_VIEW_TYPES,
+)
 from models.user import User
 from models.view import ViewCreate, validate_view_config
 from repository.table import TableRepository
@@ -25,7 +33,7 @@ async def _get_table_for_member(
     user: User,
     session: AsyncSession,
 ) -> Table:
-    """Fetch table by UUID or name and verify the current user is a member of its workspace."""
+    """Resolve a table the current user is a member of, or 404."""
     ws_repo = WorkspaceRepository(session)
     workspaces = await ws_repo.list_by_user(user.user_id)
     workspace_ids = [ws.workspace_id for ws in workspaces]
@@ -36,6 +44,19 @@ async def _get_table_for_member(
     if not await ws_repo.is_member(table.workspace_id, user.user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
     return table
+
+
+async def _build_table_response(table: Table, session: AsyncSession) -> dict[str, Any]:
+    """Build a TableResponse dict including columns from the __schema__ row."""
+    view_repo = TableViewRepository(session)
+    columns = await view_repo.get_schema(table.workspace_id, table.table_id)
+    return {
+        "workspace_id": table.workspace_id,
+        "table_id": table.table_id,
+        "columns": sorted(columns, key=lambda c: c.get("position", 0)),
+        "created_at": table.created_at,
+        "updated_at": table.updated_at,
+    }
 
 
 # --------------------------------------------------
@@ -49,7 +70,8 @@ async def create_table(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Create a new table in the specified workspace (or user's first workspace)"""
+    """Create a new table. The DB trigger inserts the __schema__ + __order__
+    rows automatically; we then populate the schema with default columns."""
     ws_repo = WorkspaceRepository(session)
     if data.workspace_id:
         workspace = await ws_repo.resolve_workspace(data.workspace_id)
@@ -65,7 +87,7 @@ async def create_table(
                 status_code=status.HTTP_403_FORBIDDEN, detail="No workspace found — create a workspace first"
             )
         workspace_id = workspace.workspace_id
-    # Default template: Doc + Title + Description columns; default "Table" view created by DB trigger
+
     default_cols = [
         {"column_id": str(uuid4()), "name": "Doc", "type": "doc", "options": {}, "position": 0},
         {"column_id": str(uuid4()), "name": "Title", "type": "text", "options": {}, "position": 1},
@@ -73,20 +95,19 @@ async def create_table(
     ]
 
     table_repo = TableRepository(session)
-    table = await table_repo.create(
-        workspace_id=workspace_id,
-        table_id=data.table_id,
-        columns=default_cols,
-    )
+    table = await table_repo.create(workspace_id=workspace_id, table_id=data.table_id)
 
-    # Create column indexes (failure here shouldn't break the table row)
+    view_repo = TableViewRepository(session)
+    await view_repo.set_schema(
+        table.workspace_id, table.table_id, default_cols, updated_by=user.user_id
+    )
     for col in default_cols:
         try:
             await table_repo.create_column_index(table.table_id, col["column_id"], col["type"])
         except Exception:
             pass
 
-    return table
+    return await _build_table_response(table, session)
 
 
 @router.get("", response_model=list[TableResponse])
@@ -94,14 +115,15 @@ async def list_tables(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """List all tables across workspaces the current user is a member of"""
+    """List tables across the user's workspaces (each with its column schema)."""
     ws_repo = WorkspaceRepository(session)
     workspaces = await ws_repo.list_by_user(user.user_id)
     table_repo = TableRepository(session)
-    tables: list[Table] = []
+    out: list[dict[str, Any]] = []
     for ws in workspaces:
-        tables.extend(await table_repo.list_by_workspace(ws.workspace_id))
-    return tables
+        for t in await table_repo.list_by_workspace(ws.workspace_id):
+            out.append(await _build_table_response(t, session))
+    return out
 
 
 @router.get("/{table_id}", response_model=TableResponse)
@@ -110,8 +132,8 @@ async def get_table(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Get a table by ID (user must be a workspace member)"""
-    return await _get_table_for_member(table_id, user, session)
+    table = await _get_table_for_member(table_id, user, session)
+    return await _build_table_response(table, session)
 
 
 @router.put("/{table_id}", response_model=TableResponse)
@@ -121,7 +143,6 @@ async def update_table(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Update a table name (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
     table_repo = TableRepository(session)
     existing = await table_repo.list_by_workspace(table.workspace_id)
@@ -129,7 +150,8 @@ async def update_table(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="A table with that name already exists in this workspace"
         )
-    return await table_repo.update(table, data.table_id)
+    table = await table_repo.update(table, data.table_id)
+    return await _build_table_response(table, session)
 
 
 @router.delete("/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -138,14 +160,13 @@ async def delete_table(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Delete a table (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
     table_repo = TableRepository(session)
     await table_repo.delete(table)
 
 
 # --------------------------------------------------
-# COLUMNS (stored in tables.columns JSONB)
+# COLUMNS — backed by the __schema__ row's config
 # --------------------------------------------------
 
 
@@ -155,9 +176,10 @@ async def list_columns(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> list[dict[str, Any]]:
-    """List columns for a table (sorted by position)"""
     table = await _get_table_for_member(table_id, user, session)
-    return sorted(table.columns, key=lambda c: c.get("position", 0))
+    view_repo = TableViewRepository(session)
+    columns = await view_repo.get_schema(table.workspace_id, table.table_id)
+    return sorted(columns, key=lambda c: c.get("position", 0))
 
 
 @router.post("/{table_id}/columns", status_code=status.HTTP_201_CREATED)
@@ -167,21 +189,27 @@ async def create_column(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
-    """Add a column to a table"""
     table = await _get_table_for_member(table_id, user, session)
+    view_repo = TableViewRepository(session)
+    columns = await view_repo.get_schema(table.workspace_id, table.table_id)
     column_dict: dict[str, Any] = {
         "column_id": str(uuid4()),
         "name": data.get("name", ""),
         "type": data.get("type", "text"),
         "options": data.get("options", {}),
-        "position": data.get("position", len(table.columns)),
+        "position": data.get("position", len(columns)),
         "created_at": datetime.utcnow().isoformat(),
     }
+    columns = [*columns, column_dict]
+    await view_repo.set_schema(
+        table.workspace_id, table.table_id, columns, updated_by=user.user_id
+    )
     table_repo = TableRepository(session)
-    updated = await table_repo.add_column(table, column_dict)
-    await table_repo.create_column_index(table.table_id, column_dict["column_id"], column_dict["type"])
+    await table_repo.create_column_index(
+        table.table_id, column_dict["column_id"], column_dict["type"]
+    )
     await invalidate_schema_cache(str(table.workspace_id))
-    return updated.columns[-1]
+    return column_dict
 
 
 @router.put("/{table_id}/columns/{column_id}")
@@ -192,23 +220,27 @@ async def update_column(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
-    """Update a column in the table's columns JSONB array"""
     table = await _get_table_for_member(table_id, user, session)
-    if not any(c.get("column_id") == column_id for c in table.columns):
+    view_repo = TableViewRepository(session)
+    columns = await view_repo.get_schema(table.workspace_id, table.table_id)
+    if not any(c.get("column_id") == column_id for c in columns):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found")
-    # strip immutable fields from updates
+
     updates = {k: v for k, v in data.items() if k not in ("column_id", "created_at")}
     table_repo = TableRepository(session)
-    # If type changed, recreate index
+
     if "type" in updates:
-        old_col = next(c for c in table.columns if c.get("column_id") == column_id)
+        old_col = next(c for c in columns if c.get("column_id") == column_id)
         if updates["type"] != old_col.get("type"):
             await table_repo.drop_column_index(table.table_id, column_id)
             await table_repo.create_column_index(table.table_id, column_id, updates["type"])
-    updated = await table_repo.update_column(table, column_id, updates)
+
+    columns = [{**c, **updates} if c.get("column_id") == column_id else c for c in columns]
+    await view_repo.set_schema(
+        table.workspace_id, table.table_id, columns, updated_by=user.user_id
+    )
     await invalidate_schema_cache(str(table.workspace_id))
-    col = next(c for c in updated.columns if c.get("column_id") == column_id)
-    return col
+    return next(c for c in columns if c.get("column_id") == column_id)
 
 
 @router.delete("/{table_id}/columns/{column_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -218,18 +250,22 @@ async def delete_column(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Delete a column from the table's columns JSONB array"""
     table = await _get_table_for_member(table_id, user, session)
-    if not any(c.get("column_id") == column_id for c in table.columns):
+    view_repo = TableViewRepository(session)
+    columns = await view_repo.get_schema(table.workspace_id, table.table_id)
+    if not any(c.get("column_id") == column_id for c in columns):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found")
     table_repo = TableRepository(session)
     await table_repo.drop_column_index(table.table_id, column_id)
-    await table_repo.delete_column(table, column_id)
+    columns = [c for c in columns if c.get("column_id") != column_id]
+    await view_repo.set_schema(
+        table.workspace_id, table.table_id, columns, updated_by=user.user_id
+    )
     await invalidate_schema_cache(str(table.workspace_id))
 
 
 # --------------------------------------------------
-# VIEWS (stored in public.table_views)
+# VIEWS — user views (excludes __schema__ + __order__)
 # --------------------------------------------------
 
 
@@ -238,8 +274,6 @@ def _view_to_dict(view: Any) -> dict[str, Any]:
         "name": view.name,
         "type": view.type,
         "config": view.config,
-        "view_number": view.view_number,
-        "is_default": view.is_default,
     }
 
 
@@ -249,11 +283,31 @@ async def list_views(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> list[dict[str, Any]]:
-    """List views for a table in linked-list order"""
+    """List user views for a table, ordered per __order__ row."""
     table = await _get_table_for_member(table_id, user, session)
     view_repo = TableViewRepository(session)
-    views = await view_repo.list_ordered(table.workspace_id, table.table_id)
-    return [_view_to_dict(v) for v in views]
+    views = await view_repo.list_user_views(table.workspace_id, table.table_id)
+    by_name = {v.name: _view_to_dict(v) for v in views}
+    order = await view_repo.get_order(table.workspace_id, table.table_id)
+    ordered = [by_name[n] for n in order if n in by_name]
+    leftover = [d for n, d in by_name.items() if n not in order]
+    return ordered + leftover
+
+
+def _ensure_user_view_name(name: str) -> None:
+    if name in RESERVED_NAMES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"View name '{name}' is reserved",
+        )
+
+
+def _ensure_user_view_type(view_type: str) -> None:
+    if view_type not in USER_VIEW_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"View type must be one of {USER_VIEW_TYPES}",
+        )
 
 
 @router.post("/{table_id}/views", status_code=status.HTTP_201_CREATED)
@@ -263,10 +317,11 @@ async def create_view(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
-    """Add a view to a table"""
     table = await _get_table_for_member(table_id, user, session)
     if not data.name:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="View name is required")
+    _ensure_user_view_name(data.name)
+    _ensure_user_view_type(data.type)
     view_repo = TableViewRepository(session)
     existing = await view_repo.get_by_name(table.workspace_id, table.table_id, data.name)
     if existing:
@@ -283,6 +338,13 @@ async def create_view(
         config=data.config,
         created_by=user.user_id,
     )
+    # Append to display order
+    order = await view_repo.get_order(table.workspace_id, table.table_id)
+    if data.name not in order:
+        order = [*order, data.name]
+        await view_repo.set_order(
+            table.workspace_id, table.table_id, order, updated_by=user.user_id
+        )
     return _view_to_dict(view)
 
 
@@ -294,15 +356,37 @@ async def update_view(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
-    """Update a view's config"""
+    _ensure_user_view_name(view_name)
     table = await _get_table_for_member(table_id, user, session)
     view_repo = TableViewRepository(session)
     view = await view_repo.get_by_name(table.workspace_id, table.table_id, view_name)
-    if not view:
+    if not view or view.type not in USER_VIEW_TYPES:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
-    updates = {k: v for k, v in data.items() if k not in ("name", "view_number", "is_default")}
+
+    updates: dict[str, Any] = {}
+    if "name" in data and data["name"] != view.name:
+        new_name = data["name"]
+        _ensure_user_view_name(new_name)
+        if await view_repo.get_by_name(table.workspace_id, table.table_id, new_name):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="View name already exists")
+        updates["name"] = new_name
+    if "type" in data:
+        _ensure_user_view_type(data["type"])
+        updates["type"] = data["type"]
+    if "config" in data:
+        updates["config"] = data["config"]
     updates["updated_by"] = user.user_id
+
     view = await view_repo.update(view, updates)
+
+    # If renamed, swap the name inside __order__
+    if "name" in updates:
+        order = await view_repo.get_order(table.workspace_id, table.table_id)
+        order = [updates["name"] if n == view_name else n for n in order]
+        await view_repo.set_order(
+            table.workspace_id, table.table_id, order, updated_by=user.user_id
+        )
+
     return _view_to_dict(view)
 
 
@@ -313,43 +397,60 @@ async def delete_view(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Remove a view (DB trigger prevents deleting the default view)"""
+    _ensure_user_view_name(view_name)
     table = await _get_table_for_member(table_id, user, session)
     view_repo = TableViewRepository(session)
     view = await view_repo.get_by_name(table.workspace_id, table.table_id, view_name)
-    if not view:
+    if not view or view.type not in USER_VIEW_TYPES:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
-    try:
-        await view_repo.delete(view)
-    except Exception as e:
-        if "Cannot delete default view" in str(e):
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot delete the default view") from e
-        raise
+    await view_repo.delete(view)
+    # Drop from __order__
+    order = await view_repo.get_order(table.workspace_id, table.table_id)
+    if view_name in order:
+        order = [n for n in order if n != view_name]
+        await view_repo.set_order(
+            table.workspace_id, table.table_id, order, updated_by=user.user_id
+        )
 
 
-class ViewMoveRequest(BaseModel):
-    after_name: str | None = None
+# --------------------------------------------------
+# VIEW ORDER — single PUT replaces the whole order array
+# --------------------------------------------------
 
 
-@router.put("/{table_id}/views/{view_name}/move")
-async def move_view(
+class ViewOrderRequest(BaseModel):
+    order: list[str]
+
+
+@router.get("/{table_id}/view-order")
+async def get_view_order(
     table_id: str,
-    view_name: str,
-    data: ViewMoveRequest,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
-) -> list[dict[str, Any]]:
-    """Reorder views: move view_name to after data.after_name (null = move to head)"""
+) -> list[str]:
     table = await _get_table_for_member(table_id, user, session)
     view_repo = TableViewRepository(session)
-    view = await view_repo.get_by_name(table.workspace_id, table.table_id, view_name)
-    if not view:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
-    try:
-        ordered = await view_repo.move(table.workspace_id, table.table_id, view, data.after_name)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
-    return [_view_to_dict(v) for v in ordered]
+    return await view_repo.get_order(table.workspace_id, table.table_id)
+
+
+@router.put("/{table_id}/view-order")
+async def put_view_order(
+    table_id: str,
+    data: ViewOrderRequest,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+) -> list[str]:
+    table = await _get_table_for_member(table_id, user, session)
+    view_repo = TableViewRepository(session)
+    # Filter against actual user views to self-heal stale names
+    user_view_names = {
+        v.name
+        for v in await view_repo.list_user_views(table.workspace_id, table.table_id)
+    }
+    cleaned = [n for n in data.order if n in user_view_names]
+    return await view_repo.set_order(
+        table.workspace_id, table.table_id, cleaned, updated_by=user.user_id
+    )
 
 
 # --------------------------------------------------
@@ -408,17 +509,26 @@ _PM_COLUMNS: list[dict[str, Any]] = [
 ]
 
 
-@router.post("/template/pm", response_model=TableResponse, status_code=status.HTTP_201_CREATED)
-async def create_pm_template(
-    data: dict[str, Any],
-    user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_rls_session),
+def _build_columns(specs: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    columns: list[dict[str, Any]] = []
+    name_to_id: dict[str, str] = {}
+    for pos, spec in enumerate(specs):
+        col_id = str(uuid4())
+        columns.append({
+            "column_id": col_id,
+            "name": spec["name"],
+            "type": spec["type"],
+            "options": spec.get("options", {}),
+            "position": pos,
+            "created_at": datetime.utcnow().isoformat(),
+        })
+        name_to_id[spec["name"]] = col_id
+    return columns, name_to_id
+
+
+async def _resolve_template_workspace(
+    data: dict[str, Any], user: User, ws_repo: WorkspaceRepository
 ):
-    """Create a PM project table with pre-configured columns and default views"""
-    table_id = data.get("table_id", "") or data.get("table_name", "") or data.get("name", "")
-    if not table_id:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="table_id is required")
-    ws_repo = WorkspaceRepository(session)
     raw_workspace = data.get("workspace_name") or data.get("workspace_id")
     if raw_workspace:
         workspace = await ws_repo.resolve_workspace(str(raw_workspace))
@@ -426,51 +536,48 @@ async def create_pm_template(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
         if not await ws_repo.is_member(workspace.workspace_id, user.user_id):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of that workspace")
-        workspace_id = workspace.workspace_id
-    else:
-        workspace = await ws_repo.get_first_owned_workspace(user.user_id)
-        if not workspace:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="No workspace found — create a workspace first"
-            )
-        workspace_id = workspace.workspace_id
+        return workspace.workspace_id
+    workspace = await ws_repo.get_first_owned_workspace(user.user_id)
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="No workspace found — create a workspace first"
+        )
+    return workspace.workspace_id
+
+
+@router.post("/template/pm", response_model=TableResponse, status_code=status.HTTP_201_CREATED)
+async def create_pm_template(
+    data: dict[str, Any],
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+):
+    table_id = data.get("table_id", "") or data.get("table_name", "") or data.get("name", "")
+    if not table_id:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="table_id is required")
+    ws_repo = WorkspaceRepository(session)
+    workspace_id = await _resolve_template_workspace(data, user, ws_repo)
 
     table_repo = TableRepository(session)
     table = await table_repo.create(workspace_id=workspace_id, table_id=table_id)
 
-    # Add columns and collect their generated IDs for view config
-    col_ids: dict[str, str] = {}
-    for pos, col_def in enumerate(_PM_COLUMNS):
-        column_dict: dict[str, Any] = {
-            "column_id": str(uuid4()),
-            "name": col_def["name"],
-            "type": col_def["type"],
-            "options": col_def.get("options", {}),
-            "position": pos,
-            "created_at": datetime.utcnow().isoformat(),
-        }
-        table = await table_repo.add_column(table, column_dict)
-        await table_repo.create_column_index(table.table_id, column_dict["column_id"], column_dict["type"])
-        col_ids[col_def["name"]] = column_dict["column_id"]
-
-    # Update default Table view config (created by DB trigger on table insert)
-    status_col_id = col_ids.get("Status", "")
-    start_col_id = col_ids.get("Start Date", "")
-    due_col_id = col_ids.get("Due Date", "")
-
+    columns, col_ids = _build_columns(_PM_COLUMNS)
     view_repo = TableViewRepository(session)
-    default_view = await view_repo.get_by_name(table.workspace_id, table.table_id, "Table")
-    if default_view:
-        await view_repo.update(default_view, {"config": {"sort": {"colId": start_col_id, "dir": "desc"}}})
+    await view_repo.set_schema(
+        table.workspace_id, table.table_id, columns, updated_by=user.user_id
+    )
+    for col in columns:
+        try:
+            await table_repo.create_column_index(table.table_id, col["column_id"], col["type"])
+        except Exception:
+            pass
 
-    # Create Sprint Board and Roadmap views
     await view_repo.create(
         workspace_id=table.workspace_id,
         table_id=table.table_id,
         name="Sprint Board",
         view_type="kanban",
         config={
-            "group_by": status_col_id,
+            "group_by": col_ids.get("Status", ""),
             "card_fields": [col_ids.get("Title", ""), col_ids.get("Priority", ""), col_ids.get("Assignee", "")],
         },
         created_by=user.user_id,
@@ -481,15 +588,21 @@ async def create_pm_template(
         name="Roadmap",
         view_type="timeline",
         config={
-            "start_col": start_col_id,
-            "end_col": due_col_id,
-            "color_by": status_col_id,
+            "start_col": col_ids.get("Start Date", ""),
+            "end_col": col_ids.get("Due Date", ""),
+            "color_by": col_ids.get("Status", ""),
             "group_by": col_ids.get("Type", ""),
         },
         created_by=user.user_id,
     )
+    await view_repo.set_order(
+        table.workspace_id,
+        table.table_id,
+        ["Sprint Board", "Roadmap"],
+        updated_by=user.user_id,
+    )
 
-    return table
+    return await _build_table_response(table, session)
 
 
 # --------------------------------------------------
@@ -526,62 +639,33 @@ async def create_crm_template(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Create a CRM Deals table with pre-configured columns and default views including a dashboard"""
     table_id = data.get("table_id", "") or data.get("table_name", "") or data.get("name", "")
     if not table_id:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="table_id is required")
-
     ws_repo = WorkspaceRepository(session)
-    raw_workspace = data.get("workspace_name") or data.get("workspace_id")
-    if raw_workspace:
-        workspace = await ws_repo.resolve_workspace(str(raw_workspace))
-        if not workspace:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
-        if not await ws_repo.is_member(workspace.workspace_id, user.user_id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of that workspace")
-        workspace_id = workspace.workspace_id
-    else:
-        workspace = await ws_repo.get_first_owned_workspace(user.user_id)
-        if not workspace:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="No workspace found — create a workspace first"
-            )
-        workspace_id = workspace.workspace_id
+    workspace_id = await _resolve_template_workspace(data, user, ws_repo)
 
     table_repo = TableRepository(session)
     table = await table_repo.create(workspace_id=workspace_id, table_id=table_id)
 
-    col_ids: dict[str, str] = {}
-    for pos, col_def in enumerate(_CRM_COLUMNS):
-        column_dict: dict[str, Any] = {
-            "column_id": str(uuid4()),
-            "name": col_def["name"],
-            "type": col_def["type"],
-            "options": col_def.get("options", {}),
-            "position": pos,
-            "created_at": datetime.utcnow().isoformat(),
-        }
-        table = await table_repo.add_column(table, column_dict)
-        await table_repo.create_column_index(table.table_id, column_dict["column_id"], column_dict["type"])
-        col_ids[col_def["name"]] = column_dict["column_id"]
-
-    # Update default Table view config (created by DB trigger on table insert)
-    stage_col_id = col_ids.get("Stage", "")
-    close_date_col_id = col_ids.get("Close Date", "")
-
+    columns, col_ids = _build_columns(_CRM_COLUMNS)
     view_repo = TableViewRepository(session)
-    default_view = await view_repo.get_by_name(table.workspace_id, table.table_id, "Table")
-    if default_view:
-        await view_repo.update(default_view, {"config": {"sort": {"colId": close_date_col_id, "dir": "asc"}}})
+    await view_repo.set_schema(
+        table.workspace_id, table.table_id, columns, updated_by=user.user_id
+    )
+    for col in columns:
+        try:
+            await table_repo.create_column_index(table.table_id, col["column_id"], col["type"])
+        except Exception:
+            pass
 
-    # Create Pipeline and Sales Dashboard views
     await view_repo.create(
         workspace_id=table.workspace_id,
         table_id=table.table_id,
         name="Pipeline",
         view_type="kanban",
         config={
-            "group_by": stage_col_id,
+            "group_by": col_ids.get("Stage", ""),
             "card_fields": [col_ids.get("Title", ""), col_ids.get("Value", ""), col_ids.get("Owner", "")],
         },
         created_by=user.user_id,
@@ -638,5 +722,15 @@ async def create_crm_template(
         },
         created_by=user.user_id,
     )
+    await view_repo.set_order(
+        table.workspace_id,
+        table.table_id,
+        ["Pipeline", "Sales Dashboard"],
+        updated_by=user.user_id,
+    )
 
-    return table
+    return await _build_table_response(table, session)
+
+
+# Keep imports referenced even if a section is unused — keeps refactor safe.
+_ = SCHEMA_ROW_NAME, ORDER_ROW_NAME

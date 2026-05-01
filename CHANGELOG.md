@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.26 — 2026-05-01
+- **Simplify `table_views` (V34).** Drop V33's linked-list / `is_default` /
+  `view_number` machinery. PK is now `(workspace_id, table_id, name)`.
+  Single `type` column discriminates row purpose:
+  - `type='schema'` (`name='__schema__'`) — config holds the column array,
+    replacing `tables.columns`. Cannot be deleted (BEFORE-DELETE trigger).
+  - `type='order'` (`name='__order__'`) — config holds the ordered name
+    array; reorder = one UPDATE on the array.
+  - `type='table' | 'kanban' | 'timeline' | 'dashboard'` — user-named view
+    rows.
+- **`tables` shrinks to identity-only.** `columns` JSONB column dropped.
+- **One trigger replaces three** — `trg_table_views_prevent_schema_delete`
+  refuses deletion of the schema row; `trg_tables_create_schema_and_order`
+  auto-inserts both meta-rows on table create.
+- **New endpoint** — `GET / PUT /api/v1/tables/{tid}/view-order`. PUT body
+  is `{order: ["A","B"]}` and self-heals stale names against actual user
+  views. Replaces V33's `/views/{name}/move`.
+- **Backend** — `models/table_view.py`, `repository/table_view.py`,
+  `router/api/tables.py` rewritten for the simplified shape. Column CRUD
+  endpoints route through the schema row. `repository/table.py` keeps
+  identity + index management; column ops moved to `TableViewRepository`.
+- **Frontend** — `Table.views` removed (views are fetched separately).
+  `lib/backend/views.ts` adds `fetchViewOrder` / `putViewOrder`. Store
+  exposes `views`, `viewOrder` writables and per-view splice mutations
+  (`createView` / `updateView` / `deleteView` / `reorderViews`).
+- **Migration tests** updated for the new shape (PK, dropped columns,
+  trigger names).
+
 ## v0.25 — 2026-05-01
 - **`tables.views` JSONB → dedicated `public.table_views` table.** Every
   view is now a row with its own audit, locking, and indexing instead of

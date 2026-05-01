@@ -10,24 +10,31 @@ from lattice_ql.error import LatticeQLError
 
 from config.redis import get_redis
 from repository.table import TableRepository
+from repository.table_view import TableViewRepository
 
 _SCHEMA_TTL = 60  # seconds
 
 
 async def _build_schema(workspace_id: str, session: Any) -> dict[str, Any]:
-    repo = TableRepository(session)
-    tables = await repo.list_by_workspace(UUID(workspace_id))
-    return {
-        t.table_id: {
+    """Build the LatticeQL workspace schema from each table's __schema__ row."""
+    table_repo = TableRepository(session)
+    view_repo = TableViewRepository(session)
+    tables = await table_repo.list_by_workspace(UUID(workspace_id))
+    out: dict[str, Any] = {}
+    for t in tables:
+        cols = await view_repo.get_schema(t.workspace_id, t.table_id)
+        out[t.table_id] = {
             "table_id": t.table_id,
             "columns": {
-                c["name"].lower().replace(" ", "_"): {"id": c["column_id"], "type": c["type"]}
-                for c in (t.columns or [])
+                c["name"].lower().replace(" ", "_"): {
+                    "id": c["column_id"],
+                    "type": c["type"],
+                }
+                for c in cols
                 if "name" in c and "column_id" in c and "type" in c
             },
         }
-        for t in tables
-    }
+    return out
 
 
 async def get_schema(workspace_id: str, session: Any) -> dict[str, Any]:

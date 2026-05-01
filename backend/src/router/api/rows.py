@@ -14,6 +14,7 @@ from models.row import Row, RowCreate, RowResponse, RowUpdate
 from models.user import User
 from repository.row import RowRepository
 from repository.table import TableRepository
+from repository.table_view import TableViewRepository
 from repository.workspace import WorkspaceRepository
 
 router = APIRouter(tags=["rows"])
@@ -67,7 +68,8 @@ def _build_doc_template(row_type: str, key: str, title: str) -> str:
 
 async def _inject_hierarchy(content: str, table, row: Row, session: AsyncSession) -> str:
     """Replace placeholder comments in doc with live parent/children links."""
-    cols = {c["name"]: c["column_id"] for c in table.columns}
+    columns = await TableViewRepository(session).get_schema(table.workspace_id, table.table_id)
+    cols = {c["name"]: c["column_id"] for c in columns}
     key_col_id = cols.get("Key", "")
     title_col_id = cols.get("Title", "")
     parent_col_id = cols.get("Parent", "")
@@ -153,14 +155,15 @@ async def create_row(
     )
 
     # Auto-create MinIO object and fill cell for every doc-type column
-    doc_cols = [c for c in table.columns if c.get("type") == "doc"]
+    columns = await TableViewRepository(session).get_schema(table.workspace_id, table.table_id)
+    doc_cols = [c for c in columns if c.get("type") == "doc"]
     if doc_cols:
         import json as _json
 
         from sqlalchemy import text as sa_text
 
-        type_col = next((c for c in table.columns if c.get("name") == "Type"), None)
-        title_col = next((c for c in table.columns if c.get("name") == "Title"), None)
+        type_col = next((c for c in columns if c.get("name") == "Type"), None)
+        title_col = next((c for c in columns if c.get("name") == "Title"), None)
         row_type = row.row_data.get(type_col["column_id"], "") if type_col else ""
         row_title = row.row_data.get(title_col["column_id"], "") if title_col else ""
         row_key = f"{row_type}-{row.row_number}" if row_type else str(row.row_number)
@@ -249,7 +252,8 @@ async def update_row(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     # Silently drop any attempts to change doc-type column values (system-managed)
-    doc_col_ids = {c["column_id"] for c in table.columns if c.get("type") == "doc"}
+    columns = await TableViewRepository(session).get_schema(table.workspace_id, table.table_id)
+    doc_col_ids = {c["column_id"] for c in columns if c.get("type") == "doc"}
     if doc_col_ids:
         data = RowUpdate(row_data={k: v for k, v in data.row_data.items() if k not in doc_col_ids})
     return await repo.update(row=row, data=data, updated_by=user.user_id)
@@ -431,7 +435,8 @@ async def delete_row(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     # Delete MinIO objects for any doc-type columns (best-effort)
-    doc_cols = [c for c in table.columns if c.get("type") == "doc"]
+    columns = await TableViewRepository(session).get_schema(table.workspace_id, table.table_id)
+    doc_cols = [c for c in columns if c.get("type") == "doc"]
     for doc_col in doc_cols:
         minio_key = row.row_data.get(doc_col["column_id"])
         if minio_key:

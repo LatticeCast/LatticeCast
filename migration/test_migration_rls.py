@@ -66,8 +66,8 @@ def verify(psql_fn) -> list[str]:
 
     # Behavioral: two users in two workspaces
     # Insert users, workspaces, membership, and tables.
-    # The trigger trg_tables_create_default_view auto-creates a default view
-    # in table_views for each inserted table row.
+    # V34 trigger trg_tables_create_schema_and_order auto-inserts the
+    # __schema__ and __order__ rows for each new table.
     psql_fn(
         f"INSERT INTO auth.users (user_id, role) VALUES "
         f"('{_USER_A}'::uuid,'user'),('{_USER_B}'::uuid,'user') "
@@ -112,43 +112,61 @@ def verify(psql_fn) -> list[str]:
             "RLS BEHAVIORAL: user A can SELECT from workspace B table_views"
         )
 
-    # INSERT positive: user A can insert a non-default view into workspace A
-    last = _as_app(
+    # INSERT positive: user A can insert a kanban view into workspace A
+    # _as_app returns the last digit-only line; we use a count(*) probe
+    # afterward to verify the row landed.
+    _as_app(
         psql_fn,
         _USER_A,
         f"INSERT INTO public.table_views "
-        f"(workspace_id, table_id, is_default, name, type, config) "
+        f"(workspace_id, table_id, name, type, config) "
         f"VALUES ('{_WS_A}'::uuid,'tv_rls_tbl_a',"
-        f"false,'rls_test_view','table','{{}}') "
-        f"RETURNING view_number;",
+        f"'rls_test_view','kanban','{{}}');",
     )
-    if not last.isdigit():
+    count = _as_app(
+        psql_fn,
+        _USER_A,
+        f"SELECT COUNT(*) FROM public.table_views "
+        f"WHERE workspace_id='{_WS_A}'::uuid AND name='rls_test_view';",
+    )
+    if not count.isdigit() or int(count) != 1:
         errors.append(
             "RLS BEHAVIORAL: user A cannot INSERT into own workspace table_views"
         )
 
     # UPDATE positive: user A can update the view just inserted
-    last = _as_app(
+    _as_app(
         psql_fn,
         _USER_A,
-        f"UPDATE public.table_views SET name='rls_updated' "
-        f"WHERE workspace_id='{_WS_A}'::uuid AND name='rls_test_view' "
-        f"RETURNING view_number;",
+        f"UPDATE public.table_views SET type='timeline' "
+        f"WHERE workspace_id='{_WS_A}'::uuid AND name='rls_test_view';",
     )
-    if not last.isdigit():
+    type_after = _as_app(
+        psql_fn,
+        _USER_A,
+        f"SELECT 1 FROM public.table_views "
+        f"WHERE workspace_id='{_WS_A}'::uuid "
+        f"  AND name='rls_test_view' AND type='timeline';",
+    )
+    if type_after != "1":
         errors.append(
             "RLS BEHAVIORAL: user A cannot UPDATE in own workspace table_views"
         )
 
-    # DELETE positive: user A can delete the non-default view
-    last = _as_app(
+    # DELETE positive: user A can delete the non-schema view
+    _as_app(
         psql_fn,
         _USER_A,
         f"DELETE FROM public.table_views "
-        f"WHERE workspace_id='{_WS_A}'::uuid AND name='rls_updated' "
-        f"RETURNING view_number;",
+        f"WHERE workspace_id='{_WS_A}'::uuid AND name='rls_test_view';",
     )
-    if not last.isdigit():
+    count = _as_app(
+        psql_fn,
+        _USER_A,
+        f"SELECT COUNT(*) FROM public.table_views "
+        f"WHERE workspace_id='{_WS_A}'::uuid AND name='rls_test_view';",
+    )
+    if count != "0":
         errors.append(
             "RLS BEHAVIORAL: user A cannot DELETE in own workspace table_views"
         )
