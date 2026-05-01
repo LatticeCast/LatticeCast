@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.25 — 2026-05-01
+- **`tables.views` JSONB → dedicated `public.table_views` table.** Every
+  view is now a row with its own audit, locking, and indexing instead of
+  living inside a JSONB array. Per-view invariants enforced in the
+  database:
+  - Partial unique index on `(workspace_id, table_id) WHERE is_default`
+    → exactly one default per table.
+  - `BEFORE DELETE` trigger refuses to remove `is_default=true`
+    → at least one view per table.
+  - `AFTER INSERT ON tables` trigger auto-creates the default Table view.
+  - `next_view_id` self-FK (DEFERRABLE INITIALLY DEFERRED) for
+    linked-list ordering walked by the FE.
+- **Migration V33** — schema + 3 triggers + RLS policy + backfill from
+  existing `tables.views` JSONB; drops the old column.
+- **Backend rewrite** — new `models/table_view.py`, `repository/table_view.py`
+  (list_ordered / get_by_name / create / update / delete / move).
+  `router/api/tables.py` view endpoints route through the new repo.
+  PM/CRM template seeders update the trigger-created default view in
+  place rather than inserting their own "Table" view.
+- **New endpoint** — `PUT /api/v1/tables/{tid}/views/{name}/move` body
+  `{after_name: string|null}` for atomic reorder (null = head).
+- **One-view-one-JSON CRUD shape** — every per-view endpoint returns
+  exactly one view dict (or 204 on DELETE), so the FE can patch its
+  local state instead of refetching. (FE client wiring is a follow-up.)
+- **LatticeQL → pure-Python git dep.** Switched `lattice-ql` from a
+  vendored wheel (`/app/vendor/lattice_ql-0.3.0-...whl`) to a pinned
+  git install: `lattice-ql @ git+https://github.com/latticeCast/LatticeQL@v0.2.0`.
+  Upstream is pure Python (hatchling) — no Rust toolchain in the backend
+  image anymore. Backend Dockerfile gained `git` apt for the install.
+  Backend adapter (`config/lattice_ql.py`) updated for the v0.2.0 API:
+  `compile(lql, schema)` returns SQL string; adapter inlines `$1` as the
+  workspace_id literal then runs the existing `_fix_table_name` rewrite.
+
 ## v0.24 — 2026-04-30
 - **Dashboard view + CRM template**. New `dashboard` view type renders
   aggregates over rows via LatticeQL widget queries (number / bar / pie /
