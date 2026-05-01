@@ -5,6 +5,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.lattice_ql import invalidate_schema_cache
@@ -13,6 +14,7 @@ from models.table import Table, TableCreate, TableResponse, TableUpdate
 from models.user import User
 from models.view import ViewCreate, validate_view_config
 from repository.table import TableRepository
+from repository.table_view import TableViewRepository
 from repository.workspace import WorkspaceRepository
 
 router = APIRouter(prefix="/tables", tags=["tables"])
@@ -63,20 +65,18 @@ async def create_table(
                 status_code=status.HTTP_403_FORBIDDEN, detail="No workspace found — create a workspace first"
             )
         workspace_id = workspace.workspace_id
-    # Default template: Doc + Title + Description + Table view (atomic insert)
+    # Default template: Doc + Title + Description columns; default "Table" view created by DB trigger
     default_cols = [
         {"column_id": str(uuid4()), "name": "Doc", "type": "doc", "options": {}, "position": 0},
         {"column_id": str(uuid4()), "name": "Title", "type": "text", "options": {}, "position": 1},
         {"column_id": str(uuid4()), "name": "Description", "type": "text", "options": {}, "position": 2},
     ]
-    default_views = [{"name": "Table", "type": "table", "config": {}}]
 
     table_repo = TableRepository(session)
     table = await table_repo.create(
         workspace_id=workspace_id,
         table_id=data.table_id,
         columns=default_cols,
-        views=default_views,
     )
 
     # Create column indexes (failure here shouldn't break the table row)
@@ -111,12 +111,7 @@ async def get_table(
     session: AsyncSession = Depends(get_rls_session),
 ):
     """Get a table by ID (user must be a workspace member)"""
-    table = await _get_table_for_member(table_id, user, session)
-    # Heal legacy tables: ensure at least one Table view exists
-    if not any(v.get("type") == "table" for v in (table.views or [])):
-        table_repo = TableRepository(session)
-        table = await table_repo.add_view(table, {"name": "Table", "type": "table", "config": {}})
-    return table
+    return await _get_table_for_member(table_id, user, session)
 
 
 @router.put("/{table_id}", response_model=TableResponse)
@@ -234,8 +229,18 @@ async def delete_column(
 
 
 # --------------------------------------------------
-# VIEWS (stored in tables.views JSONB)
+# VIEWS (stored in public.table_views)
 # --------------------------------------------------
+
+
+def _view_to_dict(view: Any) -> dict[str, Any]:
+    return {
+        "name": view.name,
+        "type": view.type,
+        "config": view.config,
+        "view_number": view.view_number,
+        "is_default": view.is_default,
+    }
 
 
 @router.get("/{table_id}/views")
@@ -244,9 +249,11 @@ async def list_views(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> list[dict[str, Any]]:
-    """List views for a table"""
+    """List views for a table in linked-list order"""
     table = await _get_table_for_member(table_id, user, session)
-    return table.views
+    view_repo = TableViewRepository(session)
+    views = await view_repo.list_ordered(table.workspace_id, table.table_id)
+    return [_view_to_dict(v) for v in views]
 
 
 @router.post("/{table_id}/views", status_code=status.HTTP_201_CREATED)
@@ -260,20 +267,23 @@ async def create_view(
     table = await _get_table_for_member(table_id, user, session)
     if not data.name:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="View name is required")
-    if any(v.get("name") == data.name for v in table.views):
+    view_repo = TableViewRepository(session)
+    existing = await view_repo.get_by_name(table.workspace_id, table.table_id, data.name)
+    if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="View name already exists")
     try:
         validate_view_config(data.type, data.config)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-    view_dict: dict[str, Any] = {
-        "name": data.name,
-        "type": data.type,
-        "config": data.config,
-    }
-    table_repo = TableRepository(session)
-    updated = await table_repo.add_view(table, view_dict)
-    return updated.views[-1]
+    view = await view_repo.create(
+        workspace_id=table.workspace_id,
+        table_id=table.table_id,
+        name=data.name,
+        view_type=data.type,
+        config=data.config,
+        created_by=user.user_id,
+    )
+    return _view_to_dict(view)
 
 
 @router.put("/{table_id}/views/{view_name}")
@@ -284,14 +294,16 @@ async def update_view(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
-    """Update a view's config in the table's views JSONB array"""
+    """Update a view's config"""
     table = await _get_table_for_member(table_id, user, session)
-    if not any(v.get("name") == view_name for v in table.views):
+    view_repo = TableViewRepository(session)
+    view = await view_repo.get_by_name(table.workspace_id, table.table_id, view_name)
+    if not view:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
-    updates = {k: v for k, v in data.items() if k != "name"}
-    table_repo = TableRepository(session)
-    updated = await table_repo.update_view(table, view_name, updates)
-    return next(v for v in updated.views if v.get("name") == view_name)
+    updates = {k: v for k, v in data.items() if k not in ("name", "view_number", "is_default")}
+    updates["updated_by"] = user.user_id
+    view = await view_repo.update(view, updates)
+    return _view_to_dict(view)
 
 
 @router.delete("/{table_id}/views/{view_name}", status_code=status.HTTP_204_NO_CONTENT)
@@ -301,16 +313,43 @@ async def delete_view(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Remove a view from the table's views JSONB array"""
+    """Remove a view (DB trigger prevents deleting the default view)"""
     table = await _get_table_for_member(table_id, user, session)
-    if not any(v.get("name") == view_name for v in table.views):
+    view_repo = TableViewRepository(session)
+    view = await view_repo.get_by_name(table.workspace_id, table.table_id, view_name)
+    if not view:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
-    # Cannot delete the last Table-type view
-    table_views = [v for v in table.views if v.get("type") == "table"]
-    if len(table_views) <= 1 and any(v.get("name") == view_name and v.get("type") == "table" for v in table.views):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot delete the last Table view")
-    table_repo = TableRepository(session)
-    await table_repo.delete_view(table, view_name)
+    try:
+        await view_repo.delete(view)
+    except Exception as e:
+        if "Cannot delete default view" in str(e):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot delete the default view") from e
+        raise
+
+
+class ViewMoveRequest(BaseModel):
+    after_name: str | None = None
+
+
+@router.put("/{table_id}/views/{view_name}/move")
+async def move_view(
+    table_id: str,
+    view_name: str,
+    data: ViewMoveRequest,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+) -> list[dict[str, Any]]:
+    """Reorder views: move view_name to after data.after_name (null = move to head)"""
+    table = await _get_table_for_member(table_id, user, session)
+    view_repo = TableViewRepository(session)
+    view = await view_repo.get_by_name(table.workspace_id, table.table_id, view_name)
+    if not view:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
+    try:
+        ordered = await view_repo.move(table.workspace_id, table.table_id, view, data.after_name)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    return [_view_to_dict(v) for v in ordered]
 
 
 # --------------------------------------------------
@@ -414,38 +453,41 @@ async def create_pm_template(
         await table_repo.create_column_index(table.table_id, column_dict["column_id"], column_dict["type"])
         col_ids[col_def["name"]] = column_dict["column_id"]
 
-    # Default views
+    # Update default Table view config (created by DB trigger on table insert)
     status_col_id = col_ids.get("Status", "")
     start_col_id = col_ids.get("Start Date", "")
     due_col_id = col_ids.get("Due Date", "")
 
-    default_views: list[dict[str, Any]] = [
-        {"name": "Table", "type": "table", "config": {"sort": {"colId": start_col_id, "dir": "desc"}}},
-        {
-            "name": "Sprint Board",
-            "type": "kanban",
-            "config": {
-                "group_by": status_col_id,
-                "card_fields": [
-                    col_ids.get("Title", ""),
-                    col_ids.get("Priority", ""),
-                    col_ids.get("Assignee", ""),
-                ],
-            },
+    view_repo = TableViewRepository(session)
+    default_view = await view_repo.get_by_name(table.workspace_id, table.table_id, "Table")
+    if default_view:
+        await view_repo.update(default_view, {"config": {"sort": {"colId": start_col_id, "dir": "desc"}}})
+
+    # Create Sprint Board and Roadmap views
+    await view_repo.create(
+        workspace_id=table.workspace_id,
+        table_id=table.table_id,
+        name="Sprint Board",
+        view_type="kanban",
+        config={
+            "group_by": status_col_id,
+            "card_fields": [col_ids.get("Title", ""), col_ids.get("Priority", ""), col_ids.get("Assignee", "")],
         },
-        {
-            "name": "Roadmap",
-            "type": "timeline",
-            "config": {
-                "start_col": start_col_id,
-                "end_col": due_col_id,
-                "color_by": status_col_id,
-                "group_by": col_ids.get("Type", ""),
-            },
+        created_by=user.user_id,
+    )
+    await view_repo.create(
+        workspace_id=table.workspace_id,
+        table_id=table.table_id,
+        name="Roadmap",
+        view_type="timeline",
+        config={
+            "start_col": start_col_id,
+            "end_col": due_col_id,
+            "color_by": status_col_id,
+            "group_by": col_ids.get("Type", ""),
         },
-    ]
-    for view_dict in default_views:
-        table = await table_repo.add_view(table, view_dict)
+        created_by=user.user_id,
+    )
 
     return table
 
@@ -523,90 +565,78 @@ async def create_crm_template(
         await table_repo.create_column_index(table.table_id, column_dict["column_id"], column_dict["type"])
         col_ids[col_def["name"]] = column_dict["column_id"]
 
+    # Update default Table view config (created by DB trigger on table insert)
     stage_col_id = col_ids.get("Stage", "")
     close_date_col_id = col_ids.get("Close Date", "")
 
-    default_views: list[dict[str, Any]] = [
-        {
-            "name": "Table",
-            "type": "table",
-            "config": {"sort": {"colId": close_date_col_id, "dir": "asc"}},
+    view_repo = TableViewRepository(session)
+    default_view = await view_repo.get_by_name(table.workspace_id, table.table_id, "Table")
+    if default_view:
+        await view_repo.update(default_view, {"config": {"sort": {"colId": close_date_col_id, "dir": "asc"}}})
+
+    # Create Pipeline and Sales Dashboard views
+    await view_repo.create(
+        workspace_id=table.workspace_id,
+        table_id=table.table_id,
+        name="Pipeline",
+        view_type="kanban",
+        config={
+            "group_by": stage_col_id,
+            "card_fields": [col_ids.get("Title", ""), col_ids.get("Value", ""), col_ids.get("Owner", "")],
         },
-        {
-            "name": "Pipeline",
-            "type": "kanban",
-            "config": {
-                "group_by": stage_col_id,
-                "card_fields": [
-                    col_ids.get("Title", ""),
-                    col_ids.get("Value", ""),
-                    col_ids.get("Owner", ""),
-                ],
-            },
-        },
-        {
-            "name": "Sales Dashboard",
-            "type": "dashboard",
-            "config": {
-                "layout": [
-                    {"widget_id": "pipeline_value", "x": 0, "y": 0, "w": 3, "h": 2},
-                    {"widget_id": "by_stage", "x": 3, "y": 0, "w": 6, "h": 4},
-                    {"widget_id": "by_owner", "x": 9, "y": 0, "w": 3, "h": 4},
-                    {"widget_id": "won_value", "x": 0, "y": 2, "w": 3, "h": 2},
-                    {"widget_id": "recent", "x": 0, "y": 4, "w": 12, "h": 4},
-                ],
-                "widgets": {
-                    "pipeline_value": {
-                        "title": "Pipeline Value",
-                        "chart": "number",
-                        "lql": (
-                            'table("deals")'
-                            ' | filter((r)->{r.stage in @["lead","qualified","proposal"]})'
-                            ' | aggregate(@{"value": sum(r.value)})'
-                        ),
-                        "binding": {"value": "value"},
-                    },
-                    "by_stage": {
-                        "title": "Value by Stage",
-                        "chart": "bar",
-                        "lql": (
-                            'table("deals")'
-                            " | group_by((r)->{r.stage})"
-                            ' | aggregate(@{"value": sum(r.value)})'
-                        ),
-                        "binding": {"x": "dim_0", "y": "value"},
-                    },
-                    "by_owner": {
-                        "title": "Deals by Owner",
-                        "chart": "bar",
-                        "lql": (
-                            'table("deals")'
-                            " | group_by((r)->{r.owner})"
-                            " | aggregate(count())"
-                        ),
-                        "binding": {"x": "dim_0", "y": "count"},
-                    },
-                    "won_value": {
-                        "title": "Won Value",
-                        "chart": "number",
-                        "lql": (
-                            'table("deals")'
-                            ' | filter((r)->{r.stage=="won"})'
-                            ' | aggregate(@{"value": sum(r.value)})'
-                        ),
-                        "binding": {"value": "value"},
-                    },
-                    "recent": {
-                        "title": "Recent Deals",
-                        "chart": "list",
-                        "lql": 'table("deals") | limit(10)',
-                        "binding": {},
-                    },
+        created_by=user.user_id,
+    )
+    await view_repo.create(
+        workspace_id=table.workspace_id,
+        table_id=table.table_id,
+        name="Sales Dashboard",
+        view_type="dashboard",
+        config={
+            "layout": [
+                {"widget_id": "pipeline_value", "x": 0, "y": 0, "w": 3, "h": 2},
+                {"widget_id": "by_stage", "x": 3, "y": 0, "w": 6, "h": 4},
+                {"widget_id": "by_owner", "x": 9, "y": 0, "w": 3, "h": 4},
+                {"widget_id": "won_value", "x": 0, "y": 2, "w": 3, "h": 2},
+                {"widget_id": "recent", "x": 0, "y": 4, "w": 12, "h": 4},
+            ],
+            "widgets": {
+                "pipeline_value": {
+                    "title": "Pipeline Value",
+                    "chart": "number",
+                    "lql": (
+                        'table("deals")'
+                        ' | filter((r)->{r.stage in @["lead","qualified","proposal"]})'
+                        ' | aggregate(@{"value": sum(r.value)})'
+                    ),
+                    "binding": {"value": "value"},
+                },
+                "by_stage": {
+                    "title": "Value by Stage",
+                    "chart": "bar",
+                    "lql": ('table("deals") | group_by((r)->{r.stage}) | aggregate(@{"value": sum(r.value)})'),
+                    "binding": {"x": "dim_0", "y": "value"},
+                },
+                "by_owner": {
+                    "title": "Deals by Owner",
+                    "chart": "bar",
+                    "lql": ('table("deals") | group_by((r)->{r.owner}) | aggregate(count())'),
+                    "binding": {"x": "dim_0", "y": "count"},
+                },
+                "won_value": {
+                    "title": "Won Value",
+                    "chart": "number",
+                    "lql": ('table("deals") | filter((r)->{r.stage=="won"}) | aggregate(@{"value": sum(r.value)})'),
+                    "binding": {"value": "value"},
+                },
+                "recent": {
+                    "title": "Recent Deals",
+                    "chart": "list",
+                    "lql": 'table("deals") | limit(10)',
+                    "binding": {},
                 },
             },
         },
-    ]
-    for view_dict in default_views:
-        table = await table_repo.add_view(table, view_dict)
+        created_by=user.user_id,
+    )
 
     return table
