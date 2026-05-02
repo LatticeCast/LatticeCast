@@ -98,9 +98,7 @@ async def create_table(
     table = await table_repo.create(workspace_id=workspace_id, table_id=data.table_id)
 
     view_repo = TableViewRepository(session)
-    await view_repo.set_schema(
-        table.workspace_id, table.table_id, default_cols, updated_by=user.user_id
-    )
+    await view_repo.set_schema(table.workspace_id, table.table_id, default_cols, updated_by=user.user_id)
     for col in default_cols:
         try:
             await table_repo.create_column_index(table.table_id, col["column_id"], col["type"])
@@ -201,13 +199,9 @@ async def create_column(
         "created_at": datetime.utcnow().isoformat(),
     }
     columns = [*columns, column_dict]
-    await view_repo.set_schema(
-        table.workspace_id, table.table_id, columns, updated_by=user.user_id
-    )
+    await view_repo.set_schema(table.workspace_id, table.table_id, columns, updated_by=user.user_id)
     table_repo = TableRepository(session)
-    await table_repo.create_column_index(
-        table.table_id, column_dict["column_id"], column_dict["type"]
-    )
+    await table_repo.create_column_index(table.table_id, column_dict["column_id"], column_dict["type"])
     await invalidate_schema_cache(str(table.workspace_id))
     return column_dict
 
@@ -236,9 +230,7 @@ async def update_column(
             await table_repo.create_column_index(table.table_id, column_id, updates["type"])
 
     columns = [{**c, **updates} if c.get("column_id") == column_id else c for c in columns]
-    await view_repo.set_schema(
-        table.workspace_id, table.table_id, columns, updated_by=user.user_id
-    )
+    await view_repo.set_schema(table.workspace_id, table.table_id, columns, updated_by=user.user_id)
     await invalidate_schema_cache(str(table.workspace_id))
     return next(c for c in columns if c.get("column_id") == column_id)
 
@@ -258,9 +250,7 @@ async def delete_column(
     table_repo = TableRepository(session)
     await table_repo.drop_column_index(table.table_id, column_id)
     columns = [c for c in columns if c.get("column_id") != column_id]
-    await view_repo.set_schema(
-        table.workspace_id, table.table_id, columns, updated_by=user.user_id
-    )
+    await view_repo.set_schema(table.workspace_id, table.table_id, columns, updated_by=user.user_id)
     await invalidate_schema_cache(str(table.workspace_id))
 
 
@@ -342,9 +332,7 @@ async def create_view(
     order = await view_repo.get_order(table.workspace_id, table.table_id)
     if data.name not in order:
         order = [*order, data.name]
-        await view_repo.set_order(
-            table.workspace_id, table.table_id, order, updated_by=user.user_id
-        )
+        await view_repo.set_order(table.workspace_id, table.table_id, order, updated_by=user.user_id)
     return _view_to_dict(view)
 
 
@@ -383,9 +371,7 @@ async def update_view(
     if "name" in updates:
         order = await view_repo.get_order(table.workspace_id, table.table_id)
         order = [updates["name"] if n == view_name else n for n in order]
-        await view_repo.set_order(
-            table.workspace_id, table.table_id, order, updated_by=user.user_id
-        )
+        await view_repo.set_order(table.workspace_id, table.table_id, order, updated_by=user.user_id)
 
     return _view_to_dict(view)
 
@@ -408,9 +394,7 @@ async def delete_view(
     order = await view_repo.get_order(table.workspace_id, table.table_id)
     if view_name in order:
         order = [n for n in order if n != view_name]
-        await view_repo.set_order(
-            table.workspace_id, table.table_id, order, updated_by=user.user_id
-        )
+        await view_repo.set_order(table.workspace_id, table.table_id, order, updated_by=user.user_id)
 
 
 # --------------------------------------------------
@@ -443,14 +427,9 @@ async def put_view_order(
     table = await _get_table_for_member(table_id, user, session)
     view_repo = TableViewRepository(session)
     # Filter against actual user views to self-heal stale names
-    user_view_names = {
-        v.name
-        for v in await view_repo.list_user_views(table.workspace_id, table.table_id)
-    }
+    user_view_names = {v.name for v in await view_repo.list_user_views(table.workspace_id, table.table_id)}
     cleaned = [n for n in data.order if n in user_view_names]
-    return await view_repo.set_order(
-        table.workspace_id, table.table_id, cleaned, updated_by=user.user_id
-    )
+    return await view_repo.set_order(table.workspace_id, table.table_id, cleaned, updated_by=user.user_id)
 
 
 # --------------------------------------------------
@@ -514,21 +493,21 @@ def _build_columns(specs: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], d
     name_to_id: dict[str, str] = {}
     for pos, spec in enumerate(specs):
         col_id = str(uuid4())
-        columns.append({
-            "column_id": col_id,
-            "name": spec["name"],
-            "type": spec["type"],
-            "options": spec.get("options", {}),
-            "position": pos,
-            "created_at": datetime.utcnow().isoformat(),
-        })
+        columns.append(
+            {
+                "column_id": col_id,
+                "name": spec["name"],
+                "type": spec["type"],
+                "options": spec.get("options", {}),
+                "position": pos,
+                "created_at": datetime.utcnow().isoformat(),
+            }
+        )
         name_to_id[spec["name"]] = col_id
     return columns, name_to_id
 
 
-async def _resolve_template_workspace(
-    data: dict[str, Any], user: User, ws_repo: WorkspaceRepository
-):
+async def _resolve_template_workspace(data: dict[str, Any], user: User, ws_repo: WorkspaceRepository):
     raw_workspace = data.get("workspace_name") or data.get("workspace_id")
     if raw_workspace:
         workspace = await ws_repo.resolve_workspace(str(raw_workspace))
@@ -562,9 +541,7 @@ async def create_pm_template(
 
     columns, col_ids = _build_columns(_PM_COLUMNS)
     view_repo = TableViewRepository(session)
-    await view_repo.set_schema(
-        table.workspace_id, table.table_id, columns, updated_by=user.user_id
-    )
+    await view_repo.set_schema(table.workspace_id, table.table_id, columns, updated_by=user.user_id)
     for col in columns:
         try:
             await table_repo.create_column_index(table.table_id, col["column_id"], col["type"])
@@ -650,9 +627,7 @@ async def create_crm_template(
 
     columns, col_ids = _build_columns(_CRM_COLUMNS)
     view_repo = TableViewRepository(session)
-    await view_repo.set_schema(
-        table.workspace_id, table.table_id, columns, updated_by=user.user_id
-    )
+    await view_repo.set_schema(table.workspace_id, table.table_id, columns, updated_by=user.user_id)
     for col in columns:
         try:
             await table_repo.create_column_index(table.table_id, col["column_id"], col["type"])
@@ -677,46 +652,62 @@ async def create_crm_template(
         view_type="dashboard",
         config={
             "layout": [
-                {"widget_id": "pipeline_value", "x": 0, "y": 0, "w": 3, "h": 2},
-                {"widget_id": "by_stage", "x": 3, "y": 0, "w": 6, "h": 4},
-                {"widget_id": "by_owner", "x": 9, "y": 0, "w": 3, "h": 4},
-                {"widget_id": "won_value", "x": 0, "y": 2, "w": 3, "h": 2},
-                {"widget_id": "recent", "x": 0, "y": 4, "w": 12, "h": 4},
+                {"id": "pipeline_value", "x": 0, "y": 0, "w": 3, "h": 2},
+                {"id": "by_stage", "x": 3, "y": 0, "w": 6, "h": 4},
+                {"id": "by_owner", "x": 9, "y": 0, "w": 3, "h": 4},
+                {"id": "won_value", "x": 0, "y": 2, "w": 3, "h": 2},
+                {"id": "recent", "x": 0, "y": 4, "w": 12, "h": 4},
             ],
-            "widgets": {
+            "blocks": {
                 "pipeline_value": {
+                    "kind": "number",
                     "title": "Pipeline Value",
-                    "chart": "number",
                     "lql": (
-                        'table("deals")'
+                        f'table("{table_id}")'
                         ' | filter((r)->{r.stage in @["lead","qualified","proposal"]})'
                         ' | aggregate(@{"value": sum(r.value)})'
                     ),
-                    "binding": {"value": "value"},
+                    "field": "value",
+                    "format": "$,.0f",
                 },
                 "by_stage": {
+                    "kind": "chart",
                     "title": "Value by Stage",
-                    "chart": "bar",
-                    "lql": ('table("deals") | group_by((r)->{r.stage}) | aggregate(@{"value": sum(r.value)})'),
-                    "binding": {"x": "dim_0", "y": "value"},
+                    "lql": (
+                        f'table("{table_id}") | group_by((r)->{{r.stage}}) | aggregate(@{{"value": sum(r.value)}})'
+                    ),
+                    "echarts": {
+                        "dataset": [{"$inject": "rows"}],
+                        "xAxis": {"type": "category"},
+                        "yAxis": {"type": "value"},
+                        "series": [{"type": "bar", "encode": {"x": "dim_0", "y": "value"}}],
+                    },
                 },
                 "by_owner": {
+                    "kind": "chart",
                     "title": "Deals by Owner",
-                    "chart": "bar",
-                    "lql": ('table("deals") | group_by((r)->{r.owner}) | aggregate(count())'),
-                    "binding": {"x": "dim_0", "y": "count"},
+                    "lql": f'table("{table_id}") | group_by((r)->{{r.owner}}) | aggregate(count())',
+                    "echarts": {
+                        "dataset": [{"$inject": "rows"}],
+                        "xAxis": {"type": "category"},
+                        "yAxis": {"type": "value"},
+                        "series": [{"type": "bar", "encode": {"x": "dim_0", "y": "count"}}],
+                    },
                 },
                 "won_value": {
+                    "kind": "number",
                     "title": "Won Value",
-                    "chart": "number",
-                    "lql": ('table("deals") | filter((r)->{r.stage=="won"}) | aggregate(@{"value": sum(r.value)})'),
-                    "binding": {"value": "value"},
+                    "lql": (
+                        f'table("{table_id}") | filter((r)->{{r.stage=="won"}}) | aggregate(@{{"value": sum(r.value)}})'
+                    ),
+                    "field": "value",
+                    "format": "$,.0f",
                 },
                 "recent": {
+                    "kind": "list",
                     "title": "Recent Deals",
-                    "chart": "list",
-                    "lql": 'table("deals") | limit(10)',
-                    "binding": {},
+                    "lql": f'table("{table_id}") | limit(10)',
+                    "columns": [],
                 },
             },
         },

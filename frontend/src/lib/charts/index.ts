@@ -1,17 +1,2 @@
-export {
-	Chart,
-	BarController,
-	LineController,
-	PieController,
-	DoughnutController,
-	CategoryScale,
-	LinearScale,
-	PointElement,
-	LineElement,
-	BarElement,
-	ArcElement,
-	Tooltip,
-	Legend
-} from 'chart.js';
-
-export { Bar, Line, Pie, Doughnut } from 'svelte-chartjs';
+export { default as EChart } from './EChart.svelte';
+export { applyInjects } from './inject';

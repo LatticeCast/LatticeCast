@@ -1,7 +1,7 @@
 """
-Tests for the widget query endpoint and DashboardRepository.
+Tests for the block query endpoint and DashboardRepository.
 
-  POST /api/v1/tables/{table_id}/views/{view_name}/widgets/{widget_id}/query
+  POST /api/v1/tables/{table_id}/views/{view_name}/blocks/{block_id}/query
 
 Unit tests:  mock AsyncSession; verify execute() behavior.
 Integration: requires live stack (INTEGRATION_TESTS=1).
@@ -85,9 +85,7 @@ class TestExecute:
             session = self._make_session([{"count": 7}])
             from repository.dashboard import DashboardRepository
 
-            rows = await DashboardRepository.execute(
-                session, "SELECT 7 AS count", [], {"sprint": "Q1"}
-            )
+            rows = await DashboardRepository.execute(session, "SELECT 7 AS count", [], {"sprint": "Q1"})
             assert rows == [{"count": 7}]
             session.execute.assert_called_once()
 
@@ -116,13 +114,13 @@ class TestWidgetQueryEndpoint:
             "name": "Sales Dashboard",
             "type": "dashboard",
             "config": {
-                "layout": [{"widget_id": "w1", "x": 0, "y": 0, "w": 6, "h": 4}],
-                "widgets": {
+                "layout": [{"id": "w1", "x": 0, "y": 0, "w": 6, "h": 4}],
+                "blocks": {
                     "w1": {
+                        "kind": "number",
                         "title": "Row count",
-                        "chart": "number",
                         "lql": f'table("{table_id}") | aggregate(count())',
-                        "binding": {"value": "measure"},
+                        "field": "measure",
                     }
                 },
             },
@@ -146,7 +144,7 @@ class TestWidgetQueryEndpoint:
                 )
 
                 r = await client.post(
-                    "/api/v1/tables/dash_nondash/views/Table/widgets/w1/query",
+                    "/api/v1/tables/dash_nondash/views/Table/blocks/w1/query",
                     json={},
                     headers=headers,
                 )
@@ -178,12 +176,12 @@ class TestWidgetQueryEndpoint:
                 )
 
                 r = await client.post(
-                    "/api/v1/tables/dash_wid404/views/Sales Dashboard/widgets/no_widget/query",
+                    "/api/v1/tables/dash_wid404/views/Sales Dashboard/blocks/no_block/query",
                     json={},
                     headers=headers,
                 )
                 assert r.status_code == 404
-                assert "widget" in r.json()["detail"].lower()
+                assert "block" in r.json()["detail"].lower()
 
         _run(_run_test())
 
@@ -226,7 +224,7 @@ class TestWidgetQueryEndpoint:
                 )
 
                 r = await client.post(
-                    f"/api/v1/tables/{tbl_id}/views/Sales Dashboard/widgets/w1/query",
+                    f"/api/v1/tables/{tbl_id}/views/Sales Dashboard/blocks/w1/query",
                     json={},
                     headers=headers,
                 )
@@ -246,10 +244,7 @@ class TestDashboardRepositoryIntegration:
     """Direct DashboardRepository.execute() against a real DB session."""
 
     @pytest.mark.xfail(
-        reason=(
-            "LatticeQL-generated SQL uses `tables.table_name` dropped in V21. "
-            "Execution requires a schema update."
-        ),
+        reason=("LatticeQL-generated SQL uses `tables.table_name` dropped in V21. Execution requires a schema update."),
         strict=False,
     )
     def test_execute_count_query(self):
@@ -277,6 +272,7 @@ class TestDashboardRepositoryIntegration:
 
             sys.path.insert(0, "/app/src")
             from config.db import app_session_factory  # type: ignore[import]
+
             from config.lattice_ql import compile_lql
             from repository.dashboard import DashboardRepository
 

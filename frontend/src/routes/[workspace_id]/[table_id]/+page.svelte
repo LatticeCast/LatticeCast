@@ -12,6 +12,7 @@
 		workspaces,
 		columns,
 		rows,
+		views as viewsStore,
 		loading,
 		error,
 		loadTable,
@@ -172,13 +173,14 @@
 				// Restore active view from URL param or localStorage
 				const urlView = new URL(window.location.href).searchParams.get('view');
 				const savedView = urlView ?? localStorage.getItem(`view:${tableId}`);
-				if (savedView && table.views.some((v) => v.name === savedView)) {
+				const loadedViews = get(viewsStore);
+				if (savedView && loadedViews.some((v) => v.name === savedView)) {
 					activeViewName = savedView;
-				} else if (table.views.length > 0) {
-					activeViewName = table.views[0].name;
+				} else if (loadedViews.length > 0) {
+					activeViewName = loadedViews[0].name;
 				}
 				// Apply sort/group/filter from active view config
-				const initView = table.views.find((v) => v.name === activeViewName);
+				const initView = loadedViews.find((v) => v.name === activeViewName);
 				if (initView) applyViewConfig(initView); // also sets _applyingConfig = true and schedules reset
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to load table');

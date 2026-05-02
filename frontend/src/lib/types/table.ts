@@ -41,6 +41,7 @@ export interface Table {
 	table_id: string;
 	workspace_id: UUID;
 	columns: Column[];
+	views?: ViewConfig[];
 	created_at: string;
 	updated_at: string;
 }

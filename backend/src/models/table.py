@@ -27,9 +27,7 @@ class TableCreate(SQLModel):
     """Schema for creating a table."""
 
     table_id: str = Field(..., description="Table name (becomes the PK)")
-    workspace_id: str | None = Field(
-        default=None, description="Target workspace UUID or workspace_name"
-    )
+    workspace_id: str | None = Field(default=None, description="Target workspace UUID or workspace_name")
 
 
 class TableResponse(SQLModel):
