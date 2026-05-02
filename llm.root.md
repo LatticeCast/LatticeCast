@@ -87,7 +87,7 @@ lattice-cast/
 └── docker-compose.yml      DBA creds hardcoded here (not .env)
 ```
 
-## Database Schema (current, after V32)
+## Database Schema (current, after V34)
 
 See `llm.arch.db.md` for full details.
 
@@ -97,13 +97,19 @@ auth.gdpr          (user_id FK, email UNIQUE, legal_name)        # PII — login
 public.user_info   (user_id FK, user_name VARCHAR(32) UNIQUE)    # public handle
 public.workspaces  (workspace_id UUID PK, workspace_name UNIQUE)
 public.workspace_members  ((workspace_id, user_id) PK, role)
-public.tables      ((workspace_id, table_id) composite PK, columns JSONB, views JSONB)
+public.tables      ((workspace_id, table_id) composite PK)       # V34: identity-only
+public.table_views ((workspace_id, table_id, name) composite PK, type, config JSONB)
 public.rows        ((workspace_id, table_id, row_number) composite PK, row_data JSONB)
 private.schema_migrations  (filename, checksum SHA-256, applied_at)
 ```
 
 Notes:
-- Column defs + view configs in `tables.columns` / `tables.views` JSONB
+- `public.table_views` is one row per "thing about a table". `type`
+  discriminates: `schema` (name=`__schema__`, config=column array),
+  `order` (name=`__order__`, config=ordered name array), or one of
+  `table|kanban|timeline|dashboard` (user-named view rows).
+- Schema row cannot be deleted (BEFORE-DELETE trigger). On `tables`
+  insert an AFTER-INSERT trigger auto-creates `__schema__` + `__order__`.
 - Auto-managed PG indexes per column: B-tree (num/date), GIN (select/tags/text)
 - Ticket docs: MinIO at `{workspace_id}/{table_id}/{row_number}.md`
 - RLS on `tables` + `rows` enforces workspace membership

@@ -21,7 +21,7 @@ Built ON the Airtable core. PM is just a template + conventions — no special c
 | 10 | Description | text |
 | 11 | Parent | text (row_number of parent) |
 
-Default views: Table (sort by Start Date desc) + Sprint Board (Kanban by Status) + Roadmap (Timeline).
+Default views: implicit Table (rendered from the schema row) + Sprint Board (Kanban by Status) + Roadmap (Timeline). The seeder no longer inserts a "Table" view explicitly — the schema row serves as the default Table rendering.
 
 ## Hierarchy
 

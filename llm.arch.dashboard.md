@@ -4,7 +4,7 @@
 
 Dashboard is a fourth view type (alongside Table/Kanban/Timeline). It renders **aggregates** over rows via LatticeQL widget queries — counts, sums, group-bys — not raw rows.
 
-## View Config Shape (stored in `tables.views` JSONB)
+## View Config Shape (stored in the dashboard view's row in `public.table_views`)
 
 ```jsonc
 {
