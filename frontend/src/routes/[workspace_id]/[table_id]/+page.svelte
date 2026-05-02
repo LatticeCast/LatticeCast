@@ -142,10 +142,22 @@
 		48 + sortedColumns.reduce((sum, col) => sum + getColWidth(col), 0) + 40 + 40
 	);
 
+	// V34: the schema row is the implicit default Table view. Prepend it
+	// so the view switcher always has at least one tab even when no
+	// user views exist. Skip if the user happens to have a user view
+	// named 'Table' to avoid duplicate tabs.
+	const IMPLICIT_TABLE_VIEW: ViewConfig = {
+		name: 'Table',
+		type: 'table',
+		config: {}
+	};
+	const allViews = $derived(
+		$viewsStore.some((v) => v.name === IMPLICIT_TABLE_VIEW.name)
+			? $viewsStore
+			: [IMPLICIT_TABLE_VIEW, ...$viewsStore]
+	);
 	const activeView = $derived(
-		($viewsStore).find((v) => v.name === activeViewName) ??
-			($viewsStore)[0] ??
-			({ name: 'Table', type: 'table', config: {} } satisfies ViewConfig)
+		allViews.find((v) => v.name === activeViewName) ?? allViews[0] ?? IMPLICIT_TABLE_VIEW
 	);
 
 	const groupedRows = $derived(buildGroupedRows(sortedRows, groupConfig, $columns));
@@ -864,7 +876,7 @@
 	{/if}
 
 	<ViewSwitcher
-		views={$viewsStore}
+		views={allViews}
 		activeViewName={activeView.name}
 		onViewChange={handleViewChange}
 		onAddView={handleAddView}
