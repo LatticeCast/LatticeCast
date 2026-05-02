@@ -1,30 +1,45 @@
-export type ChartKind = 'number' | 'bar' | 'pie' | 'line' | 'list';
+export type BlockKind = 'chart' | 'number' | 'list';
 
-export interface WidgetBinding {
-	x?: string;
-	y?: string;
-	label?: string;
-	value?: string;
-}
-
-export interface Widget {
-	title: string;
-	chart: ChartKind;
-	lql: string;
-	binding: WidgetBinding;
-}
-
-export interface DashboardLayoutItem {
-	widget_id: string;
+export interface LayoutEntry {
+	id: string;
 	x: number;
 	y: number;
 	w: number;
 	h: number;
 }
 
+export interface ChartBlock {
+	kind: 'chart';
+	title: string;
+	lql: string;
+	echarts: Record<string, unknown>;
+}
+
+export interface NumberBlock {
+	kind: 'number';
+	title: string;
+	lql: string;
+	field: string;
+	format?: string;
+}
+
+export interface ListColumn {
+	key: string;
+	label: string;
+}
+
+export interface ListBlock {
+	kind: 'list';
+	title: string;
+	lql: string;
+	columns: ListColumn[];
+}
+
+export type Block = ChartBlock | NumberBlock | ListBlock;
+
 export interface DashboardConfig {
-	layout: DashboardLayoutItem[];
-	widgets: Record<string, Widget>;
+	layout: LayoutEntry[];
+	blocks: Record<string, Block>;
 }
 
 export interface DashboardView {
@@ -33,4 +48,4 @@ export interface DashboardView {
 	config: DashboardConfig;
 }
 
-export type WidgetRow = Record<string, unknown>;
+export type BlockRow = Record<string, unknown>;

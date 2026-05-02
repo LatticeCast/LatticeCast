@@ -4,26 +4,45 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Discriminator, Field, TypeAdapter, ValidationError
 
 
-class WidgetBinding(BaseModel):
-    x: str | None = None
-    y: str | None = None
-    label: str | None = None
-    value: str | None = None
-
-
-class Widget(BaseModel):
-    title: str
-    chart: Literal["number", "bar", "pie", "line", "list"]
-    lql: str
-    binding: WidgetBinding = Field(default_factory=WidgetBinding)
-
-
-class DashboardLayoutItem(BaseModel):
-    widget_id: str
+class LayoutEntry(BaseModel):
+    id: str
     x: int
     y: int
     w: int
     h: int
+
+
+class ChartBlock(BaseModel):
+    kind: Literal["chart"] = "chart"
+    title: str
+    lql: str
+    echarts: dict[str, Any] = Field(default_factory=dict)
+
+
+class NumberBlock(BaseModel):
+    kind: Literal["number"] = "number"
+    title: str
+    lql: str
+    field: str
+    format: str | None = None
+
+
+class ListColumn(BaseModel):
+    key: str
+    label: str
+
+
+class ListBlock(BaseModel):
+    kind: Literal["list"] = "list"
+    title: str
+    lql: str
+    columns: list[ListColumn] = Field(default_factory=list)
+
+
+Block = Annotated[
+    ChartBlock | NumberBlock | ListBlock,
+    Discriminator("kind"),
+]
 
 
 class TableConfig(BaseModel):
@@ -48,8 +67,10 @@ class DashboardConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     type: Literal["dashboard"] = "dashboard"
-    layout: list[DashboardLayoutItem] = Field(default_factory=list)
-    widgets: dict[str, Widget] = Field(default_factory=dict)
+    layout: list[LayoutEntry] = Field(default_factory=list)
+    blocks: dict[str, Annotated[ChartBlock | NumberBlock | ListBlock, Discriminator("kind")]] = Field(
+        default_factory=dict
+    )
 
 
 ViewConfig = Annotated[

@@ -83,6 +83,7 @@ export async function loadTable(table: Table): Promise<void> {
 		rows.set(rws);
 		views.set(vws);
 		viewOrder.set(ord);
+		currentTable.update((t) => (t ? { ...t, views: vws } : null));
 	} catch (e) {
 		error.set(e instanceof Error ? e.message : 'Failed to load table data');
 	} finally {

@@ -17,7 +17,7 @@ from repository.workspace import WorkspaceRepository
 router = APIRouter(prefix="/tables", tags=["dashboard"])
 
 
-class WidgetQueryRequest(BaseModel):
+class BlockQueryRequest(BaseModel):
     params: dict[str, Any] = {}
 
 
@@ -34,16 +34,16 @@ async def _get_table_for_member(table_id: str, user: User, session: AsyncSession
     return table
 
 
-@router.post("/{table_id}/views/{view_name}/widgets/{widget_id}/query")
-async def query_widget(
+@router.post("/{table_id}/views/{view_name}/blocks/{block_id}/query")
+async def query_block(
     table_id: str,
     view_name: str,
-    widget_id: str,
-    body: WidgetQueryRequest,
+    block_id: str,
+    body: BlockQueryRequest,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
-    """Execute a dashboard widget's LatticeQL query and return aggregated rows."""
+    """Execute a dashboard block's LatticeQL query and return aggregated rows."""
     table = await _get_table_for_member(table_id, user, session)
 
     view_repo = TableViewRepository(session)
@@ -53,11 +53,11 @@ async def query_widget(
     if view.type != "dashboard":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="View is not a dashboard")
 
-    widgets = (view.config or {}).get("widgets", {})
-    if widget_id not in widgets:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Widget not found")
+    blocks = (view.config or {}).get("blocks", {})
+    if block_id not in blocks:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Block not found")
 
-    lql = widgets[widget_id].get("lql", "")
+    lql = blocks[block_id].get("lql", "")
     try:
         sql, params = await compile_lql(lql, str(table.workspace_id), session)
     except ValueError as e:

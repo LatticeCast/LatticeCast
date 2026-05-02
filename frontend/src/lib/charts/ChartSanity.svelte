@@ -1,31 +1,23 @@
 <script lang="ts">
-	import {
-		Chart,
-		BarController,
-		BarElement,
-		CategoryScale,
-		LinearScale,
-		Tooltip,
-		Legend
-	} from 'chart.js';
-	import { Bar } from 'svelte-chartjs';
+	import EChart from './EChart.svelte';
 
-	Chart.register(BarController, BarElement, CategoryScale, LinearScale, Tooltip, Legend);
-
-	const data = {
-		labels: ['Leads', 'Qualified', 'Won'],
-		datasets: [
+	const option = {
+		dataset: [
 			{
-				label: 'Deals',
-				data: [12, 7, 3],
-				backgroundColor: ['#6d28d9', '#7c3aed', '#8b5cf6']
+				source: [
+					['Stage', 'Deals'],
+					['Leads', 12],
+					['Qualified', 7],
+					['Won', 3]
+				]
 			}
-		]
+		],
+		xAxis: { type: 'category' },
+		yAxis: { type: 'value' },
+		series: [{ type: 'bar', encode: { x: 'Stage', y: 'Deals' } }]
 	};
-
-	const options = { responsive: true };
 </script>
 
 <div data-testid="chart-sanity" class="h-64 w-full max-w-sm">
-	<Bar {data} {options} />
+	<EChart {option} />
 </div>

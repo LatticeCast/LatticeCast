@@ -33,9 +33,7 @@ class TableViewRepository:
         )
         return list(result.scalars().all())
 
-    async def get_by_name(
-        self, workspace_id: UUID, table_id: str, name: str
-    ) -> TableView | None:
+    async def get_by_name(self, workspace_id: UUID, table_id: str, name: str) -> TableView | None:
         result = await self.session.execute(
             select(TableView).where(
                 TableView.workspace_id == workspace_id,
@@ -68,9 +66,7 @@ class TableViewRepository:
         await self.session.refresh(view)
         return view
 
-    async def update(
-        self, view: TableView, updates: dict[str, Any]
-    ) -> TableView:
+    async def update(self, view: TableView, updates: dict[str, Any]) -> TableView:
         for k, v in updates.items():
             setattr(view, k, v)
         view.updated_at = datetime.utcnow()
@@ -85,9 +81,7 @@ class TableViewRepository:
 
     # ── User views (excludes schema + order rows) ────────────────────────
 
-    async def list_user_views(
-        self, workspace_id: UUID, table_id: str
-    ) -> list[TableView]:
+    async def list_user_views(self, workspace_id: UUID, table_id: str) -> list[TableView]:
         result = await self.session.execute(
             select(TableView).where(
                 TableView.workspace_id == workspace_id,
@@ -99,9 +93,7 @@ class TableViewRepository:
 
     # ── __schema__ row helpers ───────────────────────────────────────────
 
-    async def get_schema(
-        self, workspace_id: UUID, table_id: str
-    ) -> list[dict[str, Any]]:
+    async def get_schema(self, workspace_id: UUID, table_id: str) -> list[dict[str, Any]]:
         view = await self.get_by_name(workspace_id, table_id, SCHEMA_ROW_NAME)
         if view is None or not isinstance(view.config, list):
             return []
@@ -130,9 +122,7 @@ class TableViewRepository:
 
     # ── __order__ row helpers ────────────────────────────────────────────
 
-    async def get_order(
-        self, workspace_id: UUID, table_id: str
-    ) -> list[str]:
+    async def get_order(self, workspace_id: UUID, table_id: str) -> list[str]:
         view = await self.get_by_name(workspace_id, table_id, ORDER_ROW_NAME)
         if view is None or not isinstance(view.config, list):
             return []

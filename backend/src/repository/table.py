@@ -31,15 +31,11 @@ class TableRepository:
 
     async def get_by_id(self, workspace_id: UUID, table_id: str) -> Table | None:
         result = await self.session.execute(
-            select(Table).where(
-                Table.workspace_id == workspace_id, Table.table_id == table_id
-            )
+            select(Table).where(Table.workspace_id == workspace_id, Table.table_id == table_id)
         )
         return result.scalar_one_or_none()
 
-    async def resolve_table(
-        self, workspace_id: UUID, identifier: str
-    ) -> Table | None:
+    async def resolve_table(self, workspace_id: UUID, identifier: str) -> Table | None:
         """Resolve a table by table_id (case-insensitive) within a workspace."""
         result = await self.session.execute(
             select(Table).where(
@@ -49,9 +45,7 @@ class TableRepository:
         )
         return result.scalar_one_or_none()
 
-    async def resolve_table_global(
-        self, identifier: str, workspace_ids: list[UUID]
-    ) -> Table | None:
+    async def resolve_table_global(self, identifier: str, workspace_ids: list[UUID]) -> Table | None:
         """Resolve a table by case-insensitive name across the given workspaces."""
         if not workspace_ids:
             return None
@@ -64,9 +58,7 @@ class TableRepository:
         return result.scalars().first()
 
     async def list_by_workspace(self, workspace_id: UUID) -> list[Table]:
-        result = await self.session.execute(
-            select(Table).where(Table.workspace_id == workspace_id)
-        )
+        result = await self.session.execute(select(Table).where(Table.workspace_id == workspace_id))
         return list(result.scalars().all())
 
     async def update(self, table: Table, table_id: str) -> Table:
@@ -88,24 +80,20 @@ class TableRepository:
         cid = column_id.replace("-", "")[:12]
         return f"idx_rd_{tid}_{cid}"
 
-    async def create_column_index(
-        self, table_id: str, column_id: str, col_type: str
-    ) -> None:
+    async def create_column_index(self, table_id: str, column_id: str, col_type: str) -> None:
         """app_user has no DDL — V27 defines create_row_data_index as
         SECURITY DEFINER owned by dba; we call it via SELECT."""
         if col_type not in BTREE_TYPES and col_type not in GIN_TYPES:
             return
         idx_name = self._index_name(table_id, column_id)
         await self.session.execute(
-            text(
-                "SELECT create_row_data_index(:idx, :tid, :cid, :ct)"
-            ).bindparams(idx=idx_name, tid=str(table_id), cid=column_id, ct=col_type)
+            text("SELECT create_row_data_index(:idx, :tid, :cid, :ct)").bindparams(
+                idx=idx_name, tid=str(table_id), cid=column_id, ct=col_type
+            )
         )
         await self.session.commit()
 
     async def drop_column_index(self, table_id: str, column_id: str) -> None:
         idx_name = self._index_name(table_id, column_id)
-        await self.session.execute(
-            text("SELECT drop_row_data_index(:idx)").bindparams(idx=idx_name)
-        )
+        await self.session.execute(text("SELECT drop_row_data_index(:idx)").bindparams(idx=idx_name))
         await self.session.commit()
