@@ -136,9 +136,9 @@ def verify(psql_fn) -> list[str]:
     if not result:
         errors.append("MISSING TRIGGER: rows.trg_rows_row_number")
 
-    # V34: Check triggers on table_views and tables
+    # V34/V35: Triggers on table_views and tables
+    # (V35 dropped trg_table_views_prevent_schema_delete — API layer enforces it)
     for trg_name, tbl in [
-        ("trg_table_views_prevent_schema_delete", "table_views"),
         ("trg_tables_create_schema_and_order", "tables"),
     ]:
         result = psql_fn(
@@ -213,9 +213,8 @@ def verify(psql_fn) -> list[str]:
     if result:
         errors.append("FORBIDDEN FK still present: table_views_next_fkey")
 
-    # V34 trigger functions exist
+    # V34/V35 trigger functions
     for fn_name in (
-        "trg_prevent_schema_delete_fn",
         "trg_create_schema_and_order_fn",
     ):
         result = psql_fn(

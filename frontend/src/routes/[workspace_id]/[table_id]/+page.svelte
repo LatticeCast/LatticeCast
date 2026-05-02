@@ -143,8 +143,8 @@
 	);
 
 	const activeView = $derived(
-		($currentTable?.views ?? []).find((v) => v.name === activeViewName) ??
-			($currentTable?.views ?? [])[0] ??
+		($viewsStore).find((v) => v.name === activeViewName) ??
+			($viewsStore)[0] ??
 			({ name: 'Table', type: 'table', config: {} } satisfies ViewConfig)
 	);
 
@@ -617,7 +617,7 @@
 
 	function persistViewConfig() {
 		const tableId = $page.params.table_id!;
-		const view = ($currentTable?.views ?? []).find((v) => v.name === activeViewName);
+		const view = ($viewsStore).find((v) => v.name === activeViewName);
 		if (!view) return;
 		const newConfig = {
 			...view.config,
@@ -678,7 +678,7 @@
 			await deleteView(tableId, view.name);
 			await refreshTable(tableId);
 			if (activeViewName === view.name) {
-				const remaining = $currentTable?.views ?? [];
+				const remaining = $viewsStore;
 				activeViewName = remaining[0]?.name ?? 'Table';
 			}
 		} catch (e) {
@@ -864,7 +864,7 @@
 	{/if}
 
 	<ViewSwitcher
-		views={$currentTable?.views ?? []}
+		views={$viewsStore}
 		activeViewName={activeView.name}
 		onViewChange={handleViewChange}
 		onAddView={handleAddView}

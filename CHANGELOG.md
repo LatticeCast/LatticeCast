@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.27.1 — 2026-05-02
+- **Fix V34 trigger blocking table delete (V35).** The V34
+  `trg_table_views_prevent_schema_delete` trigger refused to delete the
+  `__schema__` row even when the deletion was a CASCADE from a parent
+  `tables` row, making `DELETE /tables/{id}` 500. Drop the trigger via
+  V35; the API layer already enforces "users can't delete __schema__"
+  by rejecting reserved names in `DELETE /views/{name}`.
+- **Fix FE view switcher.** `routes/[workspace_id]/[table_id]/+page.svelte`
+  still read `$currentTable?.views` (the V33 inline JSONB array, gone
+  after V34). Switched all 5 references to the new `$viewsStore` which
+  the table-load flow populates. View tabs / switcher now show again.
+
 ## v0.27 — 2026-05-02
 - **ECharts dashboard with JSON-described blocks.** Replaced
   `chart.js` + `svelte-chartjs` with Apache ECharts (`echarts ^5.6`).
