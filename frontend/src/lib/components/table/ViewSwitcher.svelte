@@ -6,16 +6,58 @@
 		activeViewName,
 		onViewChange,
 		onAddView,
-		onDeleteView
+		onDeleteView,
+		onRenameView,
+		isRenameable = () => true
 	}: {
 		views: ViewConfig[];
 		activeViewName: string;
 		onViewChange: (view: ViewConfig) => void;
 		onAddView: (type: string, name: string) => void;
 		onDeleteView?: (view: ViewConfig) => void;
+		onRenameView?: (oldName: string, newName: string) => Promise<void>;
+		isRenameable?: (view: ViewConfig) => boolean;
 	} = $props();
 
 	let showAddPanel = $state(false);
+	let editingViewName = $state<string | null>(null);
+	let editingValue = $state('');
+	let renameError = $state('');
+
+	function startRenameView(view: ViewConfig, e: MouseEvent) {
+		e.stopPropagation();
+		editingViewName = view.name;
+		editingValue = view.name;
+		renameError = '';
+	}
+
+	async function commitRenameView(oldName: string) {
+		if (editingViewName !== oldName) return; // already cancelled
+		const newName = editingValue.trim();
+		if (!newName) {
+			renameError = 'Name cannot be empty';
+			return;
+		}
+		if (newName !== oldName && views.some((v) => v.name === newName)) {
+			renameError = 'A view with this name already exists';
+			return;
+		}
+		editingViewName = null;
+		renameError = '';
+		if (newName !== oldName && onRenameView) {
+			await onRenameView(oldName, newName);
+		}
+	}
+
+	function cancelRenameView() {
+		editingViewName = null;
+		renameError = '';
+	}
+
+	function focusInput(node: HTMLInputElement) {
+		node.focus();
+		node.select();
+	}
 
 	const VIEW_TYPES = [
 		{
@@ -50,7 +92,10 @@
 
 <svelte:window
 	onkeydown={(e) => {
-		if (e.key === 'Escape') showAddPanel = false;
+		if (e.key === 'Escape') {
+			showAddPanel = false;
+			cancelRenameView();
+		}
 	}}
 	onclick={() => {
 		showAddPanel = false;
@@ -70,68 +115,114 @@
 						? 'border-blue-500'
 						: 'border-transparent hover:border-gray-300'}"
 				>
-					<button
-						data-testid="view-tab-{view.name}"
-						onclick={() => onViewChange(view)}
-						class="flex items-center gap-1.5 px-3 py-2 text-sm transition {activeViewName ===
-						view.name
-							? 'font-medium text-blue-600'
-							: 'text-gray-500 hover:text-gray-700'}"
-					>
-						{#if view.type === 'table'}
-							<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M3 10h18M3 14h18M10 3v18M14 3v18M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"
-								/>
-							</svg>
-						{:else if view.type === 'kanban'}
-							<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"
-								/>
-							</svg>
-						{:else if view.type === 'timeline'}
-							<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-								/>
-							</svg>
-						{/if}
-						{view.name}
-					</button>
-					{#if onDeleteView}
-						<button
-							onclick={(e) => {
-								e.stopPropagation();
-								if (canDelete(view)) onDeleteView(view);
-							}}
-							disabled={!canDelete(view)}
-							title={canDelete(view) ? `Delete ${view.name}` : 'Cannot delete the last Table view'}
-							class="mr-1 rounded p-0.5 opacity-0 transition group-hover:opacity-100 {canDelete(
-								view
-							)
-								? 'text-gray-400 hover:bg-red-50 hover:text-red-500'
-								: 'cursor-not-allowed text-gray-200'}"
-							aria-label="Delete view"
+					{#if editingViewName === view.name}
+						<!-- Inline rename input -->
+						<div
+							class="flex items-center px-2 py-1"
+							onclick={(e) => e.stopPropagation()}
+							role="none"
 						>
-							<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M6 18L18 6M6 6l12 12"
-								/>
-							</svg>
+							<input
+								data-testid="view-tab-rename-input-{view.name}"
+								type="text"
+								bind:value={editingValue}
+								class="w-28 rounded border px-1.5 py-0.5 text-sm focus:outline-none {renameError
+									? 'border-red-400 focus:border-red-400'
+									: 'border-blue-400 focus:border-blue-500'}"
+								title={renameError || undefined}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') commitRenameView(view.name);
+									else if (e.key === 'Escape') cancelRenameView();
+									e.stopPropagation();
+								}}
+								onblur={() => commitRenameView(view.name)}
+								use:focusInput
+							/>
+						</div>
+					{:else}
+						<button
+							data-testid="view-tab-{view.name}"
+							onclick={() => onViewChange(view)}
+							class="flex items-center gap-1.5 px-3 py-2 text-sm transition {activeViewName ===
+							view.name
+								? 'font-medium text-blue-600'
+								: 'text-gray-500 hover:text-gray-700'}"
+						>
+							{#if view.type === 'table'}
+								<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M3 10h18M3 14h18M10 3v18M14 3v18M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"
+									/>
+								</svg>
+							{:else if view.type === 'kanban'}
+								<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"
+									/>
+								</svg>
+							{:else if view.type === 'timeline'}
+								<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+									/>
+								</svg>
+							{/if}
+							{view.name}
 						</button>
+						{#if onRenameView && isRenameable(view)}
+							<button
+								data-testid="view-tab-rename-{view.name}"
+								onclick={(e) => startRenameView(view, e)}
+								title="Rename {view.name}"
+								class="rounded p-0.5 text-gray-400 opacity-0 transition group-hover:opacity-100 hover:bg-blue-50 hover:text-blue-500"
+								aria-label="Rename view"
+							>
+								<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+									/>
+								</svg>
+							</button>
+						{/if}
+						{#if onDeleteView}
+							<button
+								onclick={(e) => {
+									e.stopPropagation();
+									if (canDelete(view)) onDeleteView(view);
+								}}
+								disabled={!canDelete(view)}
+								title={canDelete(view)
+									? `Delete ${view.name}`
+									: 'Cannot delete the last Table view'}
+								class="mr-1 rounded p-0.5 opacity-0 transition group-hover:opacity-100 {canDelete(
+									view
+								)
+									? 'text-gray-400 hover:bg-red-50 hover:text-red-500'
+									: 'cursor-not-allowed text-gray-200'}"
+								aria-label="Delete view"
+							>
+								<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M6 18L18 6M6 6l12 12"
+									/>
+								</svg>
+							</button>
+						{/if}
 					{/if}
 				</div>
 			{/each}

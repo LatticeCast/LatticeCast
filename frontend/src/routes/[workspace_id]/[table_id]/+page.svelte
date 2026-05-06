@@ -691,6 +691,22 @@
 		}
 	}
 
+	async function handleRenameView(oldName: string, newName: string) {
+		const tableId = $page.params.table_id!;
+		error.set(null);
+		try {
+			await updateView(tableId, oldName, { name: newName });
+			if (activeViewName === oldName) {
+				activeViewName = newName;
+				const url = new URL(window.location.href);
+				url.searchParams.set('view', newName);
+				history.replaceState(history.state, '', url.toString());
+			}
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to rename view');
+		}
+	}
+
 	function handleViewUpdate(updated: ViewConfig) {
 		viewsStore.update((arr) => arr.map((v) => (v.name === updated.name ? updated : v)));
 	}
@@ -874,6 +890,8 @@
 		onViewChange={handleViewChange}
 		onAddView={handleAddView}
 		onDeleteView={handleDeleteView}
+		onRenameView={handleRenameView}
+		isRenameable={(v) => $viewsStore.some((uv) => uv.name === v.name)}
 	/>
 
 	{#if activeView.type === 'table'}
