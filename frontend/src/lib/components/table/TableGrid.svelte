@@ -864,7 +864,7 @@
 														>
 															{#each available as choice (choice.value)}
 																{@const color =
-																	TAG_COLORS[choices.indexOf(choice) % TAG_COLORS.length]}
+																	TAG_COLORS.find((c) => c.bg === choice.color) ?? TAG_COLORS[0]}
 																<button
 																	class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-50"
 																	onclick={() => onAddTag(row.row_number, col, choice.value)}

@@ -68,8 +68,9 @@ export function getChoices(col: Column): ColumnChoice[] {
 
 export function getChoiceColor(col: Column, value: string): (typeof TAG_COLORS)[number] {
 	const choices = getChoices(col);
-	const idx = choices.findIndex((c) => c.value === value);
-	return TAG_COLORS[idx >= 0 ? idx % TAG_COLORS.length : 0];
+	const choice = choices.find((c) => c.value === value);
+	if (!choice) return TAG_COLORS[0];
+	return TAG_COLORS.find((c) => c.bg === choice.color) ?? TAG_COLORS[0];
 }
 
 export function getTagValues(row: { row_data: Record<string, unknown> }, colId: string): string[] {
