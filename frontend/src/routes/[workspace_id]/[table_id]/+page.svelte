@@ -643,7 +643,7 @@
 			widths: Object.keys(localWidths).length > 0 ? { ...localWidths } : undefined,
 			colOrder: viewColOrder ?? undefined
 		};
-		updateView(tableId, view.name, newConfig).catch(() => {});
+		updateView(tableId, view.name, { config: newConfig }).catch(() => {});
 	}
 
 	// Auto-persist view config when any view-local state changes (but not during applyViewConfig)
