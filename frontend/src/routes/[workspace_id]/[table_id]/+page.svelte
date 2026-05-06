@@ -85,6 +85,9 @@
 	// ─── State ───────────────────────────────────────────────────────────────────
 
 	let addingRow = $state(false);
+	let addingColumn = $state(false);
+	let scrollToRowId = $state<number | null>(null);
+	let scrollToColTrigger = $state(0);
 	let showCreateTicket = $state(false);
 	let createTicketInitialData = $state<Record<string, unknown>>({});
 	let deletingRowId = $state<number | null>(null);
@@ -258,6 +261,7 @@
 			const newRow = await createRow(tableId, { row_data: {} });
 			// Replace temp row with real row from backend
 			rows.update((r) => r.map((row) => (row.row_number === tempRowNumber ? newRow : row)));
+			scrollToRowId = newRow.row_number;
 			if (editColId) {
 				editingCell = { rowId: newRow.row_number, colId: editColId };
 			}
@@ -339,13 +343,17 @@
 
 	async function handleAddColumn(name: string, type: string) {
 		const tableId = $page.params.table_id!;
+		addingColumn = true;
 		error.set(null);
 		try {
 			await createColumn(tableId, { name, type: type as ColumnType });
 			await refreshTable(tableId);
 			showAddColumn = false;
+			scrollToColTrigger += 1;
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to add column');
+		} finally {
+			addingColumn = false;
 		}
 	}
 
@@ -629,7 +637,7 @@
 
 	function persistViewConfig() {
 		const tableId = $page.params.table_id!;
-		const view = ($viewsStore).find((v) => v.name === activeViewName);
+		const view = $viewsStore.find((v) => v.name === activeViewName);
 		if (!view) return;
 		const newConfig = {
 			...view.config,
@@ -916,6 +924,9 @@
 			loading={$loading}
 			{tableMinWidth}
 			{addingRow}
+			{addingColumn}
+			{scrollToRowId}
+			{scrollToColTrigger}
 			{deletingRowId}
 			{rowsWithDocs}
 			{editingCell}
@@ -1019,6 +1030,7 @@
 	show={showAddColumn}
 	onClose={() => (showAddColumn = false)}
 	onAdd={handleAddColumn}
+	pending={addingColumn}
 />
 
 {#if expandedRow}

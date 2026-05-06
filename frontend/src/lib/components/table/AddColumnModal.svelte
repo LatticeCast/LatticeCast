@@ -4,11 +4,13 @@
 	let {
 		show,
 		onClose,
-		onAdd
+		onAdd,
+		pending = false
 	}: {
 		show: boolean;
 		onClose: () => void;
 		onAdd: (name: string, type: string) => void;
+		pending?: boolean;
 	} = $props();
 
 	let newColName = $state('');
@@ -77,10 +79,29 @@
 				<button
 					data-testid="add-column-submit-btn"
 					onclick={handleAdd}
-					disabled={!newColName.trim()}
-					class="flex-1 rounded-2xl bg-blue-600 px-4 py-2 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+					disabled={!newColName.trim() || pending}
+					class="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-2 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
 				>
-					Add Column
+					{#if pending}
+						<svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+							<circle
+								class="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								stroke-width="4"
+							></circle>
+							<path
+								class="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+							></path>
+						</svg>
+						Adding…
+					{:else}
+						Add Column
+					{/if}
 				</button>
 			</div>
 		</div>

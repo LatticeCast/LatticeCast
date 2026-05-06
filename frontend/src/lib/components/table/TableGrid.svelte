@@ -62,7 +62,10 @@
 		onToggleCollapseGroup,
 		onManageOptions,
 		onNavigateRow,
-		onOpenDocCell
+		onOpenDocCell,
+		addingColumn = false,
+		scrollToRowId = null,
+		scrollToColTrigger = 0
 	}: {
 		columns: Column[];
 		sortedColumns: Column[];
@@ -115,6 +118,9 @@
 		onManageOptions: (col: Column) => void;
 		onNavigateRow: (rowId: number) => void;
 		onOpenDocCell: (row: Row, col: Column) => void;
+		addingColumn?: boolean;
+		scrollToRowId?: number | null;
+		scrollToColTrigger?: number;
 	} = $props();
 
 	// T imported from theme.svelte.ts — auto-derives light/dark
@@ -130,9 +136,23 @@
 	function getColWidth(col: Column): number {
 		return localWidths[col.column_id] ?? col.options?.width ?? 150;
 	}
+
+	let containerEl = $state<HTMLDivElement | null>(null);
+
+	$effect(() => {
+		if (!scrollToRowId || !containerEl) return;
+		const btn = containerEl.querySelector(`[data-testid="grid-expand-row-${scrollToRowId}-btn"]`);
+		btn?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+	});
+
+	$effect(() => {
+		void scrollToColTrigger;
+		if (!containerEl || scrollToColTrigger === 0) return;
+		containerEl.scrollLeft = containerEl.scrollWidth;
+	});
 </script>
 
-<div class="min-h-0 flex-1 overflow-x-auto overflow-y-auto {T.cardBg}">
+<div bind:this={containerEl} class="min-h-0 flex-1 overflow-x-auto overflow-y-auto {T.cardBg}">
 	{#if loading}
 		<div class="pt-16 text-center {T.muted}">Loading...</div>
 	{:else if sortedColumns.length === 0}
@@ -483,18 +503,37 @@
 						<button
 							data-testid="grid-add-column-btn"
 							onclick={onShowAddColumn}
-							class="flex h-full w-full items-center justify-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+							disabled={addingColumn}
+							class="flex h-full w-full items-center justify-center rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 disabled:opacity-50"
 							title="Add column"
 							aria-label="Add column"
 						>
-							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M12 4v16m8-8H4"
-								/>
-							</svg>
+							{#if addingColumn}
+								<svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+									<circle
+										class="opacity-25"
+										cx="12"
+										cy="12"
+										r="10"
+										stroke="currentColor"
+										stroke-width="4"
+									></circle>
+									<path
+										class="opacity-75"
+										fill="currentColor"
+										d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+									></path>
+								</svg>
+							{:else}
+								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M12 4v16m8-8H4"
+									/>
+								</svg>
+							{/if}
 						</button>
 					</th>
 				</tr>
@@ -910,7 +949,25 @@
 							class="flex h-full w-full items-center justify-center rounded px-1 py-0.5 text-sm font-medium text-blue-500 hover:bg-blue-100 hover:text-blue-700 disabled:opacity-50"
 							title="Add row"
 						>
-							+
+							{#if addingRow}
+								<svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+									<circle
+										class="opacity-25"
+										cx="12"
+										cy="12"
+										r="10"
+										stroke="currentColor"
+										stroke-width="4"
+									></circle>
+									<path
+										class="opacity-75"
+										fill="currentColor"
+										d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+									></path>
+								</svg>
+							{:else}
+								+
+							{/if}
 						</button>
 					</td>
 					{#each sortedColumns as col, i (col.column_id)}
