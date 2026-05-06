@@ -33,7 +33,7 @@
 
 	async function saveConfig(patch: Record<string, unknown>) {
 		const newConfig = { ...viewConfig.config, ...patch };
-		const updated = await updateView(tableId, viewConfig.name, newConfig);
+		const updated = await updateView(tableId, viewConfig.name, { config: newConfig });
 		onViewUpdate(updated);
 	}
 

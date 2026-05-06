@@ -706,8 +706,8 @@
 		}
 	}
 
-	async function handleViewUpdate(_updated: ViewConfig) {
-		await refreshTable($page.params.table_id!);
+	function handleViewUpdate(updated: ViewConfig) {
+		viewsStore.update((arr) => arr.map((v) => (v.name === updated.name ? updated : v)));
 	}
 
 	// Export / Import
