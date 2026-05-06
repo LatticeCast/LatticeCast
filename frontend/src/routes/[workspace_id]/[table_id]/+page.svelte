@@ -18,7 +18,10 @@
 		loadTable,
 		loadWorkspaces,
 		refreshRows,
-		refreshTable
+		refreshTable,
+		createView,
+		updateView,
+		deleteView
 	} from '$lib/stores/tables.store';
 	import {
 		fetchTable,
@@ -31,7 +34,6 @@
 	} from '$lib/backend/tables';
 	import type { Column, ColumnOptions, ColumnType, Row, ViewConfig } from '$lib/types/table';
 	import { TAG_COLORS } from '$lib/UI/theme.svelte';
-	import { createView, updateView, deleteView } from '$lib/backend/views';
 	import { SvelteSet } from 'svelte/reactivity';
 	import {
 		type FilterCondition,
@@ -669,7 +671,6 @@
 		error.set(null);
 		try {
 			await createView(tableId, { name, type, config: {} });
-			await refreshTable(tableId);
 			activeViewName = name;
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to create view');
@@ -681,7 +682,6 @@
 		error.set(null);
 		try {
 			await deleteView(tableId, view.name);
-			await refreshTable(tableId);
 			if (activeViewName === view.name) {
 				const remaining = $viewsStore;
 				activeViewName = remaining[0]?.name ?? 'Table';
