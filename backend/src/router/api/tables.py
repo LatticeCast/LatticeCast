@@ -89,8 +89,8 @@ async def create_table(
         workspace_id = workspace.workspace_id
 
     default_cols = [
-        {"column_id": str(uuid4()), "name": "Doc", "type": "doc", "options": {}, "position": 0},
-        {"column_id": str(uuid4()), "name": "Title", "type": "text", "options": {}, "position": 1},
+        {"column_id": str(uuid4()), "name": "Title", "type": "text", "options": {}, "position": 0},
+        {"column_id": str(uuid4()), "name": "Doc", "type": "doc", "options": {}, "position": 1},
         {"column_id": str(uuid4()), "name": "Description", "type": "text", "options": {}, "position": 2},
     ]
 
@@ -437,8 +437,8 @@ async def put_view_order(
 # --------------------------------------------------
 
 _PM_COLUMNS: list[dict[str, Any]] = [
-    {"name": "Doc", "type": "doc"},
     {"name": "Title", "type": "text"},
+    {"name": "Doc", "type": "doc"},
     {
         "name": "Type",
         "type": "select",
@@ -587,8 +587,8 @@ async def create_pm_template(
 # --------------------------------------------------
 
 _CRM_COLUMNS: list[dict[str, Any]] = [
-    {"name": "Doc", "type": "doc"},
     {"name": "Title", "type": "text"},
+    {"name": "Doc", "type": "doc"},
     {
         "name": "Stage",
         "type": "select",
