@@ -27,28 +27,15 @@
 		deleteColumn,
 		updateColumn,
 		updateRow,
-		deleteRow,
-		checkDocExists
+		deleteRow
 	} from '$lib/backend/tables';
-	import type {
-		Column,
-		ColumnChoice,
-		ColumnOptions,
-		ColumnType,
-		Row,
-		ViewConfig
-	} from '$lib/types/table';
+	import type { Column, ColumnOptions, ColumnType, Row, ViewConfig } from '$lib/types/table';
 	import { TAG_COLORS } from '$lib/UI/theme.svelte';
 	import { createView, updateView, deleteView } from '$lib/backend/views';
 	import { SvelteSet } from 'svelte/reactivity';
 	import {
 		type FilterCondition,
 		type ContextMenuState,
-		type RenderItem,
-		getItemKey,
-		getChoices,
-		getChoiceColor,
-		formatDate,
 		parseCSV,
 		applyEditToRowData,
 		toggleCheckboxInRowData,
@@ -180,17 +167,17 @@
 				const [table] = await Promise.all([fetchTable(tableId), loadWorkspaces()]);
 				await loadTable(table);
 				// Non-blocking: load doc flags in background, don't block page render
-				loadDocFlags(table.table_id, get(rows)).catch(() => {});
+				loadDocFlags(table.table_id).catch(() => {});
 				const ws = get(workspaces).find((w) => w.workspace_id === table.workspace_id);
 				if (ws) currentWorkspace.set(ws);
 				// Guard against effect persisting during initial view config apply
 				_applyingConfig = true;
-				// Restore active view from URL param or localStorage
+				// Restore active view from URL param only; localStorage is not used to avoid
+				// persisting the last-clicked view as the default across navigations.
 				const urlView = new URL(window.location.href).searchParams.get('view');
-				const savedView = urlView ?? localStorage.getItem(`view:${tableId}`);
 				const loadedViews = get(viewsStore);
-				if (savedView && loadedViews.some((v) => v.name === savedView)) {
-					activeViewName = savedView;
+				if (urlView && loadedViews.some((v) => v.name === urlView)) {
+					activeViewName = urlView;
 				} else if (loadedViews.length > 0) {
 					activeViewName = loadedViews[0].name;
 				}
@@ -480,7 +467,7 @@
 		await updateRow(tableId, row.row_number, { row_data: data });
 	}
 
-	async function loadDocFlags(tableId: string, _rowList: import('$lib/types/table').Row[]) {
+	async function loadDocFlags(tableId: string) {
 		const { batchDocsExist } = await import('$lib/backend/tables');
 		const docSet = await batchDocsExist(tableId);
 		rowsWithDocs.clear();
@@ -491,7 +478,7 @@
 
 	async function handleRefreshRows(tableId: string) {
 		await refreshRows(tableId);
-		loadDocFlags(tableId, get(rows));
+		loadDocFlags(tableId);
 	}
 
 	function openExpand(row: Row) {
@@ -656,13 +643,13 @@
 
 	// Auto-persist view config when any view-local state changes (but not during applyViewConfig)
 	$effect(() => {
-		// Establish reactive dependencies
-		const _s = JSON.stringify(sortConfig);
-		const _g = JSON.stringify(groupConfig);
-		const _f = JSON.stringify(filterConditions);
-		const _h = [...hiddenCols].sort().join(',');
-		const _w = JSON.stringify(localWidths);
-		const _o = JSON.stringify(viewColOrder);
+		// Touch reactive state to establish dependencies without unused-var assignments
+		JSON.stringify(sortConfig);
+		JSON.stringify(groupConfig);
+		JSON.stringify(filterConditions);
+		[...hiddenCols].sort().join(',');
+		JSON.stringify(localWidths);
+		JSON.stringify(viewColOrder);
 		if (!_applyingConfig && activeViewName) {
 			persistViewConfig();
 		}
@@ -671,8 +658,6 @@
 	// View handlers
 	function handleViewChange(view: ViewConfig) {
 		activeViewName = view.name;
-		const tableId = $page.params.table_id!;
-		localStorage.setItem(`view:${tableId}`, view.name);
 		const url = new URL(window.location.href);
 		url.searchParams.set('view', view.name);
 		history.replaceState(history.state, '', url.toString());
