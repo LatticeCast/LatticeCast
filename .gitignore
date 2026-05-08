@@ -39,3 +39,4 @@ vite.config.ts.timestamp-*
 .minio_data/
 
 *.png
+*.patch

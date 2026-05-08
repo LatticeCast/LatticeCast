@@ -23,6 +23,7 @@
 		updateView,
 		deleteView
 	} from '$lib/stores/tables.store';
+	import { putDefaultView } from '$lib/backend/views';
 	import {
 		fetchTable,
 		createRow,
@@ -174,17 +175,27 @@
 				if (ws) currentWorkspace.set(ws);
 				// Guard against effect persisting during initial view config apply
 				_applyingConfig = true;
-				// Restore active view from URL param only; localStorage is not used to avoid
-				// persisting the last-clicked view as the default across navigations.
+				// Resume order: URL ?view= → table.default_view (per-table flag,
+				// V37 is_default) → implicit Table → first user view. Match
+				// against the candidate set INCLUDING the implicit Table view so
+				// default_view="Table" resumes correctly when no user "Table"
+				// view exists.
 				const urlView = new URL(window.location.href).searchParams.get('view');
 				const loadedViews = get(viewsStore);
-				if (urlView && loadedViews.some((v) => v.name === urlView)) {
+				const hasUserTable = loadedViews.some((v) => v.name === IMPLICIT_TABLE_VIEW.name);
+				const candidates = hasUserTable
+					? loadedViews
+					: [IMPLICIT_TABLE_VIEW, ...loadedViews];
+				const defaultView = table.default_view ?? null;
+				if (urlView && candidates.some((v) => v.name === urlView)) {
 					activeViewName = urlView;
-				} else if (loadedViews.length > 0) {
-					activeViewName = loadedViews[0].name;
+				} else if (defaultView && candidates.some((v) => v.name === defaultView)) {
+					activeViewName = defaultView;
+				} else if (candidates.length > 0) {
+					activeViewName = candidates[0].name;
 				}
 				// Apply sort/group/filter from active view config
-				const initView = loadedViews.find((v) => v.name === activeViewName);
+				const initView = candidates.find((v) => v.name === activeViewName);
 				if (initView) applyViewConfig(initView); // also sets _applyingConfig = true and schedules reset
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to load table');
@@ -664,6 +675,16 @@
 		url.searchParams.set('view', view.name);
 		history.replaceState(history.state, '', url.toString());
 		applyViewConfig(view);
+		// Mark this view as the table's default so visiting later without
+		// ?view= resumes here. Per-table (shared); writes is_default=true
+		// via the SQL function set_table_default_view. Skip the implicit
+		// Table tab — it has no row in public.table_views to flag.
+		const isImplicitTable =
+			view.name === IMPLICIT_TABLE_VIEW.name &&
+			!$viewsStore.some((v) => v.name === IMPLICIT_TABLE_VIEW.name);
+		if (!isImplicitTable) {
+			putDefaultView($page.params.table_id!, view.name).catch(() => {});
+		}
 	}
 
 	async function handleAddView(type: string, name: string) {

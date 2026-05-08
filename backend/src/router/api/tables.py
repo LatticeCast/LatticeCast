@@ -47,13 +47,15 @@ async def _get_table_for_member(
 
 
 async def _build_table_response(table: Table, session: AsyncSession) -> dict[str, Any]:
-    """Build a TableResponse dict including columns from the __schema__ row."""
+    """Build a TableResponse dict including columns + default view name."""
     view_repo = TableViewRepository(session)
     columns = await view_repo.get_schema(table.workspace_id, table.table_id)
+    default_view = await view_repo.get_default_view_name(table.workspace_id, table.table_id)
     return {
         "workspace_id": table.workspace_id,
         "table_id": table.table_id,
         "columns": sorted(columns, key=lambda c: c.get("position", 0)),
+        "default_view": default_view,
         "created_at": table.created_at,
         "updated_at": table.updated_at,
     }
@@ -430,6 +432,33 @@ async def put_view_order(
     user_view_names = {v.name for v in await view_repo.list_user_views(table.workspace_id, table.table_id)}
     cleaned = [n for n in data.order if n in user_view_names]
     return await view_repo.set_order(table.workspace_id, table.table_id, cleaned, updated_by=user.user_id)
+
+
+# --------------------------------------------------
+# DEFAULT VIEW (V37 is_default flag, set via SQL helper)
+# --------------------------------------------------
+
+
+class DefaultViewRequest(BaseModel):
+    name: str
+
+
+@router.put("/{table_id}/default-view")
+async def put_default_view(
+    table_id: str,
+    data: DefaultViewRequest,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+) -> dict[str, str | None]:
+    """Mark `data.name` as the table's default view. Refuses internal rows
+    (__schema__/__order__) at the SQL function level."""
+    table = await _get_table_for_member(table_id, user, session)
+    view_repo = TableViewRepository(session)
+    try:
+        await view_repo.set_default_view(table.workspace_id, table.table_id, data.name)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    return {"default_view": data.name}
 
 
 # --------------------------------------------------

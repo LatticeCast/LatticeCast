@@ -38,6 +38,7 @@ class TableView(SQLModel, table=True):
     name: str = Field(primary_key=True)
     type: str = Field(default="table")
     config: dict[str, Any] | list[Any] = Field(default_factory=dict, sa_type=JSON)
+    is_default: bool = Field(default=False, description="V37: at most one is_default per (workspace, table)")
     created_by: UUID | None = Field(default=None, foreign_key="auth.users.user_id")
     updated_by: UUID | None = Field(default=None, foreign_key="auth.users.user_id")
     created_at: datetime = Field(default_factory=datetime.utcnow)

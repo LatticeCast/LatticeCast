@@ -3,7 +3,7 @@
 Authentication API endpoints.
 """
 
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 import httpx
@@ -97,6 +97,10 @@ class MeResponse(BaseModel):
     provider: Literal["google", "authentik", "none"] = Field(..., description="OAuth provider used")
     role: str | None = Field(default=None, description="User role in the system")
     user_name: str | None = Field(default=None, description="URL-safe user name")
+    config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Per-user UI config blob (darkMode, lastView per table, …)",
+    )
 
 
 # --------------------------------------------------
@@ -194,7 +198,53 @@ async def me(
         provider=provider,
         role=user.role,
         user_name=info.user_name if info else None,
+        config=info.config if info and info.config else {},
     )
+
+
+# --------------------------------------------------
+# Per-user config (public.user_info.config)
+# --------------------------------------------------
+
+
+@router.patch(
+    "/me/config",
+    response_model=dict[str, Any],
+    responses={
+        401: {"model": HTTPErrorResponse, "description": "Invalid or missing token"},
+        403: {"model": HTTPErrorResponse, "description": "User not registered"},
+    },
+)
+async def patch_me_config(
+    patch: dict[str, Any],
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, Any]:
+    """Shallow-merge the supplied keys into the caller's user_info.config.
+
+    A top-level value of `null` removes that key. Returns the new full
+    config blob. Body must be a JSON object; nested values are replaced
+    wholesale (no deep merge).
+    """
+    if not isinstance(patch, dict):
+        raise HTTPException(status_code=422, detail="Body must be a JSON object")
+
+    result = await session.execute(select(UserInfoModel).where(UserInfoModel.user_id == user.user_id))
+    info = result.scalar_one_or_none()
+    if not info:
+        raise HTTPException(status_code=403, detail="User profile not found")
+
+    merged = {**(info.config or {})}
+    for k, v in patch.items():
+        if v is None:
+            merged.pop(k, None)
+        else:
+            merged[k] = v
+
+    info.config = merged
+    session.add(info)
+    await session.commit()
+    return merged
 
 
 @router.post(

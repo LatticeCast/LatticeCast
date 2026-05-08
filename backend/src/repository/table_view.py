@@ -120,6 +120,32 @@ class TableViewRepository:
         await self.update(view, {"config": columns, "updated_by": updated_by})
         return columns
 
+    # ── Default view (V37 is_default flag) ────────────────────────────────
+
+    async def get_default_view_name(self, workspace_id: UUID, table_id: str) -> str | None:
+        """Return the name of the default view, or None if none is marked."""
+        from sqlalchemy import text
+
+        result = await self.session.execute(
+            text(
+                "SELECT name FROM public.table_views "
+                "WHERE workspace_id = :ws AND table_id = :tid AND is_default"
+            ).bindparams(ws=workspace_id, tid=table_id)
+        )
+        row = result.first()
+        return row[0] if row else None
+
+    async def set_default_view(self, workspace_id: UUID, table_id: str, view_name: str) -> None:
+        """Atomically flip the default view via the SQL helper."""
+        from sqlalchemy import text
+
+        await self.session.execute(
+            text("SELECT set_table_default_view(:ws, :tid, :name)").bindparams(
+                ws=workspace_id, tid=table_id, name=view_name
+            )
+        )
+        await self.session.commit()
+
     # ── __order__ row helpers ────────────────────────────────────────────
 
     async def get_order(self, workspace_id: UUID, table_id: str) -> list[str]:

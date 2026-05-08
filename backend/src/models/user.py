@@ -1,8 +1,10 @@
 # src/models/user.py
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
+from sqlalchemy import Column
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
 RoleType = Literal["user", "admin"]
@@ -21,12 +23,17 @@ class User(SQLModel, table=True):
 
 
 class UserInfo(SQLModel, table=True):
-    """Public handle — public.user_info"""
+    """Public handle + per-user UI config — public.user_info"""
 
     __tablename__ = "user_info"
 
     user_id: UUID = Field(primary_key=True, foreign_key="auth.users.user_id", description="UUID FK → auth.users")
     user_name: str = Field(index=True, unique=True, description="URL-safe slug (unique)")
+    config: dict[str, Any] = Field(
+        default_factory=dict,
+        sa_column=Column("config", JSONB, nullable=False, server_default="{}"),
+        description="Per-user UI config blob (darkMode, lastView per table, …)",
+    )
 
 
 class Gdpr(SQLModel, table=True):
@@ -50,6 +57,7 @@ class UserResponse(SQLModel):
     legal_name: str = Field(default="", description="Legal name (from auth.gdpr)")
     role: RoleType = Field(..., description="User role")
     user_name: str | None = Field(default=None, description="Public handle from user_info")
+    config: dict[str, Any] = Field(default_factory=dict, description="Per-user UI config blob")
 
     model_config = {
         "json_schema_extra": {

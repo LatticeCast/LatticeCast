@@ -8,8 +8,10 @@
 	import { isDark } from '$lib/UI/theme.svelte';
 	import { browser } from '$app/environment';
 	import { currentTable, pageTitle } from '$lib/stores/tables.store';
+	import { hydrateFromServer } from '$lib/stores/settings.store';
 	import { fetchWorkspaces } from '$lib/backend/workspaces';
 	import { fetchTables } from '$lib/backend/tables';
+	import { fetchMe } from '$lib/backend/auth';
 	import type { Workspace, Table } from '$lib/types/table';
 
 	let { children } = $props();
@@ -28,11 +30,21 @@
 	$effect(() => {
 		if ($authStore?.accessToken) {
 			loadSidebarData();
+			hydrateUserConfig($authStore.accessToken);
 		} else {
 			workspaces = [];
 			tablesByWorkspace = {};
 		}
 	});
+
+	async function hydrateUserConfig(accessToken: string) {
+		try {
+			const me = await fetchMe(accessToken);
+			if (me?.config) hydrateFromServer(me.config);
+		} catch {
+			// best-effort — local cache stays in effect
+		}
+	}
 
 	async function loadSidebarData() {
 		try {

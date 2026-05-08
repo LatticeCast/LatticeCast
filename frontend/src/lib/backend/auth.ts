@@ -26,6 +26,7 @@ export interface MeResponse {
 	provider: 'google' | 'authentik' | 'none';
 	role?: string;
 	user_name?: string;
+	config?: Record<string, unknown>;
 }
 
 /**

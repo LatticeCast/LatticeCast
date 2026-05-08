@@ -1,6 +1,42 @@
 # Changelog
 
-## v0.27.1 — 2026-05-02
+## v0.29 — 2026-05-08
+- **Per-table default view, server-side (V37).** Clicking a view now flags
+  it as the table's default via a new `is_default boolean` column on
+  `public.table_views`, enforced by a partial unique index
+  `WHERE is_default` so exactly one default exists per (workspace, table).
+  An atomic `SECURITY DEFINER` SQL helper
+  `set_table_default_view(workspace_id, table_id, view_name)` clears the
+  current default and sets the target in one call, validating the target
+  is a user view (not `__schema__`/`__order__`). Avoids the cycle a back-FK
+  on `public.tables.default_view` would have introduced.
+- **New endpoint** — `PUT /api/v1/tables/{id}/default-view` body
+  `{name}` → returns `{default_view}`. Wired into `TableResponse`
+  alongside `columns`, so the FE gets the resume hint with the table fetch
+  (no extra round-trip).
+- **FE resume order**: URL `?view=` → `table.default_view` → implicit
+  Table → first user view. Match runs against a candidate set that
+  *includes* the implicit Table view, so a saved `default_view='Table'`
+  resumes correctly when no user "Table" view exists.
+- **FE click**: writes via `PUT /default-view`. Skipped for the implicit
+  Table tab (no DB row to flag) — clicking it leaves the previous default
+  unchanged.
+- **Per-user UI config (V36).** New `config jsonb NOT NULL DEFAULT '{}'`
+  column on `public.user_info`. New `PATCH /api/v1/login/me/config`
+  shallow-merges supplied keys (top-level `null` removes a key) and
+  returns the new full blob. `MeResponse` carries `config` so the FE
+  hydrates without an extra request.
+- **`darkMode` is now cross-device.** `frontend/src/lib/stores/settings.store.ts`
+  hydrates from `/me` on auth, mirrors changes to localStorage as a
+  fast-paint cache, and debounces a `PATCH /me/config` for any drift
+  from the last-known server value. `speechLang` and notification
+  settings stay in localStorage (single-device, no need to round-trip).
+- **Schema test additions** — `public.user_info.config jsonb`,
+  `public.table_views.is_default boolean`, and the
+  `table_views_one_default` partial unique index. The previously-forbidden
+  V34 entries for `is_default`/`table_views_one_default` are removed.
+
+## v0.28 — 2026-05-02
 - **Fix V34 trigger blocking table delete (V35).** The V34
   `trg_table_views_prevent_schema_delete` trigger refused to delete the
   `__schema__` row even when the deletion was a CASCADE from a parent

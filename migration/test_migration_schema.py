@@ -14,9 +14,10 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("auth", "gdpr", "user_id", "uuid"),
     ("auth", "gdpr", "email", "character varying"),
     ("auth", "gdpr", "legal_name", "character varying"),
-    # public.user_info — public handle only
+    # public.user_info — public handle + per-user UI config
     ("public", "user_info", "user_id", "uuid"),
     ("public", "user_info", "user_name", "character varying"),
+    ("public", "user_info", "config", "jsonb"),
     # public.workspaces
     ("public", "workspaces", "workspace_id", "uuid"),
     ("public", "workspaces", "workspace_name", "character varying"),
@@ -31,12 +32,13 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "tables", "table_id", "character varying"),
     ("public", "tables", "created_at", "timestamp"),
     ("public", "tables", "updated_at", "timestamp"),
-    # public.table_views (V34 simplified shape)
+    # public.table_views (V34 simplified shape; V37 adds is_default)
     ("public", "table_views", "workspace_id", "uuid"),
     ("public", "table_views", "table_id", "character varying"),
     ("public", "table_views", "name", "character varying"),
     ("public", "table_views", "type", "character varying"),
     ("public", "table_views", "config", "jsonb"),
+    ("public", "table_views", "is_default", "boolean"),
     ("public", "table_views", "created_by", "uuid"),
     ("public", "table_views", "updated_by", "uuid"),
     ("public", "table_views", "created_at", "timestamp"),
@@ -67,7 +69,6 @@ FORBIDDEN_COLUMNS: list[tuple[str, str, str]] = [
     ("public", "tables", "views"),
     ("public", "tables", "columns"),                  # V34: moved to __schema__ row
     ("public", "table_views", "view_number"),         # V34: dropped
-    ("public", "table_views", "is_default"),          # V34: dropped
     ("public", "table_views", "next_view_id"),        # V34: dropped
 ]
 
@@ -148,16 +149,15 @@ def verify(psql_fn) -> list[str]:
         if not result:
             errors.append(f"MISSING TRIGGER: {tbl}.{trg_name}")
 
-    # V33's partial unique index is dropped in V34
+    # V37 reintroduces the partial unique index that V34 had dropped.
     result = psql_fn(
         "SELECT 1 FROM pg_indexes "
         "WHERE schemaname='public' AND tablename='table_views' "
         "  AND indexname='table_views_one_default';"
     )
-    if result:
+    if not result:
         errors.append(
-            "FORBIDDEN INDEX still present: "
-            "public.table_views.table_views_one_default (V34 drop)"
+            "MISSING INDEX: public.table_views.table_views_one_default"
         )
 
     # RLS policy on table_views still in place

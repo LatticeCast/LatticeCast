@@ -36,6 +36,10 @@ class TableResponse(SQLModel):
     workspace_id: UUID
     table_id: str
     columns: list[dict[str, Any]] = Field(default_factory=list)
+    default_view: str | None = Field(
+        default=None,
+        description="Name of the table_views row currently flagged is_default, or None.",
+    )
     created_at: datetime
     updated_at: datetime
 
