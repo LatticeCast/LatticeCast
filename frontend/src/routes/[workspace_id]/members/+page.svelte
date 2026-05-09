@@ -8,7 +8,7 @@
 	import { fetchMembers, addMember, removeMember, updateMemberRole } from '$lib/backend/workspaces';
 	import type { WorkspaceMemberFull } from '$lib/types/table';
 
-	let workspaceId = $derived($page.params.workspace_id);
+	let workspaceId = $derived($page.params.workspace_id ?? '');
 	let members = $state<WorkspaceMemberFull[]>([]);
 	let loading = $state(true);
 	let errorMsg = $state('');
