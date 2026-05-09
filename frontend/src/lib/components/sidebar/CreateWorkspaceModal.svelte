@@ -58,6 +58,7 @@
 		role="dialog"
 		aria-modal="true"
 		aria-label="Create workspace"
+		tabindex="-1"
 	>
 		<div
 			class="w-full max-w-sm rounded-3xl p-6 shadow-2xl {isDark.value
