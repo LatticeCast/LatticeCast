@@ -13,9 +13,11 @@
 	import { fetchTables } from '$lib/backend/tables';
 	import { fetchMe } from '$lib/backend/auth';
 	import type { Workspace, Table } from '$lib/types/table';
+	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
 
 	let { children } = $props();
 	let menuOpen = $state(false);
+	let showCreateWorkspace = $state(false);
 
 	let workspaces = $state<Workspace[]>([]);
 	let tablesByWorkspace = $state<Record<string, Table[]>>({});
@@ -72,6 +74,12 @@
 		if (next.has(wsId)) next.delete(wsId);
 		else next.add(wsId);
 		expandedWorkspaces = next;
+	}
+
+	async function onWorkspaceCreated(ws: Workspace) {
+		showCreateWorkspace = false;
+		await loadSidebarData();
+		navigate(`/${ws.workspace_id}`);
 	}
 
 	const handleLogout = () => {
@@ -167,6 +175,25 @@
 							</div>
 						{/each}
 					</div>
+				{/if}
+
+				<!-- New Workspace button -->
+				{#if $authStore?.accessToken}
+					<button
+						data-testid="create-workspace-btn"
+						onclick={() => (showCreateWorkspace = true)}
+						class="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm text-gray-400 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-500 dark:hover:bg-gray-800 dark:hover:text-blue-400"
+					>
+						<svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M12 4v16m8-8H4"
+							/>
+						</svg>
+						<span>New Workspace</span>
+					</button>
 				{/if}
 			</nav>
 
@@ -373,3 +400,9 @@
 		</main>
 	</div>
 </div>
+
+<CreateWorkspaceModal
+	show={showCreateWorkspace}
+	onClose={() => (showCreateWorkspace = false)}
+	onCreated={onWorkspaceCreated}
+/>
