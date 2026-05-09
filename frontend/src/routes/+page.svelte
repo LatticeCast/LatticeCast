@@ -238,7 +238,7 @@
 		{/if}
 
 		{#if loading}
-			<div class="text-center text-gray-500">Loading...</div>
+			<div class="text-center {T.muted}">Loading...</div>
 		{:else if workspaces.length === 0}
 			<div class="rounded-3xl {T.cardBg} p-8 text-center {T.muted} shadow-sm">
 				No workspaces yet.
@@ -253,7 +253,7 @@
 							<h2 class="text-lg font-bold {T.body}">{ws.workspace_name}</h2>
 							<button
 								onclick={(e) => openWsSettings(ws, e)}
-								class="rounded-lg p-1 {T.muted} transition hover:bg-gray-100 hover:text-gray-600"
+								class="rounded-lg p-1 {T.muted} transition {T.hoverBg}"
 								aria-label="Workspace settings"
 								title="Workspace settings"
 							>
@@ -295,7 +295,7 @@
 							</button>
 							<button
 								onclick={() => openTemplateModal(ws.workspace_id)}
-								class="rounded-2xl border-2 border-blue-200 {T.cardBg} px-4 py-2.5 font-semibold text-blue-600 transition {T.hoverBg}"
+								class="rounded-2xl border-2 {T.badgeBorder} {T.cardBg} px-4 py-2.5 font-semibold {T.badgeText} transition {T.hoverBg}"
 							>
 								From Template
 							</button>
@@ -320,7 +320,7 @@
 										</button>
 										<button
 											onclick={(e) => openTableSettings(table, e)}
-											class="rounded-xl p-2 {T.muted} transition hover:bg-gray-100 hover:text-gray-600"
+											class="rounded-xl p-2 {T.muted} transition {T.hoverBg}"
 											aria-label="Table settings"
 											title="Table settings"
 										>
@@ -395,7 +395,7 @@
 				<div class="flex gap-2">
 					<button
 						onclick={closeTableSettings}
-						class="rounded-xl px-4 py-2 text-sm {T.muted} hover:bg-gray-100"
+						class="rounded-xl px-4 py-2 text-sm {T.muted} {T.hoverBg}"
 					>
 						Cancel
 					</button>
@@ -457,7 +457,7 @@
 				<div class="flex gap-2">
 					<button
 						onclick={closeWsSettings}
-						class="rounded-xl px-4 py-2 text-sm {T.muted} hover:bg-gray-100"
+						class="rounded-xl px-4 py-2 text-sm {T.muted} {T.hoverBg}"
 					>
 						Cancel
 					</button>
@@ -489,12 +489,12 @@
 			<h2 class="mb-4 text-xl font-bold {T.heading}">New from Template</h2>
 
 			<!-- PM Project Option -->
-			<div class="mb-5 rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
+			<div class="mb-5 rounded-2xl border-2 {T.badgeBorder} {T.badgeBg} p-4">
 				<div class="mb-1 flex items-center gap-2">
 					<span class="text-lg">📋</span>
-					<span class="font-semibold text-blue-800">PM Project</span>
+					<span class="font-semibold {T.badgeText}">PM Project</span>
 				</div>
-				<p class="mb-3 text-sm text-blue-700">
+				<p class="mb-3 text-sm {T.badgeText}">
 					Project management with Key, Title, Status, Priority, Assignee, dates, and Sprint Board +
 					Roadmap views.
 				</p>
@@ -502,21 +502,21 @@
 					type="text"
 					bind:value={templateName}
 					placeholder="Project name..."
-					class="w-full rounded-xl border-2 border-blue-200 bg-white px-3 py-2 text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+					class="w-full rounded-xl border-2 {T.inputBorder} {T.inputBg} px-3 py-2 {T.body} {T.placeholder} {T.inputFocusBorder} focus:outline-none"
 				/>
 			</div>
 
 			<div class="flex justify-end gap-2">
 				<button
 					onclick={() => (showTemplateModal = false)}
-					class="rounded-2xl px-4 py-2 {T.muted} hover:bg-gray-100"
+					class="rounded-2xl px-4 py-2 {T.muted} {T.hoverBg}"
 				>
 					Cancel
 				</button>
 				<button
 					onclick={handlePmTemplate}
 					disabled={creatingTemplate || !templateName.trim()}
-					class="rounded-2xl bg-linear-to-r from-blue-600 to-blue-500 px-5 py-2 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+					class="rounded-2xl {T.buttonGradient} px-5 py-2 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
 				>
 					{creatingTemplate ? 'Creating...' : 'Create PM Project'}
 				</button>
