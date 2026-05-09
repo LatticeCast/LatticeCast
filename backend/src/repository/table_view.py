@@ -128,8 +128,7 @@ class TableViewRepository:
 
         result = await self.session.execute(
             text(
-                "SELECT name FROM public.table_views "
-                "WHERE workspace_id = :ws AND table_id = :tid AND is_default"
+                "SELECT name FROM public.table_views WHERE workspace_id = :ws AND table_id = :tid AND is_default"
             ).bindparams(ws=workspace_id, tid=table_id)
         )
         row = result.first()

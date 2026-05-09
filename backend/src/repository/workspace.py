@@ -53,6 +53,62 @@ class WorkspaceRepository:
         result = await self.session.execute(select(WorkspaceMember).where(WorkspaceMember.workspace_id == workspace_id))
         return list(result.scalars().all())
 
+    async def get_members_with_info(self, workspace_id: UUID) -> list["MemberFullResponse"]:
+        from models.user import Gdpr, UserInfo
+        from models.workspace import MemberFullResponse
+
+        result = await self.session.execute(
+            select(
+                WorkspaceMember.workspace_id,
+                WorkspaceMember.user_id,
+                WorkspaceMember.role,
+                UserInfo.user_name,
+                Gdpr.email,
+            )
+            .outerjoin(UserInfo, WorkspaceMember.user_id == UserInfo.user_id)
+            .outerjoin(Gdpr, WorkspaceMember.user_id == Gdpr.user_id)
+            .where(WorkspaceMember.workspace_id == workspace_id)
+        )
+        return [MemberFullResponse(**row) for row in result.mappings().all()]
+
+    async def get_member_with_info(self, workspace_id: UUID, user_id: UUID) -> "MemberFullResponse | None":
+        from models.user import Gdpr, UserInfo
+        from models.workspace import MemberFullResponse
+
+        result = await self.session.execute(
+            select(
+                WorkspaceMember.workspace_id,
+                WorkspaceMember.user_id,
+                WorkspaceMember.role,
+                UserInfo.user_name,
+                Gdpr.email,
+            )
+            .outerjoin(UserInfo, WorkspaceMember.user_id == UserInfo.user_id)
+            .outerjoin(Gdpr, WorkspaceMember.user_id == Gdpr.user_id)
+            .where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.user_id == user_id,
+            )
+        )
+        row = result.mappings().one_or_none()
+        return MemberFullResponse(**row) if row else None
+
+    async def update_member_role(self, workspace_id: UUID, user_id: UUID, role: str) -> WorkspaceMember | None:
+        result = await self.session.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.user_id == user_id,
+            )
+        )
+        member = result.scalar_one_or_none()
+        if not member:
+            return None
+        member.role = role
+        self.session.add(member)
+        await self.session.commit()
+        await self.session.refresh(member)
+        return member
+
     async def is_member(self, workspace_id: UUID, user_id: UUID) -> bool:
         result = await self.session.execute(
             select(WorkspaceMember).where(

@@ -142,6 +142,27 @@
 									<div
 										class="mt-0.5 ml-3 space-y-0.5 border-l border-gray-200 pl-2 dark:border-gray-700"
 									>
+										<!-- Members link -->
+										<button
+											onclick={() => navigate(`/${ws.workspace_id}/members`)}
+											data-testid="nav-members-{ws.workspace_id}"
+											class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs text-gray-600 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-blue-400"
+										>
+											<svg
+												class="h-3 w-3 shrink-0 text-gray-400"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+												/>
+											</svg>
+											<span class="truncate">Members</span>
+										</button>
 										{#each wsTables as table (table.table_id)}
 											<button
 												onclick={() => {

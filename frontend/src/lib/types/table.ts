@@ -37,6 +37,14 @@ export interface WorkspaceMember {
 	role: string;
 }
 
+export interface WorkspaceMemberFull {
+	workspace_id: UUID;
+	user_id: UUID;
+	user_name: string | null;
+	email: string | null;
+	role: string;
+}
+
 export interface Table {
 	table_id: string;
 	workspace_id: UUID;

@@ -3,7 +3,7 @@
 
 import { BACKEND_URL } from './config';
 import { getAuthHeaders } from './http';
-import type { Workspace, WorkspaceMember } from '$lib/types/table';
+import type { Workspace, WorkspaceMember, WorkspaceMemberFull } from '$lib/types/table';
 
 export interface CreateWorkspace {
 	workspace_name: string;
@@ -14,7 +14,8 @@ export interface UpdateWorkspace {
 }
 
 export interface AddMember {
-	user_id: string;
+	user_id?: string;
+	user_email?: string;
 	role?: string;
 }
 
@@ -66,7 +67,7 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
 
 // Members
 
-export async function fetchMembers(workspaceId: string): Promise<WorkspaceMember[]> {
+export async function fetchMembers(workspaceId: string): Promise<WorkspaceMemberFull[]> {
 	const headers = await getAuthHeaders();
 	const response = await fetch(`${BACKEND_URL}/api/v1/workspaces/${workspaceId}/members`, {
 		headers
@@ -75,14 +76,41 @@ export async function fetchMembers(workspaceId: string): Promise<WorkspaceMember
 	return response.json();
 }
 
-export async function addMember(workspaceId: string, data: AddMember): Promise<WorkspaceMember> {
+export async function addMember(
+	workspaceId: string,
+	data: AddMember
+): Promise<WorkspaceMemberFull> {
 	const headers = await getAuthHeaders();
 	const response = await fetch(`${BACKEND_URL}/api/v1/workspaces/${workspaceId}/members`, {
 		method: 'POST',
 		headers,
 		body: JSON.stringify(data)
 	});
-	if (!response.ok) throw new Error(`Failed to add member: ${response.statusText}`);
+	if (!response.ok) {
+		const body = await response.json().catch(() => ({}));
+		throw new Error(body.detail || `Failed to add member: ${response.statusText}`);
+	}
+	return response.json();
+}
+
+export async function updateMemberRole(
+	workspaceId: string,
+	userId: string,
+	role: string
+): Promise<WorkspaceMemberFull> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(
+		`${BACKEND_URL}/api/v1/workspaces/${workspaceId}/members/${userId}`,
+		{
+			method: 'PUT',
+			headers,
+			body: JSON.stringify({ role })
+		}
+	);
+	if (!response.ok) {
+		const body = await response.json().catch(() => ({}));
+		throw new Error(body.detail || `Failed to update role: ${response.statusText}`);
+	}
 	return response.json();
 }
 
@@ -95,5 +123,8 @@ export async function removeMember(workspaceId: string, userId: string): Promise
 			headers
 		}
 	);
-	if (!response.ok) throw new Error(`Failed to remove member: ${response.statusText}`);
+	if (!response.ok) {
+		const body = await response.json().catch(() => ({}));
+		throw new Error(body.detail || `Failed to remove member: ${response.statusText}`);
+	}
 }

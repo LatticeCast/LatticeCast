@@ -84,3 +84,19 @@ class MemberResponse(SQLModel):
             ]
         }
     }
+
+
+class MemberFullResponse(SQLModel):
+    """Workspace member response with user_name and email joined from auth tables"""
+
+    workspace_id: UUID = Field(..., description="Workspace UUID")
+    user_id: UUID = Field(..., description="User UUID")
+    user_name: str | None = Field(default=None, description="User handle from user_info")
+    email: str | None = Field(default=None, description="User email from auth.gdpr")
+    role: MemberRoleType = Field(..., description="Member role")
+
+
+class MemberRoleUpdate(SQLModel):
+    """Schema for updating a member's role"""
+
+    role: MemberRoleType = Field(..., description="New role (owner/member)")
