@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth.store';
 	import { fetchMe, updateEmail } from '$lib/backend/auth';
+	import { T } from '$lib/UI/theme.svelte';
 
 	const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -63,7 +64,7 @@
 	}
 </script>
 
-<div class="min-h-screen bg-linear-to-br from-blue-600 via-blue-500 to-sky-500 p-4">
+<div class="{T.settingsHeroBg} min-h-screen p-4">
 	<div class="mx-auto max-w-md">
 		<div class="mb-6 flex items-center justify-between pt-8">
 			<button
@@ -78,28 +79,28 @@
 
 		{#if userInfo}
 			<!-- Read-only identity -->
-			<div class="mb-4 rounded-3xl bg-white p-6 shadow-2xl">
-				<h2 class="mb-4 text-xl font-bold text-gray-800">Account Info</h2>
+			<div class="mb-4 rounded-3xl {T.cardBg} p-6 shadow-2xl">
+				<h2 class="mb-4 text-xl font-bold {T.heading}">Account Info</h2>
 				<div class="space-y-3">
 					<div>
-						<label class="mb-1 block text-xs font-semibold tracking-wide text-gray-400 uppercase">
+						<label class="mb-1 block text-xs font-semibold tracking-wide {T.muted} uppercase">
 							User ID
 						</label>
 						<p
 							data-testid="settings-user-id"
-							class="rounded-xl bg-gray-50 px-4 py-2.5 font-mono text-sm break-all text-gray-600"
+							class="rounded-xl {T.inputBg} px-4 py-2.5 font-mono text-sm break-all {T.body}"
 						>
 							{userInfo.user_id}
 						</p>
 					</div>
 					{#if userInfo.user_name}
 						<div>
-							<label class="mb-1 block text-xs font-semibold tracking-wide text-gray-400 uppercase">
+							<label class="mb-1 block text-xs font-semibold tracking-wide {T.muted} uppercase">
 								Username
 							</label>
 							<p
 								data-testid="settings-user-name"
-								class="rounded-xl bg-gray-50 px-4 py-2.5 text-sm text-gray-700"
+								class="rounded-xl {T.inputBg} px-4 py-2.5 text-sm {T.body}"
 							>
 								{userInfo.user_name}
 							</p>
@@ -109,8 +110,8 @@
 			</div>
 
 			<!-- Editable email -->
-			<div class="mb-4 rounded-3xl bg-white p-6 shadow-2xl">
-				<h2 class="mb-4 text-xl font-bold text-gray-800">Email Address</h2>
+			<div class="mb-4 rounded-3xl {T.cardBg} p-6 shadow-2xl">
+				<h2 class="mb-4 text-xl font-bold {T.heading}">Email Address</h2>
 				<div class="space-y-3">
 					<input
 						type="email"
@@ -118,10 +119,10 @@
 						data-testid="settings-email-input"
 						placeholder="your@email.com"
 						disabled={saving}
-						class="w-full rounded-2xl border-2 bg-gray-50 px-4 py-3 text-gray-800 placeholder-gray-400 focus:outline-none disabled:opacity-50
+						class="{T.inputBg} {T.body} {T.placeholder} w-full rounded-2xl border-2 px-4 py-3 focus:outline-none disabled:opacity-50
 							{validationError && emailInput.trim()
 							? 'border-red-400 focus:border-red-400'
-							: 'border-gray-200 focus:border-blue-500'}"
+							: `${T.inputBorder} ${T.inputFocusBorder}`}"
 					/>
 
 					{#if validationError && emailInput.trim()}
@@ -142,7 +143,7 @@
 						onclick={save}
 						data-testid="settings-save-btn"
 						disabled={!!validationError || !isDirty || saving}
-						class="w-full rounded-2xl bg-linear-to-r from-blue-600 to-sky-500 px-4 py-3 font-semibold text-white transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
+						class="{T.buttonGradient} w-full rounded-2xl px-4 py-3 font-semibold text-white transition hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40"
 					>
 						{saving ? 'Saving…' : 'Save'}
 					</button>

@@ -22,6 +22,7 @@ export interface ThemeTokens {
 
 	// Backgrounds
 	pageBg: string;
+	settingsHeroBg: string;
 	cardBg: string;
 	inputBg: string;
 	hoverBg: string;
@@ -54,6 +55,7 @@ export const theme = {
 
 		// Backgrounds
 		pageBg: 'bg-gray-50',
+		settingsHeroBg: 'bg-linear-to-br from-blue-600 via-blue-500 to-sky-500',
 		cardBg: 'bg-white',
 		inputBg: 'bg-white',
 		hoverBg: 'hover:bg-blue-50',
@@ -85,6 +87,7 @@ export const theme = {
 
 		// Backgrounds
 		pageBg: 'bg-gray-900',
+		settingsHeroBg: 'bg-gray-900',
 		cardBg: 'bg-gray-800',
 		inputBg: 'bg-gray-700',
 		hoverBg: 'hover:bg-blue-900',

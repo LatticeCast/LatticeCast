@@ -14,6 +14,7 @@
 	import { fetchWorkspaces, updateWorkspace, deleteWorkspace } from '$lib/backend/workspaces';
 	import { currentTable, pageTitle } from '$lib/stores/tables.store';
 	import type { Table, Workspace } from '$lib/types/table';
+	import { T } from '$lib/UI/theme.svelte';
 
 	let tables = $state<Table[]>([]);
 	let workspaces = $state<Workspace[]>([]);
@@ -230,7 +231,7 @@
 	}
 </script>
 
-<div class="min-h-screen bg-gray-50 p-6">
+<div class="{T.pageBg} min-h-screen p-6">
 	<div class="mx-auto max-w-2xl pt-4">
 		{#if error}
 			<div class="mb-4 rounded-xl bg-red-50 px-4 py-3 text-red-600">{error}</div>
@@ -239,7 +240,7 @@
 		{#if loading}
 			<div class="text-center text-gray-500">Loading...</div>
 		{:else if workspaces.length === 0}
-			<div class="rounded-3xl bg-white p-8 text-center text-gray-400 shadow-sm">
+			<div class="rounded-3xl {T.cardBg} p-8 text-center {T.muted} shadow-sm">
 				No workspaces yet.
 			</div>
 		{:else}
@@ -249,10 +250,10 @@
 					<div>
 						<!-- Workspace header -->
 						<div class="mb-3 flex items-center gap-2">
-							<h2 class="text-lg font-bold text-gray-800">{ws.workspace_name}</h2>
+							<h2 class="text-lg font-bold {T.body}">{ws.workspace_name}</h2>
 							<button
 								onclick={(e) => openWsSettings(ws, e)}
-								class="rounded-lg p-1 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+								class="rounded-lg p-1 {T.muted} transition hover:bg-gray-100 hover:text-gray-600"
 								aria-label="Workspace settings"
 								title="Workspace settings"
 							>
@@ -282,7 +283,7 @@
 									if (e.key === 'Enter') handleCreate(ws.workspace_id);
 								}}
 								placeholder="New table name..."
-								class="flex-1 rounded-2xl border-2 border-gray-200 bg-white px-4 py-2.5 text-gray-800 placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+								class="flex-1 rounded-2xl border-2 {T.inputBorder} {T.inputBg} px-4 py-2.5 {T.body} {T.placeholder} {T.inputFocusBorder} focus:outline-none"
 							/>
 							<button
 								onclick={() => handleCreate(ws.workspace_id)}
@@ -294,7 +295,7 @@
 							</button>
 							<button
 								onclick={() => openTemplateModal(ws.workspace_id)}
-								class="rounded-2xl border-2 border-blue-200 bg-white px-4 py-2.5 font-semibold text-blue-600 transition hover:bg-blue-50"
+								class="rounded-2xl border-2 border-blue-200 {T.cardBg} px-4 py-2.5 font-semibold text-blue-600 transition {T.hoverBg}"
 							>
 								From Template
 							</button>
@@ -302,26 +303,24 @@
 
 						<!-- Tables -->
 						{#if wsTables.length === 0}
-							<div
-								class="rounded-2xl bg-white px-4 py-4 text-center text-sm text-gray-400 shadow-sm"
-							>
+							<div class="rounded-2xl {T.cardBg} px-4 py-4 text-center text-sm {T.muted} shadow-sm">
 								No tables yet.
 							</div>
 						{:else}
 							<div class="space-y-2">
 								{#each wsTables as table (table.table_id)}
 									<div
-										class="flex items-center gap-3 rounded-2xl bg-white px-4 py-4 shadow-sm transition hover:bg-blue-50"
+										class="flex items-center gap-3 rounded-2xl {T.cardBg} px-4 py-4 shadow-sm transition {T.hoverBg}"
 									>
 										<button
 											onclick={() => goto(`/${table.workspace_id}/${table.table_id}`)}
-											class="flex-1 text-left font-medium text-gray-800"
+											class="flex-1 text-left font-medium {T.body}"
 										>
 											{table.table_id}
 										</button>
 										<button
 											onclick={(e) => openTableSettings(table, e)}
-											class="rounded-xl p-2 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+											class="rounded-xl p-2 {T.muted} transition hover:bg-gray-100 hover:text-gray-600"
 											aria-label="Table settings"
 											title="Table settings"
 										>
@@ -360,15 +359,13 @@
 		aria-modal="true"
 	>
 		<div
-			class="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl"
+			class="w-full max-w-sm rounded-3xl {T.cardBg} p-6 shadow-xl"
 			onclick={(e) => e.stopPropagation()}
 		>
-			<h2 class="mb-4 text-lg font-bold text-gray-900">Table Settings</h2>
+			<h2 class="mb-4 text-lg font-bold {T.heading}">Table Settings</h2>
 
 			<div class="mb-4">
-				<label class="mb-1 block text-sm font-medium text-gray-700" for="table-rename-input"
-					>Name</label
-				>
+				<label class="mb-1 block text-sm font-medium {T.body}" for="table-rename-input">Name</label>
 				<input
 					id="table-rename-input"
 					type="text"
@@ -377,7 +374,7 @@
 						if (e.key === 'Enter') handleTableRename();
 						if (e.key === 'Escape') closeTableSettings();
 					}}
-					class="w-full rounded-xl border-2 border-gray-200 px-3 py-2 text-gray-800 focus:border-blue-500 focus:outline-none"
+					class="w-full rounded-xl border-2 {T.inputBorder} {T.inputBg} px-3 py-2 {T.body} {T.inputFocusBorder} focus:outline-none"
 				/>
 			</div>
 
@@ -398,7 +395,7 @@
 				<div class="flex gap-2">
 					<button
 						onclick={closeTableSettings}
-						class="rounded-xl px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+						class="rounded-xl px-4 py-2 text-sm {T.muted} hover:bg-gray-100"
 					>
 						Cancel
 					</button>
@@ -424,15 +421,13 @@
 		aria-modal="true"
 	>
 		<div
-			class="w-full max-w-sm rounded-3xl bg-white p-6 shadow-xl"
+			class="w-full max-w-sm rounded-3xl {T.cardBg} p-6 shadow-xl"
 			onclick={(e) => e.stopPropagation()}
 		>
-			<h2 class="mb-4 text-lg font-bold text-gray-900">Workspace Settings</h2>
+			<h2 class="mb-4 text-lg font-bold {T.heading}">Workspace Settings</h2>
 
 			<div class="mb-4">
-				<label class="mb-1 block text-sm font-medium text-gray-700" for="ws-rename-input"
-					>Name</label
-				>
+				<label class="mb-1 block text-sm font-medium {T.body}" for="ws-rename-input">Name</label>
 				<input
 					id="ws-rename-input"
 					type="text"
@@ -441,7 +436,7 @@
 						if (e.key === 'Enter') handleWsRename();
 						if (e.key === 'Escape') closeWsSettings();
 					}}
-					class="w-full rounded-xl border-2 border-gray-200 px-3 py-2 text-gray-800 focus:border-blue-500 focus:outline-none"
+					class="w-full rounded-xl border-2 {T.inputBorder} {T.inputBg} px-3 py-2 {T.body} {T.inputFocusBorder} focus:outline-none"
 				/>
 			</div>
 
@@ -462,7 +457,7 @@
 				<div class="flex gap-2">
 					<button
 						onclick={closeWsSettings}
-						class="rounded-xl px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+						class="rounded-xl px-4 py-2 text-sm {T.muted} hover:bg-gray-100"
 					>
 						Cancel
 					</button>
@@ -488,10 +483,10 @@
 		aria-modal="true"
 	>
 		<div
-			class="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl"
+			class="w-full max-w-md rounded-3xl {T.cardBg} p-6 shadow-xl"
 			onclick={(e) => e.stopPropagation()}
 		>
-			<h2 class="mb-4 text-xl font-bold text-gray-900">New from Template</h2>
+			<h2 class="mb-4 text-xl font-bold {T.heading}">New from Template</h2>
 
 			<!-- PM Project Option -->
 			<div class="mb-5 rounded-2xl border-2 border-blue-200 bg-blue-50 p-4">
@@ -514,7 +509,7 @@
 			<div class="flex justify-end gap-2">
 				<button
 					onclick={() => (showTemplateModal = false)}
-					class="rounded-2xl px-4 py-2 text-gray-600 hover:bg-gray-100"
+					class="rounded-2xl px-4 py-2 {T.muted} hover:bg-gray-100"
 				>
 					Cancel
 				</button>
