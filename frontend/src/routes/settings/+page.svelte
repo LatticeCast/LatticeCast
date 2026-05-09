@@ -50,6 +50,10 @@
 			userInfo = { ...userInfo!, email: updated.email };
 			emailInput = updated.email;
 			successMsg = 'Email updated successfully';
+			authStore.update((current) => {
+				if (!current || !current.userInfo) return current;
+				return { ...current, userInfo: { ...current.userInfo, email: updated.email } };
+			});
 		} catch (e: unknown) {
 			const msg = e instanceof Error ? e.message : 'Update failed';
 			errorMsg = msg === 'email already registered' ? 'Email already registered' : msg;
