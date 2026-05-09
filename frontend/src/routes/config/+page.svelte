@@ -2,6 +2,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { settingsStore, type SpeechLang } from '$lib/stores/settings.store';
+	import { T } from '$lib/UI/theme.svelte';
 
 	const languages: { value: SpeechLang; label: string; flag: string }[] = [
 		{ value: 'zh-TW', label: '繁體中文', flag: '🇹🇼' },
@@ -20,7 +21,7 @@
 	}
 </script>
 
-<div class="min-h-screen bg-linear-to-br from-blue-600 via-blue-500 to-sky-500 p-4">
+<div class="{T.settingsHeroBg} min-h-screen p-4">
 	<div class="mx-auto max-w-md">
 		<div class="mb-6 flex items-center justify-between pt-8">
 			<button
@@ -34,9 +35,9 @@
 		</div>
 
 		<!-- Speech Language -->
-		<div class="mb-4 rounded-3xl bg-white p-6 shadow-2xl">
-			<h2 class="mb-2 text-xl font-bold text-gray-800">Speech Language</h2>
-			<p class="mb-4 text-sm text-gray-500">Select the language for voice input</p>
+		<div class="mb-4 rounded-3xl {T.cardBg} p-6 shadow-2xl">
+			<h2 class="mb-2 text-xl font-bold {T.heading}">Speech Language</h2>
+			<p class="mb-4 text-sm {T.muted}">Select the language for voice input</p>
 
 			<div class="space-y-2">
 				{#each languages as lang (lang.value)}
@@ -44,12 +45,12 @@
 						onclick={() => selectLang(lang.value)}
 						class="flex w-full items-center justify-between rounded-2xl border-2 px-4 py-3 transition-all
 							{$settingsStore.speechLang === lang.value
-							? 'border-blue-500 bg-blue-50'
-							: 'border-transparent bg-gray-50 hover:border-blue-200 hover:bg-blue-50/50'}"
+							? `${T.selectedBorder} ${T.selectedBg}`
+							: `border-transparent ${T.inputBg} hover:border-blue-200`}"
 					>
 						<div class="flex items-center gap-3">
 							<span class="text-2xl">{lang.flag}</span>
-							<span class="font-medium text-gray-800">{lang.label}</span>
+							<span class="font-medium {T.body}">{lang.label}</span>
 						</div>
 						{#if $settingsStore.speechLang === lang.value}
 							<span class="text-xl text-blue-500">✓</span>
@@ -60,15 +61,15 @@
 		</div>
 
 		<!-- Dark Mode -->
-		<div class="mb-4 rounded-3xl bg-white p-6 shadow-2xl">
-			<h2 class="mb-2 text-xl font-bold text-gray-800">Appearance</h2>
-			<p class="mb-4 text-sm text-gray-500">Customize the look of the app</p>
+		<div class="mb-4 rounded-3xl {T.cardBg} p-6 shadow-2xl">
+			<h2 class="mb-2 text-xl font-bold {T.heading}">Appearance</h2>
+			<p class="mb-4 text-sm {T.muted}">Customize the look of the app</p>
 
 			<button
 				onclick={() => ($settingsStore.darkMode = !$settingsStore.darkMode)}
-				class="flex w-full items-center justify-between rounded-2xl bg-gray-50 px-4 py-3"
+				class="flex w-full items-center justify-between rounded-2xl {T.inputBg} px-4 py-3"
 			>
-				<span class="font-medium text-gray-800">Dark Mode</span>
+				<span class="font-medium {T.body}">Dark Mode</span>
 				<div
 					class="relative h-7 w-12 rounded-full transition-colors {$settingsStore.darkMode
 						? 'bg-blue-500'
@@ -84,16 +85,16 @@
 		</div>
 
 		<!-- Notification Reminders -->
-		<div class="mb-4 rounded-3xl bg-white p-6 shadow-2xl">
-			<h2 class="mb-2 text-xl font-bold text-gray-800">Notification Reminders</h2>
-			<p class="mb-4 text-sm text-gray-500">Get periodic reminders to check in</p>
+		<div class="mb-4 rounded-3xl {T.cardBg} p-6 shadow-2xl">
+			<h2 class="mb-2 text-xl font-bold {T.heading}">Notification Reminders</h2>
+			<p class="mb-4 text-sm {T.muted}">Get periodic reminders to check in</p>
 
 			<!-- Toggle -->
 			<button
 				onclick={() => ($settingsStore.notificationEnabled = !$settingsStore.notificationEnabled)}
-				class="mb-4 flex w-full items-center justify-between rounded-2xl bg-gray-50 px-4 py-3"
+				class="mb-4 flex w-full items-center justify-between rounded-2xl {T.inputBg} px-4 py-3"
 			>
-				<span class="font-medium text-gray-800">Enable notifications</span>
+				<span class="font-medium {T.body}">Enable notifications</span>
 				<div
 					class="relative h-7 w-12 rounded-full transition-colors {$settingsStore.notificationEnabled
 						? 'bg-blue-500'
@@ -109,7 +110,7 @@
 
 			<!-- Interval picker -->
 			{#if $settingsStore.notificationEnabled}
-				<p class="mb-2 text-sm font-medium text-gray-600">Remind every</p>
+				<p class="mb-2 text-sm font-medium {T.muted}">Remind every</p>
 				<div class="flex flex-wrap gap-2">
 					{#each intervalOptions as mins (mins)}
 						<button
@@ -117,7 +118,7 @@
 							class="rounded-xl px-4 py-2 text-sm font-medium transition-all
 								{$settingsStore.notificationIntervalMinutes === mins
 								? 'bg-blue-500 text-white'
-								: 'bg-gray-100 text-gray-700 hover:bg-blue-100'}"
+								: `${T.inputBg} ${T.body} hover:bg-blue-100`}"
 						>
 							{mins < 60 ? `${mins} min` : `${mins / 60} hr`}
 						</button>
