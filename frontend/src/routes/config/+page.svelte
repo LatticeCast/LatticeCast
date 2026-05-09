@@ -73,7 +73,7 @@
 				<div
 					class="relative h-7 w-12 rounded-full transition-colors {$settingsStore.darkMode
 						? 'bg-blue-500'
-						: 'bg-gray-300'}"
+						: T.toggleTrackBg}"
 				>
 					<div
 						class="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform {$settingsStore.darkMode
@@ -98,7 +98,7 @@
 				<div
 					class="relative h-7 w-12 rounded-full transition-colors {$settingsStore.notificationEnabled
 						? 'bg-blue-500'
-						: 'bg-gray-300'}"
+						: T.toggleTrackBg}"
 				>
 					<div
 						class="absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform {$settingsStore.notificationEnabled
@@ -118,7 +118,7 @@
 							class="rounded-xl px-4 py-2 text-sm font-medium transition-all
 								{$settingsStore.notificationIntervalMinutes === mins
 								? 'bg-blue-500 text-white'
-								: `${T.inputBg} ${T.body} hover:bg-blue-100`}"
+								: `${T.inputBg} ${T.body} ${T.hoverBg}`}"
 						>
 							{mins < 60 ? `${mins} min` : `${mins / 60} hr`}
 						</button>

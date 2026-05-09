@@ -28,6 +28,7 @@ export interface ThemeTokens {
 	hoverBg: string;
 	selectedBg: string;
 	badgeBg: string;
+	toggleTrackBg: string;
 
 	// Borders
 	inputBorder: string;
@@ -61,6 +62,7 @@ export const theme = {
 		hoverBg: 'hover:bg-blue-50',
 		selectedBg: 'bg-blue-50',
 		badgeBg: 'bg-blue-100',
+		toggleTrackBg: 'bg-gray-200',
 
 		// Borders
 		inputBorder: 'border-gray-200',
@@ -93,6 +95,7 @@ export const theme = {
 		hoverBg: 'hover:bg-blue-900',
 		selectedBg: 'bg-blue-900',
 		badgeBg: 'bg-blue-900',
+		toggleTrackBg: 'bg-gray-600',
 
 		// Borders
 		inputBorder: 'border-gray-600',
