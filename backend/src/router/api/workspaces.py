@@ -54,6 +54,8 @@ async def _resolve_member_user(
     )
 
 
+RESERVED_WORKSPACE_NAMES = frozenset({"settings", "config", "members", "login", "callback", "debug", "api"})
+
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
 
@@ -95,6 +97,8 @@ async def create_workspace(
     session: AsyncSession = Depends(get_rls_session),
 ):
     """Create a new workspace; creator becomes owner"""
+    if data.workspace_name.lower() in RESERVED_WORKSPACE_NAMES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That workspace name is reserved")
     repo = WorkspaceRepository(session)
     conflict = await session.execute(
         select(Workspace).where(func.lower(Workspace.workspace_name) == data.workspace_name.lower())
@@ -239,6 +243,8 @@ async def update_workspace(
     session: AsyncSession = Depends(get_rls_session),
 ):
     """Update workspace name (owner only). workspace_name must be globally unique."""
+    if data.workspace_name.lower() in RESERVED_WORKSPACE_NAMES:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That workspace name is reserved")
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, session)

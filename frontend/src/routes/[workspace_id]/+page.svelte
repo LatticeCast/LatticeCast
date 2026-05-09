@@ -1,13 +1,619 @@
-<!-- routes/[workspace_id]/+page.svelte — tables list filtered to this workspace -->
+<!-- routes/[workspace_id]/+page.svelte — workspace home -->
 
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
+	import { authStore } from '$lib/stores/auth.store';
+	import {
+		fetchTables,
+		createTable,
+		updateTable,
+		deleteTable,
+		createPmTemplate
+	} from '$lib/backend/tables';
+	import { fetchWorkspaces, updateWorkspace, deleteWorkspace } from '$lib/backend/workspaces';
+	import { currentTable, pageTitle } from '$lib/stores/tables.store';
+	import type { Table, Workspace } from '$lib/types/table';
+	import { T } from '$lib/UI/theme.svelte';
+	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
+	import { isUuid } from '$lib/utils/url';
 
-	onMount(() => {
-		goto(`/?workspace=${$page.params.workspace_id}`, { replaceState: true });
+	let tables = $state<Table[]>([]);
+	let workspaces = $state<Workspace[]>([]);
+	let loading = $state(true);
+	let error = $state('');
+	let showCreateWorkspace = $state(false);
+
+	// Derive active workspace from URL params + loaded workspaces
+	const activeWorkspace = $derived.by<Workspace | null>(() => {
+		if (!workspaces.length) return null;
+		const wsParam = $page.params.workspace_id;
+		if (!wsParam) return null;
+		return isUuid(wsParam)
+			? (workspaces.find((w) => w.workspace_id === wsParam) ?? null)
+			: (workspaces.find((w) => w.workspace_name === wsParam) ?? null);
 	});
+
+	const activeTables = $derived(
+		activeWorkspace ? tables.filter((t) => t.workspace_id === activeWorkspace.workspace_id) : []
+	);
+
+	// Per-workspace create state
+	let newTableNames = $state<Record<string, string>>({});
+	let creating = $state<Record<string, boolean>>({});
+
+	// Template modal
+	let showTemplateModal = $state(false);
+	let templateName = $state('');
+	let templateWorkspaceId = $state('');
+	let creatingTemplate = $state(false);
+
+	// Workspace settings dialog
+	let wsSettingsTarget = $state<Workspace | null>(null);
+	let wsRenameValue = $state('');
+	let wsSaving = $state(false);
+	let wsSettingsError = $state('');
+
+	// Table settings dialog
+	let tableSettingsTarget = $state<Table | null>(null);
+	let tableRenameValue = $state('');
+	let tableSaving = $state(false);
+	let tableSettingsError = $state('');
+
+	// UUID → name URL rewrite (runs when UUID is in the address bar)
+	$effect(() => {
+		const wsParam = $page.params.workspace_id;
+		if (!wsParam || !isUuid(wsParam)) return;
+		const ws = workspaces.find((w) => w.workspace_id === wsParam);
+		if (ws && typeof window !== 'undefined') {
+			history.replaceState({}, '', `/${encodeURIComponent(ws.workspace_name)}/`);
+		}
+	});
+
+	// Track last visited workspace in localStorage
+	$effect(() => {
+		const ws = activeWorkspace;
+		if (!ws || typeof localStorage === 'undefined') return;
+		localStorage.setItem('lastWorkspace', ws.workspace_name);
+	});
+
+	onMount(async () => {
+		if (!$authStore?.role) {
+			goto('/login');
+			return;
+		}
+		currentTable.set(null);
+		pageTitle.set('');
+		await loadData();
+	});
+
+	onDestroy(() => {
+		pageTitle.set('');
+	});
+
+	async function loadData() {
+		loading = true;
+		error = '';
+		try {
+			const [ws, tbls] = await Promise.all([fetchWorkspaces(), fetchTables()]);
+			workspaces = ws;
+			tables = tbls;
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load data';
+		} finally {
+			loading = false;
+		}
+	}
+
+	function openWsSettings(ws: Workspace, e: MouseEvent) {
+		e.stopPropagation();
+		wsSettingsTarget = ws;
+		wsRenameValue = ws.workspace_name;
+		wsSettingsError = '';
+	}
+
+	function closeWsSettings() {
+		wsSettingsTarget = null;
+		wsRenameValue = '';
+		wsSettingsError = '';
+	}
+
+	async function handleWsRename() {
+		if (!wsSettingsTarget) return;
+		const name = wsRenameValue.trim();
+		if (!name || name === wsSettingsTarget.workspace_name) {
+			closeWsSettings();
+			return;
+		}
+		wsSaving = true;
+		wsSettingsError = '';
+		try {
+			const updated = await updateWorkspace(wsSettingsTarget.workspace_id, {
+				workspace_name: name
+			});
+			workspaces = workspaces.map((w) => (w.workspace_id === updated.workspace_id ? updated : w));
+			closeWsSettings();
+			if (updated.workspace_id === activeWorkspace?.workspace_id) {
+				goto(`/${encodeURIComponent(updated.workspace_name)}/`, { replaceState: true });
+			}
+		} catch (e) {
+			wsSettingsError = e instanceof Error ? e.message : 'Failed to rename workspace';
+		} finally {
+			wsSaving = false;
+		}
+	}
+
+	async function handleWsDelete() {
+		if (!wsSettingsTarget) return;
+		if (!confirm(`Delete workspace "${wsSettingsTarget.workspace_name}"? This cannot be undone.`))
+			return;
+		wsSaving = true;
+		wsSettingsError = '';
+		try {
+			await deleteWorkspace(wsSettingsTarget.workspace_id);
+			const deletedId = wsSettingsTarget.workspace_id;
+			workspaces = workspaces.filter((w) => w.workspace_id !== deletedId);
+			tables = tables.filter((t) => t.workspace_id !== deletedId);
+			closeWsSettings();
+			const next = workspaces[0];
+			if (next) {
+				goto(`/${encodeURIComponent(next.workspace_name)}/`, { replaceState: true });
+			} else {
+				goto('/', { replaceState: true });
+			}
+		} catch (e) {
+			wsSettingsError = e instanceof Error ? e.message : 'Failed to delete workspace';
+		} finally {
+			wsSaving = false;
+		}
+	}
+
+	async function handleCreate(wsId: string) {
+		const name = (newTableNames[wsId] ?? '').trim();
+		if (!name) return;
+		creating = { ...creating, [wsId]: true };
+		error = '';
+		try {
+			const table = await createTable({ table_id: name, workspace_id: wsId });
+			tables = [...tables, table];
+			newTableNames = { ...newTableNames, [wsId]: '' };
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to create table';
+		} finally {
+			creating = { ...creating, [wsId]: false };
+		}
+	}
+
+	function openTableSettings(table: Table, e: MouseEvent) {
+		e.stopPropagation();
+		tableSettingsTarget = table;
+		tableRenameValue = table.table_id;
+		tableSettingsError = '';
+	}
+
+	function closeTableSettings() {
+		tableSettingsTarget = null;
+		tableRenameValue = '';
+		tableSettingsError = '';
+	}
+
+	async function handleTableRename() {
+		if (!tableSettingsTarget) return;
+		const name = tableRenameValue.trim();
+		if (!name || name === tableSettingsTarget.table_id) {
+			closeTableSettings();
+			return;
+		}
+		const wsId = tableSettingsTarget.workspace_id;
+		const duplicate = tables.some(
+			(t) =>
+				t.workspace_id === wsId &&
+				t.table_id === name &&
+				t.table_id !== tableSettingsTarget!.table_id
+		);
+		if (duplicate) {
+			tableSettingsError = `A table named "${name}" already exists in this workspace.`;
+			return;
+		}
+		tableSaving = true;
+		tableSettingsError = '';
+		try {
+			const updated = await updateTable(tableSettingsTarget.table_id, { table_id: name });
+			tables = tables.map((t) => (t.table_id === updated.table_id ? updated : t));
+			closeTableSettings();
+		} catch (e) {
+			tableSettingsError = e instanceof Error ? e.message : 'Failed to rename table';
+		} finally {
+			tableSaving = false;
+		}
+	}
+
+	async function handleTableDelete() {
+		if (!tableSettingsTarget) return;
+		if (!confirm(`Delete table "${tableSettingsTarget.table_id}"? This cannot be undone.`)) return;
+		tableSaving = true;
+		tableSettingsError = '';
+		try {
+			await deleteTable(tableSettingsTarget.table_id);
+			tables = tables.filter((t) => t.table_id !== tableSettingsTarget!.table_id);
+			closeTableSettings();
+		} catch (e) {
+			tableSettingsError = e instanceof Error ? e.message : 'Failed to delete table';
+		} finally {
+			tableSaving = false;
+		}
+	}
+
+	async function handlePmTemplate() {
+		const name = templateName.trim();
+		if (!name || !templateWorkspaceId) return;
+		creatingTemplate = true;
+		error = '';
+		try {
+			const table = await createPmTemplate(name, templateWorkspaceId);
+			tables = [...tables, table];
+			showTemplateModal = false;
+			templateName = '';
+			templateWorkspaceId = '';
+			goto(`/${table.workspace_id}/${table.table_id}`);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to create template';
+		} finally {
+			creatingTemplate = false;
+		}
+	}
+
+	function openTemplateModal(wsId: string) {
+		templateWorkspaceId = wsId;
+		templateName = '';
+		showTemplateModal = true;
+	}
 </script>
 
-<div class="flex min-h-screen items-center justify-center bg-gray-50 text-gray-400">Loading...</div>
+<div class="{T.pageBg} min-h-screen p-6">
+	<div class="mx-auto max-w-2xl pt-4">
+		{#if error}
+			<div class="mb-4 rounded-xl bg-red-50 px-4 py-3 text-red-600">{error}</div>
+		{/if}
+
+		{#if loading}
+			<div class="text-center {T.muted}">Loading...</div>
+		{:else if !activeWorkspace}
+			<!-- Workspace not found — name may have changed or workspace was deleted -->
+			<div class="rounded-3xl {T.cardBg} p-8 text-center shadow-sm">
+				<p class="mb-2 font-semibold {T.heading}">Workspace not found</p>
+				<p class="mb-4 text-sm {T.muted}">
+					"{$page.params.workspace_id}" may have been renamed or deleted.
+				</p>
+				{#if workspaces.length > 0}
+					<p class="mb-3 text-sm {T.muted}">Available workspaces:</p>
+					<div class="flex flex-wrap justify-center gap-2">
+						{#each workspaces as ws (ws.workspace_id)}
+							<a
+								href="/{encodeURIComponent(ws.workspace_name)}/"
+								class="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+							>
+								{ws.workspace_name}
+							</a>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{:else}
+			<!-- Workspace tab strip -->
+			<div
+				data-testid="workspace-tab-strip"
+				class="mb-6 flex items-center gap-1 overflow-x-auto pb-1"
+			>
+				{#each workspaces as ws (ws.workspace_id)}
+					<a
+						data-testid="workspace-tab-{ws.workspace_id}"
+						href="/{encodeURIComponent(ws.workspace_name)}/"
+						class="rounded-2xl px-4 py-2 text-sm font-medium whitespace-nowrap transition {activeWorkspace.workspace_id ===
+						ws.workspace_id
+							? 'bg-blue-600 text-white'
+							: `${T.muted} ${T.hoverBg}`}"
+					>
+						{ws.workspace_name}
+					</a>
+				{/each}
+				<button
+					data-testid="new-workspace-btn"
+					onclick={() => (showCreateWorkspace = true)}
+					class="rounded-2xl px-4 py-2 text-sm font-medium whitespace-nowrap transition {T.muted} {T.hoverBg}"
+				>
+					+ New
+				</button>
+			</div>
+
+			<!-- Active workspace content -->
+			<div>
+				<!-- Workspace header -->
+				<div class="mb-3 flex items-center gap-2">
+					<h2 class="text-lg font-bold {T.body}">{activeWorkspace.workspace_name}</h2>
+					<button
+						onclick={(e) => openWsSettings(activeWorkspace, e)}
+						class="rounded-lg p-1 {T.muted} transition {T.hoverBg}"
+						aria-label="Workspace settings"
+						title="Workspace settings"
+					>
+						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+							/>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+							/>
+						</svg>
+					</button>
+				</div>
+
+				<!-- Create Table -->
+				<div class="mb-3 flex gap-2">
+					<input
+						type="text"
+						bind:value={newTableNames[activeWorkspace.workspace_id]}
+						onkeydown={(e) => {
+							if (e.key === 'Enter') handleCreate(activeWorkspace.workspace_id);
+						}}
+						placeholder="New table name..."
+						class="flex-1 rounded-2xl border-2 {T.inputBorder} {T.inputBg} px-4 py-2.5 {T.body} {T.placeholder} {T.inputFocusBorder} focus:outline-none"
+					/>
+					<button
+						onclick={() => handleCreate(activeWorkspace.workspace_id)}
+						disabled={creating[activeWorkspace.workspace_id] ||
+							!(newTableNames[activeWorkspace.workspace_id] ?? '').trim()}
+						class="rounded-2xl bg-blue-600 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+					>
+						{creating[activeWorkspace.workspace_id] ? 'Creating...' : 'Create'}
+					</button>
+					<button
+						onclick={() => openTemplateModal(activeWorkspace.workspace_id)}
+						class="rounded-2xl border-2 {T.badgeBorder} {T.cardBg} px-4 py-2.5 font-semibold {T.badgeText} transition {T.hoverBg}"
+					>
+						From Template
+					</button>
+				</div>
+
+				<!-- Tables -->
+				{#if activeTables.length === 0}
+					<div class="rounded-2xl {T.cardBg} px-4 py-4 text-center text-sm {T.muted} shadow-sm">
+						No tables yet.
+					</div>
+				{:else}
+					<div class="space-y-2">
+						{#each activeTables as table (table.table_id)}
+							<div
+								class="flex items-center gap-3 rounded-2xl {T.cardBg} px-4 py-4 shadow-sm transition {T.hoverBg}"
+							>
+								<button
+									onclick={() =>
+										goto(
+											`/${encodeURIComponent(activeWorkspace.workspace_name)}/${table.table_id}`
+										)}
+									class="flex-1 text-left font-medium {T.body}"
+								>
+									{table.table_id}
+								</button>
+								<button
+									onclick={(e) => openTableSettings(table, e)}
+									class="rounded-xl p-2 {T.muted} transition {T.hoverBg}"
+									aria-label="Table settings"
+									title="Table settings"
+								>
+									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+										/>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+										/>
+									</svg>
+								</button>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/if}
+	</div>
+</div>
+
+<!-- Create Workspace Modal -->
+<CreateWorkspaceModal
+	show={showCreateWorkspace}
+	onClose={() => (showCreateWorkspace = false)}
+	onCreated={(ws) => {
+		workspaces = [...workspaces, ws];
+		showCreateWorkspace = false;
+		goto(`/${encodeURIComponent(ws.workspace_name)}/`);
+	}}
+/>
+
+<!-- Table Settings Dialog -->
+{#if tableSettingsTarget}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+		onclick={closeTableSettings}
+		role="dialog"
+		aria-modal="true"
+	>
+		<div
+			class="w-full max-w-sm rounded-3xl {T.cardBg} p-6 shadow-xl"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<h2 class="mb-4 text-lg font-bold {T.heading}">Table Settings</h2>
+
+			<div class="mb-4">
+				<label class="mb-1 block text-sm font-medium {T.body}" for="table-rename-input">Name</label>
+				<input
+					id="table-rename-input"
+					type="text"
+					bind:value={tableRenameValue}
+					onkeydown={(e) => {
+						if (e.key === 'Enter') handleTableRename();
+						if (e.key === 'Escape') closeTableSettings();
+					}}
+					class="w-full rounded-xl border-2 {T.inputBorder} {T.inputBg} px-3 py-2 {T.body} {T.inputFocusBorder} focus:outline-none"
+				/>
+			</div>
+
+			{#if tableSettingsError}
+				<div class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
+					{tableSettingsError}
+				</div>
+			{/if}
+
+			<div class="flex items-center justify-between gap-2">
+				<button
+					onclick={handleTableDelete}
+					disabled={tableSaving}
+					class="rounded-xl px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+				>
+					Delete table
+				</button>
+				<div class="flex gap-2">
+					<button
+						onclick={closeTableSettings}
+						class="rounded-xl px-4 py-2 text-sm {T.muted} {T.hoverBg}"
+					>
+						Cancel
+					</button>
+					<button
+						onclick={handleTableRename}
+						disabled={tableSaving || !tableRenameValue.trim()}
+						class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+					>
+						{tableSaving ? 'Saving...' : 'Save'}
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Workspace Settings Dialog -->
+{#if wsSettingsTarget}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+		onclick={closeWsSettings}
+		role="dialog"
+		aria-modal="true"
+	>
+		<div
+			class="w-full max-w-sm rounded-3xl {T.cardBg} p-6 shadow-xl"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<h2 class="mb-4 text-lg font-bold {T.heading}">Workspace Settings</h2>
+
+			<div class="mb-4">
+				<label class="mb-1 block text-sm font-medium {T.body}" for="ws-rename-input">Name</label>
+				<input
+					id="ws-rename-input"
+					type="text"
+					bind:value={wsRenameValue}
+					onkeydown={(e) => {
+						if (e.key === 'Enter') handleWsRename();
+						if (e.key === 'Escape') closeWsSettings();
+					}}
+					class="w-full rounded-xl border-2 {T.inputBorder} {T.inputBg} px-3 py-2 {T.body} {T.inputFocusBorder} focus:outline-none"
+				/>
+			</div>
+
+			{#if wsSettingsError}
+				<div class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
+					{wsSettingsError}
+				</div>
+			{/if}
+
+			<div class="flex items-center justify-between gap-2">
+				<button
+					onclick={handleWsDelete}
+					disabled={wsSaving}
+					class="rounded-xl px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+				>
+					Delete workspace
+				</button>
+				<div class="flex gap-2">
+					<button
+						onclick={closeWsSettings}
+						class="rounded-xl px-4 py-2 text-sm {T.muted} {T.hoverBg}"
+					>
+						Cancel
+					</button>
+					<button
+						onclick={handleWsRename}
+						disabled={wsSaving || !wsRenameValue.trim()}
+						class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+					>
+						{wsSaving ? 'Saving...' : 'Save'}
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Template Gallery Modal -->
+{#if showTemplateModal}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+		onclick={() => (showTemplateModal = false)}
+		role="dialog"
+		aria-modal="true"
+	>
+		<div
+			class="w-full max-w-md rounded-3xl {T.cardBg} p-6 shadow-xl"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<h2 class="mb-4 text-xl font-bold {T.heading}">New from Template</h2>
+
+			<!-- PM Project Option -->
+			<div class="mb-5 rounded-2xl border-2 {T.badgeBorder} {T.badgeBg} p-4">
+				<div class="mb-1 flex items-center gap-2">
+					<span class="text-lg">📋</span>
+					<span class="font-semibold {T.badgeText}">PM Project</span>
+				</div>
+				<p class="mb-3 text-sm {T.badgeText}">
+					Project management with Key, Title, Status, Priority, Assignee, dates, and Sprint Board +
+					Roadmap views.
+				</p>
+				<input
+					type="text"
+					bind:value={templateName}
+					placeholder="Project name..."
+					class="w-full rounded-xl border-2 {T.inputBorder} {T.inputBg} px-3 py-2 {T.body} {T.placeholder} {T.inputFocusBorder} focus:outline-none"
+				/>
+			</div>
+
+			<div class="flex justify-end gap-2">
+				<button
+					onclick={() => (showTemplateModal = false)}
+					class="rounded-2xl px-4 py-2 {T.muted} {T.hoverBg}"
+				>
+					Cancel
+				</button>
+				<button
+					onclick={handlePmTemplate}
+					disabled={creatingTemplate || !templateName.trim()}
+					class="rounded-2xl {T.buttonGradient} px-5 py-2 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+				>
+					{creatingTemplate ? 'Creating...' : 'Create PM Project'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
