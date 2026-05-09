@@ -98,6 +98,20 @@ class GdprRepository:
         await self.session.commit()
         return await self.get_by_user_id(user_id)  # type: ignore[return-value]
 
+    async def update_email(self, user_id: UUID, new_email: str) -> Gdpr:
+        existing = await self.get_by_email(new_email)
+        if existing and existing.user_id != user_id:
+            raise ValueError("email already registered")
+        gdpr = await self.get_by_user_id(user_id)
+        if not gdpr:
+            raise ValueError("user not found")
+        gdpr.email = new_email
+        gdpr.updated_at = datetime.utcnow()
+        self.session.add(gdpr)
+        await self.session.commit()
+        await self.session.refresh(gdpr)
+        return gdpr
+
 
 async def resolve_user_by_email(email: str, login_session: AsyncSession) -> User | None:
     """Look up a User via auth.gdpr. REQUIRES a login session."""

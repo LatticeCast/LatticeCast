@@ -183,9 +183,7 @@
 				const urlView = new URL(window.location.href).searchParams.get('view');
 				const loadedViews = get(viewsStore);
 				const hasUserTable = loadedViews.some((v) => v.name === IMPLICIT_TABLE_VIEW.name);
-				const candidates = hasUserTable
-					? loadedViews
-					: [IMPLICIT_TABLE_VIEW, ...loadedViews];
+				const candidates = hasUserTable ? loadedViews : [IMPLICIT_TABLE_VIEW, ...loadedViews];
 				const defaultView = table.default_view ?? null;
 				if (urlView && candidates.some((v) => v.name === urlView)) {
 					activeViewName = urlView;

@@ -13,11 +13,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
-from core.db import get_session
+from core.db import get_login_session, get_session
 from middleware.auth import get_current_user
 from models.user import Gdpr, User
 from models.user import UserInfo as UserInfoModel
-from repository.user import UserRepository, resolve_user_by_email
+from repository.user import GdprRepository, UserRepository, resolve_user_by_email
 
 router = APIRouter(prefix="/login", tags=["auth"])
 
@@ -245,6 +245,54 @@ async def patch_me_config(
     session.add(info)
     await session.commit()
     return merged
+
+
+class UpdateEmailRequest(BaseModel):
+    """Request body for updating the current user's email."""
+
+    email: str = Field(..., description="New email address")
+
+
+@router.put(
+    "/me/email",
+    response_model=MeResponse,
+    responses={
+        401: {"model": HTTPErrorResponse, "description": "Invalid or missing token"},
+        403: {"model": HTTPErrorResponse, "description": "User not registered"},
+        409: {"model": HTTPErrorResponse, "description": "Email already registered"},
+    },
+)
+async def update_me_email(
+    request: UpdateEmailRequest,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    login_session: AsyncSession = Depends(get_login_session),
+) -> MeResponse:
+    """Update the current user's email. Enforces uniqueness (UNIQUE on auth.gdpr.email)."""
+    try:
+        gdpr = await GdprRepository(login_session).update_email(user.user_id, request.email)
+    except ValueError as exc:
+        if "already registered" in str(exc):
+            raise HTTPException(status_code=409, detail="email already registered") from exc
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    token_payload = getattr(user, "_token_payload", {})
+    provider = token_payload.get("_provider", "authentik")
+
+    result = await session.execute(select(UserInfoModel).where(UserInfoModel.user_id == user.user_id))
+    info = result.scalar_one_or_none()
+
+    return MeResponse(
+        user_id=user.user_id,
+        sub=token_payload.get("sub"),
+        email=gdpr.email,
+        name=(gdpr.legal_name if gdpr.legal_name else None) or token_payload.get("name", ""),
+        picture=token_payload.get("picture"),
+        provider=provider,
+        role=user.role,
+        user_name=info.user_name if info else None,
+        config=info.config if info and info.config else {},
+    )
 
 
 @router.post(

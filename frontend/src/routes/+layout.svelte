@@ -232,15 +232,22 @@
 										.toUpperCase()}
 								</div>
 							{/if}
-							<!-- Name + role -->
-							<div class="min-w-0 flex-1">
-								<p class="truncate text-xs font-medium text-gray-900 dark:text-gray-100">
+							<!-- Name + role (clickable → /settings) -->
+							<button
+								onclick={() => navigate('/settings')}
+								data-testid="nav-profile"
+								class="min-w-0 flex-1 text-left"
+								title="Edit profile"
+							>
+								<p
+									class="truncate text-xs font-medium text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400"
+								>
 									{$authStore.userInfo?.name || $authStore.userInfo?.email || 'User'}
 								</p>
 								<p class="truncate text-xs text-gray-400 dark:text-gray-500">
 									{$authStore.userInfo?.sub ?? ''}
 								</p>
-							</div>
+							</button>
 							<!-- Logout icon button -->
 							<button
 								onclick={handleLogout}

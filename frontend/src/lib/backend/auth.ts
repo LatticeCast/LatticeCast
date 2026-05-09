@@ -89,3 +89,27 @@ export async function fetchMe(accessToken: string): Promise<MeResponse | null> {
 
 	return response.json();
 }
+
+/**
+ * Update the current user's email. Throws on 409 with message "email already registered".
+ */
+export async function updateEmail(email: string, accessToken: string): Promise<MeResponse> {
+	const response = await fetch(`${BACKEND_URL}/api/v1/login/me/email`, {
+		method: 'PUT',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${accessToken}`
+		},
+		body: JSON.stringify({ email })
+	});
+
+	if (response.status === 409) {
+		throw new Error('email already registered');
+	}
+	if (!response.ok) {
+		const error = await response.json().catch(() => ({ detail: 'Update failed' }));
+		throw new Error(error.detail || 'Update failed');
+	}
+
+	return response.json();
+}
