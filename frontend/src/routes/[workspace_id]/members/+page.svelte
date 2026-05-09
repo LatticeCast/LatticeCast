@@ -7,6 +7,8 @@
 	import { fetchMe } from '$lib/backend/auth';
 	import { fetchMembers, addMember, removeMember, updateMemberRole } from '$lib/backend/workspaces';
 	import type { WorkspaceMemberFull } from '$lib/types/table';
+	import { get } from 'svelte/store';
+	import { currentWorkspace, workspaces, loadWorkspaces } from '$lib/stores/tables.store';
 
 	let workspaceId = $derived($page.params.workspace_id ?? '');
 	let members = $state<WorkspaceMemberFull[]>([]);
@@ -34,6 +36,11 @@
 			return;
 		}
 		currentUserId = me.user_id;
+		if (get(currentWorkspace)?.workspace_id !== workspaceId) {
+			await loadWorkspaces();
+			const ws = get(workspaces).find((w) => w.workspace_id === workspaceId);
+			if (ws) currentWorkspace.set(ws);
+		}
 		await loadMembers();
 	});
 
@@ -110,7 +117,9 @@
 			>
 				← Back
 			</button>
-			<h1 class="text-2xl font-bold text-white">Members</h1>
+			<h1 data-testid="members-heading" class="text-2xl font-bold text-white">
+				{$currentWorkspace?.workspace_name ?? 'Workspace'} Members
+			</h1>
 			<div class="w-20"></div>
 		</div>
 
