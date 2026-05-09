@@ -15,11 +15,21 @@
 	import { currentTable, pageTitle } from '$lib/stores/tables.store';
 	import type { Table, Workspace } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
+	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
 
 	let tables = $state<Table[]>([]);
 	let workspaces = $state<Workspace[]>([]);
 	let loading = $state(true);
 	let error = $state('');
+
+	// Active workspace tab
+	let activeWorkspaceId = $state('');
+	let showCreateWorkspace = $state(false);
+
+	const activeWorkspace = $derived(
+		workspaces.find((w) => w.workspace_id === activeWorkspaceId) ?? null
+	);
+	const activeTables = $derived(tables.filter((t) => t.workspace_id === activeWorkspaceId));
 
 	// Per-workspace create state
 	let newTableNames = $state<Record<string, string>>({});
@@ -36,6 +46,19 @@
 	let wsRenameValue = $state('');
 	let wsSaving = $state(false);
 	let wsSettingsError = $state('');
+
+	function setActiveWorkspace(id: string, writeUrl = true) {
+		activeWorkspaceId = id;
+		if (writeUrl && typeof window !== 'undefined') {
+			const url = new URL(window.location.href);
+			if (id) {
+				url.searchParams.set('workspace', id);
+			} else {
+				url.searchParams.delete('workspace');
+			}
+			history.replaceState({}, '', url.toString());
+		}
+	}
 
 	function openWsSettings(ws: Workspace, e: MouseEvent) {
 		e.stopPropagation();
@@ -83,16 +106,15 @@
 			const deletedId = wsSettingsTarget.workspace_id;
 			workspaces = workspaces.filter((w) => w.workspace_id !== deletedId);
 			tables = tables.filter((t) => t.workspace_id !== deletedId);
+			if (activeWorkspaceId === deletedId) {
+				setActiveWorkspace(workspaces[0]?.workspace_id ?? '');
+			}
 			closeWsSettings();
 		} catch (e) {
 			wsSettingsError = e instanceof Error ? e.message : 'Failed to delete workspace';
 		} finally {
 			wsSaving = false;
 		}
-	}
-
-	function tablesForWorkspace(wsId: string): Table[] {
-		return tables.filter((t) => t.workspace_id === wsId);
 	}
 
 	onMount(async () => {
@@ -116,6 +138,13 @@
 			const [ws, tbls] = await Promise.all([fetchWorkspaces(), fetchTables()]);
 			workspaces = ws;
 			tables = tbls;
+
+			// Set active workspace from URL param, or fall back to first
+			const urlParams = new URLSearchParams(window.location.search);
+			const urlWsId = urlParams.get('workspace');
+			const found = urlWsId ? ws.find((w) => w.workspace_id === urlWsId) : null;
+			const targetId = found ? found.workspace_id : (ws[0]?.workspace_id ?? '');
+			setActiveWorkspace(targetId, !found && ws.length > 0);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load data';
 		} finally {
@@ -241,114 +270,156 @@
 			<div class="text-center {T.muted}">Loading...</div>
 		{:else if workspaces.length === 0}
 			<div class="rounded-3xl {T.cardBg} p-8 text-center {T.muted} shadow-sm">
-				No workspaces yet.
+				<p class="mb-4">No workspaces yet.</p>
+				<button
+					data-testid="new-workspace-btn"
+					onclick={() => (showCreateWorkspace = true)}
+					class="rounded-2xl bg-blue-600 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-700"
+				>
+					+ New Workspace
+				</button>
 			</div>
 		{:else}
-			<div class="space-y-8">
+			<!-- Workspace tab strip -->
+			<div
+				data-testid="workspace-tab-strip"
+				class="mb-6 flex items-center gap-1 overflow-x-auto pb-1"
+			>
 				{#each workspaces as ws (ws.workspace_id)}
-					{@const wsTables = tablesForWorkspace(ws.workspace_id)}
-					<div>
-						<!-- Workspace header -->
-						<div class="mb-3 flex items-center gap-2">
-							<h2 class="text-lg font-bold {T.body}">{ws.workspace_name}</h2>
-							<button
-								onclick={(e) => openWsSettings(ws, e)}
-								class="rounded-lg p-1 {T.muted} transition {T.hoverBg}"
-								aria-label="Workspace settings"
-								title="Workspace settings"
-							>
-								<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-									/>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-									/>
-								</svg>
-							</button>
-						</div>
-
-						<!-- Create Table -->
-						<div class="mb-3 flex gap-2">
-							<input
-								type="text"
-								bind:value={newTableNames[ws.workspace_id]}
-								onkeydown={(e) => {
-									if (e.key === 'Enter') handleCreate(ws.workspace_id);
-								}}
-								placeholder="New table name..."
-								class="flex-1 rounded-2xl border-2 {T.inputBorder} {T.inputBg} px-4 py-2.5 {T.body} {T.placeholder} {T.inputFocusBorder} focus:outline-none"
-							/>
-							<button
-								onclick={() => handleCreate(ws.workspace_id)}
-								disabled={creating[ws.workspace_id] ||
-									!(newTableNames[ws.workspace_id] ?? '').trim()}
-								class="rounded-2xl bg-blue-600 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
-							>
-								{creating[ws.workspace_id] ? 'Creating...' : 'Create'}
-							</button>
-							<button
-								onclick={() => openTemplateModal(ws.workspace_id)}
-								class="rounded-2xl border-2 {T.badgeBorder} {T.cardBg} px-4 py-2.5 font-semibold {T.badgeText} transition {T.hoverBg}"
-							>
-								From Template
-							</button>
-						</div>
-
-						<!-- Tables -->
-						{#if wsTables.length === 0}
-							<div class="rounded-2xl {T.cardBg} px-4 py-4 text-center text-sm {T.muted} shadow-sm">
-								No tables yet.
-							</div>
-						{:else}
-							<div class="space-y-2">
-								{#each wsTables as table (table.table_id)}
-									<div
-										class="flex items-center gap-3 rounded-2xl {T.cardBg} px-4 py-4 shadow-sm transition {T.hoverBg}"
-									>
-										<button
-											onclick={() => goto(`/${table.workspace_id}/${table.table_id}`)}
-											class="flex-1 text-left font-medium {T.body}"
-										>
-											{table.table_id}
-										</button>
-										<button
-											onclick={(e) => openTableSettings(table, e)}
-											class="rounded-xl p-2 {T.muted} transition {T.hoverBg}"
-											aria-label="Table settings"
-											title="Table settings"
-										>
-											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-												<path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													stroke-width="2"
-													d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-												/>
-												<path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													stroke-width="2"
-													d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-												/>
-											</svg>
-										</button>
-									</div>
-								{/each}
-							</div>
-						{/if}
-					</div>
+					<button
+						data-testid="workspace-tab-{ws.workspace_id}"
+						onclick={() => setActiveWorkspace(ws.workspace_id)}
+						class="rounded-2xl px-4 py-2 text-sm font-medium whitespace-nowrap transition {activeWorkspaceId ===
+						ws.workspace_id
+							? 'bg-blue-600 text-white'
+							: `${T.muted} ${T.hoverBg}`}"
+					>
+						{ws.workspace_name}
+					</button>
 				{/each}
+				<button
+					data-testid="new-workspace-btn"
+					onclick={() => (showCreateWorkspace = true)}
+					class="rounded-2xl px-4 py-2 text-sm font-medium whitespace-nowrap transition {T.muted} {T.hoverBg}"
+				>
+					+ New
+				</button>
 			</div>
+
+			<!-- Active workspace content -->
+			{#if activeWorkspace}
+				<div>
+					<!-- Workspace header -->
+					<div class="mb-3 flex items-center gap-2">
+						<h2 class="text-lg font-bold {T.body}">{activeWorkspace.workspace_name}</h2>
+						<button
+							onclick={(e) => openWsSettings(activeWorkspace, e)}
+							class="rounded-lg p-1 {T.muted} transition {T.hoverBg}"
+							aria-label="Workspace settings"
+							title="Workspace settings"
+						>
+							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+								/>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+								/>
+							</svg>
+						</button>
+					</div>
+
+					<!-- Create Table -->
+					<div class="mb-3 flex gap-2">
+						<input
+							type="text"
+							bind:value={newTableNames[activeWorkspaceId]}
+							onkeydown={(e) => {
+								if (e.key === 'Enter') handleCreate(activeWorkspaceId);
+							}}
+							placeholder="New table name..."
+							class="flex-1 rounded-2xl border-2 {T.inputBorder} {T.inputBg} px-4 py-2.5 {T.body} {T.placeholder} {T.inputFocusBorder} focus:outline-none"
+						/>
+						<button
+							onclick={() => handleCreate(activeWorkspaceId)}
+							disabled={creating[activeWorkspaceId] ||
+								!(newTableNames[activeWorkspaceId] ?? '').trim()}
+							class="rounded-2xl bg-blue-600 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+						>
+							{creating[activeWorkspaceId] ? 'Creating...' : 'Create'}
+						</button>
+						<button
+							onclick={() => openTemplateModal(activeWorkspaceId)}
+							class="rounded-2xl border-2 {T.badgeBorder} {T.cardBg} px-4 py-2.5 font-semibold {T.badgeText} transition {T.hoverBg}"
+						>
+							From Template
+						</button>
+					</div>
+
+					<!-- Tables -->
+					{#if activeTables.length === 0}
+						<div class="rounded-2xl {T.cardBg} px-4 py-4 text-center text-sm {T.muted} shadow-sm">
+							No tables yet.
+						</div>
+					{:else}
+						<div class="space-y-2">
+							{#each activeTables as table (table.table_id)}
+								<div
+									class="flex items-center gap-3 rounded-2xl {T.cardBg} px-4 py-4 shadow-sm transition {T.hoverBg}"
+								>
+									<button
+										onclick={() => goto(`/${table.workspace_id}/${table.table_id}`)}
+										class="flex-1 text-left font-medium {T.body}"
+									>
+										{table.table_id}
+									</button>
+									<button
+										onclick={(e) => openTableSettings(table, e)}
+										class="rounded-xl p-2 {T.muted} transition {T.hoverBg}"
+										aria-label="Table settings"
+										title="Table settings"
+									>
+										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+											/>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+											/>
+										</svg>
+									</button>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
 		{/if}
 	</div>
 </div>
+
+<!-- Create Workspace Modal -->
+<CreateWorkspaceModal
+	show={showCreateWorkspace}
+	onClose={() => (showCreateWorkspace = false)}
+	onCreated={(ws) => {
+		workspaces = [...workspaces, ws];
+		showCreateWorkspace = false;
+		setActiveWorkspace(ws.workspace_id);
+	}}
+/>
 
 <!-- Table Settings Dialog -->
 {#if tableSettingsTarget}
