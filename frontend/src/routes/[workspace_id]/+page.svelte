@@ -256,7 +256,11 @@
 			showTemplateModal = false;
 			templateName = '';
 			templateWorkspaceId = '';
-			goto(`/${table.workspace_id}/${table.table_id}`);
+			const wsForTable = workspaces.find((w) => w.workspace_id === table.workspace_id);
+			const wsPath = wsForTable
+				? encodeURIComponent(wsForTable.workspace_name)
+				: table.workspace_id;
+			goto(`/${wsPath}/${table.table_id}`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create template';
 		} finally {
