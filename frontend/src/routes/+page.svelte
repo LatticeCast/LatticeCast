@@ -16,6 +16,7 @@
 	import type { Table, Workspace } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
+	import { isUuid } from '$lib/utils/url';
 
 	let tables = $state<Table[]>([]);
 	let workspaces = $state<Workspace[]>([]);
@@ -52,7 +53,8 @@
 		if (writeUrl && typeof window !== 'undefined') {
 			const url = new URL(window.location.href);
 			if (id) {
-				url.searchParams.set('workspace', id);
+				const ws = workspaces.find((w) => w.workspace_id === id);
+				url.searchParams.set('workspace', ws ? ws.workspace_name : id);
 			} else {
 				url.searchParams.delete('workspace');
 			}
@@ -139,10 +141,17 @@
 			workspaces = ws;
 			tables = tbls;
 
-			// Set active workspace from URL param, or fall back to first
+			// Set active workspace from URL param (accepts UUID or name), or fall back to first
 			const urlParams = new URLSearchParams(window.location.search);
-			const urlWsId = urlParams.get('workspace');
-			const found = urlWsId ? ws.find((w) => w.workspace_id === urlWsId) : null;
+			const urlWsParam = urlParams.get('workspace');
+			let found: Workspace | null = null;
+			if (urlWsParam) {
+				// Try UUID match first, then name match
+				found =
+					(isUuid(urlWsParam)
+						? ws.find((w) => w.workspace_id === urlWsParam)
+						: ws.find((w) => w.workspace_name === urlWsParam)) ?? null;
+			}
 			const targetId = found ? found.workspace_id : (ws[0]?.workspace_id ?? '');
 			setActiveWorkspace(targetId, !found && ws.length > 0);
 		} catch (e) {
