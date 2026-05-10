@@ -1,6 +1,5 @@
 <!-- routes/[workspace_id]/members/+page.svelte -->
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { authStore } from '$lib/stores/auth.store';
@@ -24,24 +23,39 @@
 	let adding = $state(false);
 	let addError = $state('');
 
-	onMount(async () => {
+	// Plain boolean (not reactive) so changing it does not re-trigger the effect.
+	// Lets us skip fetchMe on subsequent workspace switches after the first auth check.
+	let initialized = false;
+
+	$effect(() => {
+		const wsId = workspaceId; // track reactive dep
+		if (!wsId) return;
+
 		const token = $authStore?.accessToken;
 		if (!token) {
 			goto('/login');
 			return;
 		}
-		const me = await fetchMe(token);
-		if (!me) {
-			goto('/login');
-			return;
-		}
-		currentUserId = me.user_id;
-		if (get(currentWorkspace)?.workspace_id !== workspaceId) {
-			await loadWorkspaces();
-			const ws = get(workspaces).find((w) => w.workspace_id === workspaceId);
-			if (ws) currentWorkspace.set(ws);
-		}
-		await loadMembers();
+
+		(async () => {
+			if (!initialized) {
+				const me = await fetchMe(token);
+				if (!me) {
+					goto('/login');
+					return;
+				}
+				currentUserId = me.user_id;
+				initialized = true;
+			}
+
+			if (get(currentWorkspace)?.workspace_id !== wsId) {
+				await loadWorkspaces();
+				const ws = get(workspaces).find((w) => w.workspace_id === wsId);
+				if (ws) currentWorkspace.set(ws);
+			}
+
+			await loadMembers();
+		})();
 	});
 
 	async function loadMembers() {
