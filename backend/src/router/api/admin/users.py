@@ -172,7 +172,7 @@ async def update_user(
         user.role = data.role
         session.add(user)
         await session.commit()
-        await session.refresh(user)
+        await session.refresh(user)  # refreshes attached instance — safe
     return await _build_response(user, session)
 
 

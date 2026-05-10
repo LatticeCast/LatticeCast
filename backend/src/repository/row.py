@@ -80,7 +80,7 @@ class RowRepository:
         row.updated_at = datetime.utcnow()
         self.session.add(row)
         await self.session.commit()
-        await self.session.refresh(row)
+        await self.session.refresh(row)  # refreshes attached instance — safe (row loaded via get_by_number ORM select)
         return row
 
     async def delete(self, row: Row) -> None:

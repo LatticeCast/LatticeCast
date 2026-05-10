@@ -26,7 +26,7 @@ class TableRepository:
         table = Table(workspace_id=workspace_id, table_id=table_id.lower())
         self.session.add(table)
         await self.session.commit()
-        await self.session.refresh(table)
+        await self.session.refresh(table)  # refreshes attached instance — safe
         return table
 
     async def get_by_id(self, workspace_id: UUID, table_id: str) -> Table | None:
@@ -66,7 +66,7 @@ class TableRepository:
         table.updated_at = datetime.utcnow()
         self.session.add(table)
         await self.session.commit()
-        await self.session.refresh(table)
+        await self.session.refresh(table)  # refreshes attached instance — safe
         return table
 
     async def delete(self, table: Table) -> None:

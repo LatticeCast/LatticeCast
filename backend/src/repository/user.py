@@ -50,7 +50,7 @@ class UserRepository:
         user.updated_at = datetime.utcnow()
         self.session.add(user)
         await self.session.commit()
-        await self.session.refresh(user)
+        await self.session.refresh(user)  # refreshes attached instance — safe
         return user
 
     async def resolve_user(self, identifier: str) -> User | None:
@@ -109,7 +109,7 @@ class GdprRepository:
         gdpr.updated_at = datetime.utcnow()
         self.session.add(gdpr)
         await self.session.commit()
-        await self.session.refresh(gdpr)
+        await self.session.refresh(gdpr)  # refreshes attached instance — safe
         return gdpr
 
 
@@ -139,7 +139,7 @@ async def bootstrap_user(
     gdpr = Gdpr(user_id=user.user_id, email=email, legal_name=legal_name)
     login_session.add(gdpr)
     await login_session.commit()
-    await login_session.refresh(user)
+    await login_session.refresh(user)  # refreshes attached instance — safe (added via login_session.add + flush)
 
     handle = user_name or _slugify(email)
     user_info = UserInfo(user_id=user.user_id, user_name=handle)

@@ -263,7 +263,7 @@ async def update_workspace(
     workspace.updated_at = datetime.utcnow()
     session.add(workspace)
     await session.commit()
-    await session.refresh(workspace)
+    await session.refresh(workspace)  # refreshes attached instance — safe
     return workspace
 
 

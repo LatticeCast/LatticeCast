@@ -15,7 +15,7 @@ class WorkspaceRepository:
         workspace = Workspace(workspace_name=workspace_name)
         self.session.add(workspace)
         await self.session.commit()
-        await self.session.refresh(workspace)
+        await self.session.refresh(workspace)  # refreshes attached instance — safe
         return workspace
 
     async def get_by_id(self, workspace_id: UUID) -> Workspace | None:
@@ -34,7 +34,7 @@ class WorkspaceRepository:
         member = WorkspaceMember(workspace_id=workspace_id, user_id=user_id, role=role)
         self.session.add(member)
         await self.session.commit()
-        await self.session.refresh(member)
+        await self.session.refresh(member)  # refreshes attached instance — safe
         return member
 
     async def remove_member(self, workspace_id: UUID, user_id: UUID) -> None:
@@ -106,7 +106,7 @@ class WorkspaceRepository:
         member.role = role
         self.session.add(member)
         await self.session.commit()
-        await self.session.refresh(member)
+        await self.session.refresh(member)  # refreshes attached instance — safe
         return member
 
     async def is_member(self, workspace_id: UUID, user_id: UUID) -> bool:
