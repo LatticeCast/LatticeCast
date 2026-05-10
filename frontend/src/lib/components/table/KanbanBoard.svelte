@@ -366,7 +366,7 @@
 											</span>
 										{:else if col!.type === 'tags'}
 											<div class="flex flex-wrap gap-1">
-												{#each getTagValues(row, col!.column_id) as tag, i (tag)}
+												{#each getTagValues(row, col!.column_id) as tag (tag)}
 													{@const tc = getChoiceColor(col!, tag)}
 													<span
 														class="inline-flex items-center rounded-full border px-1.5 py-0.5 text-xs {tc.bg} {tc.text} {tc.border}"

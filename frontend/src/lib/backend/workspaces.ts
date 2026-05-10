@@ -3,7 +3,7 @@
 
 import { BACKEND_URL } from './config';
 import { getAuthHeaders } from './http';
-import type { Workspace, WorkspaceMember, WorkspaceMemberFull } from '$lib/types/table';
+import type { Workspace, WorkspaceMemberFull } from '$lib/types/table';
 
 export interface CreateWorkspace {
 	workspace_name: string;

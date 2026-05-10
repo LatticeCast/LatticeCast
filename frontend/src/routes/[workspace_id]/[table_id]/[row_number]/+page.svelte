@@ -7,14 +7,8 @@
 	import { authStore } from '$lib/stores/auth.store';
 	import { get } from 'svelte/store';
 	import { fetchTable, fetchRows, fetchDoc, saveDoc, createRow } from '$lib/backend/tables';
-	import { fetchWorkspaces } from '$lib/backend/workspaces';
-	import {
-		getChoices,
-		getChoiceColor,
-		getTagValues,
-		formatDate
-	} from '$lib/components/table/table.utils';
-	import type { Column, Row, Table, Workspace } from '$lib/types/table';
+	import { getChoiceColor, getTagValues, formatDate } from '$lib/components/table/table.utils';
+	import type { Row, Table } from '$lib/types/table';
 	import { marked } from 'marked';
 	import CreateTicketModal from '$lib/components/table/CreateTicketModal.svelte';
 
@@ -23,7 +17,6 @@
 	const workspaceId = $derived($page.params.workspace_id ?? '');
 
 	let table = $state<Table | null>(null);
-	let workspace = $state<Workspace | null>(null);
 	let row = $state<Row | null>(null);
 	let docContent = $state('');
 	let loading = $state(true);
@@ -32,10 +25,6 @@
 	let editingDoc = $state(false);
 	let error = $state<string | null>(null);
 	let showCreateTicket = $state(false);
-
-	const userDisplay = $derived(
-		$authStore?.userInfo?.name ?? $authStore?.userInfo?.email ?? $authStore?.accessToken ?? 'Me'
-	);
 
 	const sortedCols = $derived(
 		table ? [...table.columns].sort((a, b) => a.position - b.position) : []
@@ -47,14 +36,6 @@
 
 	const docPreview = $derived(marked(docContent) as string);
 
-	const ticketKey = $derived(
-		(() => {
-			if (!row || !table) return '';
-			const keyCol = table.columns.find((c) => c.name === 'Key');
-			return keyCol ? ((row.row_data[keyCol.column_id] as string) ?? '') : '';
-		})()
-	);
-
 	const isTicketTable = $derived(!!table?.columns.find((c) => c.name === 'Key'));
 
 	onMount(async () => {
@@ -64,13 +45,8 @@
 			return;
 		}
 		try {
-			const [t, rows, wsList] = await Promise.all([
-				fetchTable(tableId),
-				fetchRows(tableId, 0, 200),
-				fetchWorkspaces()
-			]);
+			const [t, rows] = await Promise.all([fetchTable(tableId), fetchRows(tableId, 0, 200)]);
 			table = t;
-			workspace = wsList.find((w) => w.workspace_id === t.workspace_id) ?? null;
 			row = rows.find((r) => r.row_number === rowNumberParam) ?? null;
 			if (!row) {
 				error = 'Row not found';

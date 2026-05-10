@@ -12,7 +12,6 @@
 	import { SvelteSet } from 'svelte/reactivity';
 
 	let {
-		columns,
 		sortedColumns,
 		renderItems,
 		loading,
@@ -27,9 +26,6 @@
 		colMenuId,
 		tagsPopupCell,
 		sortConfig,
-		filterConditions,
-		resizingColId,
-		hiddenCols,
 		collapsedGroups,
 		localWidths,
 		onStartEdit,
@@ -61,13 +57,11 @@
 		onAddRowInGroup,
 		onToggleCollapseGroup,
 		onManageOptions,
-		onNavigateRow,
 		onOpenDocCell,
 		addingColumn = false,
 		scrollToRowId = null,
 		scrollToColTrigger = 0
 	}: {
-		columns: Column[];
 		sortedColumns: Column[];
 		renderItems: RenderItem[];
 		loading: boolean;
@@ -82,9 +76,6 @@
 		colMenuId: string | null;
 		tagsPopupCell: { rowId: number; colId: string } | null;
 		sortConfig: { colId: string; dir: 'asc' | 'desc' } | null;
-		filterConditions: { id: string; colId: string; operator: string; value: string }[];
-		resizingColId: string | null;
-		hiddenCols: SvelteSet<string>;
 		collapsedGroups: SvelteSet<string>;
 		localWidths: Record<string, number>;
 		onStartEdit: (rowId: number, col: Column, currentVal: unknown) => void;
@@ -116,7 +107,6 @@
 		onAddRowInGroup: (key: string, col: Column) => void;
 		onToggleCollapseGroup: (key: string) => void;
 		onManageOptions: (col: Column) => void;
-		onNavigateRow: (rowId: number) => void;
 		onOpenDocCell: (row: Row, col: Column) => void;
 		addingColumn?: boolean;
 		scrollToRowId?: number | null;
@@ -600,7 +590,6 @@
 						</tr>
 					{:else}
 						{@const row = item.row}
-						{@const rowIdx = item.rowIdx}
 						<tr
 							class="border-b transition {isDark.value
 								? 'border-gray-700 hover:bg-blue-900/20'

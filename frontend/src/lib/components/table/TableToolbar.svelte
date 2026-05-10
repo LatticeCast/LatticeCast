@@ -16,7 +16,6 @@
 		onGroupChange,
 		onToggleHideCol,
 		onClearHiddenCols,
-		onFilterConditionsChange,
 		onShowFilterPanelChange,
 		onSearchQueryChange,
 		onExportTemplate,
@@ -39,7 +38,6 @@
 		onGroupChange: (config: { colId: string; granularity?: 'month' | 'day' } | null) => void;
 		onToggleHideCol: (colId: string) => void;
 		onClearHiddenCols: () => void;
-		onFilterConditionsChange: (conditions: FilterCondition[]) => void;
 		onShowFilterPanelChange: (show: boolean) => void;
 		onSearchQueryChange: (query: string) => void;
 		onExportTemplate: () => void;

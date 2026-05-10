@@ -926,7 +926,6 @@
 			onGroupChange={(c) => (groupConfig = c)}
 			onToggleHideCol={toggleHideCol}
 			onClearHiddenCols={() => hiddenCols.clear()}
-			onFilterConditionsChange={(c) => (filterConditions = c)}
 			onShowFilterPanelChange={(s) => (showFilterPanel = s)}
 			onSearchQueryChange={(q) => (searchQuery = q)}
 			onExportTemplate={handleExportTemplate}
@@ -940,7 +939,6 @@
 		/>
 
 		<TableGrid
-			columns={$columns}
 			{sortedColumns}
 			{renderItems}
 			loading={$loading}
@@ -958,9 +956,6 @@
 			{colMenuId}
 			{tagsPopupCell}
 			{sortConfig}
-			{filterConditions}
-			{resizingColId}
-			{hiddenCols}
 			{collapsedGroups}
 			{localWidths}
 			onStartEdit={startEdit}
@@ -992,10 +987,6 @@
 			onAddRowInGroup={handleAddRowInGroup}
 			onToggleCollapseGroup={toggleCollapseGroup}
 			onManageOptions={(col) => (managingOptionsCol = col)}
-			onNavigateRow={(rowId) => {
-				const r = $rows.find((row) => row.row_number === rowId);
-				if (r) goto(`/${$page.params.workspace_id}/${$page.params.table_id}/${r.row_number}`);
-			}}
 			onOpenDocCell={(row, col) => (docCellState = { row, col })}
 		/>
 	{:else if activeView.type === 'kanban'}
