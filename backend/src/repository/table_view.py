@@ -3,10 +3,11 @@
 #   - __schema__ row holds the column array
 #   - __order__ row holds the ordered name array
 #   - user-named rows hold view configs
-from datetime import datetime
+import json
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
@@ -67,13 +68,61 @@ class TableViewRepository:
         return view
 
     async def update(self, view: TableView, updates: dict[str, Any]) -> TableView:
-        for k, v in updates.items():
-            setattr(view, k, v)
-        view.updated_at = datetime.utcnow()
-        self.session.add(view)
+        # Capture original PK before any mutation; view may be detached from session.
+        ws = str(view.workspace_id)
+        tid = view.table_id
+        original_name = view.name
+
+        set_parts: list[str] = []
+        params: dict[str, Any] = {"ws": ws, "tid": tid, "orig_name": original_name}
+
+        if "config" in updates:
+            set_parts.append("config = CAST(:config AS jsonb)")
+            params["config"] = json.dumps(updates["config"])
+        if "name" in updates:
+            set_parts.append("name = :new_name")
+            params["new_name"] = updates["name"]
+        if "type" in updates:
+            set_parts.append("type = :type")
+            params["type"] = updates["type"]
+        if "updated_by" in updates:
+            set_parts.append("updated_by = :updated_by")
+            params["updated_by"] = str(updates["updated_by"]) if updates["updated_by"] else None
+
+        set_parts.append("updated_at = NOW()")
+
+        await self.session.execute(
+            sa_text(
+                f"UPDATE table_views SET {', '.join(set_parts)} "
+                "WHERE workspace_id = CAST(:ws AS uuid) AND table_id = :tid AND name = :orig_name"
+            ),
+            params,
+        )
         await self.session.commit()
-        await self.session.refresh(view)
-        return view
+
+        new_name = str(updates.get("name", original_name))
+        result = await self.session.execute(
+            sa_text(
+                "SELECT workspace_id, table_id, name, type, config, is_default, "
+                "created_by, updated_by, created_at, updated_at "
+                "FROM table_views "
+                "WHERE workspace_id = CAST(:ws AS uuid) AND table_id = :tid AND name = :name"
+            ),
+            {"ws": ws, "tid": tid, "name": new_name},
+        )
+        row = result.mappings().one()
+        return TableView(
+            workspace_id=row["workspace_id"],
+            table_id=row["table_id"],
+            name=row["name"],
+            type=row["type"],
+            config=row["config"],
+            is_default=row["is_default"],
+            created_by=row["created_by"],
+            updated_by=row["updated_by"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
 
     async def delete(self, view: TableView) -> None:
         await self.session.delete(view)
