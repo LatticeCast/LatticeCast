@@ -2,12 +2,13 @@
 
 <script lang="ts">
 	import '../app.css';
-	import { goto } from '$app/navigation';
+	import { goto, afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { authStore, logout } from '$lib/stores/auth.store';
 	import { isDark } from '$lib/UI/theme.svelte';
 	import { browser } from '$app/environment';
-	import { currentTable, pageTitle } from '$lib/stores/tables.store';
+	import { currentTable } from '$lib/stores/tables.store';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { hydrateFromServer } from '$lib/stores/settings.store';
 	import { fetchWorkspaces } from '$lib/backend/workspaces';
 	import { fetchTables } from '$lib/backend/tables';
@@ -22,7 +23,7 @@
 
 	let workspaces = $state<Workspace[]>([]);
 	let tablesByWorkspace = $state<Record<string, Table[]>>({});
-	let expandedWorkspaces = $state<Set<string>>(new Set());
+	const expandedWorkspaces = new SvelteSet<string>();
 
 	$effect(() => {
 		if (browser) {
@@ -83,28 +84,35 @@
 			}
 			tablesByWorkspace = grouped;
 			// Auto-expand workspaces that have tables
-			const expanded = new Set<string>();
+			expandedWorkspaces.clear();
 			for (const ws of wsList) {
-				if (grouped[ws.workspace_id]?.length) expanded.add(ws.workspace_id);
+				if (grouped[ws.workspace_id]?.length) expandedWorkspaces.add(ws.workspace_id);
 			}
-			expandedWorkspaces = expanded;
 		} catch {
 			// silently ignore — sidebar tree is best-effort
 		}
 	}
 
 	function toggleWorkspace(wsId: string) {
-		const next = new Set(expandedWorkspaces);
-		if (next.has(wsId)) next.delete(wsId);
-		else next.add(wsId);
-		expandedWorkspaces = next;
+		if (expandedWorkspaces.has(wsId)) expandedWorkspaces.delete(wsId);
+		else expandedWorkspaces.add(wsId);
 	}
 
-	async function onWorkspaceCreated(ws: Workspace) {
+	function onWorkspaceCreated(ws: Workspace) {
+		workspaces = [...workspaces, ws];
 		showCreateWorkspace = false;
-		await loadSidebarData();
-		navigate(`/${ws.workspace_id}`);
+		navigate(`/${encodeURIComponent(ws.workspace_name)}/`);
 	}
+
+	afterNavigate(({ from }) => {
+		if (!from || !$authStore?.accessToken) return;
+		const wsId = $page.params.workspace_id;
+		if (!wsId) return;
+		const found = workspaces.some(
+			(w) => w.workspace_id === wsId || w.workspace_name === decodeURIComponent(wsId)
+		);
+		if (!found) loadSidebarData();
+	});
 
 	const handleLogout = () => {
 		logout();
