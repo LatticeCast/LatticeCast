@@ -53,19 +53,49 @@ class TableViewRepository:
         config: dict[str, Any] | list[Any],
         created_by: UUID | None = None,
     ) -> TableView:
-        view = TableView(
-            workspace_id=workspace_id,
-            table_id=table_id,
-            name=name,
-            type=view_type,
-            config=config,
-            created_by=created_by,
-            updated_by=created_by,
+        # Use raw SQL to avoid session.refresh() after commit — same pattern as update().
+        # session.refresh() can raise InvalidRequestError on detached instances when the
+        # session has prior raw-SQL commits (e.g. set_schema → create_column_index → create).
+        cb = str(created_by) if created_by else None
+        await self.session.execute(
+            sa_text(
+                "INSERT INTO table_views "
+                "(workspace_id, table_id, name, type, config, created_by, updated_by) "
+                "VALUES (CAST(:ws AS uuid), :tid, :name, :type, CAST(:config AS jsonb), "
+                "CAST(:cb AS uuid), CAST(:cb AS uuid))"
+            ),
+            {
+                "ws": str(workspace_id),
+                "tid": table_id,
+                "name": name,
+                "type": view_type,
+                "config": json.dumps(config),
+                "cb": cb,
+            },
         )
-        self.session.add(view)
         await self.session.commit()
-        await self.session.refresh(view)
-        return view
+        result = await self.session.execute(
+            sa_text(
+                "SELECT workspace_id, table_id, name, type, config, is_default, "
+                "created_by, updated_by, created_at, updated_at "
+                "FROM table_views "
+                "WHERE workspace_id = CAST(:ws AS uuid) AND table_id = :tid AND name = :name"
+            ),
+            {"ws": str(workspace_id), "tid": table_id, "name": name},
+        )
+        row = result.mappings().one()
+        return TableView(
+            workspace_id=row["workspace_id"],
+            table_id=row["table_id"],
+            name=row["name"],
+            type=row["type"],
+            config=row["config"],
+            is_default=row["is_default"],
+            created_by=row["created_by"],
+            updated_by=row["updated_by"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
 
     async def update(self, view: TableView, updates: dict[str, Any]) -> TableView:
         # Capture original PK before any mutation; view may be detached from session.
