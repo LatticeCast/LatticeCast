@@ -144,5 +144,13 @@ export async function deleteView(tableId: string, viewName: string): Promise<voi
 export async function reorderViews(tableId: string, order: string[]): Promise<string[]> {
 	const cleaned = await putViewOrder(tableId, order);
 	viewOrder.set(cleaned);
+	views.update((arr) => {
+		const byName = new Map(arr.map((v) => [v.name, v]));
+		const reordered = cleaned
+			.map((name) => byName.get(name))
+			.filter((v): v is ViewConfig => v !== undefined);
+		const rest = arr.filter((v) => !cleaned.includes(v.name));
+		return [...reordered, ...rest];
+	});
 	return cleaned;
 }

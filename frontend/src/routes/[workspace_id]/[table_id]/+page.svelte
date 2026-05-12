@@ -402,7 +402,7 @@
 		const toIdx = ordered.indexOf(toId);
 		if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
 		ordered.splice(fromIdx, 1);
-		ordered.splice(toIdx > fromIdx ? toIdx - 1 : toIdx, 0, fromId);
+		ordered.splice(toIdx, 0, fromId);
 		viewColOrder = ordered;
 	}
 
@@ -765,7 +765,7 @@
 		if (toIdx === -1) return;
 		const reordered = [...userViewNames];
 		reordered.splice(fromIdx, 1);
-		reordered.splice(toIdx > fromIdx ? toIdx - 1 : toIdx, 0, fromName);
+		reordered.splice(toIdx, 0, fromName);
 		await reorderViews(tableId, reordered).catch(() => {});
 	}
 
