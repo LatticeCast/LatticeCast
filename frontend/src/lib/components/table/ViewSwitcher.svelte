@@ -8,6 +8,7 @@
 		onAddView,
 		onDeleteView,
 		onRenameView,
+		onReorderViews,
 		isRenameable = () => true
 	}: {
 		views: ViewConfig[];
@@ -16,6 +17,7 @@
 		onAddView: (type: string, name: string) => void;
 		onDeleteView?: (view: ViewConfig) => void;
 		onRenameView?: (oldName: string, newName: string) => Promise<void>;
+		onReorderViews?: (fromName: string, toName: string) => void;
 		isRenameable?: (view: ViewConfig) => boolean;
 	} = $props();
 
@@ -23,6 +25,8 @@
 	let editingViewName = $state<string | null>(null);
 	let editingValue = $state('');
 	let renameError = $state('');
+	let dragViewName = $state<string | null>(null);
+	let dragOverViewName = $state<string | null>(null);
 
 	function startRenameView(view: ViewConfig, e: MouseEvent) {
 		e.stopPropagation();
@@ -110,6 +114,31 @@
 		<div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-4">
 			{#each views as view (view.name)}
 				<div
+					draggable={true}
+					data-drag-over={dragOverViewName === view.name && dragViewName !== view.name
+						? 'true'
+						: undefined}
+					ondragstart={(e) => {
+						e.stopPropagation();
+						dragViewName = view.name;
+					}}
+					ondragover={(e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						dragOverViewName = view.name;
+					}}
+					ondrop={(e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						if (dragViewName && dragViewName !== view.name)
+							onReorderViews?.(dragViewName, view.name);
+						dragViewName = null;
+						dragOverViewName = null;
+					}}
+					ondragend={() => {
+						dragViewName = null;
+						dragOverViewName = null;
+					}}
 					class="group flex shrink-0 items-center border-b-2 transition {activeViewName ===
 					view.name
 						? 'border-blue-500'
@@ -338,3 +367,9 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	div[data-drag-over='true'] {
+		border-left: 2px solid #3b82f6;
+	}
+</style>

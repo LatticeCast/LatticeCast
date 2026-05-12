@@ -21,7 +21,8 @@
 		refreshTable,
 		createView,
 		updateView,
-		deleteView
+		deleteView,
+		reorderViews
 	} from '$lib/stores/tables.store';
 	import { putDefaultView } from '$lib/backend/views';
 	import {
@@ -386,6 +387,25 @@
 		// $effect will call persistViewConfig()
 	}
 
+	function handleDragReorderColumns(fromId: string, toId: string) {
+		const ordered = [...$columns]
+			.sort((a, b) => {
+				if (viewColOrder && viewColOrder.length > 0) {
+					const ai = viewColOrder.indexOf(a.column_id);
+					const bi = viewColOrder.indexOf(b.column_id);
+					return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+				}
+				return a.position - b.position;
+			})
+			.map((c) => c.column_id);
+		const fromIdx = ordered.indexOf(fromId);
+		const toIdx = ordered.indexOf(toId);
+		if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+		ordered.splice(fromIdx, 1);
+		ordered.splice(toIdx > fromIdx ? toIdx - 1 : toIdx, 0, fromId);
+		viewColOrder = ordered;
+	}
+
 	function startRename(colId: string, currentName: string) {
 		renamingColId = colId;
 		renameValue = currentName;
@@ -726,6 +746,19 @@
 		}
 	}
 
+	async function handleReorderViews(fromName: string, toName: string) {
+		const tableId = $page.params.table_id!;
+		const userViewNames = $viewsStore.map((v) => v.name);
+		const fromIdx = userViewNames.indexOf(fromName);
+		if (fromIdx === -1) return;
+		const toIdx = userViewNames.indexOf(toName);
+		if (toIdx === -1) return;
+		const reordered = [...userViewNames];
+		reordered.splice(fromIdx, 1);
+		reordered.splice(toIdx > fromIdx ? toIdx - 1 : toIdx, 0, fromName);
+		await reorderViews(tableId, reordered).catch(() => {});
+	}
+
 	function handleViewUpdate(updated: ViewConfig) {
 		viewsStore.update((arr) => arr.map((v) => (v.name === updated.name ? updated : v)));
 	}
@@ -911,6 +944,7 @@
 		onDeleteView={handleDeleteView}
 		onRenameView={handleRenameView}
 		isRenameable={(v) => $viewsStore.some((uv) => uv.name === v.name)}
+		onReorderViews={handleReorderViews}
 	/>
 
 	{#if activeView.type === 'table'}
@@ -980,6 +1014,7 @@
 			onHideCol={(id) => hiddenCols.add(id)}
 			onDeleteColumn={handleDeleteColumn}
 			onMoveColumn={handleMoveColumn}
+			onDragReorderColumns={handleDragReorderColumns}
 			onResizeStart={handleResizeStart}
 			onShowAddColumn={() => (showAddColumn = true)}
 			onAddRow={() => handleAddRow()}

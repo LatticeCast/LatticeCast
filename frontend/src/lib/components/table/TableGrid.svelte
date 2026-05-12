@@ -50,6 +50,7 @@
 		onHideCol,
 		onDeleteColumn,
 		onMoveColumn,
+		onDragReorderColumns,
 		onResizeStart,
 		onShowAddColumn,
 		onAddRow,
@@ -100,6 +101,7 @@
 		onHideCol: (colId: string) => void;
 		onDeleteColumn: (colId: string) => void;
 		onMoveColumn: (col: Column, dir: 'up' | 'down') => void;
+		onDragReorderColumns?: (fromId: string, toId: string) => void;
 		onResizeStart: (e: MouseEvent, col: Column) => void;
 		onShowAddColumn: () => void;
 		onAddRow: () => void;
@@ -128,6 +130,8 @@
 	}
 
 	let containerEl = $state<HTMLDivElement | null>(null);
+	let dragColId = $state<string | null>(null);
+	let dragOverColId = $state<string | null>(null);
 
 	$effect(() => {
 		if (!scrollToRowId || !containerEl) return;
@@ -171,6 +175,28 @@
 					</th>
 					{#each sortedColumns as col, i (col.column_id)}
 						<th
+							draggable={true}
+							data-drag-over={dragOverColId === col.column_id && dragColId !== col.column_id
+								? 'true'
+								: undefined}
+							ondragstart={() => {
+								dragColId = col.column_id;
+							}}
+							ondragover={(e) => {
+								e.preventDefault();
+								dragOverColId = col.column_id;
+							}}
+							ondrop={(e) => {
+								e.preventDefault();
+								if (dragColId && dragColId !== col.column_id)
+									onDragReorderColumns?.(dragColId, col.column_id);
+								dragColId = null;
+								dragOverColId = null;
+							}}
+							ondragend={() => {
+								dragColId = null;
+								dragOverColId = null;
+							}}
 							class="relative border-b px-3 py-2 text-left text-xs font-semibold tracking-wide uppercase {isDark.value
 								? 'border-gray-700 text-gray-400'
 								: 'border-gray-200 text-gray-500'}
@@ -200,6 +226,23 @@
 										autofocus
 									/>
 								{:else}
+									<span
+										data-testid="col-drag-handle-{col.column_id}"
+										class="shrink-0 cursor-grab text-gray-300 select-none hover:text-gray-400"
+										aria-hidden="true"
+									>
+										<svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+											<circle cx="7" cy="5" r="1.5" /><circle cx="13" cy="5" r="1.5" /><circle
+												cx="7"
+												cy="10"
+												r="1.5"
+											/><circle cx="13" cy="10" r="1.5" /><circle cx="7" cy="15" r="1.5" /><circle
+												cx="13"
+												cy="15"
+												r="1.5"
+											/>
+										</svg>
+									</span>
 									<button
 										onclick={(e) => {
 											e.stopPropagation();
@@ -980,3 +1023,9 @@
 		</table>
 	{/if}
 </div>
+
+<style>
+	th[data-drag-over='true'] {
+		border-left: 2px solid #3b82f6;
+	}
+</style>
