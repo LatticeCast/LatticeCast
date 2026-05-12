@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Column, Row } from '$lib/types/table';
-	import { TAG_COLORS, isDark } from '$lib/UI/theme.svelte';
-	import { getChoices, getChoiceColor, getTagValues } from '../table.utils';
+	import { isDark } from '$lib/UI/theme.svelte';
+	import { getChoices, getChoiceColor, getTagValues, colorToStyle } from '../table.utils';
 
 	let {
 		row,
@@ -29,9 +29,10 @@
 
 <div class="flex min-h-[1.75rem] flex-wrap items-center gap-1" onclick={(e) => e.stopPropagation()}>
 	{#each tagVals as tag (tag)}
-		{@const color = getChoiceColor(column, tag)}
+		{@const cs = getChoiceColor(column, tag)}
 		<span
-			class="inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
+			class="inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs font-medium {cs.cls}"
+			style={cs.style}
 		>
 			{tag}
 			<button
@@ -57,14 +58,14 @@
 						: 'border-gray-100 bg-white'}"
 				>
 					{#each available as choice (choice.value)}
-						{@const color = TAG_COLORS.find((c) => c.bg === choice.color) ?? TAG_COLORS[0]}
+						{@const cs = colorToStyle(choice.color)}
 						<button
 							class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-50"
 							onclick={() => onAddTag(choice.value)}
 						>
 							<span
-								class="inline-flex items-center rounded-full border px-2 py-0.5 font-medium {color.bg} {color.text} {color.border}"
-								>{choice.value}</span
+								class="inline-flex items-center rounded-full border px-2 py-0.5 font-medium {cs.cls}"
+								style={cs.style}>{choice.value}</span
 							>
 						</button>
 					{/each}

@@ -66,11 +66,37 @@ export function getChoices(col: Column): ColumnChoice[] {
 	return choices as ColumnChoice[];
 }
 
-export function getChoiceColor(col: Column, value: string): (typeof TAG_COLORS)[number] {
+export interface ChoiceStyle {
+	cls: string;
+	style: string;
+}
+
+function isDarkColor(color: string): boolean {
+	const hexMatch = color.match(/^#([0-9a-f]{6})$/i);
+	if (hexMatch) {
+		const r = parseInt(hexMatch[1].slice(0, 2), 16);
+		const g = parseInt(hexMatch[1].slice(2, 4), 16);
+		const b = parseInt(hexMatch[1].slice(4, 6), 16);
+		return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+	}
+	const hslMatch = color.match(/hsl\(\s*[\d.]+[\s,]+[\d.]+%?[\s,]+([\d.]+)%?\s*\)/i);
+	if (hslMatch) return parseFloat(hslMatch[1]) < 50;
+	return false;
+}
+
+export function colorToStyle(color: string): ChoiceStyle {
+	if (!color || color.startsWith('bg-')) {
+		const tc = TAG_COLORS.find((c) => c.bg === color) ?? TAG_COLORS[0];
+		return { cls: `${tc.bg} ${tc.text} ${tc.border}`, style: '' };
+	}
+	const text = isDarkColor(color) ? '#ffffff' : '#1a1a1a';
+	return { cls: '', style: `background-color: ${color}; color: ${text}; border-color: ${color};` };
+}
+
+export function getChoiceColor(col: Column, value: string): ChoiceStyle {
 	const choices = getChoices(col);
 	const choice = choices.find((c) => c.value === value);
-	if (!choice) return TAG_COLORS[0];
-	return TAG_COLORS.find((c) => c.bg === choice.color) ?? TAG_COLORS[0];
+	return colorToStyle(choice?.color ?? '');
 }
 
 export function getTagValues(row: { row_data: Record<string, unknown> }, colId: string): string[] {

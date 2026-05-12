@@ -41,8 +41,8 @@
 	</select>
 {:else if selVal && color}
 	<span
-		class="inline-flex cursor-pointer items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
-		>{selVal}</span
+		class="inline-flex cursor-pointer items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.cls}"
+		style={color.style}>{selVal}</span
 	>
 {:else}
 	<span class="block min-h-[1.5rem] cursor-pointer py-1 text-gray-300">—</span>

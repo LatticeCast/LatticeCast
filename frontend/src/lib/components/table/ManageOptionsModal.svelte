@@ -1,7 +1,19 @@
 <script lang="ts">
 	import type { Column, ColumnChoice } from '$lib/types/table';
-	import { TAG_COLORS } from '$lib/UI/theme.svelte';
-	import { getChoices } from './table.utils';
+	import { getChoices, colorToStyle } from './table.utils';
+
+	const DEFAULT_COLORS = [
+		'hsl(210 80% 60%)',
+		'hsl(150 60% 55%)',
+		'hsl(30 90% 60%)',
+		'hsl(0 75% 60%)',
+		'hsl(270 65% 65%)',
+		'hsl(60 75% 55%)',
+		'hsl(180 65% 55%)',
+		'hsl(330 70% 65%)',
+		'hsl(90 60% 55%)',
+		'hsl(240 70% 65%)'
+	];
 
 	let {
 		col,
@@ -17,9 +29,88 @@
 	let newValue = $state('');
 	let draggedIdx = $state<number | null>(null);
 	let colorPickerIdx = $state<number | null>(null);
+	let pickerH = $state(210);
+	let pickerS = $state(80);
+	let pickerL = $state(60);
+	const pickerHsl = $derived(`hsl(${pickerH} ${pickerS}% ${pickerL}%)`);
+	const pickerHex = $derived(hslToHex(pickerH, pickerS, pickerL));
 
-	function setChoiceColor(i: number, bg: string) {
-		choices = choices.map((c, idx) => (idx === i ? { ...c, color: bg } : c));
+	function hslToHex(h: number, s: number, l: number): string {
+		s /= 100;
+		l /= 100;
+		const a = s * Math.min(l, 1 - l);
+		const f = (n: number): string => {
+			const k = (n + h / 30) % 12;
+			const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+			return Math.round(255 * c)
+				.toString(16)
+				.padStart(2, '0');
+		};
+		return `#${f(0)}${f(8)}${f(4)}`;
+	}
+
+	function hexToHslValues(hex: string): { h: number; s: number; l: number } | null {
+		const m = hex.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+		if (!m) return null;
+		const hex6 =
+			m[1].length === 3
+				? m[1]
+						.split('')
+						.map((c) => c + c)
+						.join('')
+				: m[1];
+		const r = parseInt(hex6.slice(0, 2), 16) / 255;
+		const g = parseInt(hex6.slice(2, 4), 16) / 255;
+		const b = parseInt(hex6.slice(4, 6), 16) / 255;
+		const max = Math.max(r, g, b);
+		const min = Math.min(r, g, b);
+		const l = (max + min) / 2;
+		if (max === min) return { h: 0, s: 0, l: Math.round(l * 100) };
+		const d = max - min;
+		const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+		let h = 0;
+		if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+		else if (max === g) h = ((b - r) / d + 2) / 6;
+		else h = ((r - g) / d + 4) / 6;
+		return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
+	}
+
+	function openPicker(i: number) {
+		if (colorPickerIdx === i) {
+			colorPickerIdx = null;
+			return;
+		}
+		const c = choices[i]?.color ?? '';
+		if (c && !c.startsWith('bg-')) {
+			const hslMatch = c.match(/hsl\(\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%\s*\)/i);
+			if (hslMatch) {
+				pickerH = Math.round(parseFloat(hslMatch[1]));
+				pickerS = Math.round(parseFloat(hslMatch[2]));
+				pickerL = Math.round(parseFloat(hslMatch[3]));
+			} else {
+				const parsed = hexToHslValues(c);
+				if (parsed) {
+					pickerH = parsed.h;
+					pickerS = parsed.s;
+					pickerL = Math.max(20, Math.min(80, parsed.l));
+				}
+			}
+		}
+		colorPickerIdx = i;
+	}
+
+	function onHexInput(e: Event) {
+		const val = (e.currentTarget as HTMLInputElement).value.trim();
+		const parsed = hexToHslValues(val);
+		if (parsed) {
+			pickerH = parsed.h;
+			pickerS = parsed.s;
+			pickerL = Math.max(20, Math.min(80, parsed.l));
+		}
+	}
+
+	function setChoiceColor(i: number, color: string) {
+		choices = choices.map((c, idx) => (idx === i ? { ...c, color } : c));
 		colorPickerIdx = null;
 	}
 
@@ -44,8 +135,8 @@
 	function addChoice() {
 		const val = newValue.trim();
 		if (!val || choices.some((c) => c.value === val)) return;
-		const colorIdx = choices.length % TAG_COLORS.length;
-		choices = [...choices, { value: val, color: TAG_COLORS[colorIdx].bg }];
+		const colorIdx = choices.length % DEFAULT_COLORS.length;
+		choices = [...choices, { value: val, color: DEFAULT_COLORS[colorIdx] }];
 		newValue = '';
 	}
 
@@ -78,7 +169,7 @@
 		<!-- Existing choices -->
 		<div class="mb-4 space-y-1.5">
 			{#each choices as choice, i (choice.value)}
-				{@const color = TAG_COLORS.find((c) => c.bg === choice.color) ?? TAG_COLORS[0]}
+				{@const cs = colorToStyle(choice.color)}
 				<div
 					class="flex items-center gap-2 rounded transition-opacity {draggedIdx === i
 						? 'opacity-40'
@@ -108,35 +199,74 @@
 							data-testid="choice-color-btn-{i}"
 							onclick={(e) => {
 								e.stopPropagation();
-								colorPickerIdx = colorPickerIdx === i ? null : i;
+								openPicker(i);
 							}}
-							class="h-4 w-4 rounded-full border-2 {color.border} {color.bg} transition-transform hover:scale-110"
+							class="h-4 w-4 rounded-full border-2 {cs.cls} transition-transform hover:scale-110"
+							style={cs.style}
 							aria-label="Change color for {choice.value}"
 						></button>
 						{#if colorPickerIdx === i}
 							<div
-								class="absolute top-6 left-0 z-10 grid grid-cols-4 gap-1 rounded-xl border border-gray-200 bg-white p-2 shadow-xl"
+								class="absolute top-6 left-0 z-10 w-52 rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
 								onclick={(e) => e.stopPropagation()}
 								role="menu"
 								aria-label="Pick a color"
 							>
-								{#each TAG_COLORS as tc (tc.bg)}
+								<div class="mb-1 text-xs text-gray-400">Hue</div>
+								<input
+									data-testid="color-picker-hue"
+									type="range"
+									min="0"
+									max="359"
+									bind:value={pickerH}
+									class="mb-2 w-full cursor-pointer"
+									style="accent-color: {pickerHsl}"
+								/>
+								<div class="mb-1 text-xs text-gray-400">Saturation</div>
+								<input
+									data-testid="color-picker-sat"
+									type="range"
+									min="0"
+									max="100"
+									bind:value={pickerS}
+									class="mb-2 w-full cursor-pointer"
+									style="accent-color: {pickerHsl}"
+								/>
+								<div class="mb-1 text-xs text-gray-400">Lightness</div>
+								<input
+									data-testid="color-picker-light"
+									type="range"
+									min="20"
+									max="80"
+									bind:value={pickerL}
+									class="mb-2 w-full cursor-pointer"
+									style="accent-color: {pickerHsl}"
+								/>
+								<div class="flex items-center gap-2">
+									<div
+										class="h-6 w-6 shrink-0 rounded-full border border-gray-200"
+										style="background-color: {pickerHsl}"
+									></div>
+									<input
+										data-testid="color-picker-hex"
+										type="text"
+										class="min-w-0 flex-1 rounded border border-gray-200 px-2 py-0.5 font-mono text-xs"
+										value={pickerHex}
+										onchange={onHexInput}
+									/>
 									<button
-										data-testid="color-swatch-{tc.bg}"
-										onclick={() => setChoiceColor(i, tc.bg)}
-										class="h-5 w-5 rounded-full border-2 {tc.border} {tc.bg} transition-transform hover:scale-110 {choice.color ===
-										tc.bg
-											? 'ring-2 ring-blue-500 ring-offset-1'
-											: ''}"
-										aria-label="Set color {tc.bg}"
-										role="menuitem"
-									></button>
-								{/each}
+										data-testid="color-picker-apply"
+										onclick={() => setChoiceColor(i, pickerHsl)}
+										class="rounded bg-blue-600 px-2 py-0.5 text-xs text-white hover:bg-blue-700"
+										role="menuitem">✓</button
+									>
+								</div>
 							</div>
 						{/if}
 					</div>
 					<span
-						class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
+						class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium {cs.cls}"
+						style={cs.style}
 					>
 						{choice.value}
 					</span>
