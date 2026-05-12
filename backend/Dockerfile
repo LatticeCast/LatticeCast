@@ -6,6 +6,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends cron supervisor
 WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
+# pypi/cargo deps occasionally stall past uv's 30s default — bump so transient
+# network blips don't fail the whole build.
+ENV UV_HTTP_TIMEOUT=180
 RUN uv sync --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"
