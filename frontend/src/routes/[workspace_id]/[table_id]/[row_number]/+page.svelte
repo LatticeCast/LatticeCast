@@ -126,7 +126,8 @@
 							{@const strVal = val as string}
 							{@const color = getChoiceColor(col, strVal)}
 							<span
-								class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
+								class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium {color.cls}"
+								style={color.style}
 							>
 								<span class="text-xs font-normal text-gray-400">{col.name}:</span>
 								{strVal}
@@ -136,7 +137,8 @@
 							{#each tags as tag (tag)}
 								{@const color = getChoiceColor(col, tag)}
 								<span
-									class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
+									class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium {color.cls}"
+									style={color.style}
 								>
 									{tag}
 								</span>

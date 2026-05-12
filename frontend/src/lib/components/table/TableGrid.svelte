@@ -602,8 +602,8 @@
 									{#if item.col.type === 'select' && item.key !== '(empty)'}
 										{@const color = getChoiceColor(item.col, item.key)}
 										<span
-											class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
-											>{item.key}</span
+											class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.cls}"
+											style={color.style}>{item.key}</span
 										>
 									{:else}
 										<span
@@ -849,8 +849,8 @@
 										{#if selVal}
 											{@const color = getChoiceColor(col, selVal)}
 											<span
-												class="inline-flex cursor-pointer items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
-												>{selVal}</span
+												class="inline-flex cursor-pointer items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.cls}"
+												style={color.style}>{selVal}</span
 											>
 										{:else}
 											<span class="block min-h-[1.5rem] cursor-pointer py-1 text-gray-300">—</span>
@@ -866,7 +866,8 @@
 											{#each tagVals as tag (tag)}
 												{@const color = getChoiceColor(col, tag)}
 												<span
-													class="inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
+													class="inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs font-medium {color.cls}"
+													style={color.style}
 												>
 													{tag}
 													<button

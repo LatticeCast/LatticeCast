@@ -384,7 +384,8 @@
 						{#if groupByCol.type === 'select' && group.key}
 							{@const choiceColor = getChoiceColor(groupByCol, group.key)}
 							<span
-								class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {choiceColor.bg} {choiceColor.text} {choiceColor.border}"
+								class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {choiceColor.cls}"
+								style={choiceColor.style}
 							>
 								{group.label}
 							</span>

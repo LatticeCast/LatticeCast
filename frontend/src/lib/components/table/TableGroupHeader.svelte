@@ -45,8 +45,8 @@
 			{#if col.type === 'select' && groupKey !== '(empty)'}
 				{@const color = getChoiceColor(col, groupKey)}
 				<span
-					class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
-					>{groupKey}</span
+					class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.cls}"
+					style={color.style}>{groupKey}</span
 				>
 			{:else}
 				<span class="text-sm font-medium {isDark.value ? 'text-gray-300' : 'text-gray-700'}"

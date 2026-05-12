@@ -332,8 +332,8 @@
 								{#if selVal}
 									{@const color = getChoiceColor(col, selVal)}
 									<span
-										class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
-										>{selVal}</span
+										class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.cls}"
+										style={color.style}>{selVal}</span
 									>
 								{:else}
 									<span class="text-gray-400">—</span>
@@ -352,7 +352,8 @@
 							{#each tagVals as tag (tag)}
 								{@const color = getChoiceColor(col, tag)}
 								<span
-									class="inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
+									class="inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs font-medium {color.cls}"
+									style={color.style}
 								>
 									{tag}
 									<button

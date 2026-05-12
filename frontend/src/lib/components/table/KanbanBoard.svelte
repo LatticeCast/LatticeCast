@@ -175,14 +175,18 @@
 		const val = row.row_data[accentCol.column_id];
 		if (val === null || val === undefined || val === '') return '';
 		const color = getChoiceColor(accentCol, String(val));
-		// TAG_COLORS border class format: 'border-blue-200' → CSS var '--color-blue-200'
-		const colorName = color.border.replace('border-', '');
-		return `border-left: 4px solid var(--color-${colorName})`;
+		if (color.style) {
+			const m = color.style.match(/border-color:\s*([^;]+)/);
+			const borderColor = m?.[1]?.trim() ?? '';
+			return borderColor ? `border-left: 4px solid ${borderColor}` : '';
+		}
+		const borderClass = color.cls.split(' ').find((c) => c.startsWith('border-')) ?? '';
+		const colorName = borderClass.replace('border-', '');
+		return colorName ? `border-left: 4px solid var(--color-${colorName})` : '';
 	}
 
 	function getLaneColor(value: string) {
-		if (!groupCol || !value)
-			return { bg: 'bg-gray-100', text: 'text-gray-600', border: 'border-gray-200' };
+		if (!groupCol || !value) return { cls: 'bg-gray-100 text-gray-600 border-gray-200', style: '' };
 		return getChoiceColor(groupCol, value);
 	}
 </script>
@@ -324,7 +328,8 @@
 						: 'border-gray-200'}"
 				>
 					<span
-						class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.bg} {color.text} {color.border}"
+						class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.cls}"
+						style={color.style}
 					>
 						{lane.value || 'Uncategorized'}
 					</span>
@@ -360,7 +365,8 @@
 										{#if col!.type === 'select' && val}
 											{@const choiceColor = getChoiceColor(col!, String(val))}
 											<span
-												class="inline-flex items-center rounded-full border px-1.5 py-0.5 text-xs font-medium {choiceColor.bg} {choiceColor.text} {choiceColor.border}"
+												class="inline-flex items-center rounded-full border px-1.5 py-0.5 text-xs font-medium {choiceColor.cls}"
+												style={choiceColor.style}
 											>
 												{val}
 											</span>
@@ -369,7 +375,8 @@
 												{#each getTagValues(row, col!.column_id) as tag (tag)}
 													{@const tc = getChoiceColor(col!, tag)}
 													<span
-														class="inline-flex items-center rounded-full border px-1.5 py-0.5 text-xs {tc.bg} {tc.text} {tc.border}"
+														class="inline-flex items-center rounded-full border px-1.5 py-0.5 text-xs {tc.cls}"
+														style={tc.style}
 													>
 														{tag}
 													</span>
