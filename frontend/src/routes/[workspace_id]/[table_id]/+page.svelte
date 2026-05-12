@@ -655,10 +655,10 @@
 
 	function persistViewConfig() {
 		const tableId = $page.params.table_id!;
-		const view = $viewsStore.find((v) => v.name === activeViewName);
-		if (!view) return;
+		// Use non-reactive get() so $viewsStore updates don't re-trigger this effect
+		const view = get(viewsStore).find((v) => v.name === activeViewName);
 		const newConfig = {
-			...view.config,
+			...(view?.config ?? {}),
 			sort: sortConfig ?? undefined,
 			group: groupConfig ?? undefined,
 			filter:
@@ -669,6 +669,16 @@
 			widths: Object.keys(localWidths).length > 0 ? { ...localWidths } : undefined,
 			colOrder: viewColOrder ?? undefined
 		};
+		if (!view) {
+			// Implicit Table view has no DB row yet — materialize it so config persists
+			if (activeViewName !== IMPLICIT_TABLE_VIEW.name) return;
+			createView(tableId, {
+				name: IMPLICIT_TABLE_VIEW.name,
+				type: IMPLICIT_TABLE_VIEW.type,
+				config: newConfig
+			}).catch(() => {});
+			return;
+		}
 		updateView(tableId, view.name, { config: newConfig }).catch(() => {});
 	}
 
