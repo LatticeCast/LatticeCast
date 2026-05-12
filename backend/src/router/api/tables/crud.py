@@ -16,7 +16,7 @@ from ._shared import _build_table_response, _get_table_for_member
 router = APIRouter(tags=["tables"])
 
 
-@router.post("", response_model=TableResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=TableResponse, status_code=status.HTTP_201_CREATED)
 async def create_table(
     data: TableCreate,
     user: User = Depends(get_current_user),
@@ -60,7 +60,7 @@ async def create_table(
     return await _build_table_response(table, session)
 
 
-@router.get("", response_model=list[TableResponse])
+@router.get("/", response_model=list[TableResponse])
 async def list_tables(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
