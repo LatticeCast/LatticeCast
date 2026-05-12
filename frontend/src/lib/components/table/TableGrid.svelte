@@ -7,7 +7,8 @@
 		getChoices,
 		getChoiceColor,
 		getTagValues,
-		formatDate
+		formatDate,
+		sortLabels
 	} from './table.utils';
 	import { SvelteSet } from 'svelte/reactivity';
 
@@ -277,6 +278,7 @@
 
 							<!-- Column dropdown menu -->
 							{#if colMenuId === col.column_id}
+								{@const sl = sortLabels(col.type)}
 								<div
 									class="absolute top-full left-0 z-30 mt-1 min-w-[168px] rounded-xl border py-1 shadow-xl {isDark.value
 										? 'border-gray-700 bg-gray-800'
@@ -407,7 +409,7 @@
 												d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"
 											/></svg
 										>
-										Sort A → Z
+										Sort {sl.asc}
 									</button>
 									<button
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
@@ -432,7 +434,7 @@
 												d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"
 											/></svg
 										>
-										Sort Z → A
+										Sort {sl.desc}
 									</button>
 									<button
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value

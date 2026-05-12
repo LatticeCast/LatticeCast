@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Column, Row } from '$lib/types/table';
 	import type { ContextMenuState, FilterCondition } from './table.utils';
+	import { sortLabels } from './table.utils';
 
 	let {
 		contextMenu,
@@ -119,6 +120,7 @@
 			Rename
 		</button>
 		<hr class="my-1 border-gray-100" />
+		{@const sl = sortLabels(ctxCol.type)}
 		<button
 			class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
 				ctxCol.column_id && sortConfig?.dir === 'asc'
@@ -138,7 +140,7 @@
 					d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"
 				/>
 			</svg>
-			Sort A → Z
+			Sort {sl.asc}
 		</button>
 		<button
 			class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
@@ -159,7 +161,7 @@
 					d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"
 				/>
 			</svg>
-			Sort Z → A
+			Sort {sl.desc}
 		</button>
 		<button
 			class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {filterConditions.some(

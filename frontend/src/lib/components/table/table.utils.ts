@@ -104,6 +104,22 @@ export function getTagValues(row: { row_data: Record<string, unknown> }, colId: 
 	return Array.isArray(val) ? (val as string[]) : [];
 }
 
+export function sortLabels(type: ColumnType): { asc: string; desc: string } {
+	switch (type) {
+		case 'number':
+			return { asc: 'Ascending (1 → 9)', desc: 'Descending (9 → 1)' };
+		case 'date':
+			return { asc: 'Oldest first', desc: 'Newest first' };
+		case 'select':
+		case 'tags':
+			return { asc: 'Defined order', desc: 'Reverse defined order' };
+		case 'checkbox':
+			return { asc: 'Unchecked first', desc: 'Checked first' };
+		default:
+			return { asc: 'A → Z', desc: 'Z → A' };
+	}
+}
+
 /** Parse a string edit value to the correct runtime type for the given column type. */
 export function parseEditValue(editVal: string, colType: ColumnType): unknown {
 	if (colType === 'number') return editVal === '' ? null : Number(editVal);
