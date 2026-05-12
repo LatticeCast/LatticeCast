@@ -50,7 +50,7 @@ import type {
 	ViewConfig
 } from '$lib/types/table';
 
-export const IMPLICIT_TABLE_VIEW: ViewConfig = { name: 'Table', type: 'table', config: {} };
+export const IMPLICIT_TABLE_VIEW: ViewConfig = { name: 'Schema', type: 'table', config: {} };
 
 class TablePageStore {
 	// ─── UI State ──────────────────────────────────────────────────────────────
@@ -569,7 +569,7 @@ class TablePageStore {
 			await deleteView(this.tableId, view.name);
 			if (this.activeViewName === view.name) {
 				const remaining = get(viewsStore);
-				this.activeViewName = remaining[0]?.name ?? 'Table';
+				this.activeViewName = remaining[0]?.name ?? IMPLICIT_TABLE_VIEW.name;
 			}
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to delete view');

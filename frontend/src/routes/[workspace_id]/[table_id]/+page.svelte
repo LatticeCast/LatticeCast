@@ -136,12 +136,12 @@
 		48 + sortedColumns.reduce((sum, col) => sum + getColWidth(col), 0) + 40 + 40
 	);
 
-	// V34: the schema row is the implicit default Table view. Prepend it
+	// V34: the schema row is the implicit default Schema view. Prepend it
 	// so the view switcher always has at least one tab even when no
 	// user views exist. Skip if the user happens to have a user view
-	// named 'Table' to avoid duplicate tabs.
+	// named 'Schema' to avoid duplicate tabs.
 	const IMPLICIT_TABLE_VIEW: ViewConfig = {
-		name: 'Table',
+		name: 'Schema',
 		type: 'table',
 		config: {}
 	};
@@ -733,7 +733,7 @@
 			await deleteView(tableId, view.name);
 			if (activeViewName === view.name) {
 				const remaining = $viewsStore;
-				activeViewName = remaining[0]?.name ?? 'Table';
+				activeViewName = remaining[0]?.name ?? IMPLICIT_TABLE_VIEW.name;
 			}
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to delete view');

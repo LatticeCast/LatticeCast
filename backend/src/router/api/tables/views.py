@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from middleware.auth import get_current_user, get_rls_session
-from models.table_view import RESERVED_NAMES, USER_VIEW_TYPES
+from models.table_view import RESERVED_NAMES, SCHEMA_VIEW_DISPLAY_NAME, USER_VIEW_TYPES
 from models.user import User
 from models.view import ViewCreate, validate_view_config
 from repository.table_view import TableViewRepository
@@ -24,7 +24,7 @@ def _view_to_dict(view: Any) -> dict[str, Any]:
 
 
 def _ensure_user_view_name(name: str) -> None:
-    if name in RESERVED_NAMES:
+    if name in RESERVED_NAMES or name.lower() == SCHEMA_VIEW_DISPLAY_NAME.lower():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"View name '{name}' is reserved",

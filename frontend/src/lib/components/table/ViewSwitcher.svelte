@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ViewConfig } from '$lib/types/table';
+	import { IMPLICIT_TABLE_VIEW } from '$lib/stores/tablePage.store.svelte';
 
 	let {
 		views,
@@ -88,7 +89,12 @@
 		showAddPanel = false;
 	}
 
+	function isFixed(view: ViewConfig): boolean {
+		return view.name === IMPLICIT_TABLE_VIEW.name;
+	}
+
 	function canDelete(view: ViewConfig): boolean {
+		if (isFixed(view)) return false;
 		if (view.type !== 'table') return true;
 		return views.filter((v) => v.type === 'table').length > 1;
 	}
@@ -114,15 +120,17 @@
 		<div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-4">
 			{#each views as view (view.name)}
 				<div
-					draggable={true}
+					draggable={!isFixed(view)}
 					data-drag-over={dragOverViewName === view.name && dragViewName !== view.name
 						? 'true'
 						: undefined}
 					ondragstart={(e) => {
+						if (isFixed(view)) return;
 						e.stopPropagation();
 						dragViewName = view.name;
 					}}
 					ondragover={(e) => {
+						if (isFixed(view) || dragViewName === null) return;
 						e.preventDefault();
 						e.stopPropagation();
 						dragOverViewName = view.name;
@@ -130,7 +138,7 @@
 					ondrop={(e) => {
 						e.preventDefault();
 						e.stopPropagation();
-						if (dragViewName && dragViewName !== view.name)
+						if (dragViewName && dragViewName !== view.name && !isFixed(view))
 							onReorderViews?.(dragViewName, view.name);
 						dragViewName = null;
 						dragOverViewName = null;
@@ -225,7 +233,7 @@
 								</svg>
 							</button>
 						{/if}
-						{#if onDeleteView}
+						{#if onDeleteView && !isFixed(view)}
 							<button
 								onclick={(e) => {
 									e.stopPropagation();

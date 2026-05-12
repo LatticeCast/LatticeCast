@@ -17,6 +17,9 @@ SCHEMA_ROW_NAME = "__schema__"
 ORDER_ROW_NAME = "__order__"
 RESERVED_NAMES = {SCHEMA_ROW_NAME, ORDER_ROW_NAME}
 
+# Display name reserved for the implicit pinned first view.
+SCHEMA_VIEW_DISPLAY_NAME = "Schema"
+
 # Allowed view types for user-created views.
 USER_VIEW_TYPES = ("table", "kanban", "timeline", "dashboard")
 
