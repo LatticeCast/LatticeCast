@@ -439,7 +439,7 @@
 
 							<!-- Bar -->
 							<div
-								data-testid="timeline-bar-{row.row_number}"
+								data-testid="timeline-row-bar-{row.row_number}"
 								class="absolute top-2 bottom-2 flex cursor-pointer items-center overflow-hidden rounded text-xs font-medium shadow-sm {getBarColorClasses(
 									row,
 									colorByCol,
