@@ -2,6 +2,8 @@
 # V34: Table holds identity only. Column CRUD lives in TableViewRepository
 # (operating on the __schema__ row). Index management stays here because it
 # touches public.rows, not table_views.
+import hashlib
+import re
 from datetime import datetime
 from uuid import UUID
 
@@ -22,12 +24,32 @@ class TableRepository:
 
     async def create(self, workspace_id: UUID, table_id: str) -> Table:
         """Atomic create. The DB trigger trg_tables_create_schema_and_order
-        inserts the __schema__ and __order__ rows automatically."""
-        table = Table(workspace_id=workspace_id, table_id=table_id.lower())
-        self.session.add(table)
+        inserts the __schema__ and __order__ rows automatically.
+
+        Use raw SQL instead of ORM add+refresh — same pattern as bug-252/bug-253:
+        the AFTER INSERT trigger does extra writes in the same transaction,
+        which leaves the ORM instance in a state where session.refresh() raises
+        InvalidRequestError."""
+        tid = table_id.lower()
+        await self.session.execute(
+            text("INSERT INTO tables (workspace_id, table_id) VALUES (CAST(:ws AS uuid), :tid)"),
+            {"ws": str(workspace_id), "tid": tid},
+        )
         await self.session.commit()
-        await self.session.refresh(table)  # refreshes attached instance — safe
-        return table
+        result = await self.session.execute(
+            text(
+                "SELECT workspace_id, table_id, created_at, updated_at FROM tables "
+                "WHERE workspace_id = CAST(:ws AS uuid) AND table_id = :tid"
+            ),
+            {"ws": str(workspace_id), "tid": tid},
+        )
+        row = result.mappings().one()
+        return Table(
+            workspace_id=row["workspace_id"],
+            table_id=row["table_id"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
 
     async def get_by_id(self, workspace_id: UUID, table_id: str) -> Table | None:
         result = await self.session.execute(
@@ -76,9 +98,16 @@ class TableRepository:
     # ── Per-column index management (PG-side via SECURITY DEFINER funcs) ──
 
     def _index_name(self, table_id: str, column_id: str) -> str:
-        tid = table_id.replace("-", "")[:12]
+        # create_row_data_index validates ^idx_rd_[a-zA-Z0-9_]+$, so non-ASCII
+        # table_ids (e.g. Chinese "出國") would explode. Fall back to a hash
+        # when the table_id contains anything outside [A-Za-z0-9_-].
+        ascii_tid = re.sub(r"[^A-Za-z0-9_]", "", table_id.replace("-", ""))
+        if not ascii_tid or ascii_tid != table_id.replace("-", ""):
+            ascii_tid = hashlib.sha1(table_id.encode("utf-8")).hexdigest()[:12]
+        else:
+            ascii_tid = ascii_tid[:12]
         cid = column_id.replace("-", "")[:12]
-        return f"idx_rd_{tid}_{cid}"
+        return f"idx_rd_{ascii_tid}_{cid}"
 
     async def create_column_index(self, table_id: str, column_id: str, col_type: str) -> None:
         """app_user has no DDL — V27 defines create_row_data_index as

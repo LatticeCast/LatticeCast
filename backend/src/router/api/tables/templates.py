@@ -75,7 +75,9 @@ async def create_pm_template(
         try:
             await table_repo.create_column_index(table.table_id, col["column_id"], col["type"])
         except Exception:
-            pass
+            # A failed CREATE INDEX poisons the transaction; rollback so
+            # the rest of the request (views, set_order) can still run.
+            await session.rollback()
 
     await view_repo.create(
         workspace_id=table.workspace_id,
@@ -107,6 +109,7 @@ async def create_pm_template(
         ["Sprint Board", "Roadmap"],
         updated_by=user.user_id,
     )
+    await view_repo.set_default_view(table.workspace_id, table.table_id, "Sprint Board")
 
     return await _build_table_response(table, session)
 
