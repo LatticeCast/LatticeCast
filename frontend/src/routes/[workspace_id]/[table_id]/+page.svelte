@@ -24,7 +24,7 @@
 		deleteView,
 		reorderViews
 	} from '$lib/stores/tables.store';
-	import { putDefaultView } from '$lib/backend/views';
+	import { putDefaultView, reorderColumns } from '$lib/backend/views';
 	import {
 		fetchTable,
 		createRow,
@@ -367,27 +367,7 @@
 		}
 	}
 
-	function handleMoveColumn(col: Column, direction: 'up' | 'down') {
-		// Build current ordered list using viewColOrder if available, else col.position
-		const ordered = [...$columns]
-			.sort((a, b) => {
-				if (viewColOrder && viewColOrder.length > 0) {
-					const ai = viewColOrder.indexOf(a.column_id);
-					const bi = viewColOrder.indexOf(b.column_id);
-					return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
-				}
-				return a.position - b.position;
-			})
-			.map((c) => c.column_id);
-		const idx = ordered.indexOf(col.column_id);
-		const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-		if (swapIdx < 0 || swapIdx >= ordered.length) return;
-		[ordered[idx], ordered[swapIdx]] = [ordered[swapIdx], ordered[idx]];
-		viewColOrder = ordered;
-		// $effect will call persistViewConfig()
-	}
-
-	function handleDragReorderColumns(fromId: string, toId: string) {
+	async function handleDragReorderColumns(fromId: string, toId: string) {
 		const ordered = [...$columns]
 			.sort((a, b) => {
 				if (viewColOrder && viewColOrder.length > 0) {
@@ -403,7 +383,26 @@
 		if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
 		ordered.splice(fromIdx, 1);
 		ordered.splice(toIdx, 0, fromId);
+		// Optimistic local update for snappy DOM.
 		viewColOrder = ordered;
+		// Persist: when on the implicit Schema view, write position fields
+		// back to __schema__ so the order is global. User views still
+		// auto-persist via the view.config.colOrder $effect.
+		const tableId = $page.params.table_id!;
+		const isImplicitTable =
+			activeViewName === IMPLICIT_TABLE_VIEW.name &&
+			!$viewsStore.some((v) => v.name === IMPLICIT_TABLE_VIEW.name);
+		if (isImplicitTable) {
+			try {
+				await reorderColumns(tableId, ordered);
+				await refreshTable(tableId);
+				// Now the global position fields reflect the new order; per-view
+				// override is no longer needed for the implicit view.
+				viewColOrder = null;
+			} catch (e) {
+				error.set(e instanceof Error ? e.message : 'Failed to save column order');
+			}
+		}
 	}
 
 	function startRename(colId: string, currentName: string) {
@@ -703,16 +702,11 @@
 		url.searchParams.set('view', view.name);
 		history.replaceState(history.state, '', url.toString());
 		applyViewConfig(view);
-		// Mark this view as the table's default so visiting later without
-		// ?view= resumes here. Per-table (shared); writes is_default=true
-		// via the SQL function set_table_default_view. Skip the implicit
-		// Table tab — it has no row in public.table_views to flag.
-		const isImplicitTable =
-			view.name === IMPLICIT_TABLE_VIEW.name &&
-			!$viewsStore.some((v) => v.name === IMPLICIT_TABLE_VIEW.name);
-		if (!isImplicitTable) {
-			putDefaultView($page.params.table_id!, view.name).catch(() => {});
-		}
+		// PG side does "clear all is_default + flag this one" atomically.
+		// 'Schema' is accepted by set_table_default_view (V40 mapped it to
+		// the __schema__ row) so we can call this for every click,
+		// including the implicit Schema tab.
+		putDefaultView($page.params.table_id!, view.name).catch(() => {});
 	}
 
 	async function handleAddView(type: string, name: string) {
@@ -1023,7 +1017,6 @@
 			onShowFilterPanel={() => (showFilterPanel = true)}
 			onHideCol={(id) => hiddenCols.add(id)}
 			onDeleteColumn={handleDeleteColumn}
-			onMoveColumn={handleMoveColumn}
 			onDragReorderColumns={handleDragReorderColumns}
 			onResizeStart={handleResizeStart}
 			onShowAddColumn={() => (showAddColumn = true)}

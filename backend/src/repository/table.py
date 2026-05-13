@@ -22,18 +22,24 @@ class TableRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create(self, workspace_id: UUID, table_id: str) -> Table:
-        """Atomic create. The DB trigger trg_tables_create_schema_and_order
-        inserts the __schema__ and __order__ rows automatically.
-
-        Use raw SQL instead of ORM add+refresh — same pattern as bug-252/bug-253:
-        the AFTER INSERT trigger does extra writes in the same transaction,
-        which leaves the ORM instance in a state where session.refresh() raises
-        InvalidRequestError."""
+    async def create_from_template(
+        self,
+        workspace_id: UUID,
+        table_id: str,
+        kind: str,
+        created_by: UUID,
+    ) -> Table:
+        """V38: Atomic table create + populate via the PG function
+        `create_table_from_template`. One transaction covers the INSERT,
+        the __schema__ + __order__ writes, per-column index creation, and
+        (for templates) the seed views and default-view flag."""
         tid = table_id.lower()
         await self.session.execute(
-            text("INSERT INTO tables (workspace_id, table_id) VALUES (CAST(:ws AS uuid), :tid)"),
-            {"ws": str(workspace_id), "tid": tid},
+            text(
+                "SELECT create_table_from_template("
+                "CAST(:ws AS uuid), :tid, :kind, CAST(:by AS uuid))"
+            ),
+            {"ws": str(workspace_id), "tid": tid, "kind": kind, "by": str(created_by)},
         )
         await self.session.commit()
         result = await self.session.execute(

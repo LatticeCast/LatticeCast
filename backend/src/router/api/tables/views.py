@@ -12,7 +12,7 @@ from repository.table_view import TableViewRepository
 
 from ._shared import _get_table_for_member
 
-router = APIRouter(tags=["tables"])
+router = APIRouter(prefix="/tables", tags=["tables"])
 
 
 def _view_to_dict(view: Any) -> dict[str, Any]:
@@ -204,8 +204,10 @@ async def put_default_view(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, str | None]:
-    """Mark `data.name` as the table's default view. Refuses internal rows
-    (__schema__/__order__) at the SQL function level."""
+    """Mark `data.name` as the table's default view. The PG function
+    `set_table_default_view` clears the existing is_default and sets the
+    new target atomically. Accepts user view names AND the implicit
+    'Schema' tab (mapped to the __schema__ row)."""
     table = await _get_table_for_member(table_id, user, session)
     view_repo = TableViewRepository(session)
     try:

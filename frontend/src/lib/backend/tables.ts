@@ -87,7 +87,7 @@ export async function updateColumn(
 ): Promise<Column> {
 	const headers = await getAuthHeaders();
 	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/columns/${columnId}`, {
-		method: 'PUT',
+		method: 'PATCH',
 		headers,
 		body: JSON.stringify(data)
 	});

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { ViewConfig } from '$lib/types/table';
 	import { IMPLICIT_TABLE_VIEW } from '$lib/stores/tablePage.store.svelte';
+	import { createDragReorder } from './dragReorder.svelte';
 
 	let {
 		views,
@@ -26,8 +27,12 @@
 	let editingViewName = $state<string | null>(null);
 	let editingValue = $state('');
 	let renameError = $state('');
-	let dragViewName = $state<string | null>(null);
-	let dragOverViewName = $state<string | null>(null);
+
+	const viewDrag = createDragReorder<ViewConfig>({
+		getId: (view) => view.name,
+		canDrag: (view) => !isFixed(view),
+		onReorder: (fromName, toName) => onReorderViews?.(fromName, toName)
+	});
 
 	function startRenameView(view: ViewConfig, e: MouseEvent) {
 		e.stopPropagation();
@@ -120,33 +125,7 @@
 		<div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-4">
 			{#each views as view (view.name)}
 				<div
-					draggable={!isFixed(view)}
-					data-drag-over={dragOverViewName === view.name && dragViewName !== view.name
-						? 'true'
-						: undefined}
-					ondragstart={(e) => {
-						if (isFixed(view)) return;
-						e.stopPropagation();
-						dragViewName = view.name;
-					}}
-					ondragover={(e) => {
-						if (isFixed(view) || dragViewName === null) return;
-						e.preventDefault();
-						e.stopPropagation();
-						dragOverViewName = view.name;
-					}}
-					ondrop={(e) => {
-						e.preventDefault();
-						e.stopPropagation();
-						if (dragViewName && dragViewName !== view.name && !isFixed(view))
-							onReorderViews?.(dragViewName, view.name);
-						dragViewName = null;
-						dragOverViewName = null;
-					}}
-					ondragend={() => {
-						dragViewName = null;
-						dragOverViewName = null;
-					}}
+					{...viewDrag.handlers(view)}
 					class="group flex shrink-0 items-center border-b-2 transition {activeViewName ===
 					view.name
 						? 'border-blue-500'

@@ -18,7 +18,6 @@
 		onColMenuChange,
 		onStartRename,
 		onManageOptions,
-		onMoveColumn,
 		onSortChange,
 		onFilterAdd,
 		onShowFilterPanel,
@@ -41,7 +40,6 @@
 		onColMenuChange: (colId: string | null) => void;
 		onStartRename: (colId: string, name: string) => void;
 		onManageOptions: (col: Column) => void;
-		onMoveColumn: (col: Column, dir: 'up' | 'down') => void;
 		onSortChange: (config: { colId: string; dir: 'asc' | 'desc' } | null) => void;
 		onFilterAdd: (colId: string) => void;
 		onShowFilterPanel: () => void;
@@ -187,55 +185,6 @@
 								Manage Options
 							</button>
 						{/if}
-						<hr class={isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'} />
-						<button
-							class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value
-								? 'text-gray-300 hover:bg-gray-700'
-								: 'text-gray-700 hover:bg-gray-50'}"
-							onclick={() => {
-								onMoveColumn(col, 'up');
-								onColMenuChange(null);
-							}}
-							role="menuitem"
-						>
-							<svg
-								class="h-4 w-4 text-gray-400"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-								><path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M7 16l-4-4m0 0l4-4m-4 4h18"
-								/></svg
-							>
-							Move Left
-						</button>
-						<button
-							class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value
-								? 'text-gray-300 hover:bg-gray-700'
-								: 'text-gray-700 hover:bg-gray-50'}"
-							onclick={() => {
-								onMoveColumn(col, 'down');
-								onColMenuChange(null);
-							}}
-							role="menuitem"
-						>
-							<svg
-								class="h-4 w-4 text-gray-400"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-								><path
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									stroke-width="2"
-									d="M17 8l4 4m0 0l-4 4m4-4H3"
-								/></svg
-							>
-							Move Right
-						</button>
 						<hr class={isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'} />
 						<button
 							class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===

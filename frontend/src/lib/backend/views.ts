@@ -81,3 +81,15 @@ export async function putDefaultView(tableId: string, viewName: string): Promise
 	const data = await response.json();
 	return (data?.default_view as string | null) ?? null;
 }
+
+/** Persist a global column order (writes `position` on each column in
+ * `__schema__`). Used when the user reorders cols on the Schema tab. */
+export async function reorderColumns(tableId: string, order: string[]): Promise<void> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/columns/order`, {
+		method: 'PUT',
+		headers,
+		body: JSON.stringify({ order })
+	});
+	if (!response.ok) throw new Error(`Failed to reorder columns: ${response.statusText}`);
+}

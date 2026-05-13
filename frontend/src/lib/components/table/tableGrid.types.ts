@@ -40,7 +40,6 @@ export interface TableGridProps {
 	onShowFilterPanel: () => void;
 	onHideCol: (colId: string) => void;
 	onDeleteColumn: (colId: string) => void;
-	onMoveColumn: (col: Column, dir: 'up' | 'down') => void;
 	onResizeStart: (e: MouseEvent, col: Column) => void;
 	onShowAddColumn: () => void;
 	onAddRow: () => void;

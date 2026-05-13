@@ -367,24 +367,6 @@ class TablePageStore {
 		}
 	}
 
-	handleMoveColumn(col: Column, direction: 'up' | 'down') {
-		const ordered = [...get(columns)]
-			.sort((a, b) => {
-				if (this.viewColOrder && this.viewColOrder.length > 0) {
-					const ai = this.viewColOrder.indexOf(a.column_id);
-					const bi = this.viewColOrder.indexOf(b.column_id);
-					return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
-				}
-				return a.position - b.position;
-			})
-			.map((c) => c.column_id);
-		const idx = ordered.indexOf(col.column_id);
-		const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-		if (swapIdx < 0 || swapIdx >= ordered.length) return;
-		[ordered[idx], ordered[swapIdx]] = [ordered[swapIdx], ordered[idx]];
-		this.viewColOrder = ordered;
-	}
-
 	startRename(colId: string, currentName: string) {
 		this.renamingColId = colId;
 		this.renameValue = currentName;

@@ -32,13 +32,13 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "tables", "table_id", "character varying"),
     ("public", "tables", "created_at", "timestamp"),
     ("public", "tables", "updated_at", "timestamp"),
-    # public.table_views (V34 simplified shape; V37 adds is_default)
+    # public.table_views (V34 shape; V41 drops is_default — default_view
+    # now lives in __schema__.config.default_view)
     ("public", "table_views", "workspace_id", "uuid"),
     ("public", "table_views", "table_id", "character varying"),
     ("public", "table_views", "name", "character varying"),
     ("public", "table_views", "type", "character varying"),
     ("public", "table_views", "config", "jsonb"),
-    ("public", "table_views", "is_default", "boolean"),
     ("public", "table_views", "created_by", "uuid"),
     ("public", "table_views", "updated_by", "uuid"),
     ("public", "table_views", "created_at", "timestamp"),
@@ -70,6 +70,7 @@ FORBIDDEN_COLUMNS: list[tuple[str, str, str]] = [
     ("public", "tables", "columns"),                  # V34: moved to __schema__ row
     ("public", "table_views", "view_number"),         # V34: dropped
     ("public", "table_views", "next_view_id"),        # V34: dropped
+    ("public", "table_views", "is_default"),          # V41: dropped (default_view moved into __schema__.config)
 ]
 
 
@@ -149,15 +150,16 @@ def verify(psql_fn) -> list[str]:
         if not result:
             errors.append(f"MISSING TRIGGER: {tbl}.{trg_name}")
 
-    # V37 reintroduces the partial unique index that V34 had dropped.
+    # V41 drops V37's partial unique index (default_view moved into config).
     result = psql_fn(
         "SELECT 1 FROM pg_indexes "
         "WHERE schemaname='public' AND tablename='table_views' "
         "  AND indexname='table_views_one_default';"
     )
-    if not result:
+    if result:
         errors.append(
-            "MISSING INDEX: public.table_views.table_views_one_default"
+            "FORBIDDEN INDEX still present: "
+            "public.table_views.table_views_one_default (V41 drop)"
         )
 
     # RLS policy on table_views still in place

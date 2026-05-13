@@ -173,10 +173,18 @@ class TableViewRepository:
     # ── __schema__ row helpers ───────────────────────────────────────────
 
     async def get_schema(self, workspace_id: UUID, table_id: str) -> list[dict[str, Any]]:
+        """V41: __schema__.config is {columns: [...], default_view: ...}."""
         view = await self.get_by_name(workspace_id, table_id, SCHEMA_ROW_NAME)
-        if view is None or not isinstance(view.config, list):
+        if view is None:
             return []
-        return view.config
+        cfg = view.config
+        if isinstance(cfg, list):
+            # Legacy shape — should be migrated by V41 but be tolerant.
+            return cfg
+        if isinstance(cfg, dict):
+            cols = cfg.get("columns", [])
+            return cols if isinstance(cols, list) else []
+        return []
 
     async def set_schema(
         self,
@@ -185,33 +193,126 @@ class TableViewRepository:
         columns: list[dict[str, Any]],
         updated_by: UUID | None = None,
     ) -> list[dict[str, Any]]:
+        """Writes columns into __schema__.config.columns, preserving the
+        existing default_view value."""
         view = await self.get_by_name(workspace_id, table_id, SCHEMA_ROW_NAME)
+        existing_default = None
+        if view is not None and isinstance(view.config, dict):
+            existing_default = view.config.get("default_view")
+        new_config = {"columns": columns, "default_view": existing_default}
         if view is None:
-            view = await self.create(
+            await self.create(
                 workspace_id=workspace_id,
                 table_id=table_id,
                 name=SCHEMA_ROW_NAME,
                 view_type="schema",
-                config=columns,
+                config=new_config,
                 created_by=updated_by,
             )
             return columns
-        await self.update(view, {"config": columns, "updated_by": updated_by})
+        await self.update(view, {"config": new_config, "updated_by": updated_by})
         return columns
 
-    # ── Default view (V37 is_default flag) ────────────────────────────────
+    # ── Column CRUD (V39 PG functions) ───────────────────────────────────
+    # Each delegates to a plpgsql function that wraps the JSONB __schema__
+    # write and per-column index DDL in one atomic transaction. Endpoints
+    # in router/api/tables/columns.py are thin pass-throughs.
 
-    async def get_default_view_name(self, workspace_id: UUID, table_id: str) -> str | None:
-        """Return the name of the default view, or None if none is marked."""
+    async def add_column(
+        self,
+        workspace_id: UUID,
+        table_id: str,
+        name: str,
+        col_type: str,
+        options: dict[str, Any],
+        position: int | None,
+        created_by: UUID,
+    ) -> dict[str, Any]:
+        import json as _json
         from sqlalchemy import text
 
         result = await self.session.execute(
             text(
-                "SELECT name FROM public.table_views WHERE workspace_id = :ws AND table_id = :tid AND is_default"
+                "SELECT add_column(CAST(:ws AS uuid), :tid, :name, :type, "
+                "CAST(:options AS jsonb), :position, CAST(:by AS uuid))"
+            ),
+            {
+                "ws": str(workspace_id),
+                "tid": table_id,
+                "name": name,
+                "type": col_type,
+                "options": _json.dumps(options),
+                "position": position,
+                "by": str(created_by),
+            },
+        )
+        await self.session.commit()
+        return result.scalar_one()
+
+    async def update_column(
+        self,
+        workspace_id: UUID,
+        table_id: str,
+        column_id: str,
+        patch: dict[str, Any],
+        updated_by: UUID,
+    ) -> dict[str, Any]:
+        """Returns the merged column dict. Raises if column_id is missing
+        (caller maps to 404)."""
+        import json as _json
+        from sqlalchemy import text
+
+        result = await self.session.execute(
+            text(
+                "SELECT update_column(CAST(:ws AS uuid), :tid, :cid, "
+                "CAST(:patch AS jsonb), CAST(:by AS uuid))"
+            ),
+            {
+                "ws": str(workspace_id),
+                "tid": table_id,
+                "cid": column_id,
+                "patch": _json.dumps(patch),
+                "by": str(updated_by),
+            },
+        )
+        await self.session.commit()
+        return result.scalar_one()
+
+    async def delete_column(
+        self,
+        workspace_id: UUID,
+        table_id: str,
+        column_id: str,
+        updated_by: UUID,
+    ) -> None:
+        from sqlalchemy import text
+
+        await self.session.execute(
+            text("SELECT delete_column(CAST(:ws AS uuid), :tid, :cid, CAST(:by AS uuid))"),
+            {
+                "ws": str(workspace_id),
+                "tid": table_id,
+                "cid": column_id,
+                "by": str(updated_by),
+            },
+        )
+        await self.session.commit()
+
+    # ── Default view (V37 is_default flag) ────────────────────────────────
+
+    async def get_default_view_name(self, workspace_id: UUID, table_id: str) -> str | None:
+        """V41: default_view lives in __schema__.config.default_view."""
+        from sqlalchemy import text
+
+        result = await self.session.execute(
+            text(
+                "SELECT config->>'default_view' "
+                "FROM public.table_views "
+                "WHERE workspace_id = :ws AND table_id = :tid AND name = '__schema__'"
             ).bindparams(ws=workspace_id, tid=table_id)
         )
         row = result.first()
-        return row[0] if row else None
+        return row[0] if row and row[0] else None
 
     async def set_default_view(self, workspace_id: UUID, table_id: str, view_name: str) -> None:
         """Atomically flip the default view via the SQL helper."""

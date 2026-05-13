@@ -8,6 +8,7 @@ dont use `/plan`. Use Skill(agent-claude-bot)
 
 always working in ./.tmp/ don't /tmp/
 
+always working in tmux session LatticeCast that we can do pair programming ex: docker compose
 
 ## Rules
 - When editing any `.claude/skills/*/SKILL.md`, MUST bump `version:` in frontmatter (patch for fixes, minor for features). No exceptions.

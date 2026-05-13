@@ -11,6 +11,7 @@
 		sortLabels
 	} from './table.utils';
 	import { SvelteSet } from 'svelte/reactivity';
+	import { createDragReorder } from './dragReorder.svelte';
 
 	let {
 		sortedColumns,
@@ -50,7 +51,6 @@
 		onShowFilterPanel,
 		onHideCol,
 		onDeleteColumn,
-		onMoveColumn,
 		onDragReorderColumns,
 		onResizeStart,
 		onShowAddColumn,
@@ -101,7 +101,6 @@
 		onShowFilterPanel: () => void;
 		onHideCol: (colId: string) => void;
 		onDeleteColumn: (colId: string) => void;
-		onMoveColumn: (col: Column, dir: 'up' | 'down') => void;
 		onDragReorderColumns?: (fromId: string, toId: string) => void;
 		onResizeStart: (e: MouseEvent, col: Column) => void;
 		onShowAddColumn: () => void;
@@ -131,8 +130,11 @@
 	}
 
 	let containerEl = $state<HTMLDivElement | null>(null);
-	let dragColId = $state<string | null>(null);
-	let dragOverColId = $state<string | null>(null);
+
+	const colDrag = createDragReorder<Column>({
+		getId: (col) => col.column_id,
+		onReorder: (fromId, toId) => onDragReorderColumns?.(fromId, toId)
+	});
 
 	$effect(() => {
 		if (!scrollToRowId || !containerEl) return;
@@ -176,28 +178,7 @@
 					</th>
 					{#each sortedColumns as col, i (col.column_id)}
 						<th
-							draggable={true}
-							data-drag-over={dragOverColId === col.column_id && dragColId !== col.column_id
-								? 'true'
-								: undefined}
-							ondragstart={() => {
-								dragColId = col.column_id;
-							}}
-							ondragover={(e) => {
-								e.preventDefault();
-								dragOverColId = col.column_id;
-							}}
-							ondrop={(e) => {
-								e.preventDefault();
-								if (dragColId && dragColId !== col.column_id)
-									onDragReorderColumns?.(dragColId, col.column_id);
-								dragColId = null;
-								dragOverColId = null;
-							}}
-							ondragend={() => {
-								dragColId = null;
-								dragOverColId = null;
-							}}
+							{...colDrag.handlers(col)}
 							class="relative border-b px-3 py-2 text-left text-xs font-semibold tracking-wide uppercase {isDark.value
 								? 'border-gray-700 text-gray-400'
 								: 'border-gray-200 text-gray-500'}
@@ -336,55 +317,6 @@
 											Manage Options
 										</button>
 									{/if}
-									<hr class={isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'} />
-									<button
-										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value
-											? 'text-gray-300 hover:bg-gray-700'
-											: 'text-gray-700 hover:bg-gray-50'}"
-										onclick={() => {
-											onMoveColumn(col, 'up');
-											onColMenuChange(null);
-										}}
-										role="menuitem"
-									>
-										<svg
-											class="h-4 w-4 text-gray-400"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-											><path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M7 16l-4-4m0 0l4-4m-4 4h18"
-											/></svg
-										>
-										Move Left
-									</button>
-									<button
-										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value
-											? 'text-gray-300 hover:bg-gray-700'
-											: 'text-gray-700 hover:bg-gray-50'}"
-										onclick={() => {
-											onMoveColumn(col, 'down');
-											onColMenuChange(null);
-										}}
-										role="menuitem"
-									>
-										<svg
-											class="h-4 w-4 text-gray-400"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-											><path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M17 8l4 4m0 0l-4 4m4-4H3"
-											/></svg
-										>
-										Move Right
-									</button>
 									<hr class={isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'} />
 									<button
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
