@@ -1,5 +1,136 @@
 # Changelog
 
+## v0.31 — 2026-05-13
+
+### Bug fixes
+- **`TableRepository.create()` 500 (root-cause patch).** The
+  `trg_tables_create_schema_and_order` AFTER INSERT trigger writes extra
+  rows in the same transaction, leaving the ORM instance unrefreshable.
+  task-256's audit had incorrectly marked `table.py:29` attached-safe.
+  Switched to raw `INSERT` + `SELECT` (same pattern as bug-252/253).
+- **`_index_name()` rejects non-ASCII table_id.** Names like `出國`
+  blew up `create_row_data_index`'s `^idx_rd_[A-Za-z0-9_]+$` regex.
+  Falls back to a SHA1[:12] hash when any non-ASCII char is present.
+- **PM template silently lost views.** A failing `create_column_index`
+  call poisoned the transaction, swallowed the exception, and the
+  subsequent view inserts no-op'd — leaving only the implicit Table.
+  Now rolls back on the failure and sets `Sprint Board` as the default
+  view.
+- **`Failed to fetch` / `Workspace not found` after table-router split.**
+  The post-v0.30 `tables.py` split left `crud.py` with empty path on
+  an empty-prefix router; FastAPI's auto-301-on-trailing-slash sent
+  `/api/v1/tables` → `/api/v1/tables/`, and the browser dropped the
+  Authorization header on redirect. Refactored: `crud.py` now declares
+  `prefix="/tables"` itself, `__init__.py` is pure composition.
+- **Docker backend build failed on transient pypi blip.** `uv`'s
+  default 30s timeout was too tight. `ENV UV_HTTP_TIMEOUT=180` in
+  the backend Dockerfile.
+- **bug-266 — picked color not applied in all render sites.** task-263
+  changed `getChoiceColor()` to return `{cls, style}` but only updated
+  TagsCell + SelectCell. TableGrid, TableGroupHeader, TimelineView,
+  KanbanBoard lane headers, and the row-expand panel all still read
+  the old `{bg, text, border}` shape → custom colors looked blank.
+  Migrated every site to the new `class={cs.cls} style={cs.style}`
+  pattern.
+- **bug-269 — DnD reorder did not persist.** Two bugs: `reorderViews`
+  in the store never updated the local `views` writable after the API
+  call (visual reverted on reload), and the column-reorder insert
+  formula `toIdx > fromIdx ? toIdx - 1 : toIdx` was a no-op when
+  dragging one step right (adjacent case).
+
+### Polish
+- **task-267 — sort labels are type-aware.** Number columns show
+  `Ascending (1 → 9)`, date shows `Oldest first`, select/tags shows
+  `Defined order`, checkbox shows `Unchecked first`. Text/url/doc
+  keep the original `A → Z`. New `sortLabels(type)` helper in
+  `table.utils.ts`; the three duplicate context-menu sites all use it.
+- **task-268 — implicit first view is "Schema", pinned.** The
+  always-present first tab now reads `Schema` instead of `Table`,
+  cannot be renamed, deleted, or dragged. Server-side guard in
+  `views.py` rejects user-created views named `Schema`
+  (case-insensitive) with 400.
+
+### Known follow-ups
+- **bug-265 — color picker rewrite is parked.** The 3-slider HSL stack
+  shipped in task-263 is bad UX; the spec is a hue-bar + 2D S/L-square
+  picker. First attempt TIMEOUTed on the bot; partial work is in
+  `git stash`. Needs to be split (build standalone `ColorPicker.svelte`,
+  then wire into `ManageOptionsModal`) before retry.
+
+## v0.30 — 2026-05-10
+
+### User-facing features
+- **task-242 — edit own email.** New `PUT /api/v1/login/me/email`
+  through `login_mgr` role to write `auth.gdpr.email`. 409 on
+  duplicate (`UNIQUE` constraint from V10). New `/settings` page.
+- **task-243 — create workspaces from sidebar.** Wired the existing
+  `POST /workspaces` to a `+ New Workspace` modal in the sidebar.
+- **task-244 — workspace members page.** `/<workspace>/members`
+  lists members as `<user_name> (<email>)`, owner can add by email
+  (server resolves to `user_id` UUID), change role, remove. New
+  `PUT /workspaces/{id}/members/{user_id}` for role change.
+  Last-owner guard on demote/remove. Members list joins
+  `auth.users` + `auth.gdpr`.
+- **task-245 — members page header shows workspace name.**
+  `"<workspace_name> Members"`, with deep-link sync.
+- **task-247 + bug-246 — dark mode coverage.** `/`, `/settings`, and
+  `/config` all honor the dark toggle. New theme tokens
+  `settingsHeroBg`, `selectedBorder`, `selectedBg`, `toggleTrackBg`
+  in `theme.svelte.ts`. No more raw `bg-white` / `bg-gray-*` /
+  `from-blue-*` in those routes.
+- **task-248 + task-250 — workspace home is path-based.**
+  `/<workspace_name>/` shows just that workspace's tables (tab
+  strip switches between workspaces). The `/?workspace=<uuid>` query
+  shape from task-248's first pass is gone. `/` redirects to the
+  first or last-visited workspace. `+ New Workspace` button at the
+  end of the tab strip.
+- **task-249 — pretty URLs.** UUID in the address bar gets rewritten
+  to `workspace_name` via `history.replaceState`. Pasted UUID URLs
+  load correctly and then prettify. Backend still receives UUID —
+  no API surface change.
+- **task-251 — Members icon on workspace home header.**
+- **task-261 — drag-and-drop column reorder + view tab reorder.**
+  Native HTML5 DnD replaces the ←/→ click buttons.
+- **task-264 — Table view group-by persists.** The Table view's
+  group-by selection now round-trips through the view config the
+  same way Kanban's does. Fixed a `$viewsStore` reactive loop that
+  was re-firing the persist effect.
+
+### Bug fixes
+- **bug-252 / bug-253 — `Failed to create view` / `Failed to create
+  PM template` 500s.** Root cause: `TableViewRepository.update()` and
+  `.create()` called `session.refresh()` on instances detached after
+  raw-SQL `INSERT`s. Migrated both to raw UPDATE/INSERT + SELECT
+  (same pattern as `RowRepository.create()`).
+- **bug-254 — `+ New Workspace` showed error after success.** Sidebar
+  store wasn't updated until after navigation, and the `goto()` used
+  UUID instead of name. Workspace now added to the local writable
+  immediately + navigated to `/<workspace_name>/`.
+- **bug-255 — members page didn't reload when switching workspaces
+  via sidebar.** SvelteKit reuses the page component across same-shape
+  routes; `onMount` doesn't re-fire. Swapped to an `$effect` tracking
+  `params.workspace_id`.
+- **task-256 — `session.refresh()` audit.** All 11 remaining call
+  sites verified attached-safe and annotated with a comment.
+  Regression tests added for the high-risk paths.
+
+### Refactor
+- **task-258 — split `router/api/tables.py` (756 LOC) → 5 sibling
+  files** under `router/api/tables/` (`crud`, `columns`, `views`,
+  `templates`, `_shared`). Each ≤ 250 LOC; URLs unchanged.
+- **task-260 — zero `no-unused-vars` lint errors** across FE in a
+  single commit.
+- **examples/crm_demo.py** — stdlib-only Python script that creates
+  a demo CRM table, seeds 30 deals, and installs `Sales Dashboard`
+  + `Win Loss Analysis` + `Forecast` dashboards (LatticeQL widgets).
+  Documents the widget JSON via `num()` / `bar()` / `donut()`
+  builder helpers.
+
+### Known follow-ups
+- **task-257 + task-259 — page split + TableGrid split.** Both
+  TIMEOUTed on the bot (1115-line and 993-line files are too big
+  for one worker session). Partial work is in `git stash`.
+
 ## v0.29 — 2026-05-08
 - **Per-table default view, server-side (V37).** Clicking a view now flags
   it as the table's default via a new `is_default boolean` column on
