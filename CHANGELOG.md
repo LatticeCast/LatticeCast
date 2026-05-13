@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.32 — 2026-05-14
+
+### Color UX overhaul
+- **Picker swapped to `vanilla-colorful` web component.** `<hex-color-picker>`
+  replaces the 3-slider HSL stack from task-263. ~4KB, no Svelte runtime
+  overhead. Standard 2D saturation/value pad + horizontal hue bar + hex
+  input. No text-selection-on-drag bug because the lib uses pointer events
+  with its own capture. Lazy client-side import (the lib calls
+  `customElements.define()` at module load, browser-only). Apply-on-close
+  so live drag updates do not race the modal's reactive state.
+- **Outlined choice pills.** `colorToStyle()` for hex/hsl colors now emits
+  `background-color: <color>20` (12% alpha tint) + colored border + colored
+  text instead of a solid fill. Reads as "tagged with this color" without
+  flooding the cell. Legacy `bg-*` Tailwind classes keep their pastel-fill
+  look (same visual weight).
+- **PM/CRM template colors are hex (V42).** `_build_template_columns`
+  recreated via `CREATE OR REPLACE` with semantic hex values: Type
+  (epic/story/task/bug), Status (todo/in_progress/testing/debugging/review/
+  done/merged), Priority (critical/high/medium/low), CRM Stage
+  (lead/qualified/proposal/won/lost). Existing tables keep their Tailwind
+  class colors and render unchanged; new tables get the hex palette which
+  the new picker can edit directly.
+- **`addChoice()` random colors.** New select/tags options get a random
+  vivid hex: hue 0-359, saturation 60-75%, lightness 55-65%. Replaces the
+  cyclic 10-color preset list.
+
 ## v0.31 — 2026-05-13
 
 ### Bug fixes
@@ -55,7 +81,8 @@
   shipped in task-263 is bad UX; the spec is a hue-bar + 2D S/L-square
   picker. First attempt TIMEOUTed on the bot; partial work is in
   `git stash`. Needs to be split (build standalone `ColorPicker.svelte`,
-  then wire into `ManageOptionsModal`) before retry.
+  then wire into `ManageOptionsModal`) before retry. *(Resolved in v0.32
+  via `vanilla-colorful` web component.)*
 
 ## v0.30 — 2026-05-10
 

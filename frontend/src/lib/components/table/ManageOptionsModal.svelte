@@ -1,19 +1,45 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { Column, ColumnChoice } from '$lib/types/table';
 	import { getChoices, colorToStyle } from './table.utils';
 
-	const DEFAULT_COLORS = [
-		'hsl(210 80% 60%)',
-		'hsl(150 60% 55%)',
-		'hsl(30 90% 60%)',
-		'hsl(0 75% 60%)',
-		'hsl(270 65% 65%)',
-		'hsl(60 75% 55%)',
-		'hsl(180 65% 55%)',
-		'hsl(330 70% 65%)',
-		'hsl(90 60% 55%)',
-		'hsl(240 70% 65%)'
-	];
+	// vanilla-colorful registers a custom element via `customElements.define()`,
+	// which only exists in the browser. Import client-side only.
+	onMount(() => {
+		import('vanilla-colorful/hex-color-picker.js');
+	});
+
+	const DEFAULT_HEX = '#5599e0'; // initial hex shown when opening picker on a legacy choice
+
+	// Random hue, fixed saturation/lightness band → readable, vivid color.
+	function randomChoiceColor(): string {
+		const h = Math.floor(Math.random() * 360);
+		const s = 60 + Math.random() * 15; // 60–75%
+		const l = 55 + Math.random() * 10; // 55–65%
+		return hslToHex(h, s, l);
+	}
+
+	function hslToHex(h: number, s: number, l: number): string {
+		s /= 100;
+		l /= 100;
+		const c = (1 - Math.abs(2 * l - 1)) * s;
+		const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+		const m = l - c / 2;
+		let r = 0,
+			g = 0,
+			b = 0;
+		if (h < 60) [r, g, b] = [c, x, 0];
+		else if (h < 120) [r, g, b] = [x, c, 0];
+		else if (h < 180) [r, g, b] = [0, c, x];
+		else if (h < 240) [r, g, b] = [0, x, c];
+		else if (h < 300) [r, g, b] = [x, 0, c];
+		else [r, g, b] = [c, 0, x];
+		const f = (n: number): string =>
+			Math.round((n + m) * 255)
+				.toString(16)
+				.padStart(2, '0');
+		return `#${f(r)}${f(g)}${f(b)}`;
+	}
 
 	let {
 		col,
@@ -28,90 +54,25 @@
 	let choices = $state<ColumnChoice[]>([...getChoices(col)]);
 	let newValue = $state('');
 	let draggedIdx = $state<number | null>(null);
-	let colorPickerIdx = $state<number | null>(null);
-	let pickerH = $state(210);
-	let pickerS = $state(80);
-	let pickerL = $state(60);
-	const pickerHsl = $derived(`hsl(${pickerH} ${pickerS}% ${pickerL}%)`);
-	const pickerHex = $derived(hslToHex(pickerH, pickerS, pickerL));
+	let pickerHex = $state<string | null>('#5599e0');
 
-	function hslToHex(h: number, s: number, l: number): string {
-		s /= 100;
-		l /= 100;
-		const a = s * Math.min(l, 1 - l);
-		const f = (n: number): string => {
-			const k = (n + h / 30) % 12;
-			const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
-			return Math.round(255 * c)
-				.toString(16)
-				.padStart(2, '0');
-		};
-		return `#${f(0)}${f(8)}${f(4)}`;
-	}
-
-	function hexToHslValues(hex: string): { h: number; s: number; l: number } | null {
-		const m = hex.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-		if (!m) return null;
-		const hex6 =
-			m[1].length === 3
-				? m[1]
-						.split('')
-						.map((c) => c + c)
-						.join('')
-				: m[1];
-		const r = parseInt(hex6.slice(0, 2), 16) / 255;
-		const g = parseInt(hex6.slice(2, 4), 16) / 255;
-		const b = parseInt(hex6.slice(4, 6), 16) / 255;
-		const max = Math.max(r, g, b);
-		const min = Math.min(r, g, b);
-		const l = (max + min) / 2;
-		if (max === min) return { h: 0, s: 0, l: Math.round(l * 100) };
-		const d = max - min;
-		const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-		let h = 0;
-		if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-		else if (max === g) h = ((b - r) / d + 2) / 6;
-		else h = ((r - g) / d + 4) / 6;
-		return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
-	}
+	let editingColorIdx = $state<number | null>(null);
 
 	function openPicker(i: number) {
-		if (colorPickerIdx === i) {
-			colorPickerIdx = null;
+		const c = choices[i]?.color ?? '';
+		// Hex passes straight through. hsl(...)/legacy classes default to the
+		// first preset; user edits propagate via bind:hex.
+		pickerHex = c && /^#[0-9a-f]{3,6}$/i.test(c) ? c : DEFAULT_HEX;
+	}
+
+	function closePicker() {
+		if (editingColorIdx === null || !pickerHex) {
+			editingColorIdx = null;
 			return;
 		}
-		const c = choices[i]?.color ?? '';
-		if (c && !c.startsWith('bg-')) {
-			const hslMatch = c.match(/hsl\(\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%\s*\)/i);
-			if (hslMatch) {
-				pickerH = Math.round(parseFloat(hslMatch[1]));
-				pickerS = Math.round(parseFloat(hslMatch[2]));
-				pickerL = Math.round(parseFloat(hslMatch[3]));
-			} else {
-				const parsed = hexToHslValues(c);
-				if (parsed) {
-					pickerH = parsed.h;
-					pickerS = parsed.s;
-					pickerL = Math.max(20, Math.min(80, parsed.l));
-				}
-			}
-		}
-		colorPickerIdx = i;
-	}
-
-	function onHexInput(e: Event) {
-		const val = (e.currentTarget as HTMLInputElement).value.trim();
-		const parsed = hexToHslValues(val);
-		if (parsed) {
-			pickerH = parsed.h;
-			pickerS = parsed.s;
-			pickerL = Math.max(20, Math.min(80, parsed.l));
-		}
-	}
-
-	function setChoiceColor(i: number, color: string) {
-		choices = choices.map((c, idx) => (idx === i ? { ...c, color } : c));
-		colorPickerIdx = null;
+		const idx = editingColorIdx;
+		choices = choices.map((c, i) => (i === idx ? { ...c, color: pickerHex! } : c));
+		editingColorIdx = null;
 	}
 
 	function onDragStart(i: number) {
@@ -135,9 +96,17 @@
 	function addChoice() {
 		const val = newValue.trim();
 		if (!val || choices.some((c) => c.value === val)) return;
-		const colorIdx = choices.length % DEFAULT_COLORS.length;
-		choices = [...choices, { value: val, color: DEFAULT_COLORS[colorIdx] }];
+		choices = [...choices, { value: val, color: randomChoiceColor() }];
 		newValue = '';
+	}
+
+	function togglePicker(i: number) {
+		if (editingColorIdx === i) {
+			closePicker();
+		} else {
+			openPicker(i);
+			editingColorIdx = i;
+		}
 	}
 
 	function removeChoice(value: string) {
@@ -154,7 +123,7 @@
 	class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
 	onclick={(e) => {
 		if (e.target === e.currentTarget) onClose();
-		colorPickerIdx = null;
+		closePicker();
 	}}
 	role="dialog"
 	aria-modal="true"
@@ -199,66 +168,46 @@
 							data-testid="choice-color-btn-{i}"
 							onclick={(e) => {
 								e.stopPropagation();
-								openPicker(i);
+								togglePicker(i);
 							}}
 							class="h-4 w-4 rounded-full border-2 {cs.cls} transition-transform hover:scale-110"
 							style={cs.style}
 							aria-label="Change color for {choice.value}"
 						></button>
-						{#if colorPickerIdx === i}
+						{#if editingColorIdx === i}
 							<div
-								class="absolute top-6 left-0 z-10 w-52 rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
+								class="absolute top-6 left-0 z-20 rounded-xl border border-gray-200 bg-white p-3 shadow-xl"
 								onclick={(e) => e.stopPropagation()}
 								role="menu"
 								aria-label="Pick a color"
+								tabindex="-1"
 							>
-								<div class="mb-1 text-xs text-gray-400">Hue</div>
-								<input
-									data-testid="color-picker-hue"
-									type="range"
-									min="0"
-									max="359"
-									bind:value={pickerH}
-									class="mb-2 w-full cursor-pointer"
-									style="accent-color: {pickerHsl}"
-								/>
-								<div class="mb-1 text-xs text-gray-400">Saturation</div>
-								<input
-									data-testid="color-picker-sat"
-									type="range"
-									min="0"
-									max="100"
-									bind:value={pickerS}
-									class="mb-2 w-full cursor-pointer"
-									style="accent-color: {pickerHsl}"
-								/>
-								<div class="mb-1 text-xs text-gray-400">Lightness</div>
-								<input
-									data-testid="color-picker-light"
-									type="range"
-									min="20"
-									max="80"
-									bind:value={pickerL}
-									class="mb-2 w-full cursor-pointer"
-									style="accent-color: {pickerHsl}"
-								/>
-								<div class="flex items-center gap-2">
+								<hex-color-picker
+									color={pickerHex ?? '#5599e0'}
+									oncolor-changed={(e: CustomEvent<{ value: string }>) =>
+										(pickerHex = e.detail.value)}
+									style="width: 200px; height: 200px;"
+								></hex-color-picker>
+								<div class="mt-2 flex items-center gap-2">
 									<div
-										class="h-6 w-6 shrink-0 rounded-full border border-gray-200"
-										style="background-color: {pickerHsl}"
+										class="h-5 w-5 shrink-0 rounded-full border border-gray-200"
+										style="background-color: {pickerHex ?? '#5599e0'};"
 									></div>
 									<input
 										data-testid="color-picker-hex"
 										type="text"
 										class="min-w-0 flex-1 rounded border border-gray-200 px-2 py-0.5 font-mono text-xs"
 										value={pickerHex}
-										onchange={onHexInput}
+										onchange={(e) => {
+											const v = (e.currentTarget as HTMLInputElement).value.trim();
+											if (/^#[0-9a-f]{3,6}$/i.test(v)) pickerHex = v;
+										}}
 									/>
 									<button
 										data-testid="color-picker-apply"
-										onclick={() => setChoiceColor(i, pickerHsl)}
+										onclick={closePicker}
 										class="rounded bg-blue-600 px-2 py-0.5 text-xs text-white hover:bg-blue-700"
-										role="menuitem">✓</button
+										aria-label="Apply color">✓</button
 									>
 								</div>
 							</div>

@@ -89,8 +89,12 @@ export function colorToStyle(color: string): ChoiceStyle {
 		const tc = TAG_COLORS.find((c) => c.bg === color) ?? TAG_COLORS[0];
 		return { cls: `${tc.bg} ${tc.text} ${tc.border}`, style: '' };
 	}
-	const text = isDarkColor(color) ? '#ffffff' : '#1a1a1a';
-	return { cls: '', style: `background-color: ${color}; color: ${text}; border-color: ${color};` };
+	// Outlined pill: subtle 12% tint background, full-strength border + text.
+	// Reads as "this thing has this color" without flooding the cell visually.
+	return {
+		cls: '',
+		style: `background-color: ${color}20; color: ${color}; border-color: ${color};`
+	};
 }
 
 export function getChoiceColor(col: Column, value: string): ChoiceStyle {
