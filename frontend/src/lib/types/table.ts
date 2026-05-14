@@ -49,8 +49,8 @@ export interface Table {
 	table_id: string;
 	workspace_id: UUID;
 	columns: Column[];
-	view_order: string[];
-	default_view?: string | null;
+	view_order: number[];
+	default_view?: number | null;
 	views?: ViewConfig[];
 	created_at: string;
 	updated_at: string;
@@ -70,8 +70,8 @@ export interface Column {
  * state locally. */
 export interface TableSchema {
 	columns: Column[];
-	view_order: string[];
-	default_view: string | null;
+	view_order: number[];
+	default_view: number | null;
 	views: ViewConfig[];
 }
 
@@ -117,6 +117,7 @@ export interface UpdateRow {
 export type ViewType = 'table' | 'kanban' | 'timeline' | 'dashboard';
 
 export interface ViewConfig {
+	view_id: number;
 	name: string;
 	type: ViewType;
 	config: Record<string, unknown>;

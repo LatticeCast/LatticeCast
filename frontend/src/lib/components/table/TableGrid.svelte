@@ -636,10 +636,7 @@
 										} else if (
 											col.type !== 'checkbox' &&
 											col.type !== 'tags' &&
-											!(
-												editingCell?.rowId === row.row_id &&
-												editingCell?.colId === col.column_id
-											)
+											!(editingCell?.rowId === row.row_id && editingCell?.colId === col.column_id)
 										) {
 											onStartEdit(row.row_id, col, row.row_data[col.column_id]);
 										}

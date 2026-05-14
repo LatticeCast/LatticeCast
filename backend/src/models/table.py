@@ -38,13 +38,13 @@ class TableResponse(SQLModel):
     workspace_id: UUID
     table_id: str
     columns: list[dict[str, Any]] = Field(default_factory=list)
-    view_order: list[str] = Field(
+    view_order: list[int] = Field(
         default_factory=list,
-        description="Display order of user views (subset of table_views.name).",
+        description="Display order of user views — list of view_id BIGINTs.",
     )
-    default_view: str | None = Field(
+    default_view: int | None = Field(
         default=None,
-        description="Default view name; 'Schema' for the implicit pinned tab.",
+        description="Default view_id (BIGINT); null means the implicit Schema tab.",
     )
     views: list[dict[str, Any]] = Field(
         default_factory=list,

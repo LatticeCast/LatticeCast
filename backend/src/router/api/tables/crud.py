@@ -125,8 +125,8 @@ async def delete_table(
 
 
 class SchemaPatch(BaseModel):
-    view_order: list[str] | None = None
-    default_view: str | None = None
+    view_order: list[int] | None = None
+    default_view: int | None = None
     col_order: list[str] | None = None
 
 

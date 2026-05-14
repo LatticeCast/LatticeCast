@@ -47,9 +47,8 @@
 			<button
 				class="rounded-full border border-gray-300 px-1.5 py-0.5 text-xs text-gray-400 hover:border-blue-400 hover:text-blue-600"
 				onclick={() =>
-					onTagsPopupChange(
-						isPopupOpen ? null : { rowId: row.row_id, colId: column.column_id }
-					)}>+</button
+					onTagsPopupChange(isPopupOpen ? null : { rowId: row.row_id, colId: column.column_id })}
+				>+</button
 			>
 			{#if isPopupOpen}
 				<div

@@ -112,7 +112,7 @@ export async function deleteColumn(tableId: string, columnId: string): Promise<T
  * drag-reorder-column. */
 export async function patchSchema(
 	tableId: string,
-	data: { view_order?: string[]; default_view?: string; col_order?: string[] }
+	data: { view_order?: number[]; default_view?: number | null; col_order?: string[] }
 ): Promise<TableSchema> {
 	const headers = await getAuthHeaders();
 	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/schema`, {

@@ -134,28 +134,31 @@ export async function createView(
 
 export async function updateView(
 	tableId: string,
-	viewName: string,
+	viewId: number,
 	updates: UpdateView
 ): Promise<TableSchema> {
-	const schema = await apiUpdateView(tableId, viewName, updates);
+	const schema = await apiUpdateView(tableId, viewId, updates);
 	applySchema(schema);
 	return schema;
 }
 
-export async function deleteView(tableId: string, viewName: string): Promise<TableSchema> {
-	const schema = await apiDeleteView(tableId, viewName);
+export async function deleteView(tableId: string, viewId: number): Promise<TableSchema> {
+	const schema = await apiDeleteView(tableId, viewId);
 	applySchema(schema);
 	return schema;
 }
 
-export async function reorderViews(tableId: string, order: string[]): Promise<TableSchema> {
+export async function reorderViews(tableId: string, order: number[]): Promise<TableSchema> {
 	const schema = await patchSchema(tableId, { view_order: order });
 	applySchema(schema);
 	return schema;
 }
 
-export async function setDefaultView(tableId: string, viewName: string): Promise<TableSchema> {
-	const schema = await patchSchema(tableId, { default_view: viewName });
+export async function setDefaultView(
+	tableId: string,
+	viewId: number | null
+): Promise<TableSchema> {
+	const schema = await patchSchema(tableId, { default_view: viewId });
 	applySchema(schema);
 	return schema;
 }
