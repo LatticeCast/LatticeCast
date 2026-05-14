@@ -1,5 +1,169 @@
 # Changelog
 
+## v0.41 — 2026-05-14 (post-squash bugfixes + e2e test)
+
+### Bugfixes caught via the new e2e suite
+
+- **POST /workspaces 500.** New V17 `create_workspace` SECURITY DEFINER
+  PG function inserts workspace + owner-member atomically. Previously
+  RLS-blocked itself: creator wasn't a member yet at INSERT time. BE
+  route delegates to the function.
+- **PATCH /tables/{tid}/columns/{cid} 500 on color/options edit.**
+  BE repo CASTed `column_id AS uuid`, but V13's `update_column` /
+  `delete_column` take `p_column_id TEXT` (they string-match into
+  the JSONB columns array). Dropped the cast.
+- **View-config writes (group_by / sort_by / card_fields) "looked
+  dead" in the FE.** BE view-CRUD returned only raw PG output
+  (`{columns, view_order, default_view}`) without merging `views[]`.
+  FE's `applySchema()` then nuked the views store. All write methods
+  on `TableViewRepository` now `return await self.get_tables_schema()`
+  so every response carries the full schema including views[].
+- **`/login/me` + `/me/config` returned 403 / missing fields.** Three
+  routes used `get_session` (no RLS context); `gdpr.user_info`'s
+  RLS policy filters by `app.current_user_id`, which was unset →
+  zero rows → 403. Switched to `get_rls_session`.
+
+### Testing
+
+- **New `browser/e2e_test.py`.** Tracked Playwright script that
+  exercises the user-visible flows: workspace / blank table / PM
+  template / column color / view config / me-config. Each step
+  independent, prints pass/fail, exits non-zero on failure.
+  Mounted live at `/scripts/` via the new `./browser:/scripts`
+  compose volume — no image rebuild needed to iterate.
+  ```bash
+  docker compose --profile browser up -d browser
+  docker compose exec browser python3 /scripts/e2e_test.py
+  ```
+
+### Known follow-up before AWS launch
+
+- `get_first_owned_workspace` can transiently return a workspace
+  whose RLS check doesn't match the caller after a workspace burst.
+  Pass `workspace_id` explicitly in clients for now; need to audit
+  the ORDER BY + ownership-role join.
+- `_build_response` in admin/users.py reads via app_session so the
+  201 response after create-user shows `email: ""` / `user_name: null`.
+  Cosmetic — the user is created correctly. Switch to login_session
+  for the response build.
+
+## v0.40 — 2026-05-14 (pre-AWS migration squash + schema rewrite)
+
+> **Major-version jump v0.3x → v0.4x.** Not incremental. The whole
+> migration history is replaced, BE models are rewritten, FE pivots
+> to a single-shape full-schema read pattern, and identifiers change
+> (`row_number` → `row_id`, `view_name` → `view_id`). This is the
+> last allowed checksum reset — V1-V14 are the locked baseline for
+> AWS SaaS launch. From here on, V15+ is forward-only forever.
+
+### Migrations squashed, then locked
+
+- **Final checksum reset.** All prior migrations (V1-V42) are squashed
+  into a clean V1-V14 set covering init, users, workspaces, tables,
+  rows, table_views, RLS policies, and the index/template/schema/view
+  helper PG functions. Pre-launch baseline — from here on it's
+  forward-only forever. (Saved in memory: any "let's just squash
+  again" idea post-launch must be refused.)
+- **V15 — explicit role grants + BYPASSRLS.** V1's
+  `ALTER DEFAULT PRIVILEGES FOR ROLE dba` silently no-ops because
+  tables are owned by `dba_user` (login user), not the `dba` group
+  role. V15 re-grants table-level CRUD to `app` and `mgr` on
+  public/auth/gdpr, and sets `BYPASSRLS` on `mgr_user` (PG role
+  attributes don't inherit through GRANT). Without this, the login
+  session couldn't see any rows before a user was authenticated and
+  the app session couldn't see its own tables.
+- **V16 — `table_views.view_id` DEFAULT 0.** V9 set the default to 1,
+  which silently bypassed the BEFORE INSERT trigger (which only fires
+  on NULL or 0). Result: the second INSERT into the same table
+  collided on PK. Dropped the default so the trigger always assigns
+  `MAX(view_id)+1`.
+- **V17 — `create_workspace` SECURITY DEFINER.** POST /workspaces
+  used to RLS-block itself: creator wasn't a member yet at INSERT
+  time. New PG function inserts workspace + owner-member atomically,
+  bypassing RLS for the bootstrap.
+
+### Architecture
+
+- **BE is thin; PG functions own business logic.** Schema mutations
+  (`add_column` / `update_column` / `delete_column` / `create_view` /
+  `update_view` / `delete_view` / `update_view_order` /
+  `update_default_view` / `update_col_order` /
+  `create_table_from_template`) live in V11-V14 and run atomically
+  in one transaction each. BE repositories are one-line wrappers —
+  `await session.execute(SELECT <fn>(...))` and return the JSONB.
+  No Python-side coordination, no duplication. Multi-worker safe.
+- **Full schema in one shape.** Every read (`GET /tables/{tid}`) and
+  every mutation (column / view / order / default-view) returns the
+  same `{columns, view_order, default_view, views}` JSONB. The FE
+  replaces its local store from that one response and never derives
+  schema state locally. Per-aspect GETs (`/view-order`, `/col-order`)
+  removed.
+- **`view_id` (BIGINT) replaces `view_name` (string) as the view
+  identifier.** Mirrors how columns use `column_id`. Display name +
+  view type live inside the `config` JSONB; PG functions match by
+  `view_id`. Route is `PUT/DELETE /tables/{tid}/views/{view_id}`.
+  FE stores numeric ids; `IMPLICIT_TABLE_VIEW` has sentinel
+  `view_id: 0`.
+- **`row_number` → `row_id`.** Rename across backend models, repository,
+  API routes, frontend types, components, and SvelteKit route params
+  (`[row_number]` directory → `[row_id]`).
+- **`column.position` removed.** Array index IS the column position
+  now. Column order lives in `table_schemas.config.col_order`.
+
+### Identity
+
+- **PII merged into `gdpr.user_info`.** The old `public.user_info` +
+  `auth.gdpr` split collapses into one row per user with
+  `(user_id, email, user_name, config)`. A GDPR purge drops one row
+  (or the whole schema) without touching `auth.users` or workspace
+  audit trails. BE `UserInfo` SQLModel, repository, and routers all
+  updated; `Gdpr` model deleted.
+- **Engine search_path** now includes `gdpr` for both app + login
+  engines; `mgr_user` (was `login_user`) backs the login session.
+  POSTGRES_LOGIN_PASSWORD env var renamed to POSTGRES_MGR_PASSWORD.
+
+### v41 bugfixes (caught via the new e2e suite)
+
+- **POST /workspaces 500.** Fixed via V17 above.
+- **PATCH /tables/{tid}/columns/{cid} 500 on color/options edit.**
+  BE repo CASTed `column_id AS uuid`, but V13's `update_column` /
+  `delete_column` take `p_column_id TEXT` (they string-match into the
+  JSONB columns array). Dropped the cast.
+- **View-config writes (group_by / sort_by / card_fields) "looked
+  dead" in the FE.** BE view-CRUD returned only raw PG output
+  (`{columns, view_order, default_view}`) without merging `views[]`.
+  FE's `applySchema()` then nuked the views store. All write methods
+  on `TableViewRepository` now `return await self.get_tables_schema()`
+  so every response carries the full schema including views[].
+- **`/login/me` + `/me/config` returned 403 / missing fields.** Three
+  routes used `get_session` (no RLS context); `gdpr.user_info`'s
+  RLS policy filters by `app.current_user_id`, which was unset →
+  zero rows → 403. Switched to `get_rls_session`.
+
+### Testing
+
+- **New `browser/e2e_test.py`.** Tracked Playwright script that
+  exercises the user-visible flows: workspace / blank table / PM
+  template / column color / view config / me-config. Each step is
+  independent, prints pass/fail, exits non-zero on any failure.
+  Mounted live at `/scripts/` via the new `./browser:/scripts`
+  compose volume — no image rebuild needed to iterate.
+  ```bash
+  docker compose --profile browser up -d browser
+  docker compose exec browser python3 /scripts/e2e_test.py
+  ```
+
+### Known follow-up before AWS launch
+
+- `get_first_owned_workspace` can transiently return a workspace
+  whose RLS check doesn't match the caller after a workspace burst.
+  Pass `workspace_id` explicitly in clients for now; need to audit
+  the ORDER BY + ownership-role join.
+- `_build_response` in admin/users.py reads via app_session so the
+  201 response after create-user shows `email: ""` / `user_name: null`.
+  Cosmetic — the user is created correctly. Switch to login_session
+  for the response build.
+
 ## v0.32 — 2026-05-14
 
 ### Color UX overhaul
