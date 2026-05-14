@@ -53,10 +53,9 @@ class TableViewRepository:
         created_by: UUID,
     ) -> dict[str, Any]:
         """V14 create_view: inserts the row and appends view_id to
-        table_schemas.config.view_order atomically. Returns the new full
-        table_schemas.config blob. `config` must include 'name' and
-        'type' keys."""
-        result = await self.session.execute(
+        table_schemas.config.view_order atomically. Returns the full
+        schema snapshot {columns, view_order, default_view, views}."""
+        await self.session.execute(
             sa_text(
                 "SELECT create_view(CAST(:ws AS uuid), :tid, "
                 "CAST(:config AS jsonb), CAST(:by AS uuid))"
@@ -69,7 +68,7 @@ class TableViewRepository:
             },
         )
         await self.session.commit()
-        return result.scalar_one()
+        return await self.get_tables_schema(workspace_id, table_id)
 
     async def update_view(
         self,
@@ -79,9 +78,10 @@ class TableViewRepository:
         patch: dict[str, Any],
         updated_by: UUID,
     ) -> dict[str, Any]:
-        """V14 update_view: merges `patch` into config and keeps
-        view_order + default_view consistent. Returns new full schema."""
-        result = await self.session.execute(
+        """V14 update_view: shallow-merges `patch` into the row's
+        config. Returns the full schema snapshot with the embedded
+        views[] array so the FE can replace its store from one shape."""
+        await self.session.execute(
             sa_text(
                 "SELECT update_view(CAST(:ws AS uuid), :tid, :vid, "
                 "CAST(:patch AS jsonb), CAST(:by AS uuid))"
@@ -95,7 +95,7 @@ class TableViewRepository:
             },
         )
         await self.session.commit()
-        return result.scalar_one()
+        return await self.get_tables_schema(workspace_id, table_id)
 
     async def delete_view(
         self,
@@ -104,9 +104,9 @@ class TableViewRepository:
         view_id: int,
         deleted_by: UUID,
     ) -> dict[str, Any]:
-        """V14 delete_view: removes the row, strips view_id from
-        view_order, clears default_view if it pointed here."""
-        result = await self.session.execute(
+        """V14 delete_view: removes the row + strips view_id from
+        view_order. Returns the full schema snapshot."""
+        await self.session.execute(
             sa_text(
                 "SELECT delete_view(CAST(:ws AS uuid), :tid, :vid, "
                 "CAST(:by AS uuid))"
@@ -119,7 +119,7 @@ class TableViewRepository:
             },
         )
         await self.session.commit()
-        return result.scalar_one()
+        return await self.get_tables_schema(workspace_id, table_id)
 
     # ── Schema reads (table_schemas) ──────────────────────────────────────
 
@@ -182,7 +182,7 @@ class TableViewRepository:
             },
         )
         await self.session.commit()
-        return result.scalar_one()
+        return await self.get_tables_schema(workspace_id, table_id)
 
     async def set_default_view(
         self,
@@ -204,7 +204,7 @@ class TableViewRepository:
             },
         )
         await self.session.commit()
-        return result.scalar_one()
+        return await self.get_tables_schema(workspace_id, table_id)
 
     async def update_col_order(
         self,
@@ -226,7 +226,7 @@ class TableViewRepository:
             },
         )
         await self.session.commit()
-        return result.scalar_one()
+        return await self.get_tables_schema(workspace_id, table_id)
 
     async def add_column(
         self,
@@ -252,7 +252,7 @@ class TableViewRepository:
             },
         )
         await self.session.commit()
-        return result.scalar_one()
+        return await self.get_tables_schema(workspace_id, table_id)
 
     async def update_column(
         self,
@@ -262,10 +262,12 @@ class TableViewRepository:
         patch: dict[str, Any],
         updated_by: UUID,
     ) -> dict[str, Any]:
+        # V13 update_column takes column_id as TEXT (not UUID) — it indexes
+        # into the columns JSONB array by string match on column_id.
         result = await self.session.execute(
             sa_text(
                 "SELECT update_column(CAST(:ws AS uuid), :tid, "
-                "CAST(:cid AS uuid), CAST(:patch AS jsonb), CAST(:by AS uuid))"
+                ":cid, CAST(:patch AS jsonb), CAST(:by AS uuid))"
             ),
             {
                 "ws": str(workspace_id),
@@ -276,7 +278,7 @@ class TableViewRepository:
             },
         )
         await self.session.commit()
-        return result.scalar_one()
+        return await self.get_tables_schema(workspace_id, table_id)
 
     async def delete_column(
         self,
@@ -288,7 +290,7 @@ class TableViewRepository:
         result = await self.session.execute(
             sa_text(
                 "SELECT delete_column(CAST(:ws AS uuid), :tid, "
-                "CAST(:cid AS uuid), CAST(:by AS uuid))"
+                ":cid, CAST(:by AS uuid))"
             ),
             {
                 "ws": str(workspace_id),
@@ -298,4 +300,4 @@ class TableViewRepository:
             },
         )
         await self.session.commit()
-        return result.scalar_one()
+        return await self.get_tables_schema(workspace_id, table_id)

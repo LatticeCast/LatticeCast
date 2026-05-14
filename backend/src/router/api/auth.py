@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
 from core.db import get_login_session, get_session
-from middleware.auth import get_current_user
+from middleware.auth import get_current_user, get_rls_session
 from models.user import User
 from models.user import UserInfo as UserInfoModel
 from repository.user import UserRepository, resolve_user_by_email
@@ -171,13 +171,15 @@ async def password_login(
 )
 async def me(
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> MeResponse:
     """
     Get current user information.
     Requires valid Bearer token and user must be registered in database.
 
-    v40: email + user_name + config all live in gdpr.user_info.
+    v40: email + user_name + config all live in gdpr.user_info. Uses
+    get_rls_session so `app.current_user_id` is set and the gdpr RLS
+    policy `user_id = current_user_id` matches the caller's row.
     """
     token_payload = getattr(user, "_token_payload", {})
     provider = token_payload.get("_provider", "authentik")
@@ -214,7 +216,7 @@ async def me(
 async def patch_me_config(
     patch: dict[str, Any],
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
     """Shallow-merge the supplied keys into the caller's user_info.config.
 
@@ -261,7 +263,7 @@ class UpdateEmailRequest(BaseModel):
 async def update_me_email(
     request: UpdateEmailRequest,
     user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_rls_session),
     login_session: AsyncSession = Depends(get_login_session),
 ) -> MeResponse:
     """Update the current user's email. Enforces uniqueness (UNIQUE on gdpr.user_info.email)."""

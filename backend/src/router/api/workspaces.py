@@ -4,7 +4,8 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from middleware.auth import get_current_user, get_rls_session
@@ -96,18 +97,29 @@ async def create_workspace(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Create a new workspace; creator becomes owner"""
+    """Create a new workspace; creator becomes owner.
+
+    Delegates to V17 SECURITY DEFINER PG function `create_workspace`
+    which inserts the workspace + owner-member row atomically. Bypasses
+    RLS at INSERT time (the creator isn't a member yet); per-row
+    permissions kick back in on subsequent reads.
+    """
     if data.workspace_name.lower() in RESERVED_WORKSPACE_NAMES:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That workspace name is reserved")
-    repo = WorkspaceRepository(session)
-    conflict = await session.execute(
-        select(Workspace).where(func.lower(Workspace.workspace_name) == data.workspace_name.lower())
-    )
-    if conflict.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A workspace with that name already exists")
-    workspace = await repo.create(workspace_name=data.workspace_name)
-    await repo.add_member(workspace_id=workspace.workspace_id, user_id=user.user_id, role="owner")
-    return workspace
+    try:
+        result = await session.execute(
+            text("SELECT create_workspace(:name, CAST(:by AS uuid))").bindparams(
+                name=data.workspace_name, by=str(user.user_id)
+            )
+        )
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A workspace with that name already exists",
+        ) from exc
+    return result.scalar_one()
 
 
 @router.get("", response_model=list[WorkspaceResponse])
