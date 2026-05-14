@@ -13,7 +13,7 @@
 
 CREATE OR REPLACE FUNCTION public.create_workspace(
     p_workspace_name VARCHAR,
-    p_by             UUID
+    p_by UUID
 ) RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -39,5 +39,5 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL    ON FUNCTION public.create_workspace(VARCHAR, UUID) FROM public;
+REVOKE ALL ON FUNCTION public.create_workspace(VARCHAR, UUID) FROM public;
 GRANT EXECUTE ON FUNCTION public.create_workspace(VARCHAR, UUID) TO app, mgr;

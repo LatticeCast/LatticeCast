@@ -72,8 +72,9 @@ def verify(psql_fn) -> list[str]:
         f"INSERT INTO auth.users (user_id, role) VALUES "
         f"('{_USER_A}'::uuid,'user'),('{_USER_B}'::uuid,'user') "
         f"ON CONFLICT (user_id) DO NOTHING; "
-        f"INSERT INTO public.user_info (user_id, user_name) VALUES "
-        f"('{_USER_A}'::uuid,'tv_rls_a'),('{_USER_B}'::uuid,'tv_rls_b') "
+        f"INSERT INTO gdpr.user_info (user_id, email, user_name) VALUES "
+        f"('{_USER_A}'::uuid,'tv_rls_a@example.com','tv_rls_a'),"
+        f"('{_USER_B}'::uuid,'tv_rls_b@example.com','tv_rls_b') "
         f"ON CONFLICT (user_id) DO NOTHING; "
         f"INSERT INTO public.workspaces (workspace_id, workspace_name) VALUES "
         f"('{_WS_A}'::uuid,'tv_rls_wsa'),('{_WS_B}'::uuid,'tv_rls_wsb') "
@@ -114,59 +115,69 @@ def verify(psql_fn) -> list[str]:
             "RLS BEHAVIORAL: user A can SELECT from workspace B table_views"
         )
 
-    # INSERT positive: user A can insert a kanban view into workspace A
-    # _as_app returns the last digit-only line; we use a count(*) probe
-    # afterward to verify the row landed.
+    # v40: table_views.name and .type are gone — they live inside config
+    # JSONB. view_id is auto-assigned by trg_set_view_id_fn (DEFAULT 0
+    # sentinel after V16). Filter by config->>'name' for behavioral
+    # assertions.
+    _test_name = "rls_test_view"
+
+    # INSERT positive: user A can insert a kanban view into workspace A.
     _as_app(
         psql_fn,
         _USER_A,
         f"INSERT INTO public.table_views "
-        f"(workspace_id, table_id, name, type, config) "
+        f"(workspace_id, table_id, config) "
         f"VALUES ('{_WS_A}'::uuid,'tv_rls_tbl_a',"
-        f"'rls_test_view','kanban','{{}}');",
+        f"""'{{"name":"{_test_name}","type":"kanban"}}'::jsonb);""",
     )
     count = _as_app(
         psql_fn,
         _USER_A,
         f"SELECT COUNT(*) FROM public.table_views "
-        f"WHERE workspace_id='{_WS_A}'::uuid AND name='rls_test_view';",
+        f"WHERE workspace_id='{_WS_A}'::uuid "
+        f"  AND config->>'name'='{_test_name}';",
     )
     if not count.isdigit() or int(count) != 1:
         errors.append(
             "RLS BEHAVIORAL: user A cannot INSERT into own workspace table_views"
         )
 
-    # UPDATE positive: user A can update the view just inserted
+    # UPDATE positive: user A can update the view's config.
     _as_app(
         psql_fn,
         _USER_A,
-        f"UPDATE public.table_views SET type='timeline' "
-        f"WHERE workspace_id='{_WS_A}'::uuid AND name='rls_test_view';",
+        f"""UPDATE public.table_views """
+        f"""SET config = config || '{{"type":"timeline"}}'::jsonb """
+        f"""WHERE workspace_id='{_WS_A}'::uuid """
+        f"""  AND config->>'name'='{_test_name}';""",
     )
     type_after = _as_app(
         psql_fn,
         _USER_A,
         f"SELECT 1 FROM public.table_views "
         f"WHERE workspace_id='{_WS_A}'::uuid "
-        f"  AND name='rls_test_view' AND type='timeline';",
+        f"  AND config->>'name'='{_test_name}' "
+        f"  AND config->>'type'='timeline';",
     )
     if type_after != "1":
         errors.append(
             "RLS BEHAVIORAL: user A cannot UPDATE in own workspace table_views"
         )
 
-    # DELETE positive: user A can delete the non-schema view
+    # DELETE positive: user A can delete the view.
     _as_app(
         psql_fn,
         _USER_A,
         f"DELETE FROM public.table_views "
-        f"WHERE workspace_id='{_WS_A}'::uuid AND name='rls_test_view';",
+        f"WHERE workspace_id='{_WS_A}'::uuid "
+        f"  AND config->>'name'='{_test_name}';",
     )
     count = _as_app(
         psql_fn,
         _USER_A,
         f"SELECT COUNT(*) FROM public.table_views "
-        f"WHERE workspace_id='{_WS_A}'::uuid AND name='rls_test_view';",
+        f"WHERE workspace_id='{_WS_A}'::uuid "
+        f"  AND config->>'name'='{_test_name}';",
     )
     if count != "0":
         errors.append(

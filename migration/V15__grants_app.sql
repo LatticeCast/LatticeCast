@@ -21,7 +21,7 @@
 -- ── app role: table-level grants ────────────────────────────────────────────
 
 GRANT SELECT, INSERT, UPDATE, DELETE
-    ON ALL TABLES IN SCHEMA public TO app;
+ON ALL TABLES IN SCHEMA public TO app;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO app;
 
 GRANT SELECT ON ALL TABLES IN SCHEMA auth TO app;
@@ -33,11 +33,11 @@ GRANT SELECT, UPDATE ON ALL TABLES IN SCHEMA gdpr TO app;
 -- mechanism is bypassed for whatever reason.
 
 GRANT SELECT, INSERT, UPDATE, DELETE
-    ON ALL TABLES IN SCHEMA public TO mgr;
+ON ALL TABLES IN SCHEMA public TO mgr;
 GRANT SELECT, INSERT, UPDATE, DELETE
-    ON ALL TABLES IN SCHEMA auth TO mgr;
+ON ALL TABLES IN SCHEMA auth TO mgr;
 GRANT SELECT, INSERT, UPDATE, DELETE
-    ON ALL TABLES IN SCHEMA gdpr TO mgr;
+ON ALL TABLES IN SCHEMA gdpr TO mgr;
 GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO mgr;
 
 -- ── mgr_user: BYPASSRLS attribute ───────────────────────────────────────────

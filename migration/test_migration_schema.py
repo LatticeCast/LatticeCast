@@ -57,23 +57,21 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "table_views", "updated_at", "timestamp"),
 ]
 
-# Columns that must NOT exist
+# Columns that must NOT exist after the v40 squash.
 FORBIDDEN_COLUMNS: list[tuple[str, str, str]] = [
-    ("public", "users", "user_id"),          # moved to auth
-    ("auth", "user_info", "user_id"),        # stays in public
-    ("auth", "user_info", "display_id"),     # renamed to user_name
-    ("public", "user_info", "email"),        # moved to auth.gdpr
-    ("public", "user_info", "name"),         # removed (legal_name in auth.gdpr)
-    ("public", "user_info", "display_name"), # removed — user_name is the only handle
+    ("public", "users", "user_id"),          # moved to auth.users
+    ("public", "user_info", "user_id"),      # moved to gdpr.user_info
+    ("public", "user_info", "user_name"),    # moved to gdpr.user_info
+    ("auth", "gdpr", "user_id"),             # merged into gdpr.user_info
+    ("auth", "gdpr", "email"),               # merged into gdpr.user_info
+    ("auth", "gdpr", "legal_name"),          # dropped — not in v40 schema
     ("public", "workspaces", "display_id"),
-    ("public", "workspaces", "name"),
     ("public", "tables", "name"),
     ("public", "tables", "table_name"),
-    ("public", "tables", "views"),
-    ("public", "tables", "columns"),                  # V34: moved to __schema__ row
-    ("public", "table_views", "view_number"),         # V34: dropped
-    ("public", "table_views", "next_view_id"),        # V34: dropped
-    ("public", "table_views", "is_default"),          # V41: dropped (default_view moved into __schema__.config)
+    ("public", "tables", "columns"),         # in table_schemas.config now
+    ("public", "table_views", "name"),       # in config jsonb now
+    ("public", "table_views", "type"),       # in config jsonb now
+    ("public", "table_views", "is_default"), # default_view in table_schemas.config
 ]
 
 
@@ -84,10 +82,10 @@ def verify(psql_fn) -> list[str]:
     # Check schemas exist
     schemas_raw = psql_fn(
         "SELECT schema_name FROM information_schema.schemata "
-        "WHERE schema_name IN ('public', 'auth', 'private');"
+        "WHERE schema_name IN ('public', 'auth', 'gdpr', 'private');"
     )
     schemas = set(schemas_raw.splitlines()) if schemas_raw else set()
-    for s in ("public", "auth"):
+    for s in ("public", "auth", "gdpr", "private"):
         if s not in schemas:
             errors.append(f"MISSING SCHEMA: {s}")
 
@@ -111,27 +109,27 @@ def verify(psql_fn) -> list[str]:
         if result:
             errors.append(f"FORBIDDEN COLUMN still present: {schema}.{table}.{column}")
 
-    # Check unique constraint on public.user_info.user_name
+    # Check unique constraint on gdpr.user_info.user_name
     result = psql_fn(
         "SELECT 1 FROM information_schema.table_constraints tc "
         "JOIN information_schema.constraint_column_usage ccu "
         "  ON tc.constraint_name = ccu.constraint_name "
-        "WHERE tc.table_schema='public' AND tc.table_name='user_info' "
+        "WHERE tc.table_schema='gdpr' AND tc.table_name='user_info' "
         "  AND ccu.column_name='user_name' AND tc.constraint_type='UNIQUE';"
     )
     if not result:
-        errors.append("MISSING CONSTRAINT: public.user_info.user_name UNIQUE")
+        errors.append("MISSING CONSTRAINT: gdpr.user_info.user_name UNIQUE")
 
-    # Check unique constraint on auth.gdpr.email
+    # Check unique constraint on gdpr.user_info.email
     result = psql_fn(
         "SELECT 1 FROM information_schema.table_constraints tc "
         "JOIN information_schema.constraint_column_usage ccu "
         "  ON tc.constraint_name = ccu.constraint_name "
-        "WHERE tc.table_schema='auth' AND tc.table_name='gdpr' "
+        "WHERE tc.table_schema='gdpr' AND tc.table_name='user_info' "
         "  AND ccu.column_name='email' AND tc.constraint_type='UNIQUE';"
     )
     if not result:
-        errors.append("MISSING CONSTRAINT: auth.gdpr.email UNIQUE")
+        errors.append("MISSING CONSTRAINT: gdpr.user_info.email UNIQUE")
 
     # Check trigger on rows table
     result = psql_fn(
@@ -176,7 +174,7 @@ def verify(psql_fn) -> list[str]:
             "MISSING RLS POLICY: public.table_views.table_views_workspace_member"
         )
 
-    # V34: PK is (workspace_id, table_id, name)
+    # v40: PK is (workspace_id, table_id, view_id BIGINT)
     result = psql_fn(
         "SELECT string_agg(kcu.column_name, ',' "
         "  ORDER BY kcu.ordinal_position) "
@@ -188,35 +186,31 @@ def verify(psql_fn) -> list[str]:
         "  AND tc.table_name='table_views' "
         "  AND tc.constraint_type='PRIMARY KEY';"
     )
-    expected_pk = "workspace_id,table_id,name"
+    expected_pk = "workspace_id,table_id,view_id"
     if result.strip() != expected_pk:
         errors.append(
             f"WRONG PK: table_views expected '{expected_pk}' "
             f"got '{result.strip()}'"
         )
 
-    # V33: FK to public.tables ON DELETE CASCADE
+    # FK from public.table_views (workspace_id, table_id) → public.tables
+    # with ON DELETE CASCADE. The constraint name is auto-generated by PG
+    # (no explicit CONSTRAINT clause in V9), so match by referenced table
+    # + delete-action instead.
     result = psql_fn(
         "SELECT 1 FROM pg_constraint c "
         "JOIN pg_class t ON c.conrelid = t.oid "
         "JOIN pg_namespace n ON t.relnamespace = n.oid "
+        "JOIN pg_class rt ON c.confrelid = rt.oid "
         "WHERE n.nspname='public' AND t.relname='table_views' "
-        "  AND c.conname='table_views_table_fkey' "
+        "  AND rt.relname='tables' AND c.contype='f' "
         "  AND c.confdeltype='c';"
     )
     if not result:
         errors.append(
-            "MISSING/WRONG FK: table_views_table_fkey "
+            "MISSING/WRONG FK: table_views → tables "
             "(expected ON DELETE CASCADE)"
         )
-
-    # V34: self-FK next_view_id is dropped — no longer present
-    result = psql_fn(
-        "SELECT 1 FROM pg_constraint "
-        "WHERE conname='table_views_next_fkey';"
-    )
-    if result:
-        errors.append("FORBIDDEN FK still present: table_views_next_fkey")
 
     # V43 trigger function (replaces V34's trg_create_schema_and_order_fn).
     for fn_name in (
