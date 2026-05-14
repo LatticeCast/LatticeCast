@@ -157,4 +157,4 @@ async def patch_schema(
         except Exception as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
-    return await view_repo.get_full_schema(table.workspace_id, table.table_id)
+    return await view_repo.get_tables_schema(table.workspace_id, table.table_id)

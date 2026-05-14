@@ -15,7 +15,8 @@ import {
 	refreshTable,
 	createView,
 	updateView,
-	deleteView
+	deleteView,
+	setDefaultView
 } from '$lib/stores/tables.store';
 import {
 	createRow,
@@ -26,7 +27,6 @@ import {
 	updateRow,
 	batchDocsExist
 } from '$lib/backend/tables';
-import { putDefaultView } from '$lib/backend/views';
 import { TAG_COLORS } from '$lib/UI/theme.svelte';
 import {
 	type FilterCondition,
@@ -532,7 +532,7 @@ class TablePageStore {
 		const isImplicitTable =
 			view.name === IMPLICIT_TABLE_VIEW.name &&
 			!get(viewsStore).some((v) => v.name === IMPLICIT_TABLE_VIEW.name);
-		if (!isImplicitTable) putDefaultView(this.tableId, view.name).catch(() => {});
+		if (!isImplicitTable) setDefaultView(this.tableId, view.name).catch(() => {});
 	}
 
 	async handleAddView(type: string, name: string) {
@@ -595,7 +595,6 @@ class TablePageStore {
 			name: string;
 			type: string;
 			options?: ColumnOptions;
-			position?: number;
 		}>;
 		if (!Array.isArray(template)) throw new Error('Invalid template: expected an array');
 		await Promise.all([...get(columns)].map((col) => deleteColumnApi(tableId, col.column_id)));
@@ -603,8 +602,7 @@ class TablePageStore {
 			await createColumn(tableId, {
 				name: col.name,
 				type: col.type as ColumnType,
-				options: col.options ?? {},
-				position: col.position ?? 0
+				options: col.options ?? {}
 			});
 		}
 		await refreshTable(tableId);

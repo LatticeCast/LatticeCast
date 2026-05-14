@@ -13,7 +13,7 @@
 		getBarColorClasses
 	} from './timeline.utils';
 	import { updateRow } from '$lib/backend/tables';
-	import { updateView } from '$lib/backend/views';
+	import { updateView } from '$lib/stores/tables.store';
 	import { isDark } from '$lib/UI/theme.svelte';
 
 	let {
@@ -23,7 +23,6 @@
 		viewConfig,
 		onOpenExpand,
 		onRowsRefresh = () => {},
-		onViewUpdate = () => {},
 		onAddRow = () => {}
 	}: {
 		tableId: string;
@@ -32,7 +31,6 @@
 		viewConfig: ViewConfig;
 		onOpenExpand: (row: Row) => void;
 		onRowsRefresh?: () => void;
-		onViewUpdate?: (updated: ViewConfig) => void;
 		onAddRow?: (initialData: Record<string, unknown>) => void;
 	} = $props();
 
@@ -59,8 +57,7 @@
 
 	async function saveConfig(patch: Record<string, unknown>) {
 		const newConfig = { ...viewConfig.config, ...patch };
-		const updated = await updateView(tableId, viewConfig.name, { config: newConfig });
-		onViewUpdate(updated);
+		await updateView(tableId, viewConfig.name, { config: newConfig });
 	}
 
 	const rowsWithDates = $derived.by(() => {

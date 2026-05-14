@@ -10,16 +10,11 @@
 
 import { BACKEND_URL } from './config';
 import { getAuthHeaders } from './http';
-import type { TableSchema, UpdateView, ViewConfig } from '$lib/types/table';
+import type { TableSchema, UpdateView } from '$lib/types/table';
 
-// ── Read endpoints ──────────────────────────────────────────────────────
-
-export async function fetchViews(tableId: string): Promise<ViewConfig[]> {
-	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/views`, { headers });
-	if (!response.ok) throw new Error(`Failed to fetch views: ${response.statusText}`);
-	return response.json();
-}
+// v40: Reads come from the full table schema (GET /tables/{tid}).
+// view-order, default-view and col-order writes go through patchSchema()
+// in $lib/backend/tables.ts. Only view CRUD lives here.
 
 // ── View CRUD — all return TableSchema ─────────────────────────────────
 

@@ -46,6 +46,10 @@ class TableResponse(SQLModel):
         default=None,
         description="Default view name; 'Schema' for the implicit pinned tab.",
     )
+    views: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="User view rows ordered by view_order: {name, type, config}.",
+    )
     created_at: datetime
     updated_at: datetime
 

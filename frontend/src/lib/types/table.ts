@@ -72,6 +72,7 @@ export interface TableSchema {
 	columns: Column[];
 	view_order: string[];
 	default_view: string | null;
+	views: ViewConfig[];
 }
 
 export interface Row {

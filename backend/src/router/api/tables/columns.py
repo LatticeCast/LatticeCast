@@ -18,18 +18,9 @@ from ._shared import _get_table_for_member
 router = APIRouter(prefix="/tables", tags=["tables"])
 
 
-@router.get("/{table_id}/columns")
-async def list_columns(
-    table_id: str,
-    user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_rls_session),
-) -> list[dict[str, Any]]:
-    """Read-only — array index IS the column position."""
-    table = await _get_table_for_member(table_id, user, session)
-    return await TableViewRepository(session).get_schema(table.workspace_id, table.table_id)
-
-
-# col_order is now a sub-field of PATCH /tables/{tid}/schema in crud.py.
+# Reads: GET /tables/{tid} returns the full schema (columns, view_order,
+# default_view). Per-aspect GETs (columns, view-order) were removed in v40.
+# Mutations below all return the full schema config.
 
 
 @router.post("/{table_id}/columns", status_code=status.HTTP_201_CREATED)
@@ -47,7 +38,7 @@ async def create_column(
         data.get("options", {}), user.user_id,
     )
     await invalidate_schema_cache(str(table.workspace_id))
-    return await view_repo.get_full_schema(table.workspace_id, table.table_id)
+    return await view_repo.get_tables_schema(table.workspace_id, table.table_id)
 
 
 @router.patch("/{table_id}/columns/{column_id}")
@@ -70,7 +61,7 @@ async def update_column(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found") from e
         raise
     await invalidate_schema_cache(str(table.workspace_id))
-    return await view_repo.get_full_schema(table.workspace_id, table.table_id)
+    return await view_repo.get_tables_schema(table.workspace_id, table.table_id)
 
 
 @router.delete("/{table_id}/columns/{column_id}")
@@ -91,4 +82,4 @@ async def delete_column(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found") from e
         raise
     await invalidate_schema_cache(str(table.workspace_id))
-    return await view_repo.get_full_schema(table.workspace_id, table.table_id)
+    return await view_repo.get_tables_schema(table.workspace_id, table.table_id)

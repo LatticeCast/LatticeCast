@@ -1,14 +1,23 @@
 // src/lib/stores/tables.store.ts
+//
+// v40 pattern: every schema mutation returns the full TableSchema.
+// applySchema() replaces local stores from that one response — FE never
+// derives or merges schema state.
 
 import { writable } from 'svelte/store';
-import type { Column, Row, Table, UpdateView, ViewConfig, Workspace } from '$lib/types/table';
-import { fetchTables, fetchTable, fetchRows } from '$lib/backend/tables';
+import type {
+	Column,
+	Row,
+	Table,
+	TableSchema,
+	UpdateView,
+	ViewConfig,
+	Workspace
+} from '$lib/types/table';
+import { fetchTables, fetchTable, fetchRows, patchSchema } from '$lib/backend/tables';
 import {
 	createView as apiCreateView,
 	deleteView as apiDeleteView,
-	fetchViewOrder,
-	fetchViews,
-	putViewOrder,
 	updateView as apiUpdateView
 } from '$lib/backend/views';
 import { fetchWorkspaces } from '$lib/backend/workspaces';
@@ -24,6 +33,12 @@ export const viewOrder = writable<string[]>([]);
 export const loading = writable(false);
 export const error = writable<string | null>(null);
 export const pageTitle = writable<string>('');
+
+function applySchema(schema: TableSchema): void {
+	columns.set(schema.columns);
+	views.set(schema.views);
+	viewOrder.set(schema.view_order);
+}
 
 export async function loadWorkspaces(): Promise<void> {
 	loading.set(true);
@@ -73,17 +88,11 @@ export async function loadTable(table: Table): Promise<void> {
 	loading.set(true);
 	error.set(null);
 	try {
-		const cols: Column[] = table.columns ?? [];
-		const [rws, vws, ord] = await Promise.all([
-			fetchRows(table.table_id),
-			fetchViews(table.table_id),
-			fetchViewOrder(table.table_id)
-		]);
-		columns.set(cols);
+		const rws = await fetchRows(table.table_id);
+		columns.set(table.columns ?? []);
 		rows.set(rws);
-		views.set(vws);
-		viewOrder.set(ord);
-		currentTable.update((t) => (t ? { ...t, views: vws } : null));
+		views.set(table.views ?? []);
+		viewOrder.set(table.view_order ?? []);
 	} catch (e) {
 		error.set(e instanceof Error ? e.message : 'Failed to load table data');
 	} finally {
@@ -96,6 +105,8 @@ export async function refreshTable(tableId: string): Promise<void> {
 		const table = await fetchTable(tableId);
 		currentTable.set(table);
 		columns.set(table.columns ?? []);
+		views.set(table.views ?? []);
+		viewOrder.set(table.view_order ?? []);
 	} catch (e) {
 		error.set(e instanceof Error ? e.message : 'Failed to refresh table');
 	}
@@ -110,47 +121,47 @@ export async function refreshRows(tableId: string): Promise<void> {
 	}
 }
 
-// ─── Views: per-view splice (no full-table refetch) ────────────────────────
+// ─── View CRUD — every call returns full TableSchema ───────────────────────
 
 export async function createView(
 	tableId: string,
 	data: { name: string; type: string; config?: Record<string, unknown> }
-): Promise<ViewConfig> {
-	const created = await apiCreateView(tableId, data);
-	views.update((arr) => [...arr, created]);
-	viewOrder.update((arr) => (arr.includes(created.name) ? arr : [...arr, created.name]));
-	return created;
+): Promise<TableSchema> {
+	const schema = await apiCreateView(tableId, data);
+	applySchema(schema);
+	return schema;
 }
 
 export async function updateView(
 	tableId: string,
 	viewName: string,
 	updates: UpdateView
-): Promise<ViewConfig> {
-	const updated = await apiUpdateView(tableId, viewName, updates);
-	views.update((arr) => arr.map((v) => (v.name === viewName ? updated : v)));
-	if (updates.name && updates.name !== viewName) {
-		viewOrder.update((arr) => arr.map((n) => (n === viewName ? updated.name : n)));
-	}
-	return updated;
+): Promise<TableSchema> {
+	const schema = await apiUpdateView(tableId, viewName, updates);
+	applySchema(schema);
+	return schema;
 }
 
-export async function deleteView(tableId: string, viewName: string): Promise<void> {
-	await apiDeleteView(tableId, viewName);
-	views.update((arr) => arr.filter((v) => v.name !== viewName));
-	viewOrder.update((arr) => arr.filter((n) => n !== viewName));
+export async function deleteView(tableId: string, viewName: string): Promise<TableSchema> {
+	const schema = await apiDeleteView(tableId, viewName);
+	applySchema(schema);
+	return schema;
 }
 
-export async function reorderViews(tableId: string, order: string[]): Promise<string[]> {
-	const cleaned = await putViewOrder(tableId, order);
-	viewOrder.set(cleaned);
-	views.update((arr) => {
-		const byName = new Map(arr.map((v) => [v.name, v]));
-		const reordered = cleaned
-			.map((name) => byName.get(name))
-			.filter((v): v is ViewConfig => v !== undefined);
-		const rest = arr.filter((v) => !cleaned.includes(v.name));
-		return [...reordered, ...rest];
-	});
-	return cleaned;
+export async function reorderViews(tableId: string, order: string[]): Promise<TableSchema> {
+	const schema = await patchSchema(tableId, { view_order: order });
+	applySchema(schema);
+	return schema;
+}
+
+export async function setDefaultView(tableId: string, viewName: string): Promise<TableSchema> {
+	const schema = await patchSchema(tableId, { default_view: viewName });
+	applySchema(schema);
+	return schema;
+}
+
+export async function reorderColumns(tableId: string, colOrder: string[]): Promise<TableSchema> {
+	const schema = await patchSchema(tableId, { col_order: colOrder });
+	applySchema(schema);
+	return schema;
 }

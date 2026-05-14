@@ -22,9 +22,10 @@
 		createView,
 		updateView,
 		deleteView,
-		reorderViews
+		reorderViews,
+		reorderColumns,
+		setDefaultView
 	} from '$lib/stores/tables.store';
-	import { putDefaultView, reorderColumns } from '$lib/backend/views';
 	import {
 		fetchTable,
 		createRow,
@@ -375,7 +376,7 @@
 					const bi = viewColOrder.indexOf(b.column_id);
 					return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
 				}
-				return a.position - b.position;
+				return 0;
 			})
 			.map((c) => c.column_id);
 		const fromIdx = ordered.indexOf(fromId);
@@ -706,7 +707,7 @@
 		// 'Schema' is accepted by set_table_default_view (V40 mapped it to
 		// the __schema__ row) so we can call this for every click,
 		// including the implicit Schema tab.
-		putDefaultView($page.params.table_id!, view.name).catch(() => {});
+		setDefaultView($page.params.table_id!, view.name).catch(() => {});
 	}
 
 	async function handleAddView(type: string, name: string) {
@@ -763,10 +764,6 @@
 		await reorderViews(tableId, reordered).catch(() => {});
 	}
 
-	function handleViewUpdate(updated: ViewConfig) {
-		viewsStore.update((arr) => arr.map((v) => (v.name === updated.name ? updated : v)));
-	}
-
 	// Export / Import
 	function handleExportTemplate() {
 		triggerDownload(
@@ -783,7 +780,6 @@
 			name: string;
 			type: string;
 			options?: ColumnOptions;
-			position?: number;
 		}>;
 		if (!Array.isArray(template)) throw new Error('Invalid template: expected an array');
 		await Promise.all([...$columns].map((col) => deleteColumn(tableId, col.column_id)));
@@ -791,8 +787,7 @@
 			await createColumn(tableId, {
 				name: col.name,
 				type: col.type as ColumnType,
-				options: col.options ?? {},
-				position: col.position ?? 0
+				options: col.options ?? {}
 			});
 		}
 		await refreshTable(tableId);
@@ -1035,7 +1030,6 @@
 			viewConfig={activeView}
 			onOpenExpand={openExpand}
 			onRowsRefresh={() => refreshRows($page.params.table_id!)}
-			onViewUpdate={handleViewUpdate}
 			onAddRow={openCreateTicket}
 		/>
 	{:else if activeView.type === 'timeline'}
@@ -1046,7 +1040,6 @@
 			viewConfig={activeView}
 			onOpenExpand={openExpand}
 			onRowsRefresh={() => refreshRows($page.params.table_id!)}
-			onViewUpdate={handleViewUpdate}
 			onAddRow={openCreateTicket}
 		/>
 	{:else if activeView.type === 'dashboard'}

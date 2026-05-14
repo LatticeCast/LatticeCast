@@ -324,34 +324,30 @@ export function buildSortedColumns(
 	viewColOrder: string[] | null,
 	hiddenCols: Set<string>
 ): Column[] {
-	return [...colList]
-		.sort((a, b) => {
-			if (viewColOrder && viewColOrder.length > 0) {
-				const ai = viewColOrder.indexOf(a.column_id);
-				const bi = viewColOrder.indexOf(b.column_id);
-				return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
-			}
-			return a.position - b.position;
-		})
-		.filter((c) => !hiddenCols.has(c.column_id));
+	const ordered =
+		viewColOrder && viewColOrder.length > 0
+			? [...colList].sort((a, b) => {
+					const ai = viewColOrder.indexOf(a.column_id);
+					const bi = viewColOrder.indexOf(b.column_id);
+					return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+				})
+			: colList;
+	return ordered.filter((c) => !hiddenCols.has(c.column_id));
 }
 
 // ─── Export helpers ───────────────────────────────────────────────────────────
 
 export function buildTemplateJSON(colList: Column[]): string {
-	const template = [...colList]
-		.sort((a, b) => a.position - b.position)
-		.map((col) => ({
-			name: col.name,
-			type: col.type,
-			options: col.options,
-			position: col.position
-		}));
+	const template = colList.map((col) => ({
+		name: col.name,
+		type: col.type,
+		options: col.options
+	}));
 	return JSON.stringify(template, null, 2);
 }
 
 export function buildCSV(colList: Column[], rowList: Row[]): string {
-	const cols = [...colList].sort((a, b) => a.position - b.position);
+	const cols = colList;
 	const escapeCSV = (v: string) => `"${v.replace(/"/g, '""')}"`;
 	const csvRows = [
 		cols.map((c) => escapeCSV(c.name)).join(','),
@@ -370,7 +366,7 @@ export function buildCSV(colList: Column[], rowList: Row[]): string {
 }
 
 export function buildExportJSON(colList: Column[], rowList: Row[]): string {
-	const cols = [...colList].sort((a, b) => a.position - b.position);
+	const cols = colList;
 	const data = rowList.map((row) => {
 		const obj: Record<string, unknown> = {};
 		for (const col of cols) obj[col.name] = row.row_data[col.column_id] ?? null;

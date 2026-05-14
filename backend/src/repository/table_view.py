@@ -133,10 +133,11 @@ class TableViewRepository:
 
     # ── Schema reads (V44 table_schemas) ─────────────────────────────────
 
-    async def get_full_schema(self, workspace_id: UUID, table_id: str) -> dict[str, Any]:
-        """Return the entire table_schemas.config blob —
-        {columns, view_order, default_view}. Used by mutation endpoints
-        to return the new full state in one shape (FE-source-of-truth)."""
+    async def get_tables_schema(self, workspace_id: UUID, table_id: str) -> dict[str, Any]:
+        """Return the entire schema snapshot the FE needs to render a
+        table: {columns, view_order, default_view, views}. Used by GET
+        and every mutation endpoint so the FE replaces its local cache
+        from one response (server-is-SSOT)."""
         result = await self.session.execute(
             sa_text(
                 "SELECT config FROM public.table_schemas "
@@ -145,15 +146,22 @@ class TableViewRepository:
             {"ws": str(workspace_id), "tid": table_id},
         )
         row = result.first()
-        if not row or row[0] is None:
-            return {"columns": [], "view_order": [], "default_view": None}
-        cfg = row[0]
-        if not isinstance(cfg, dict):
-            return {"columns": [], "view_order": [], "default_view": None}
+        cfg: dict[str, Any] = {}
+        if row and isinstance(row[0], dict):
+            cfg = row[0]
+        view_order = cfg.get("view_order", []) or []
+        views_rows = await self.list_user_views(workspace_id, table_id)
+        by_name = {
+            v.name: {"name": v.name, "type": v.type, "config": v.config}
+            for v in views_rows
+        }
+        ordered_views = [by_name[n] for n in view_order if n in by_name]
+        leftover = [d for n, d in by_name.items() if n not in view_order]
         return {
             "columns": cfg.get("columns", []) or [],
-            "view_order": cfg.get("view_order", []) or [],
+            "view_order": view_order,
             "default_view": cfg.get("default_view"),
+            "views": ordered_views + leftover,
         }
 
 

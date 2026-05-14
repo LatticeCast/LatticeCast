@@ -26,9 +26,7 @@
 	let error = $state<string | null>(null);
 	let showCreateTicket = $state(false);
 
-	const sortedCols = $derived(
-		table ? [...table.columns].sort((a, b) => a.position - b.position) : []
-	);
+	const sortedCols = $derived(table ? table.columns : []);
 
 	const badgeCols = $derived(
 		sortedCols.filter((c) => ['select', 'tags', 'text', 'number', 'date', 'url'].includes(c.type))

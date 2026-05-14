@@ -79,7 +79,7 @@
 
 	const docPreview = $derived(marked(docContent) as string);
 
-	const sortedCols = $derived([...columns].sort((a, b) => a.position - b.position));
+	const sortedCols = $derived(columns);
 
 	function startEdit(col: Column) {
 		editField = col.column_id;

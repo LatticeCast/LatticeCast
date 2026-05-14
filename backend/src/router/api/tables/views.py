@@ -15,14 +15,6 @@ from ._shared import _get_table_for_member
 router = APIRouter(prefix="/tables", tags=["tables"])
 
 
-def _view_to_dict(view: Any) -> dict[str, Any]:
-    return {
-        "name": view.name,
-        "type": view.type,
-        "config": view.config,
-    }
-
-
 def _ensure_user_view_name(name: str) -> None:
     # V44 CHECK constraint also enforces this at the DB; FE-friendly 400
     # spares the round-trip on obvious reserved names.
@@ -42,23 +34,6 @@ def _ensure_user_view_type(view_type: str) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"View type must be one of {USER_VIEW_TYPES}",
         )
-
-
-@router.get("/{table_id}/views")
-async def list_views(
-    table_id: str,
-    user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_rls_session),
-) -> list[dict[str, Any]]:
-    """List user views for a table, ordered per table_schemas.view_order."""
-    table = await _get_table_for_member(table_id, user, session)
-    view_repo = TableViewRepository(session)
-    views = await view_repo.list_user_views(table.workspace_id, table.table_id)
-    by_name = {v.name: _view_to_dict(v) for v in views}
-    order = await view_repo.get_order(table.workspace_id, table.table_id)
-    ordered = [by_name[n] for n in order if n in by_name]
-    leftover = [d for n, d in by_name.items() if n not in order]
-    return ordered + leftover
 
 
 @router.post("/{table_id}/views", status_code=status.HTTP_201_CREATED)
@@ -90,7 +65,7 @@ async def create_view(
         config=data.config,
         created_by=user.user_id,
     )
-    return await view_repo.get_full_schema(table.workspace_id, table.table_id)
+    return await view_repo.get_tables_schema(table.workspace_id, table.table_id)
 
 
 @router.put("/{table_id}/views/{view_name}")
@@ -130,7 +105,7 @@ async def update_view(
         patch=patch,
         updated_by=user.user_id,
     )
-    return await view_repo.get_full_schema(table.workspace_id, table.table_id)
+    return await view_repo.get_tables_schema(table.workspace_id, table.table_id)
 
 
 @router.delete("/{table_id}/views/{view_name}")
@@ -154,7 +129,7 @@ async def delete_view(
         name=view_name,
         deleted_by=user.user_id,
     )
-    return await view_repo.get_full_schema(table.workspace_id, table.table_id)
+    return await view_repo.get_tables_schema(table.workspace_id, table.table_id)
 
 
 # view-order / default-view are now sub-fields of PATCH /tables/{tid}/schema

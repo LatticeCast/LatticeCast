@@ -54,7 +54,7 @@
 	let showHideMenu = $state(false);
 	let showExportMenu = $state(false);
 
-	const sortedCols = $derived([...columns].sort((a, b) => a.position - b.position));
+	const sortedCols = $derived(columns);
 
 	const btnBase = 'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition';
 	const btnActive = 'bg-blue-50 text-blue-600 font-medium';
