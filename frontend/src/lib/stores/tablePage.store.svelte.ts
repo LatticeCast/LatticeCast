@@ -50,7 +50,12 @@ import type {
 	ViewConfig
 } from '$lib/types/table';
 
-export const IMPLICIT_TABLE_VIEW: ViewConfig = { name: 'Schema', type: 'table', config: {} };
+export const IMPLICIT_TABLE_VIEW: ViewConfig = {
+	view_id: 0,
+	name: 'Schema',
+	type: 'table',
+	config: {}
+};
 
 class TablePageStore {
 	// ─── UI State ──────────────────────────────────────────────────────────────
@@ -87,7 +92,7 @@ class TablePageStore {
 	importError = $state<string | null>(null);
 	managingOptionsCol = $state<Column | null>(null);
 	rowsWithDocs = new SvelteSet<string>();
-	activeViewName = $state('');
+	activeViewId = $state<number>(0);
 	_applyingConfig = false;
 	viewColOrder = $state<string[] | null>(null);
 	resizingColId = $state<string | null>(null);
@@ -136,7 +141,7 @@ class TablePageStore {
 		this.importError = null;
 		this.managingOptionsCol = null;
 		this.rowsWithDocs.clear();
-		this.activeViewName = '';
+		this.activeViewId = 0;
 		this._applyingConfig = false;
 		this.viewColOrder = null;
 		this.localWidths = {};
@@ -504,7 +509,7 @@ class TablePageStore {
 	}
 
 	persistViewConfig() {
-		const view = get(viewsStore).find((v) => v.name === this.activeViewName);
+		const view = get(viewsStore).find((v) => v.view_id === this.activeViewId);
 		if (!view) return;
 		const newConfig = {
 			...view.config,
@@ -518,28 +523,27 @@ class TablePageStore {
 			widths: Object.keys(this.localWidths).length > 0 ? { ...this.localWidths } : undefined,
 			colOrder: this.viewColOrder ?? undefined
 		};
-		updateView(this.tableId, view.name, { config: newConfig }).catch(() => {});
+		updateView(this.tableId, view.view_id, { config: newConfig }).catch(() => {});
 	}
 
 	// ─── View handlers ─────────────────────────────────────────────────────────
 
 	handleViewChange(view: ViewConfig) {
-		this.activeViewName = view.name;
+		this.activeViewId = view.view_id;
 		const url = new URL(window.location.href);
-		url.searchParams.set('view', view.name);
+		url.searchParams.set('view', String(view.view_id));
 		history.replaceState(history.state, '', url.toString());
 		this.applyViewConfig(view);
-		const isImplicitTable =
-			view.name === IMPLICIT_TABLE_VIEW.name &&
-			!get(viewsStore).some((v) => v.name === IMPLICIT_TABLE_VIEW.name);
-		if (!isImplicitTable) setDefaultView(this.tableId, view.name).catch(() => {});
+		const isImplicitTable = view.view_id === IMPLICIT_TABLE_VIEW.view_id;
+		if (!isImplicitTable) setDefaultView(this.tableId, view.view_id).catch(() => {});
 	}
 
 	async handleAddView(type: string, name: string) {
 		error.set(null);
 		try {
-			await createView(this.tableId, { name, type, config: {} });
-			this.activeViewName = name;
+			const schema = await createView(this.tableId, { name, type, config: {} });
+			const created = schema.views.find((v) => v.name === name);
+			if (created) this.activeViewId = created.view_id;
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to create view');
 		}
@@ -548,33 +552,27 @@ class TablePageStore {
 	async handleDeleteView(view: ViewConfig) {
 		error.set(null);
 		try {
-			await deleteView(this.tableId, view.name);
-			if (this.activeViewName === view.name) {
+			await deleteView(this.tableId, view.view_id);
+			if (this.activeViewId === view.view_id) {
 				const remaining = get(viewsStore);
-				this.activeViewName = remaining[0]?.name ?? IMPLICIT_TABLE_VIEW.name;
+				this.activeViewId = remaining[0]?.view_id ?? IMPLICIT_TABLE_VIEW.view_id;
 			}
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to delete view');
 		}
 	}
 
-	async handleRenameView(oldName: string, newName: string) {
+	async handleRenameView(viewId: number, newName: string) {
 		error.set(null);
 		try {
-			await updateView(this.tableId, oldName, { name: newName });
-			if (this.activeViewName === oldName) {
-				this.activeViewName = newName;
-				const url = new URL(window.location.href);
-				url.searchParams.set('view', newName);
-				history.replaceState(history.state, '', url.toString());
-			}
+			await updateView(this.tableId, viewId, { name: newName });
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to rename view');
 		}
 	}
 
 	handleViewUpdate(updated: ViewConfig) {
-		viewsStore.update((arr) => arr.map((v) => (v.name === updated.name ? updated : v)));
+		viewsStore.update((arr) => arr.map((v) => (v.view_id === updated.view_id ? updated : v)));
 	}
 
 	// ─── Export / Import ───────────────────────────────────────────────────────

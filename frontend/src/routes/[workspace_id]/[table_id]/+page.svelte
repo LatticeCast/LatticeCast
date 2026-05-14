@@ -111,7 +111,7 @@
 	let rowsWithDocs = new SvelteSet<string>();
 
 	// View state
-	let activeViewName = $state('');
+	let activeViewId = $state<number>(0);
 	let _applyingConfig = false;
 	let viewColOrder = $state<string[] | null>(null);
 
@@ -142,17 +142,18 @@
 	// user views exist. Skip if the user happens to have a user view
 	// named 'Schema' to avoid duplicate tabs.
 	const IMPLICIT_TABLE_VIEW: ViewConfig = {
+		view_id: 0,
 		name: 'Schema',
 		type: 'table',
 		config: {}
 	};
 	const allViews = $derived(
-		$viewsStore.some((v) => v.name === IMPLICIT_TABLE_VIEW.name)
+		$viewsStore.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id)
 			? $viewsStore
 			: [IMPLICIT_TABLE_VIEW, ...$viewsStore]
 	);
 	const activeView = $derived(
-		allViews.find((v) => v.name === activeViewName) ?? allViews[0] ?? IMPLICIT_TABLE_VIEW
+		allViews.find((v) => v.view_id === activeViewId) ?? allViews[0] ?? IMPLICIT_TABLE_VIEW
 	);
 
 	const groupedRows = $derived(buildGroupedRows(sortedRows, groupConfig, $columns));
@@ -182,20 +183,21 @@
 				// against the candidate set INCLUDING the implicit Table view so
 				// default_view="Table" resumes correctly when no user "Table"
 				// view exists.
-				const urlView = new URL(window.location.href).searchParams.get('view');
+				const urlViewRaw = new URL(window.location.href).searchParams.get('view');
+				const urlViewId = urlViewRaw !== null ? Number(urlViewRaw) : NaN;
 				const loadedViews = get(viewsStore);
-				const hasUserTable = loadedViews.some((v) => v.name === IMPLICIT_TABLE_VIEW.name);
+				const hasUserTable = loadedViews.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id);
 				const candidates = hasUserTable ? loadedViews : [IMPLICIT_TABLE_VIEW, ...loadedViews];
 				const defaultView = table.default_view ?? null;
-				if (urlView && candidates.some((v) => v.name === urlView)) {
-					activeViewName = urlView;
-				} else if (defaultView && candidates.some((v) => v.name === defaultView)) {
-					activeViewName = defaultView;
+				if (!isNaN(urlViewId) && candidates.some((v) => v.view_id === urlViewId)) {
+					activeViewId = urlViewId;
+				} else if (defaultView !== null && candidates.some((v) => v.view_id === defaultView)) {
+					activeViewId = defaultView;
 				} else if (candidates.length > 0) {
-					activeViewName = candidates[0].name;
+					activeViewId = candidates[0].view_id;
 				}
 				// Apply sort/group/filter from active view config
-				const initView = candidates.find((v) => v.name === activeViewName);
+				const initView = candidates.find((v) => v.view_id === activeViewId);
 				if (initView) applyViewConfig(initView); // also sets _applyingConfig = true and schedules reset
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to load table');
@@ -391,8 +393,8 @@
 		// auto-persist via the view.config.colOrder $effect.
 		const tableId = $page.params.table_id!;
 		const isImplicitTable =
-			activeViewName === IMPLICIT_TABLE_VIEW.name &&
-			!$viewsStore.some((v) => v.name === IMPLICIT_TABLE_VIEW.name);
+			activeViewId === IMPLICIT_TABLE_VIEW.view_id &&
+			!$viewsStore.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id);
 		if (isImplicitTable) {
 			try {
 				await reorderColumns(tableId, ordered);
@@ -656,7 +658,7 @@
 	function persistViewConfig() {
 		const tableId = $page.params.table_id!;
 		// Use non-reactive get() so $viewsStore updates don't re-trigger this effect
-		const view = get(viewsStore).find((v) => v.name === activeViewName);
+		const view = get(viewsStore).find((v) => v.view_id === activeViewId);
 		const newConfig = {
 			...(view?.config ?? {}),
 			sort: sortConfig ?? undefined,
@@ -671,15 +673,20 @@
 		};
 		if (!view) {
 			// Implicit Table view has no DB row yet — materialize it so config persists
-			if (activeViewName !== IMPLICIT_TABLE_VIEW.name) return;
+			if (activeViewId !== IMPLICIT_TABLE_VIEW.view_id) return;
 			createView(tableId, {
 				name: IMPLICIT_TABLE_VIEW.name,
 				type: IMPLICIT_TABLE_VIEW.type,
 				config: newConfig
-			}).catch(() => {});
+			})
+				.then((schema) => {
+					const created = schema.views.find((v) => v.name === IMPLICIT_TABLE_VIEW.name);
+					if (created) activeViewId = created.view_id;
+				})
+				.catch(() => {});
 			return;
 		}
-		updateView(tableId, view.name, { config: newConfig }).catch(() => {});
+		updateView(tableId, view.view_id, { config: newConfig }).catch(() => {});
 	}
 
 	// Auto-persist view config when any view-local state changes (but not during applyViewConfig)
@@ -691,31 +698,32 @@
 		[...hiddenCols].sort().join(',');
 		JSON.stringify(localWidths);
 		JSON.stringify(viewColOrder);
-		if (!_applyingConfig && activeViewName) {
+		if (!_applyingConfig && activeViewId) {
 			persistViewConfig();
 		}
 	});
 
 	// View handlers
 	function handleViewChange(view: ViewConfig) {
-		activeViewName = view.name;
+		activeViewId = view.view_id;
 		const url = new URL(window.location.href);
-		url.searchParams.set('view', view.name);
+		url.searchParams.set('view', String(view.view_id));
 		history.replaceState(history.state, '', url.toString());
 		applyViewConfig(view);
 		// PG side does "clear all is_default + flag this one" atomically.
-		// 'Schema' is accepted by set_table_default_view (V40 mapped it to
-		// the __schema__ row) so we can call this for every click,
-		// including the implicit Schema tab.
-		setDefaultView($page.params.table_id!, view.name).catch(() => {});
+		// Skip the implicit Schema tab (view_id=0) since it has no DB row.
+		if (view.view_id !== IMPLICIT_TABLE_VIEW.view_id) {
+			setDefaultView($page.params.table_id!, view.view_id).catch(() => {});
+		}
 	}
 
 	async function handleAddView(type: string, name: string) {
 		const tableId = $page.params.table_id!;
 		error.set(null);
 		try {
-			await createView(tableId, { name, type, config: {} });
-			activeViewName = name;
+			const schema = await createView(tableId, { name, type, config: {} });
+			const created = schema.views.find((v) => v.name === name);
+			if (created) activeViewId = created.view_id;
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to create view');
 		}
@@ -725,42 +733,36 @@
 		const tableId = $page.params.table_id!;
 		error.set(null);
 		try {
-			await deleteView(tableId, view.name);
-			if (activeViewName === view.name) {
+			await deleteView(tableId, view.view_id);
+			if (activeViewId === view.view_id) {
 				const remaining = $viewsStore;
-				activeViewName = remaining[0]?.name ?? IMPLICIT_TABLE_VIEW.name;
+				activeViewId = remaining[0]?.view_id ?? IMPLICIT_TABLE_VIEW.view_id;
 			}
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to delete view');
 		}
 	}
 
-	async function handleRenameView(oldName: string, newName: string) {
+	async function handleRenameView(viewId: number, newName: string) {
 		const tableId = $page.params.table_id!;
 		error.set(null);
 		try {
-			await updateView(tableId, oldName, { name: newName });
-			if (activeViewName === oldName) {
-				activeViewName = newName;
-				const url = new URL(window.location.href);
-				url.searchParams.set('view', newName);
-				history.replaceState(history.state, '', url.toString());
-			}
+			await updateView(tableId, viewId, { name: newName });
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to rename view');
 		}
 	}
 
-	async function handleReorderViews(fromName: string, toName: string) {
+	async function handleReorderViews(fromId: number, toId: number) {
 		const tableId = $page.params.table_id!;
-		const userViewNames = $viewsStore.map((v) => v.name);
-		const fromIdx = userViewNames.indexOf(fromName);
+		const userViewIds = $viewsStore.map((v) => v.view_id);
+		const fromIdx = userViewIds.indexOf(fromId);
 		if (fromIdx === -1) return;
-		const toIdx = userViewNames.indexOf(toName);
+		const toIdx = userViewIds.indexOf(toId);
 		if (toIdx === -1) return;
-		const reordered = [...userViewNames];
+		const reordered = [...userViewIds];
 		reordered.splice(fromIdx, 1);
-		reordered.splice(toIdx, 0, fromName);
+		reordered.splice(toIdx, 0, fromId);
 		await reorderViews(tableId, reordered).catch(() => {});
 	}
 
@@ -937,12 +939,12 @@
 
 	<ViewSwitcher
 		views={allViews}
-		activeViewName={activeView.name}
+		activeViewId={activeView.view_id}
 		onViewChange={handleViewChange}
 		onAddView={handleAddView}
 		onDeleteView={handleDeleteView}
 		onRenameView={handleRenameView}
-		isRenameable={(v) => $viewsStore.some((uv) => uv.name === v.name)}
+		isRenameable={(v) => $viewsStore.some((uv) => uv.view_id === v.view_id)}
 		onReorderViews={handleReorderViews}
 	/>
 

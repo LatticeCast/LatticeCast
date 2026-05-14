@@ -31,7 +31,7 @@
 
 	async function saveConfig(patch: Record<string, unknown>) {
 		const newConfig = { ...viewConfig.config, ...patch };
-		await updateView(tableId, viewConfig.name, { config: newConfig });
+		await updateView(tableId, viewConfig.view_id, { config: newConfig });
 	}
 
 	async function handleGroupByChange(colId: string | null) {

@@ -5,7 +5,7 @@
 
 	let {
 		views,
-		activeViewName,
+		activeViewId,
 		onViewChange,
 		onAddView,
 		onDeleteView,
@@ -14,36 +14,37 @@
 		isRenameable = () => true
 	}: {
 		views: ViewConfig[];
-		activeViewName: string;
+		activeViewId: number;
 		onViewChange: (view: ViewConfig) => void;
 		onAddView: (type: string, name: string) => void;
 		onDeleteView?: (view: ViewConfig) => void;
-		onRenameView?: (oldName: string, newName: string) => Promise<void>;
-		onReorderViews?: (fromName: string, toName: string) => void;
+		onRenameView?: (viewId: number, newName: string) => Promise<void>;
+		onReorderViews?: (fromId: number, toId: number) => void;
 		isRenameable?: (view: ViewConfig) => boolean;
 	} = $props();
 
 	let showAddPanel = $state(false);
-	let editingViewName = $state<string | null>(null);
+	let editingViewId = $state<number | null>(null);
 	let editingValue = $state('');
 	let renameError = $state('');
 
 	const viewDrag = createDragReorder<ViewConfig>({
-		getId: (view) => view.name,
+		getId: (view) => String(view.view_id),
 		canDrag: (view) => !isFixed(view),
-		onReorder: (fromName, toName) => onReorderViews?.(fromName, toName)
+		onReorder: (fromId, toId) => onReorderViews?.(Number(fromId), Number(toId))
 	});
 
 	function startRenameView(view: ViewConfig, e: MouseEvent) {
 		e.stopPropagation();
-		editingViewName = view.name;
+		editingViewId = view.view_id;
 		editingValue = view.name;
 		renameError = '';
 	}
 
-	async function commitRenameView(oldName: string) {
-		if (editingViewName !== oldName) return; // already cancelled
+	async function commitRenameView(view: ViewConfig) {
+		if (editingViewId !== view.view_id) return; // already cancelled
 		const newName = editingValue.trim();
+		const oldName = view.name;
 		if (!newName) {
 			renameError = 'Name cannot be empty';
 			return;
@@ -52,15 +53,15 @@
 			renameError = 'A view with this name already exists';
 			return;
 		}
-		editingViewName = null;
+		editingViewId = null;
 		renameError = '';
 		if (newName !== oldName && onRenameView) {
-			await onRenameView(oldName, newName);
+			await onRenameView(view.view_id, newName);
 		}
 	}
 
 	function cancelRenameView() {
-		editingViewName = null;
+		editingViewId = null;
 		renameError = '';
 	}
 
@@ -95,7 +96,7 @@
 	}
 
 	function isFixed(view: ViewConfig): boolean {
-		return view.name === IMPLICIT_TABLE_VIEW.name;
+		return view.view_id === IMPLICIT_TABLE_VIEW.view_id;
 	}
 
 	function canDelete(view: ViewConfig): boolean {
@@ -123,15 +124,15 @@
 	<div class="flex items-center border-b border-gray-200 bg-white">
 		<!-- Scrollable view tabs -->
 		<div class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-4">
-			{#each views as view (view.name)}
+			{#each views as view (view.view_id)}
 				<div
 					{...viewDrag.handlers(view)}
-					class="group flex shrink-0 items-center border-b-2 transition {activeViewName ===
-					view.name
+					class="group flex shrink-0 items-center border-b-2 transition {activeViewId ===
+					view.view_id
 						? 'border-blue-500'
 						: 'border-transparent hover:border-gray-300'}"
 				>
-					{#if editingViewName === view.name}
+					{#if editingViewId === view.view_id}
 						<!-- Inline rename input -->
 						<div
 							class="flex items-center px-2 py-1"
@@ -147,11 +148,11 @@
 									: 'border-blue-400 focus:border-blue-500'}"
 								title={renameError || undefined}
 								onkeydown={(e) => {
-									if (e.key === 'Enter') commitRenameView(view.name);
+									if (e.key === 'Enter') commitRenameView(view);
 									else if (e.key === 'Escape') cancelRenameView();
 									e.stopPropagation();
 								}}
-								onblur={() => commitRenameView(view.name)}
+								onblur={() => commitRenameView(view)}
 								use:focusInput
 							/>
 						</div>
@@ -159,8 +160,8 @@
 						<button
 							data-testid="view-tab-{view.name}"
 							onclick={() => onViewChange(view)}
-							class="flex items-center gap-1.5 px-3 py-2 text-sm transition {activeViewName ===
-							view.name
+							class="flex items-center gap-1.5 px-3 py-2 text-sm transition {activeViewId ===
+							view.view_id
 								? 'font-medium text-blue-600'
 								: 'text-gray-500 hover:text-gray-700'}"
 						>
