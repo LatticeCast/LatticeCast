@@ -88,16 +88,18 @@ def verify(psql_fn) -> list[str]:
         f"ON CONFLICT (workspace_id, table_id) DO NOTHING"
     )
 
-    # SELECT positive: user A can see own workspace views (auto-created by trigger)
+    # SELECT positive: user A can see own workspace schema rows
+    # (V43: __schema__/__order__ rows removed from table_views; the
+    # SSOT is now public.table_schemas, auto-populated by trigger)
     count = _as_app(
         psql_fn,
         _USER_A,
-        f"SELECT COUNT(*) FROM public.table_views "
+        f"SELECT COUNT(*) FROM public.table_schemas "
         f"WHERE workspace_id = '{_WS_A}'::uuid;",
     )
     if not count.isdigit() or int(count) == 0:
         errors.append(
-            "RLS BEHAVIORAL: user A cannot SELECT from own workspace table_views"
+            "RLS BEHAVIORAL: user A cannot SELECT from own workspace table_schemas"
         )
 
     # SELECT isolation: user A cannot see workspace B views

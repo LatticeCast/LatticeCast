@@ -1,4 +1,4 @@
-<!-- routes/[workspace_id]/[table_id]/[row_number]/+page.svelte -->
+<!-- routes/[workspace_id]/[table_id]/[row_id]/+page.svelte -->
 
 <script lang="ts">
 	import { onMount } from 'svelte';
@@ -13,7 +13,7 @@
 	import CreateTicketModal from '$lib/components/table/CreateTicketModal.svelte';
 
 	const tableId = $derived($page.params.table_id ?? '');
-	const rowNumberParam = $derived(parseInt($page.params.row_number ?? '0', 10));
+	const rowNumberParam = $derived(parseInt($page.params.row_id ?? '0', 10));
 	const workspaceId = $derived($page.params.workspace_id ?? '');
 
 	let table = $state<Table | null>(null);
@@ -47,7 +47,7 @@
 		try {
 			const [t, rows] = await Promise.all([fetchTable(tableId), fetchRows(tableId, 0, 200)]);
 			table = t;
-			row = rows.find((r) => r.row_number === rowNumberParam) ?? null;
+			row = rows.find((r) => r.row_id === rowNumberParam) ?? null;
 			if (!row) {
 				error = 'Row not found';
 				return;

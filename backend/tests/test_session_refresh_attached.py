@@ -255,7 +255,7 @@ class TestRowRepositoryUpdate:
             row = Row(
                 workspace_id=workspace_id,
                 table_id="my-table",
-                row_number=1,
+                row_id=1,
                 row_data={"title": "old"},
             )
 
@@ -272,7 +272,7 @@ class TestRowRepositoryUpdate:
         _run(_run_test())
 
     def test_create_does_not_call_refresh(self):
-        """create() uses raw INSERT+RETURNING (PG trigger sets row_number) — must NOT call refresh."""
+        """create() uses raw INSERT+RETURNING (PG trigger sets row_id) — must NOT call refresh."""
 
         async def _run_test():
             from repository.row import RowRepository
@@ -283,7 +283,7 @@ class TestRowRepositoryUpdate:
             fake_row = {
                 "workspace_id": workspace_id,
                 "table_id": "my-table",
-                "row_number": 42,
+                "row_id": 42,
                 "row_data": {},
                 "created_by": None,
                 "updated_by": None,
@@ -301,6 +301,6 @@ class TestRowRepositoryUpdate:
 
             # The 2024 fix: raw INSERT, no session.refresh()
             session.refresh.assert_not_called()
-            assert result.row_number == 42
+            assert result.row_id == 42
 
         _run(_run_test())

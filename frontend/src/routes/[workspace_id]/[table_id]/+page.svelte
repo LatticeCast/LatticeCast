@@ -242,7 +242,7 @@
 		const tempRowNumber = -Date.now();
 		const tempRow: Row = {
 			table_id: tableId,
-			row_number: tempRowNumber,
+			row_id: tempRowNumber,
 			row_data: {},
 			created_by: null,
 			updated_by: null,
@@ -259,14 +259,14 @@
 		try {
 			const newRow = await createRow(tableId, { row_data: {} });
 			// Replace temp row with real row from backend
-			rows.update((r) => r.map((row) => (row.row_number === tempRowNumber ? newRow : row)));
-			scrollToRowId = newRow.row_number;
+			rows.update((r) => r.map((row) => (row.row_id === tempRowNumber ? newRow : row)));
+			scrollToRowId = newRow.row_id;
 			if (editColId) {
-				editingCell = { rowId: newRow.row_number, colId: editColId };
+				editingCell = { rowId: newRow.row_id, colId: editColId };
 			}
 		} catch (e) {
 			// Rollback optimistic row
-			rows.update((r) => r.filter((row) => row.row_number !== tempRowNumber));
+			rows.update((r) => r.filter((row) => row.row_id !== tempRowNumber));
 			editingCell = null;
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
 		} finally {
@@ -304,7 +304,7 @@
 		const tempRowNumber = -Date.now();
 		const tempRow: Row = {
 			table_id: tableId,
-			row_number: tempRowNumber,
+			row_id: tempRowNumber,
 			row_data: { [col.column_id]: val },
 			created_by: null,
 			updated_by: null,
@@ -315,9 +315,9 @@
 
 		try {
 			const newRow = await createRow(tableId, { row_data: { [col.column_id]: val } });
-			rows.update((r) => r.map((row) => (row.row_number === tempRowNumber ? newRow : row)));
+			rows.update((r) => r.map((row) => (row.row_id === tempRowNumber ? newRow : row)));
 		} catch (e) {
-			rows.update((r) => r.filter((row) => row.row_number !== tempRowNumber));
+			rows.update((r) => r.filter((row) => row.row_id !== tempRowNumber));
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
 		} finally {
 			addingRow = false;
@@ -326,12 +326,12 @@
 
 	async function handleDeleteRow(rowId: number) {
 		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_number === rowId);
+		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
 		deletingRowId = rowId;
 		error.set(null);
 		try {
-			await deleteRow(tableId, row.row_number);
+			await deleteRow(tableId, row.row_id);
 			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to delete row');
@@ -436,12 +436,12 @@
 		if (!editingCell) return;
 		editingCell = null;
 		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_number === rowId);
+		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
 		const newData = applyEditToRowData(row.row_data, col.column_id, editValue, col.type);
 		error.set(null);
 		try {
-			await updateRow(tableId, row.row_number, { row_data: newData });
+			await updateRow(tableId, row.row_id, { row_data: newData });
 			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
@@ -450,12 +450,12 @@
 
 	async function toggleCheckbox(rowId: number, col: Column) {
 		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_number === rowId);
+		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
 		const newData = toggleCheckboxInRowData(row.row_data, col.column_id);
 		error.set(null);
 		try {
-			await updateRow(tableId, row.row_number, { row_data: newData });
+			await updateRow(tableId, row.row_id, { row_data: newData });
 			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
@@ -464,11 +464,11 @@
 
 	async function removeTag(rowId: number, col: Column, tag: string) {
 		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_number === rowId);
+		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
 		const newData = removeTagFromRowData(row.row_data, col.column_id, tag);
 		try {
-			await updateRow(tableId, row.row_number, { row_data: newData });
+			await updateRow(tableId, row.row_id, { row_data: newData });
 			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');
@@ -477,13 +477,13 @@
 
 	async function addTag(rowId: number, col: Column, tag: string) {
 		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_number === rowId);
+		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
 		const newData = addTagToRowData(row.row_data, col.column_id, tag);
 		if (newData === row.row_data) return; // tag already present
 		tagsPopupCell = null;
 		try {
-			await updateRow(tableId, row.row_number, { row_data: newData });
+			await updateRow(tableId, row.row_id, { row_data: newData });
 			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');
@@ -492,9 +492,9 @@
 
 	async function handleUpdateRow(rowId: number, data: Record<string, unknown>) {
 		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_number === rowId);
+		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
-		await updateRow(tableId, row.row_number, { row_data: data });
+		await updateRow(tableId, row.row_id, { row_data: data });
 	}
 
 	async function loadDocFlags(tableId: string) {
@@ -523,7 +523,7 @@
 	}
 
 	async function handleDuplicateRow(rowId: number) {
-		const row = $rows.find((r) => r.row_number === rowId);
+		const row = $rows.find((r) => r.row_id === rowId);
 		if (!row) return;
 		const tableId = $page.params.table_id!;
 		error.set(null);

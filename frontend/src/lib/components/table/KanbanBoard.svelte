@@ -54,7 +54,7 @@
 	let dragOverLane = $state<string | null>(null);
 
 	function onDragStart(e: DragEvent, row: Row) {
-		dragRowId = row.row_number;
+		dragRowId = row.row_id;
 		if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
 	}
 
@@ -80,14 +80,14 @@
 		dragOverLane = null;
 		if (!dragRowId || !groupByColId) return;
 
-		const row = rows.find((r) => r.row_number === dragRowId);
+		const row = rows.find((r) => r.row_id === dragRowId);
 		dragRowId = null;
 		if (!row) return;
 
 		const currentVal = String(row.row_data[groupByColId] ?? '');
 		if (currentVal === laneValue) return;
 
-		await updateRow(tableId, row.row_number, {
+		await updateRow(tableId, row.row_id, {
 			row_data: { ...row.row_data, [groupByColId]: laneValue }
 		});
 		onRowsRefresh();
@@ -347,15 +347,15 @@
 							<p class="text-xs {isDark.value ? 'text-gray-500' : 'text-gray-400'}">No items</p>
 						</div>
 					{:else}
-						{#each sortRows(lane.rows) as row (row.row_number)}
+						{#each sortRows(lane.rows) as row (row.row_id)}
 							<button
-								data-testid="kanban-card-{row.row_number}-btn"
+								data-testid="kanban-card-{row.row_id}-btn"
 								draggable="true"
 								ondragstart={(e) => onDragStart(e, row)}
 								ondragend={onDragEnd}
 								class="w-full rounded-lg border px-3 py-2.5 text-left shadow-sm transition hover:shadow-md {isDark.value
 									? 'border-gray-700 bg-gray-700'
-									: 'border-gray-200 bg-white'} {dragRowId === row.row_number ? 'opacity-40' : ''}"
+									: 'border-gray-200 bg-white'} {dragRowId === row.row_id ? 'opacity-40' : ''}"
 								style={getCardBorderStyle(row)}
 								onclick={() => onOpenExpand(row)}
 							>

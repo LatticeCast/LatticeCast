@@ -32,14 +32,18 @@ async def _get_table_for_member(
 
 
 async def _build_table_response(table: Table, session: AsyncSession) -> dict[str, Any]:
+    """Returns table identity + full schema snapshot. The schema fields
+    (columns, view_order, default_view) come from public.table_schemas
+    and are the same shape every mutation endpoint returns — FE never
+    has to read view-order or default-view separately."""
     view_repo = TableViewRepository(session)
-    columns = await view_repo.get_schema(table.workspace_id, table.table_id)
-    default_view = await view_repo.get_default_view_name(table.workspace_id, table.table_id)
+    schema = await view_repo.get_full_schema(table.workspace_id, table.table_id)
     return {
         "workspace_id": table.workspace_id,
         "table_id": table.table_id,
-        "columns": sorted(columns, key=lambda c: c.get("position", 0)),
-        "default_view": default_view,
+        "columns": schema.get("columns", []),
+        "view_order": schema.get("view_order", []),
+        "default_view": schema.get("default_view"),
         "created_at": table.created_at,
         "updated_at": table.updated_at,
     }

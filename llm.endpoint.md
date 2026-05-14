@@ -98,12 +98,12 @@ Content-Type: application/json
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/api/v1/tables/{table_id}/rows` | Member | Create row (row_number auto-set by trigger) |
+| POST | `/api/v1/tables/{table_id}/rows` | Member | Create row (row_id auto-set by trigger) |
 | GET | `/api/v1/tables/{table_id}/rows` | Member | List rows (paginated) |
-| PUT | `/api/v1/tables/{table_id}/rows/{row_number}` | Member | Update row data |
-| DELETE | `/api/v1/tables/{table_id}/rows/{row_number}` | Member | Delete row |
-| GET | `/api/v1/tables/{table_id}/rows/{row_number}/doc` | Member | Get ticket doc (markdown from MinIO) |
-| PUT | `/api/v1/tables/{table_id}/rows/{row_number}/doc` | Member | Save ticket doc (markdown to MinIO) |
+| PUT | `/api/v1/tables/{table_id}/rows/{row_id}` | Member | Update row data |
+| DELETE | `/api/v1/tables/{table_id}/rows/{row_id}` | Member | Delete row |
+| GET | `/api/v1/tables/{table_id}/rows/{row_id}/doc` | Member | Get ticket doc (markdown from MinIO) |
+| PUT | `/api/v1/tables/{table_id}/rows/{row_id}/doc` | Member | Save ticket doc (markdown to MinIO) |
 
 ### Table Request/Response Examples
 

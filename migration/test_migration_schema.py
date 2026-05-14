@@ -10,14 +10,11 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("auth", "users", "role", "character varying"),
     ("auth", "users", "created_at", "timestamp"),
     ("auth", "users", "updated_at", "timestamp"),
-    # auth.gdpr — PII (login_mgr only)
-    ("auth", "gdpr", "user_id", "uuid"),
-    ("auth", "gdpr", "email", "character varying"),
-    ("auth", "gdpr", "legal_name", "character varying"),
-    # public.user_info — public handle + per-user UI config
-    ("public", "user_info", "user_id", "uuid"),
-    ("public", "user_info", "user_name", "character varying"),
-    ("public", "user_info", "config", "jsonb"),
+    # gdpr.user_info — PII that can remove easily
+    ("gdpr", "user_info", "user_id", "uuid"),
+    ("gdpr", "user_info", "email", "character varying"),
+    ("gdpr", "user_info", "user_name", "character varying"),
+    ("gdpr", "user_info", "config", "jsonb"),
     # public.workspaces
     ("public", "workspaces", "workspace_id", "uuid"),
     ("public", "workspaces", "workspace_name", "character varying"),
@@ -27,31 +24,37 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "workspace_members", "workspace_id", "uuid"),
     ("public", "workspace_members", "user_id", "uuid"),
     ("public", "workspace_members", "role", "character varying"),
-    # public.tables (V34: identity only — columns moved to __schema__ row)
+    # public.tables
     ("public", "tables", "workspace_id", "uuid"),
     ("public", "tables", "table_id", "character varying"),
     ("public", "tables", "created_at", "timestamp"),
     ("public", "tables", "updated_at", "timestamp"),
-    # public.table_views (V34 shape; V41 drops is_default — default_view
-    # now lives in __schema__.config.default_view)
-    ("public", "table_views", "workspace_id", "uuid"),
-    ("public", "table_views", "table_id", "character varying"),
-    ("public", "table_views", "name", "character varying"),
-    ("public", "table_views", "type", "character varying"),
-    ("public", "table_views", "config", "jsonb"),
-    ("public", "table_views", "created_by", "uuid"),
-    ("public", "table_views", "updated_by", "uuid"),
-    ("public", "table_views", "created_at", "timestamp"),
-    ("public", "table_views", "updated_at", "timestamp"),
+    # public.table_schemas
+    ("public", "table_schemas", "workspace_id", "uuid"),
+    ("public", "table_schemas", "table_id", "character varying"),
+    ("public", "table_schemas", "config", "jsonb"),
+    ("public", "table_schemas", "created_by", "uuid"),
+    ("public", "table_schemas", "updated_by", "uuid"),
+    ("public", "table_schemas", "created_at", "timestamp"),
+    ("public", "table_schemas", "updated_at", "timestamp"),
     # public.rows
     ("public", "rows", "workspace_id", "uuid"),
-    ("public", "rows", "table_id", "character varying"),
-    ("public", "rows", "row_number", "bigint"),
+    ("public", "rows", "table_id", "character varying"), 
+    ("public", "rows", "row_id", "bigint"),
     ("public", "rows", "row_data", "jsonb"),
     ("public", "rows", "created_by", "uuid"),
     ("public", "rows", "updated_by", "uuid"),
     ("public", "rows", "created_at", "timestamp"),
     ("public", "rows", "updated_at", "timestamp"),
+    # public.table_views
+    ("public", "table_views", "workspace_id", "uuid"),
+    ("public", "table_views", "table_id", "character varying"),
+    ("public", "table_views", "view_id", "bigint"),
+    ("public", "table_views", "config", "jsonb"),
+    ("public", "table_views", "created_by", "uuid"),
+    ("public", "table_views", "updated_by", "uuid"),
+    ("public", "table_views", "created_at", "timestamp"),
+    ("public", "table_views", "updated_at", "timestamp"),
 ]
 
 # Columns that must NOT exist
@@ -133,15 +136,15 @@ def verify(psql_fn) -> list[str]:
     # Check trigger on rows table
     result = psql_fn(
         "SELECT 1 FROM information_schema.triggers "
-        "WHERE event_object_table='rows' AND trigger_name='trg_rows_row_number';"
+        "WHERE event_object_table='rows' AND trigger_name='trg_rows_row_id';"
     )
     if not result:
-        errors.append("MISSING TRIGGER: rows.trg_rows_row_number")
+        errors.append("MISSING TRIGGER: rows.trg_rows_row_id")
 
-    # V34/V35: Triggers on table_views and tables
-    # (V35 dropped trg_table_views_prevent_schema_delete — API layer enforces it)
+    # V43 replaces V34's schema+order trigger with one that auto-creates
+    # the table_schemas SSOT row on table insert.
     for trg_name, tbl in [
-        ("trg_tables_create_schema_and_order", "tables"),
+        ("trg_tables_create_table_schema", "tables"),
     ]:
         result = psql_fn(
             f"SELECT 1 FROM information_schema.triggers "
@@ -215,9 +218,9 @@ def verify(psql_fn) -> list[str]:
     if result:
         errors.append("FORBIDDEN FK still present: table_views_next_fkey")
 
-    # V34/V35 trigger functions
+    # V43 trigger function (replaces V34's trg_create_schema_and_order_fn).
     for fn_name in (
-        "trg_create_schema_and_order_fn",
+        "trg_create_table_schema_fn",
     ):
         result = psql_fn(
             f"SELECT 1 FROM pg_proc WHERE proname='{fn_name}';"

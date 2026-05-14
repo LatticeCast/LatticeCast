@@ -31,14 +31,20 @@ class TableCreate(SQLModel):
 
 
 class TableResponse(SQLModel):
-    """Table response — identity + columns sourced from __schema__ row."""
+    """Table identity + full schema snapshot (V44+ public.table_schemas).
+    Every mutation endpoint also returns the schema fields below, so FE
+    has a single shape to consume."""
 
     workspace_id: UUID
     table_id: str
     columns: list[dict[str, Any]] = Field(default_factory=list)
+    view_order: list[str] = Field(
+        default_factory=list,
+        description="Display order of user views (subset of table_views.name).",
+    )
     default_view: str | None = Field(
         default=None,
-        description="Name of the table_views row currently flagged is_default, or None.",
+        description="Default view name; 'Schema' for the implicit pinned tab.",
     )
     created_at: datetime
     updated_at: datetime

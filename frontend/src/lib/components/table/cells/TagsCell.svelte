@@ -23,7 +23,7 @@
 	const choices = $derived(getChoices(column));
 	const available = $derived(choices.filter((c) => !tagVals.includes(c.value)));
 	const isPopupOpen = $derived(
-		tagsPopupCell?.rowId === row.row_number && tagsPopupCell?.colId === column.column_id
+		tagsPopupCell?.rowId === row.row_id && tagsPopupCell?.colId === column.column_id
 	);
 </script>
 
@@ -48,7 +48,7 @@
 				class="rounded-full border border-gray-300 px-1.5 py-0.5 text-xs text-gray-400 hover:border-blue-400 hover:text-blue-600"
 				onclick={() =>
 					onTagsPopupChange(
-						isPopupOpen ? null : { rowId: row.row_number, colId: column.column_id }
+						isPopupOpen ? null : { rowId: row.row_id, colId: column.column_id }
 					)}>+</button
 			>
 			{#if isPopupOpen}

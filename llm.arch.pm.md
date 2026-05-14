@@ -19,7 +19,7 @@ Built ON the Airtable core. PM is just a template + conventions — no special c
 | 8 | Estimate | number |
 | 9 | Tags | tags |
 | 10 | Description | text |
-| 11 | Parent | text (row_number of parent) |
+| 11 | Parent | text (row_id of parent) |
 
 Default views: implicit Table (rendered from the schema row) + Sprint Board (Kanban by Status) + Roadmap (Timeline). The seeder no longer inserts a "Table" view explicitly — the schema row serves as the default Table rendering.
 
@@ -37,11 +37,11 @@ Epic (type=epic, parent=null)
 
 ## Ticket ID
 
-`<type>-<row_number>` — e.g. `task-42`, `story-15`, `bug-7`. No Key column.
+`<type>-<row_id>` — e.g. `task-42`, `story-15`, `bug-7`. No Key column.
 
 ## Ticket Doc
 
-Each ticket has a markdown doc in MinIO at `{workspace_id}/{table_id}/{row_number}.md`.
+Each ticket has a markdown doc in MinIO at `{workspace_id}/{table_id}/{row_id}.md`.
 
 - **Title is SHORT** (max 80 chars, one line)
 - **Doc has ALL detail** (implementation instructions, files, decisions, work log)

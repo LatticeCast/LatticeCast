@@ -27,7 +27,7 @@
 
 	$effect(() => {
 		docLoading = true;
-		fetchDoc(tableId, row.row_number)
+		fetchDoc(tableId, row.row_id)
 			.then((content) => {
 				docContent = content;
 				if (content) docEditing = true;
@@ -43,7 +43,7 @@
 		if (docSaving) return;
 		docSaving = true;
 		try {
-			await saveDoc(tableId, row.row_number, docContent);
+			await saveDoc(tableId, row.row_id, docContent);
 		} catch {
 			// best-effort
 		} finally {
@@ -87,12 +87,12 @@
 					/>
 				</svg>
 				<span class="text-sm font-semibold text-white">{column.name}</span>
-				<span class="text-xs text-white/60">· Row {row.row_number}</span>
+				<span class="text-xs text-white/60">· Row {row.row_id}</span>
 			</div>
 			<div class="flex items-center gap-2">
 				<a
 					data-testid="doc-cell-open-full-editor-link"
-					href="/{workspaceId}/{tableId}/{row.row_number}/doc"
+					href="/{workspaceId}/{tableId}/{row.row_id}/doc"
 					class="rounded px-2 py-1 text-xs text-white/70 transition hover:bg-white/20 hover:text-white"
 					>Open full editor ↗</a
 				>

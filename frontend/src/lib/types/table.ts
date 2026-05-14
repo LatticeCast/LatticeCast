@@ -1,6 +1,6 @@
 // src/lib/types/table.ts
 
-/** UUID string — always a 36-char hyphenated UUID, never a user_name or row_number */
+/** UUID string — always a 36-char hyphenated UUID, never a user_name or row_id */
 export type UUID = string;
 
 export type ColumnType =
@@ -49,8 +49,9 @@ export interface Table {
 	table_id: string;
 	workspace_id: UUID;
 	columns: Column[];
-	views?: ViewConfig[];
+	view_order: string[];
 	default_view?: string | null;
+	views?: ViewConfig[];
 	created_at: string;
 	updated_at: string;
 }
@@ -60,13 +61,22 @@ export interface Column {
 	name: string;
 	type: ColumnType;
 	options: ColumnOptions;
-	position: number;
 	created_at: string;
+}
+
+/** Server-authoritative schema snapshot. Every mutation endpoint on
+ * views / columns / orders / default-view returns this shape, so the FE
+ * replaces its local store from the response and never derives schema
+ * state locally. */
+export interface TableSchema {
+	columns: Column[];
+	view_order: string[];
+	default_view: string | null;
 }
 
 export interface Row {
 	table_id: string;
-	row_number: number;
+	row_id: number;
 	row_data: Record<UUID, unknown>;
 	created_by: UUID | null;
 	updated_by: UUID | null;
@@ -83,7 +93,6 @@ export interface CreateColumn {
 	name: string;
 	type: ColumnType;
 	options?: ColumnOptions;
-	position?: number;
 }
 
 export interface CreateRow {
@@ -98,7 +107,6 @@ export interface UpdateColumn {
 	name?: string;
 	type?: ColumnType;
 	options?: ColumnOptions;
-	position?: number;
 }
 
 export interface UpdateRow {

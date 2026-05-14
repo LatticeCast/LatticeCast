@@ -153,7 +153,7 @@ class TablePageStore {
 		const tempRowNumber = -Date.now();
 		const tempRow: Row = {
 			table_id: tableId,
-			row_number: tempRowNumber,
+			row_id: tempRowNumber,
 			row_data: {},
 			created_by: null,
 			updated_by: null,
@@ -169,11 +169,11 @@ class TablePageStore {
 
 		try {
 			const newRow = await createRow(tableId, { row_data: {} });
-			rows.update((r) => r.map((row) => (row.row_number === tempRowNumber ? newRow : row)));
-			this.scrollToRowId = newRow.row_number;
-			if (editColId) this.editingCell = { rowId: newRow.row_number, colId: editColId };
+			rows.update((r) => r.map((row) => (row.row_id === tempRowNumber ? newRow : row)));
+			this.scrollToRowId = newRow.row_id;
+			if (editColId) this.editingCell = { rowId: newRow.row_id, colId: editColId };
 		} catch (e) {
-			rows.update((r) => r.filter((row) => row.row_number !== tempRowNumber));
+			rows.update((r) => r.filter((row) => row.row_id !== tempRowNumber));
 			this.editingCell = null;
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
 		} finally {
@@ -211,7 +211,7 @@ class TablePageStore {
 		const tempRowNumber = -Date.now();
 		const tempRow: Row = {
 			table_id: tableId,
-			row_number: tempRowNumber,
+			row_id: tempRowNumber,
 			row_data: { [col.column_id]: val },
 			created_by: null,
 			updated_by: null,
@@ -222,9 +222,9 @@ class TablePageStore {
 
 		try {
 			const newRow = await createRow(tableId, { row_data: { [col.column_id]: val } });
-			rows.update((r) => r.map((row) => (row.row_number === tempRowNumber ? newRow : row)));
+			rows.update((r) => r.map((row) => (row.row_id === tempRowNumber ? newRow : row)));
 		} catch (e) {
-			rows.update((r) => r.filter((row) => row.row_number !== tempRowNumber));
+			rows.update((r) => r.filter((row) => row.row_id !== tempRowNumber));
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
 		} finally {
 			this.addingRow = false;
@@ -233,12 +233,12 @@ class TablePageStore {
 
 	async handleDeleteRow(rowId: number) {
 		const tableId = this.tableId;
-		const row = get(rows).find((r) => r.row_number === rowId);
+		const row = get(rows).find((r) => r.row_id === rowId);
 		if (!row) return;
 		this.deletingRowId = rowId;
 		error.set(null);
 		try {
-			await deleteRowApi(tableId, row.row_number);
+			await deleteRowApi(tableId, row.row_id);
 			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to delete row');
@@ -248,7 +248,7 @@ class TablePageStore {
 	}
 
 	async handleDuplicateRow(rowId: number) {
-		const row = get(rows).find((r) => r.row_number === rowId);
+		const row = get(rows).find((r) => r.row_id === rowId);
 		if (!row) return;
 		const tableId = this.tableId;
 		error.set(null);
@@ -262,9 +262,9 @@ class TablePageStore {
 	}
 
 	async handleUpdateRow(rowId: number, data: Record<string, unknown>) {
-		const row = get(rows).find((r) => r.row_number === rowId);
+		const row = get(rows).find((r) => r.row_id === rowId);
 		if (!row) return;
-		await updateRow(this.tableId, row.row_number, { row_data: data });
+		await updateRow(this.tableId, row.row_id, { row_data: data });
 	}
 
 	async loadDocFlags(tableId: string) {
@@ -288,12 +288,12 @@ class TablePageStore {
 	async commitEdit(rowId: number, col: Column) {
 		if (!this.editingCell) return;
 		this.editingCell = null;
-		const row = get(rows).find((r) => r.row_number === rowId);
+		const row = get(rows).find((r) => r.row_id === rowId);
 		if (!row) return;
 		const newData = applyEditToRowData(row.row_data, col.column_id, this.editValue, col.type);
 		error.set(null);
 		try {
-			await updateRow(this.tableId, row.row_number, { row_data: newData });
+			await updateRow(this.tableId, row.row_id, { row_data: newData });
 			await refreshRows(this.tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
@@ -301,12 +301,12 @@ class TablePageStore {
 	}
 
 	async toggleCheckbox(rowId: number, col: Column) {
-		const row = get(rows).find((r) => r.row_number === rowId);
+		const row = get(rows).find((r) => r.row_id === rowId);
 		if (!row) return;
 		const newData = toggleCheckboxInRowData(row.row_data, col.column_id);
 		error.set(null);
 		try {
-			await updateRow(this.tableId, row.row_number, { row_data: newData });
+			await updateRow(this.tableId, row.row_id, { row_data: newData });
 			await refreshRows(this.tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
@@ -314,11 +314,11 @@ class TablePageStore {
 	}
 
 	async removeTag(rowId: number, col: Column, tag: string) {
-		const row = get(rows).find((r) => r.row_number === rowId);
+		const row = get(rows).find((r) => r.row_id === rowId);
 		if (!row) return;
 		const newData = removeTagFromRowData(row.row_data, col.column_id, tag);
 		try {
-			await updateRow(this.tableId, row.row_number, { row_data: newData });
+			await updateRow(this.tableId, row.row_id, { row_data: newData });
 			await refreshRows(this.tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');
@@ -326,13 +326,13 @@ class TablePageStore {
 	}
 
 	async addTag(rowId: number, col: Column, tag: string) {
-		const row = get(rows).find((r) => r.row_number === rowId);
+		const row = get(rows).find((r) => r.row_id === rowId);
 		if (!row) return;
 		const newData = addTagToRowData(row.row_data, col.column_id, tag);
 		if (newData === row.row_data) return;
 		this.tagsPopupCell = null;
 		try {
-			await updateRow(this.tableId, row.row_number, { row_data: newData });
+			await updateRow(this.tableId, row.row_id, { row_data: newData });
 			await refreshRows(this.tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');

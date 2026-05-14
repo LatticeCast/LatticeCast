@@ -39,12 +39,12 @@ public.table_views (
 public.rows (
     workspace_id UUID,
     table_id     VARCHAR,
-    row_number   BIGINT,           -- auto: MAX+1 per (workspace_id, table_id)
+    row_id   BIGINT,           -- auto: MAX+1 per (workspace_id, table_id)
     row_data     JSONB DEFAULT '{}',
     created_by   UUID FK auth.users,
     updated_by   UUID FK auth.users,
     timestamps,
-    PK (workspace_id, table_id, row_number),
+    PK (workspace_id, table_id, row_id),
     FK (workspace_id, table_id) REFERENCES tables ON DELETE CASCADE
 )
 ```
@@ -103,14 +103,14 @@ names. Reorder is one PUT replacing the whole array.
 New table without template gets: Doc (doc) + Title (text) + Description
 (text) columns in the schema row. `doc` column is system-managed: on row
 insert, backend auto-creates an empty `.md` at MinIO key
-`{workspace_id}/{table_id}/{row_number}.md` and writes the path into the
+`{workspace_id}/{table_id}/{row_id}.md` and writes the path into the
 cell. Users cannot edit `doc` cell values directly.
 
 ## URL Pattern
 
 ```
 /<workspace_id>/<table_id>              → table view
-/<workspace_id>/<table_id>/<row_number> → row detail
+/<workspace_id>/<table_id>/<row_id> → row detail
 ```
 
 `table_id` is the lowercase table name (string). `workspace_id` is UUID.

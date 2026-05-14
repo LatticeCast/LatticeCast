@@ -99,7 +99,7 @@ public.workspaces  (workspace_id UUID PK, workspace_name UNIQUE)
 public.workspace_members  ((workspace_id, user_id) PK, role)
 public.tables      ((workspace_id, table_id) composite PK)       # V34: identity-only
 public.table_views ((workspace_id, table_id, name) composite PK, type, config JSONB)
-public.rows        ((workspace_id, table_id, row_number) composite PK, row_data JSONB)
+public.rows        ((workspace_id, table_id, row_id) composite PK, row_data JSONB)
 private.schema_migrations  (filename, checksum SHA-256, applied_at)
 ```
 
@@ -111,7 +111,7 @@ Notes:
 - Schema row cannot be deleted (BEFORE-DELETE trigger). On `tables`
   insert an AFTER-INSERT trigger auto-creates `__schema__` + `__order__`.
 - Auto-managed PG indexes per column: B-tree (num/date), GIN (select/tags/text)
-- Ticket docs: MinIO at `{workspace_id}/{table_id}/{row_number}.md`
+- Ticket docs: MinIO at `{workspace_id}/{table_id}/{row_id}.md`
 - RLS on `tables` + `rows` enforces workspace membership
 
 ## Key Patterns

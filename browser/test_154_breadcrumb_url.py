@@ -97,7 +97,7 @@ def run():
 
         print("  ✓ table page breadcrumb OK")
 
-        # ── Step 2: Row page — breadcrumb shows workspace / table / row_number ──
+        # ── Step 2: Row page — breadcrumb shows workspace / table / row_id ──
         print("\n[Step 2] Row page (row 154)")
         try:
             page.goto(f"{BASE_URL}/{ws_id}/{TABLE_ID}/154", wait_until="networkidle", timeout=20000)

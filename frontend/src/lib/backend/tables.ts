@@ -7,6 +7,7 @@ import { BACKEND_URL } from './config';
 import { getAuthHeaders, getBearerHeader } from './http';
 import type {
 	Table,
+	TableSchema,
 	Column,
 	Row,
 	CreateTable,
@@ -67,9 +68,9 @@ export async function deleteTable(tableId: string): Promise<void> {
 	if (!response.ok) throw new Error(`Failed to delete table: ${response.statusText}`);
 }
 
-// Columns (mutations only — column list comes from table.columns)
+// Columns — mutations return full TableSchema (V44+ server-is-SSOT).
 
-export async function createColumn(tableId: string, data: CreateColumn): Promise<Column> {
+export async function createColumn(tableId: string, data: CreateColumn): Promise<TableSchema> {
 	const headers = await getAuthHeaders();
 	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/columns`, {
 		method: 'POST',
@@ -84,7 +85,7 @@ export async function updateColumn(
 	tableId: string,
 	columnId: string,
 	data: UpdateColumn
-): Promise<Column> {
+): Promise<TableSchema> {
 	const headers = await getAuthHeaders();
 	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/columns/${columnId}`, {
 		method: 'PATCH',
@@ -95,13 +96,32 @@ export async function updateColumn(
 	return response.json();
 }
 
-export async function deleteColumn(tableId: string, columnId: string): Promise<void> {
+export async function deleteColumn(tableId: string, columnId: string): Promise<TableSchema> {
 	const headers = await getAuthHeaders();
 	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/columns/${columnId}`, {
 		method: 'DELETE',
 		headers
 	});
 	if (!response.ok) throw new Error(`Failed to delete column: ${response.statusText}`);
+	return response.json();
+}
+
+/** PATCH /tables/{tid}/schema — partial update of any subset of
+ * {view_order, default_view, col_order}. Returns the new full
+ * TableSchema. Use for FE drag-reorder-view, click-set-default-view,
+ * drag-reorder-column. */
+export async function patchSchema(
+	tableId: string,
+	data: { view_order?: string[]; default_view?: string; col_order?: string[] }
+): Promise<TableSchema> {
+	const headers = await getAuthHeaders();
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/schema`, {
+		method: 'PATCH',
+		headers,
+		body: JSON.stringify(data)
+	});
+	if (!response.ok) throw new Error(`Failed to patch schema: ${response.statusText}`);
+	return response.json();
 }
 
 // Rows
@@ -198,7 +218,7 @@ export async function batchDocsExist(tableId: string): Promise<Set<number>> {
 		});
 		if (!response.ok) return new Set();
 		const data = await response.json();
-		return new Set(data.row_numbers as number[]);
+		return new Set(data.row_ids as number[]);
 	} catch {
 		return new Set();
 	}

@@ -1,10 +1,9 @@
 # src/models/table_view.py
-# V34: simplified shape — single (workspace_id, table_id, name) PK.
-# `type` discriminates the row purpose:
-#   - 'schema' (name='__schema__'): config is the column array
-#   - 'order'  (name='__order__'):  config is the ordered name array
-#   - 'table' | 'kanban' | 'timeline' | 'dashboard' (user-given names):
-#                                  config is the view-specific config blob
+#
+# V44+: public.table_views holds ONLY user-view rows. The previous
+# __schema__/__order__ meta rows have been moved into public.table_schemas
+# (separate table). A CHECK constraint on table_views enforces that
+# `name NOT IN ('__schema__','__order__') AND type IN USER_VIEW_TYPES`.
 from datetime import datetime
 from typing import Any
 from uuid import UUID
@@ -12,12 +11,8 @@ from uuid import UUID
 from sqlalchemy import JSON, ForeignKeyConstraint
 from sqlmodel import Field, SQLModel
 
-# Reserved row names — these encode meta-rows, not user views.
-SCHEMA_ROW_NAME = "__schema__"
-ORDER_ROW_NAME = "__order__"
-RESERVED_NAMES = {SCHEMA_ROW_NAME, ORDER_ROW_NAME}
-
-# Display name reserved for the implicit pinned first view.
+# FE display name for the always-pinned implicit first tab (rendered by
+# the FE from public.table_schemas.config.columns; no DB row).
 SCHEMA_VIEW_DISPLAY_NAME = "Schema"
 
 # Allowed view types for user-created views.
@@ -25,7 +20,7 @@ USER_VIEW_TYPES = ("table", "kanban", "timeline", "dashboard")
 
 
 class TableView(SQLModel, table=True):
-    """Row in public.table_views — see module docstring for type semantics."""
+    """Row in public.table_views — user views only after V44."""
 
     __tablename__ = "table_views"
     __table_args__ = (

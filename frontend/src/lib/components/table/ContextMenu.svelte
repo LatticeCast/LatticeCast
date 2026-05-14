@@ -50,7 +50,7 @@
 		<button
 			class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
 			onclick={() => {
-				const row = rows.find((r) => String(r.row_number) === contextMenu.id);
+				const row = rows.find((r) => String(r.row_id) === contextMenu.id);
 				if (row) onExpandRow(row);
 				onClose();
 			}}

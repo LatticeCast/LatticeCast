@@ -433,13 +433,13 @@
 							class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white hover:text-white/80"
 							>{tableName}</button
 						>
-						{#if $page.params.row_number}
+						{#if $page.params.row_id}
 							<span class="shrink-0 text-white/40">/</span>
 							<button
-								onclick={() => navigate(`/${wsId}/${tableId}/${$page.params.row_number}`)}
+								onclick={() => navigate(`/${wsId}/${tableId}/${$page.params.row_id}`)}
 								data-testid="breadcrumb-row"
 								class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
-								>{$page.params.row_number}</button
+								>{$page.params.row_id}</button
 							>
 						{/if}
 					{/if}

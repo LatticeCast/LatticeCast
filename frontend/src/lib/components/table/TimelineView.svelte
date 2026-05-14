@@ -144,7 +144,7 @@
 		const colId = handle === 'start' ? startColId! : endColId!;
 		const rawVal = row.row_data[colId];
 		const origDateStr = rawVal ? formatDate(String(rawVal)).slice(0, 10) : '';
-		dragState = { rowId: row.row_number, handle, startX: e.clientX, origDateStr, colId };
+		dragState = { rowId: row.row_id, handle, startX: e.clientX, origDateStr, colId };
 		dragDeltaDays = 0;
 	}
 
@@ -167,9 +167,9 @@
 					const newDate = new Date(orig);
 					newDate.setUTCDate(newDate.getUTCDate() + delta);
 					const newDateStr = newDate.toISOString().slice(0, 10);
-					const row = rows.find((r) => r.row_number === dragState!.rowId);
+					const row = rows.find((r) => r.row_id === dragState!.rowId);
 					if (row) {
-						await updateRow(tableId, row.row_number, {
+						await updateRow(tableId, row.row_id, {
 							row_data: { ...row.row_data, [dragState.colId]: newDateStr }
 						});
 						onRowsRefresh();
@@ -193,7 +193,7 @@
 		startDate: Date,
 		endDate: Date
 	): { startDate: Date; endDate: Date } {
-		if (!dragState || dragState.rowId !== row.row_number || dragDeltaDays === 0) {
+		if (!dragState || dragState.rowId !== row.row_id || dragDeltaDays === 0) {
 			return { startDate, endDate };
 		}
 		const orig = new Date(dragState.origDateStr + 'T00:00:00Z');
@@ -399,7 +399,7 @@
 				{/if}
 
 				<!-- Rows -->
-				{#each group.rows as { row, startDate: rawStart, endDate: rawEnd } (row.row_number)}
+				{#each group.rows as { row, startDate: rawStart, endDate: rawEnd } (row.row_id)}
 					{@const { startDate, endDate } = getEffectiveDates(row, rawStart, rawEnd)}
 					<div
 						class="flex border-b {isDark.value
@@ -440,12 +440,12 @@
 
 							<!-- Bar -->
 							<div
-								data-testid="timeline-row-bar-{row.row_number}"
+								data-testid="timeline-row-bar-{row.row_id}"
 								class="absolute top-2 bottom-2 flex cursor-pointer items-center overflow-hidden rounded text-xs font-medium shadow-sm {getBarColorClasses(
 									row,
 									colorByCol,
 									colorByColId
-								)} {dragState?.rowId === row.row_number ? 'opacity-80' : ''}"
+								)} {dragState?.rowId === row.row_id ? 'opacity-80' : ''}"
 								style="left: {getBarLeft(
 									startDate,
 									viewportStart,

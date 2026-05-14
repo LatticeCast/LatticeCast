@@ -53,7 +53,7 @@
 	$effect(() => {
 		if (activeTab === 'doc' && !docLoaded && !docLoading) {
 			docLoading = true;
-			fetchDoc(tableId, row.row_number)
+			fetchDoc(tableId, row.row_id)
 				.then((content) => {
 					docContent = content;
 				})
@@ -69,7 +69,7 @@
 		if (docSaving) return;
 		docSaving = true;
 		try {
-			await saveDoc(tableId, row.row_number, docContent);
+			await saveDoc(tableId, row.row_id, docContent);
 		} catch {
 			// best-effort
 		} finally {
@@ -92,21 +92,21 @@
 		editField = null;
 		const newData = applyEditToRowData(localRow.row_data, col.column_id, editVal, col.type);
 		localRow = { ...localRow, row_data: newData };
-		await onUpdateRow(localRow.row_number, newData);
+		await onUpdateRow(localRow.row_id, newData);
 		await onRefreshRows(tableId);
 	}
 
 	async function toggleCheckbox(col: Column) {
 		const newData = toggleCheckboxInRowData(localRow.row_data, col.column_id);
 		localRow = { ...localRow, row_data: newData };
-		await onUpdateRow(localRow.row_number, newData);
+		await onUpdateRow(localRow.row_id, newData);
 		await onRefreshRows(tableId);
 	}
 
 	async function removeTag(col: Column, tag: string) {
 		const newData = removeTagFromRowData(localRow.row_data, col.column_id, tag);
 		localRow = { ...localRow, row_data: newData };
-		await onUpdateRow(localRow.row_number, newData);
+		await onUpdateRow(localRow.row_id, newData);
 		await onRefreshRows(tableId);
 	}
 
@@ -115,7 +115,7 @@
 		if (newData === localRow.row_data) return; // tag already present
 		tagsPopup = null;
 		localRow = { ...localRow, row_data: newData };
-		await onUpdateRow(localRow.row_number, newData);
+		await onUpdateRow(localRow.row_id, newData);
 		await onRefreshRows(tableId);
 	}
 </script>
@@ -142,7 +142,7 @@
 		<div class="flex items-center gap-2">
 			<a
 				data-testid="row-panel-open-fullpage-link"
-				href="/{workspaceId}/{tableId}/{row.row_number}"
+				href="/{workspaceId}/{tableId}/{row.row_id}"
 				class="rounded-lg px-3 py-1.5 text-sm font-medium text-white/80 transition hover:bg-white/20 hover:text-white"
 				aria-label="Open full page">Open full page</a
 			>
@@ -203,7 +203,7 @@
 				>
 				<a
 					data-testid="row-panel-doc-full-editor-link"
-					href="/{workspaceId}/{tableId}/{row.row_number}/doc"
+					href="/{workspaceId}/{tableId}/{row.row_id}/doc"
 					class="text-xs text-blue-500 transition hover:underline">Edit full doc ↗</a
 				>
 			</div>

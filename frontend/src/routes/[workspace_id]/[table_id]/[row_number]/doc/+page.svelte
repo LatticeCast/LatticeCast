@@ -11,7 +11,7 @@
 
 	const workspaceId = $derived($page.params.workspace_id ?? '');
 	const tableId = $derived($page.params.table_id ?? '');
-	const rowNumber = $derived(parseInt($page.params.row_number ?? '0', 10));
+	const rowNumber = $derived(parseInt($page.params.row_id ?? '0', 10));
 
 	let table = $state<Table | null>(null);
 	let row = $state<Row | null>(null);
@@ -44,7 +44,7 @@
 		try {
 			const [t, rows] = await Promise.all([fetchTable(tableId), fetchRows(tableId, 0, 200)]);
 			table = t;
-			row = rows.find((r) => r.row_number === rowNumber) ?? null;
+			row = rows.find((r) => r.row_id === rowNumber) ?? null;
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load';
 			loading = false;

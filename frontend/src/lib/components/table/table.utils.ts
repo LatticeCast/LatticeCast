@@ -49,7 +49,7 @@ export interface GroupAddItem {
 export type RenderItem = GroupHeaderItem | DataRowItem | GroupAddItem;
 
 export function getItemKey(item: RenderItem): string {
-	if (item.type === 'row') return 'row-' + item.row.row_number;
+	if (item.type === 'row') return 'row-' + item.row.row_id;
 	return item.type + '-' + item.key;
 }
 

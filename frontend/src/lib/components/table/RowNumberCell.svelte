@@ -20,12 +20,12 @@
 	style="width: 48px;"
 >
 	<button
-		data-testid="grid-expand-row-{row.row_number}-btn"
+		data-testid="grid-expand-row-{row.row_id}-btn"
 		onclick={onExpand}
 		class="group relative flex h-full w-full items-center justify-center rounded px-1 py-0.5 text-xs text-gray-400 hover:bg-gray-200 hover:text-gray-600"
 		title="Expand row"
 	>
-		{row.row_number}
+		{row.row_id}
 		{#if hasDoc}
 			<svg
 				class="absolute left-0.5 h-3 w-3 text-blue-400 group-hover:hidden"

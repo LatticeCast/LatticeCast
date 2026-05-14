@@ -1,21 +1,26 @@
-"""CRUD on the tables collection + per-table identity.
+"""CRUD on the tables collection + per-table identity + schema PATCH.
 
-- POST /tables               — create blank table (V38 PG function)
-- GET  /tables               — list all tables across user's workspaces
-- GET  /tables/{table_id}    — single table (columns + default_view)
-- PUT  /tables/{table_id}    — rename table_id
-- DELETE /tables/{table_id}  — drop table
+- POST  /tables                       — create blank table
+- GET   /tables                       — list all tables across user's workspaces
+- GET   /tables/{table_id}            — single table (full schema snapshot)
+- PUT   /tables/{table_id}            — rename table_id
+- DELETE /tables/{table_id}           — drop table
+- PATCH /tables/{table_id}/schema     — update {view_order, default_view, col_order};
+                                        returns the new full TableSchema
 """
 
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config.lattice_ql import invalidate_schema_cache
 from middleware.auth import get_current_user, get_rls_session
 from models.table import TableCreate, TableResponse, TableUpdate
 from models.user import User
 from repository.table import TableRepository
+from repository.table_view import TableViewRepository
 from repository.workspace import WorkspaceRepository
 
 from ._shared import _build_table_response, _get_table_for_member
@@ -110,3 +115,46 @@ async def delete_table(
     table = await _get_table_for_member(table_id, user, session)
     table_repo = TableRepository(session)
     await table_repo.delete(table)
+
+
+# ── PATCH /tables/{table_id}/schema ────────────────────────────────────
+# One endpoint covers FE drag-reorder-views, click-set-default-view, and
+# drag-reorder-columns. Body is a partial — any subset of the three keys.
+# Returns the new full TableSchema so the FE replaces its local cache
+# from the response.
+
+
+class SchemaPatch(BaseModel):
+    view_order: list[str] | None = None
+    default_view: str | None = None
+    col_order: list[str] | None = None
+
+
+@router.patch("/{table_id}/schema")
+async def patch_schema(
+    table_id: str,
+    data: SchemaPatch,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+) -> dict[str, Any]:
+    table = await _get_table_for_member(table_id, user, session)
+    view_repo = TableViewRepository(session)
+
+    if data.view_order is not None:
+        await view_repo.set_order(
+            table.workspace_id, table.table_id, data.view_order, updated_by=user.user_id
+        )
+    if data.col_order is not None:
+        await view_repo.update_col_order(
+            table.workspace_id, table.table_id, data.col_order, updated_by=user.user_id
+        )
+        await invalidate_schema_cache(str(table.workspace_id))
+    if data.default_view is not None:
+        try:
+            await view_repo.set_default_view(
+                table.workspace_id, table.table_id, data.default_view, updated_by=user.user_id
+            )
+        except Exception as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    return await view_repo.get_full_schema(table.workspace_id, table.table_id)

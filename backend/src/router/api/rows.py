@@ -76,7 +76,7 @@ async def _inject_hierarchy(content: str, table, row: Row, session: AsyncSession
     status_col_id = cols.get("Status", "")
     repo = RowRepository(session)
 
-    # Inject parent link — parent column stores row_number (integer)
+    # Inject parent link — parent column stores row_id (integer)
     if parent_col_id and re.search(r"<!--\s*\[PARENT-KEY\]", content):
         parent_row_num_str = row.row_data.get(parent_col_id)
         parent_link = ""
@@ -92,11 +92,11 @@ async def _inject_hierarchy(content: str, table, row: Row, session: AsyncSession
         if parent_link:
             content = re.sub(r"<!--\s*\[PARENT-KEY\][^>]*-->", parent_link, content)
 
-    # Inject children links — filter by row_number (integer) stored in parent column
+    # Inject children links — filter by row_id (integer) stored in parent column
     if parent_col_id and re.search(r"<!--\s*Links to child", content):
         try:
             children = await repo.filter_by_jsonb(
-                table.workspace_id, table.table_id, {parent_col_id: str(row.row_number)}
+                table.workspace_id, table.table_id, {parent_col_id: str(row.row_id)}
             )
             if children:
                 lines = []
@@ -166,11 +166,11 @@ async def create_row(
         title_col = next((c for c in columns if c.get("name") == "Title"), None)
         row_type = row.row_data.get(type_col["column_id"], "") if type_col else ""
         row_title = row.row_data.get(title_col["column_id"], "") if title_col else ""
-        row_key = f"{row_type}-{row.row_number}" if row_type else str(row.row_number)
+        row_key = f"{row_type}-{row.row_id}" if row_type else str(row.row_id)
 
         patch: dict = {}
         for doc_col in doc_cols:
-            minio_key = f"{table.workspace_id}/{table.table_id}/{row.row_number}.md"
+            minio_key = f"{table.workspace_id}/{table.table_id}/{row.row_id}.md"
             if row_type in ("epic", "story", "task", "bug"):
                 doc_content = _build_doc_template(row_type, row_key, row_title)
             else:
@@ -193,9 +193,9 @@ async def create_row(
                 UPDATE rows
                 SET row_data = row_data || CAST(:patch AS jsonb),
                     updated_at = NOW()
-                WHERE workspace_id = :wid AND table_id = :tid AND row_number = :rn
+                WHERE workspace_id = :wid AND table_id = :tid AND row_id = :rn
             """),
-            {"patch": _json.dumps(patch), "wid": str(table.workspace_id), "tid": table.table_id, "rn": row.row_number},
+            {"patch": _json.dumps(patch), "wid": str(table.workspace_id), "tid": table.table_id, "rn": row.row_id},
         )
         await session.commit()
 
@@ -233,22 +233,22 @@ async def list_rows(
 
 
 # --------------------------------------------------
-# ROWS (nested update/delete by row_number)
+# ROWS (nested update/delete by row_id)
 # --------------------------------------------------
 
 
-@router.put("/tables/{table_id}/rows/{row_number}", response_model=RowResponse)
+@router.put("/tables/{table_id}/rows/{row_id}", response_model=RowResponse)
 async def update_row(
     table_id: str,
-    row_number: int,
+    row_id: int,
     data: RowUpdate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Update a row's data by row_number (user must be a workspace member)"""
+    """Update a row's data by row_id (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_number)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     # Silently drop any attempts to change doc-type column values (system-managed)
@@ -259,22 +259,22 @@ async def update_row(
     return await repo.update(row=row, data=data, updated_by=user.user_id)
 
 
-@router.get("/tables/{table_id}/rows/{row_number}/doc", response_class=PlainTextResponse)
+@router.get("/tables/{table_id}/rows/{row_id}/doc", response_class=PlainTextResponse)
 async def get_row_doc(
     table_id: str,
-    row_number: int,
+    row_id: int,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> str:
-    """Get markdown doc for a row from MinIO by row_number (returns empty string if not found)"""
+    """Get markdown doc for a row from MinIO by row_id (returns empty string if not found)"""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_number)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
     workspace_id = table.workspace_id
-    key = f"{workspace_id}/{table.table_id}/{row.row_number}.md"
+    key = f"{workspace_id}/{table.table_id}/{row.row_id}.md"
     try:
         async with s3_client() as s3:
             response = await s3.get_object(Bucket=settings.minio.bucket, Key=key)
@@ -290,15 +290,15 @@ async def get_row_doc(
     return content
 
 
-@router.put("/tables/{table_id}/rows/{row_number}/doc", response_class=PlainTextResponse)
+@router.put("/tables/{table_id}/rows/{row_id}/doc", response_class=PlainTextResponse)
 async def put_row_doc(
     table_id: str,
-    row_number: int,
+    row_id: int,
     request: Request,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> str:
-    """Save markdown doc for a row to MinIO by row_number.
+    """Save markdown doc for a row to MinIO by row_id.
     Accepts text/plain body or multipart/form-data with a 'file' field."""
     content_type = request.headers.get("content-type", "")
     if "multipart/form-data" in content_type:
@@ -314,12 +314,12 @@ async def put_row_doc(
 
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_number)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
     workspace_id = table.workspace_id
-    key = f"{workspace_id}/{table.table_id}/{row.row_number}.md"
+    key = f"{workspace_id}/{table.table_id}/{row.row_id}.md"
     try:
         async with s3_client() as s3:
             await s3.put_object(
@@ -339,32 +339,32 @@ async def batch_docs_exist(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, list[int]]:
-    """Return list of row_numbers that have non-empty docs in MinIO (single S3 list, no DB lookup)"""
+    """Return list of row_ids that have non-empty docs in MinIO (single S3 list, no DB lookup)"""
     table = await _get_table_for_member(table_id, user, session)
     workspace_id = table.workspace_id
     prefix = f"{workspace_id}/{table.table_id}/"
     try:
         async with s3_client() as s3:
             response = await s3.list_objects_v2(Bucket=settings.minio.bucket, Prefix=prefix, MaxKeys=1000)
-        row_numbers = []
+        row_ids = []
         for obj in response.get("Contents", []):
             key = obj["Key"]
             if key.endswith(".md") and obj.get("Size", 0) > 0:
                 filename = key.rsplit("/", 1)[-1].replace(".md", "")
                 try:
-                    row_numbers.append(int(filename))
+                    row_ids.append(int(filename))
                 except ValueError:
                     pass
     except ClientError:
-        return {"row_numbers": []}
+        return {"row_ids": []}
 
-    return {"row_numbers": row_numbers}
+    return {"row_ids": row_ids}
 
 
-@router.get("/tables/{table_id}/rows/{row_number}/col-doc/{column_id}", response_class=PlainTextResponse)
+@router.get("/tables/{table_id}/rows/{row_id}/col-doc/{column_id}", response_class=PlainTextResponse)
 async def get_col_doc(
     table_id: str,
-    row_number: int,
+    row_id: int,
     column_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
@@ -372,12 +372,12 @@ async def get_col_doc(
     """Get markdown doc for a specific column cell from MinIO (returns empty string if not found)"""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_number)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
     workspace_id = table.workspace_id
-    key = f"{workspace_id}/{table.table_id}/col-{column_id}/{row.row_number}.md"
+    key = f"{workspace_id}/{table.table_id}/col-{column_id}/{row.row_id}.md"
     try:
         async with s3_client() as s3:
             response = await s3.get_object(Bucket=settings.minio.bucket, Key=key)
@@ -388,10 +388,10 @@ async def get_col_doc(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
 
 
-@router.put("/tables/{table_id}/rows/{row_number}/col-doc/{column_id}", response_class=PlainTextResponse)
+@router.put("/tables/{table_id}/rows/{row_id}/col-doc/{column_id}", response_class=PlainTextResponse)
 async def put_col_doc(
     table_id: str,
-    row_number: int,
+    row_id: int,
     column_id: str,
     request: Request,
     user: User = Depends(get_current_user),
@@ -402,12 +402,12 @@ async def put_col_doc(
 
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_number)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
     workspace_id = table.workspace_id
-    key = f"{workspace_id}/{table.table_id}/col-{column_id}/{row.row_number}.md"
+    key = f"{workspace_id}/{table.table_id}/col-{column_id}/{row.row_id}.md"
     try:
         async with s3_client() as s3:
             await s3.put_object(
@@ -421,17 +421,17 @@ async def put_col_doc(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
 
 
-@router.delete("/tables/{table_id}/rows/{row_number}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/tables/{table_id}/rows/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_row(
     table_id: str,
-    row_number: int,
+    row_id: int,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Delete a row by row_number (user must be a workspace member)"""
+    """Delete a row by row_id (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_number)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     # Delete MinIO objects for any doc-type columns (best-effort)

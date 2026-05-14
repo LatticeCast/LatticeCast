@@ -120,7 +120,7 @@
 	const lastDataRowId = $derived(
 		renderItems.reduceRight<number | null>((acc, item) => {
 			if (acc !== null) return acc;
-			if (item.type === 'row') return item.row.row_number;
+			if (item.type === 'row') return item.row.row_id;
 			return null;
 		}, null)
 	);
@@ -570,10 +570,10 @@
 						<tr
 							class="border-b transition {isDark.value
 								? 'border-gray-700 hover:bg-blue-900/20'
-								: 'border-gray-100 hover:bg-blue-50/50'} {deletingRowId === row.row_number
+								: 'border-gray-100 hover:bg-blue-50/50'} {deletingRowId === row.row_id
 								? 'opacity-50'
 								: ''}"
-							oncontextmenu={(e) => onOpenContextMenu(e, 'row', String(row.row_number))}
+							oncontextmenu={(e) => onOpenContextMenu(e, 'row', String(row.row_id))}
 						>
 							<!-- Row number -->
 							<td
@@ -583,13 +583,13 @@
 								style="width: 48px;"
 							>
 								<button
-									data-testid="grid-expand-row-{row.row_number}-btn"
+									data-testid="grid-expand-row-{row.row_id}-btn"
 									onclick={() => onOpenExpand(row)}
 									class="group relative flex h-full w-full items-center justify-center rounded px-1 py-0.5 text-xs text-gray-400 hover:bg-gray-200 hover:text-gray-600"
 									title="Expand row"
 								>
-									{row.row_number}
-									{#if rowsWithDocs.has(String(row.row_number))}
+									{row.row_id}
+									{#if rowsWithDocs.has(String(row.row_id))}
 										<svg
 											class="absolute left-0.5 h-3 w-3 text-blue-400 group-hover:hidden"
 											fill="currentColor"
@@ -637,15 +637,15 @@
 											col.type !== 'checkbox' &&
 											col.type !== 'tags' &&
 											!(
-												editingCell?.rowId === row.row_number &&
+												editingCell?.rowId === row.row_id &&
 												editingCell?.colId === col.column_id
 											)
 										) {
-											onStartEdit(row.row_number, col, row.row_data[col.column_id]);
+											onStartEdit(row.row_id, col, row.row_data[col.column_id]);
 										}
 									}}
 								>
-									{#if editingCell?.rowId === row.row_number && editingCell?.colId === col.column_id}
+									{#if editingCell?.rowId === row.row_id && editingCell?.colId === col.column_id}
 										{#if col.type === 'select'}
 											{@const choices = getChoices(col)}
 											<select
@@ -653,9 +653,9 @@
 												value={editValue}
 												onchange={(e) => {
 													onEditValueChange((e.currentTarget as HTMLSelectElement).value);
-													onCommitEdit(row.row_number, col);
+													onCommitEdit(row.row_id, col);
 												}}
-												onblur={() => onCommitEdit(row.row_number, col)}
+												onblur={() => onCommitEdit(row.row_id, col)}
 												autofocus
 											>
 												<option value="">—</option>
@@ -670,11 +670,11 @@
 												value={editValue}
 												oninput={(e) =>
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
-												onblur={() => onCommitEdit(row.row_number, col)}
+												onblur={() => onCommitEdit(row.row_id, col)}
 												onkeydown={(e) => {
 													if (e.key === 'Enter') {
-														onCommitEdit(row.row_number, col);
-														if (row.row_number === lastDataRowId) onAddRow();
+														onCommitEdit(row.row_id, col);
+														if (row.row_id === lastDataRowId) onAddRow();
 													}
 													if (e.key === 'Escape') onEditingCellChange(null);
 												}}
@@ -687,11 +687,11 @@
 												value={editValue}
 												oninput={(e) =>
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
-												onblur={() => onCommitEdit(row.row_number, col)}
+												onblur={() => onCommitEdit(row.row_id, col)}
 												onkeydown={(e) => {
 													if (e.key === 'Enter') {
-														onCommitEdit(row.row_number, col);
-														if (row.row_number === lastDataRowId) onAddRow();
+														onCommitEdit(row.row_id, col);
+														if (row.row_id === lastDataRowId) onAddRow();
 													}
 													if (e.key === 'Escape') onEditingCellChange(null);
 												}}
@@ -704,11 +704,11 @@
 												value={editValue}
 												oninput={(e) =>
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
-												onblur={() => onCommitEdit(row.row_number, col)}
+												onblur={() => onCommitEdit(row.row_id, col)}
 												onkeydown={(e) => {
 													if (e.key === 'Enter') {
-														onCommitEdit(row.row_number, col);
-														if (row.row_number === lastDataRowId) onAddRow();
+														onCommitEdit(row.row_id, col);
+														if (row.row_id === lastDataRowId) onAddRow();
 													}
 													if (e.key === 'Escape') onEditingCellChange(null);
 												}}
@@ -723,7 +723,7 @@
 												: 'bg-gray-200'}"
 											onclick={(e) => {
 												e.stopPropagation();
-												onToggleCheckbox(row.row_number, col);
+												onToggleCheckbox(row.row_id, col);
 											}}
 											aria-label="Toggle"
 											role="switch"
@@ -806,7 +806,7 @@
 													{tag}
 													<button
 														class="ml-0.5 rounded-full leading-none hover:opacity-60"
-														onclick={() => onRemoveTag(row.row_number, col, tag)}
+														onclick={() => onRemoveTag(row.row_id, col, tag)}
 														aria-label="Remove {tag}">×</button
 													>
 												</span>
@@ -817,13 +817,13 @@
 														class="rounded-full border border-gray-300 px-1.5 py-0.5 text-xs text-gray-400 hover:border-blue-400 hover:text-blue-600"
 														onclick={() =>
 															onTagsPopupChange(
-																tagsPopupCell?.rowId === row.row_number &&
+																tagsPopupCell?.rowId === row.row_id &&
 																	tagsPopupCell?.colId === col.column_id
 																	? null
-																	: { rowId: row.row_number, colId: col.column_id }
+																	: { rowId: row.row_id, colId: col.column_id }
 															)}>+</button
 													>
-													{#if tagsPopupCell?.rowId === row.row_number && tagsPopupCell?.colId === col.column_id}
+													{#if tagsPopupCell?.rowId === row.row_id && tagsPopupCell?.colId === col.column_id}
 														<div
 															class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border py-1 shadow-xl {isDark.value
 																? 'border-gray-700 bg-gray-800'
@@ -834,7 +834,7 @@
 																	TAG_COLORS.find((c) => c.bg === choice.color) ?? TAG_COLORS[0]}
 																<button
 																	class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-50"
-																	onclick={() => onAddTag(row.row_number, col, choice.value)}
+																	onclick={() => onAddTag(row.row_id, col, choice.value)}
 																>
 																	<span
 																		class="inline-flex items-center rounded-full border px-2 py-0.5 font-medium {color.bg} {color.text} {color.border}"
@@ -874,9 +874,9 @@
 							<!-- Actions (delete) -->
 							<td class="px-1 py-1 text-center" style="width: 40px;">
 								<button
-									data-testid="grid-delete-row-{row.row_number}-btn"
-									onclick={() => onDeleteRow(row.row_number)}
-									disabled={deletingRowId === row.row_number}
+									data-testid="grid-delete-row-{row.row_id}-btn"
+									onclick={() => onDeleteRow(row.row_id)}
+									disabled={deletingRowId === row.row_id}
 									class="rounded p-1 text-gray-300 transition hover:bg-red-50 hover:text-red-500 disabled:opacity-50"
 									aria-label="Delete row"
 									title="Delete row"

@@ -23,7 +23,7 @@ class RowRepository:
         created_by: UUID | None = None,
         updated_by: UUID | None = None,
     ) -> Row:
-        # Use raw INSERT + RETURNING because PG trigger sets row_number
+        # Use raw INSERT + RETURNING because PG trigger sets row_id
         # and SQLAlchemy can't track the PK change from 0 → actual value
         from sqlalchemy import text
 
@@ -31,7 +31,7 @@ class RowRepository:
             text("""
                 INSERT INTO rows (workspace_id, table_id, row_data, created_by, updated_by)
                 VALUES (:workspace_id, :table_id, CAST(:row_data AS jsonb), :created_by, :updated_by)
-                RETURNING workspace_id, table_id, row_number, row_data, created_by, updated_by, created_at, updated_at
+                RETURNING workspace_id, table_id, row_id, row_data, created_by, updated_by, created_at, updated_at
             """),
             {
                 "workspace_id": str(workspace_id),
@@ -46,7 +46,7 @@ class RowRepository:
         return Row(
             workspace_id=r["workspace_id"],
             table_id=r["table_id"],
-            row_number=r["row_number"],
+            row_id=r["row_id"],
             row_data=r["row_data"],
             created_by=r["created_by"],
             updated_by=r["updated_by"],
@@ -54,16 +54,16 @@ class RowRepository:
             updated_at=r["updated_at"],
         )
 
-    async def get_by_number(self, workspace_id: UUID, table_id: str, row_number: int) -> Row | None:
+    async def get_by_number(self, workspace_id: UUID, table_id: str, row_id: int) -> Row | None:
         result = await self.session.execute(
-            select(Row).where(Row.workspace_id == workspace_id, Row.table_id == table_id, Row.row_number == row_number)
+            select(Row).where(Row.workspace_id == workspace_id, Row.table_id == table_id, Row.row_id == row_id)
         )
         return result.scalar_one_or_none()
 
     async def list_by_table(
         self, workspace_id: UUID, table_id: str, offset: int = 0, limit: int = 100, sort: str = "desc"
     ) -> list[Row]:
-        order = Row.row_number.desc() if sort == "desc" else Row.row_number.asc()
+        order = Row.row_id.desc() if sort == "desc" else Row.row_id.asc()
         statement = (
             select(Row)
             .where(Row.workspace_id == workspace_id, Row.table_id == table_id)
@@ -103,7 +103,7 @@ class RowRepository:
             select(Row)
             .where(Row.workspace_id == workspace_id, Row.table_id == table_id)
             .where(text("row_data @> cast(:contains as jsonb)").bindparams(contains=json.dumps(contains)))
-            .order_by(Row.row_number)
+            .order_by(Row.row_id)
             .offset(offset)
             .limit(limit)
         )
