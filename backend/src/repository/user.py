@@ -1,13 +1,12 @@
 # src/repository/user.py
 import re
-from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.user import Gdpr, User, UserInfo
+from models.user import User, UserInfo
 from models.workspace import Workspace, WorkspaceMember
 
 
@@ -23,11 +22,7 @@ def _slugify(text: str) -> str:
 
 
 class UserRepository:
-    """Operates on public tables + SELECT on auth.users.
-
-    Uses app_session by default. For writes to auth.users / auth.gdpr, a
-    caller must inject a login session — see `bootstrap_user` below.
-    """
+    """User identity (auth.users) + PII/handle (gdpr.user_info)."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -44,22 +39,20 @@ class UserRepository:
         )
         return result.scalar_one_or_none()
 
-    async def update(self, user: User, role: str | None = None) -> User:
-        if role:
-            user.role = role
-        user.updated_at = datetime.utcnow()
-        self.session.add(user)
-        await self.session.commit()
-        await self.session.refresh(user)  # refreshes attached instance — safe
-        return user
+    async def get_by_email(self, email: str) -> User | None:
+        result = await self.session.execute(
+            select(User)
+            .join(UserInfo, User.user_id == UserInfo.user_id)
+            .where(func.lower(UserInfo.email) == email.lower())
+        )
+        return result.scalar_one_or_none()
+
+    async def get_info(self, user_id: UUID) -> UserInfo | None:
+        result = await self.session.execute(select(UserInfo).where(UserInfo.user_id == user_id))
+        return result.scalar_one_or_none()
 
     async def resolve_user(self, identifier: str) -> User | None:
-        """Resolve a user by UUID or user_name (app-session-safe).
-
-        Email lookups live on auth.gdpr — use `GdprRepository.get_by_email`
-        with a login session instead.
-        """
-        # 1. UUID
+        """Resolve a user by UUID or user_name."""
         try:
             user_uuid = UUID(identifier)
             user = await self.get_by_id(user_uuid)
@@ -67,58 +60,12 @@ class UserRepository:
                 return user
         except ValueError:
             pass
-        # 2. user_name (case-insensitive)
         return await self.get_by_user_name(identifier)
 
 
-class GdprRepository:
-    """Operates on auth.gdpr — REQUIRES a login session."""
-
-    def __init__(self, session: AsyncSession):
-        self.session = session
-
-    async def get_by_user_id(self, user_id: UUID) -> Gdpr | None:
-        result = await self.session.execute(select(Gdpr).where(Gdpr.user_id == user_id))
-        return result.scalar_one_or_none()
-
-    async def get_by_email(self, email: str) -> Gdpr | None:
-        result = await self.session.execute(select(Gdpr).where(func.lower(Gdpr.email) == email.lower()))
-        return result.scalar_one_or_none()
-
-    async def upsert(self, user_id: UUID, email: str, legal_name: str = "") -> Gdpr:
-        stmt = (
-            pg_insert(Gdpr)
-            .values(user_id=user_id, email=email, legal_name=legal_name)
-            .on_conflict_do_update(
-                index_elements=[Gdpr.user_id],
-                set_={"email": email, "legal_name": legal_name, "updated_at": datetime.utcnow()},
-            )
-        )
-        await self.session.execute(stmt)
-        await self.session.commit()
-        return await self.get_by_user_id(user_id)  # type: ignore[return-value]
-
-    async def update_email(self, user_id: UUID, new_email: str) -> Gdpr:
-        existing = await self.get_by_email(new_email)
-        if existing and existing.user_id != user_id:
-            raise ValueError("email already registered")
-        gdpr = await self.get_by_user_id(user_id)
-        if not gdpr:
-            raise ValueError("user not found")
-        gdpr.email = new_email
-        gdpr.updated_at = datetime.utcnow()
-        self.session.add(gdpr)
-        await self.session.commit()
-        await self.session.refresh(gdpr)  # refreshes attached instance — safe
-        return gdpr
-
-
-async def resolve_user_by_email(email: str, login_session: AsyncSession) -> User | None:
-    """Look up a User via auth.gdpr. REQUIRES a login session."""
-    result = await login_session.execute(
-        select(User).join(Gdpr, User.user_id == Gdpr.user_id).where(func.lower(Gdpr.email) == email.lower())
-    )
-    return result.scalar_one_or_none()
+async def resolve_user_by_email(email: str, session: AsyncSession) -> User | None:
+    """Look up a User via gdpr.user_info.email."""
+    return await UserRepository(session).get_by_email(email)
 
 
 async def bootstrap_user(
@@ -126,28 +73,54 @@ async def bootstrap_user(
     app_session: AsyncSession,
     email: str,
     role: str = "user",
-    legal_name: str = "",
     user_name: str | None = None,
 ) -> User:
-    """Full bootstrap — creates auth.users + auth.gdpr (login session) and
-    public.user_info + workspace (app session). Admin-only flow.
+    """Create auth.users + gdpr.user_info + default workspace.
+
+    v40: PII + handle + config merged into gdpr.user_info. Everything
+    runs on login_session (mgr_user, BYPASSRLS) because the user isn't
+    authenticated yet — the app_session's RLS would reject the workspace
+    INSERT (no membership row exists at the moment of insert).
     """
     user = User(role=role)
     login_session.add(user)
     await login_session.flush()
 
-    gdpr = Gdpr(user_id=user.user_id, email=email, legal_name=legal_name)
-    login_session.add(gdpr)
-    await login_session.commit()
-    await login_session.refresh(user)  # refreshes attached instance — safe (added via login_session.add + flush)
-
     handle = user_name or _slugify(email)
-    user_info = UserInfo(user_id=user.user_id, user_name=handle)
-    app_session.add(user_info)
+    info = UserInfo(user_id=user.user_id, email=email, user_name=handle)
+    login_session.add(info)
+
     workspace = Workspace(workspace_name=email)
-    app_session.add(workspace)
-    await app_session.flush()
-    member = WorkspaceMember(workspace_id=workspace.workspace_id, user_id=user.user_id, role="owner")
-    app_session.add(member)
-    await app_session.commit()
+    login_session.add(workspace)
+    await login_session.flush()
+    member = WorkspaceMember(
+        workspace_id=workspace.workspace_id, user_id=user.user_id, role="owner"
+    )
+    login_session.add(member)
+    await login_session.commit()
+    await login_session.refresh(user)
+    _ = app_session  # kept for API compatibility; not used in bootstrap
     return user
+
+
+async def upsert_user_info(
+    session: AsyncSession,
+    user_id: UUID,
+    email: str,
+    user_name: str | None = None,
+) -> UserInfo:
+    """Idempotent upsert on gdpr.user_info — used by auth flow when a
+    user logs in via SSO and we don't yet know their PII row."""
+    handle = user_name or _slugify(email)
+    stmt = (
+        pg_insert(UserInfo)
+        .values(user_id=user_id, email=email, user_name=handle)
+        .on_conflict_do_update(
+            index_elements=[UserInfo.user_id],
+            set_={"email": email},
+        )
+    )
+    await session.execute(stmt)
+    await session.commit()
+    result = await session.execute(select(UserInfo).where(UserInfo.user_id == user_id))
+    return result.scalar_one()

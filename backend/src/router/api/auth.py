@@ -15,9 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.settings import settings
 from core.db import get_login_session, get_session
 from middleware.auth import get_current_user
-from models.user import Gdpr, User
+from models.user import User
 from models.user import UserInfo as UserInfoModel
-from repository.user import GdprRepository, UserRepository, resolve_user_by_email
+from repository.user import UserRepository, resolve_user_by_email
 
 router = APIRouter(prefix="/login", tags=["auth"])
 
@@ -118,11 +118,15 @@ class MeResponse(BaseModel):
 )
 async def password_login(
     request: PasswordLoginRequest,
-    session: AsyncSession = Depends(get_session),
+    login_session: AsyncSession = Depends(get_login_session),
 ) -> TokenResponse:
     """Username+password login. In AUTH_REQUIRED=false mode, the password is
     ignored and the resolved user_id UUID is returned as the access token.
     In AUTH_REQUIRED=true mode, returns 501 — clients must use OAuth.
+
+    Uses the login_session (mgr_user, BYPASSRLS) because at login time no
+    user is authenticated yet — the app_session's RLS filter would return
+    zero rows for any lookup.
     """
     if settings.auth_required:
         raise HTTPException(
@@ -131,19 +135,17 @@ async def password_login(
         )
 
     ident = request.user_name.strip()
-    user = await UserRepository(session).resolve_user(ident)
+    user = await UserRepository(login_session).resolve_user(ident)
     if not user:
-        user = await resolve_user_by_email(ident, session)
+        user = await resolve_user_by_email(ident, login_session)
     if not user:
         raise HTTPException(status_code=404, detail="User not registered")
 
-    info_result = await session.execute(select(UserInfoModel).where(UserInfoModel.user_id == user.user_id))
+    info_result = await login_session.execute(select(UserInfoModel).where(UserInfoModel.user_id == user.user_id))
     info = info_result.scalar_one_or_none()
-    gdpr_result = await session.execute(select(Gdpr).where(Gdpr.user_id == user.user_id))
-    gdpr = gdpr_result.scalar_one_or_none()
 
-    email = gdpr.email if gdpr else ident
-    name = (gdpr.legal_name if gdpr and gdpr.legal_name else None) or (info.user_name if info else ident)
+    email = info.email if info else ident
+    name = info.user_name if info else ident
 
     return TokenResponse(
         access_token=str(user.user_id),
@@ -175,25 +177,19 @@ async def me(
     Get current user information.
     Requires valid Bearer token and user must be registered in database.
 
-    - email + legal_name come from auth.gdpr (app session, SELECT granted in V32)
-    - user_name comes from public.user_info (app session)
+    v40: email + user_name + config all live in gdpr.user_info.
     """
     token_payload = getattr(user, "_token_payload", {})
     provider = token_payload.get("_provider", "authentik")
 
-    # public handle/display from app session
     result = await session.execute(select(UserInfoModel).where(UserInfoModel.user_id == user.user_id))
     info = result.scalar_one_or_none()
-
-    # PII from app session (app has SELECT on auth.gdpr after V32)
-    gdpr_result = await session.execute(select(Gdpr).where(Gdpr.user_id == user.user_id))
-    gdpr = gdpr_result.scalar_one_or_none()
 
     return MeResponse(
         user_id=user.user_id,
         sub=token_payload.get("sub"),
-        email=gdpr.email if gdpr else token_payload.get("email", ""),
-        name=(gdpr.legal_name if gdpr and gdpr.legal_name else None) or token_payload.get("name", ""),
+        email=info.email if info else token_payload.get("email", ""),
+        name=token_payload.get("name", "") or (info.user_name if info else ""),
         picture=token_payload.get("picture"),
         provider=provider,
         role=user.role,
@@ -268,30 +264,35 @@ async def update_me_email(
     session: AsyncSession = Depends(get_session),
     login_session: AsyncSession = Depends(get_login_session),
 ) -> MeResponse:
-    """Update the current user's email. Enforces uniqueness (UNIQUE on auth.gdpr.email)."""
-    try:
-        gdpr = await GdprRepository(login_session).update_email(user.user_id, request.email)
-    except ValueError as exc:
-        if "already registered" in str(exc):
-            raise HTTPException(status_code=409, detail="email already registered") from exc
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    """Update the current user's email. Enforces uniqueness (UNIQUE on gdpr.user_info.email)."""
+    existing = await UserRepository(login_session).get_by_email(request.email)
+    if existing and existing.user_id != user.user_id:
+        raise HTTPException(status_code=409, detail="email already registered")
+
+    info_result = await login_session.execute(
+        select(UserInfoModel).where(UserInfoModel.user_id == user.user_id)
+    )
+    info = info_result.scalar_one_or_none()
+    if not info:
+        raise HTTPException(status_code=403, detail="User profile not found")
+    info.email = request.email
+    login_session.add(info)
+    await login_session.commit()
+    await login_session.refresh(info)
 
     token_payload = getattr(user, "_token_payload", {})
     provider = token_payload.get("_provider", "authentik")
 
-    result = await session.execute(select(UserInfoModel).where(UserInfoModel.user_id == user.user_id))
-    info = result.scalar_one_or_none()
-
     return MeResponse(
         user_id=user.user_id,
         sub=token_payload.get("sub"),
-        email=gdpr.email,
-        name=(gdpr.legal_name if gdpr.legal_name else None) or token_payload.get("name", ""),
+        email=info.email,
+        name=token_payload.get("name", "") or info.user_name,
         picture=token_payload.get("picture"),
         provider=provider,
         role=user.role,
-        user_name=info.user_name if info else None,
-        config=info.config if info and info.config else {},
+        user_name=info.user_name,
+        config=info.config or {},
     )
 
 

@@ -20,7 +20,7 @@ class DatabaseSettings(BaseSettings):
 
     # Role-specific login users (created by migrate container)
     app_password: str = Field(default="", description="Password for app_user (POSTGRES_APP_PASSWORD)")
-    login_password: str = Field(default="", description="Password for login_user (POSTGRES_LOGIN_PASSWORD)")
+    mgr_password: str = Field(default="", description="Password for mgr_user (POSTGRES_MGR_PASSWORD)")
 
     @field_validator("url")
     @classmethod
@@ -38,7 +38,7 @@ class DatabaseSettings(BaseSettings):
             name
             for name, val in [
                 ("POSTGRES_APP_PASSWORD", self.app_password),
-                ("POSTGRES_LOGIN_PASSWORD", self.login_password),
+                ("POSTGRES_MGR_PASSWORD", self.mgr_password),
             ]
             if not val
         ]
@@ -54,9 +54,9 @@ class DatabaseSettings(BaseSettings):
 
     @property
     def login_async_url(self) -> str:
-        """Build async SQLAlchemy URL for login_user (auth endpoints, CRUD on auth schema)"""
+        """Build async SQLAlchemy URL for mgr_user (auth lookups + admin paths, BYPASSRLS)."""
         host, port = self.url.split(":")
-        return f"postgresql+asyncpg://login_user:{self.login_password}@{host}:{port}/{self.db}"
+        return f"postgresql+asyncpg://mgr_user:{self.mgr_password}@{host}:{port}/{self.db}"
 
 
 class RedisSettings(BaseSettings):

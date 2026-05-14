@@ -22,7 +22,7 @@ async def get_current_user(
     Middleware: Verify token and check user exists in database.
 
     - `user_id` token (UUID or user_name) → resolved via app session.
-    - `email` token → resolved via auth.gdpr (app session, SELECT granted in V32).
+    - `email` token → resolved via gdpr.user_info (app session).
 
     Auto-creation in AUTH_REQUIRED=false mode is disabled: it races across
     multi-worker setups. Admins must bootstrap users via the admin API.

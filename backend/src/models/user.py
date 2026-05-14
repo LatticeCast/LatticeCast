@@ -23,11 +23,17 @@ class User(SQLModel, table=True):
 
 
 class UserInfo(SQLModel, table=True):
-    """Public handle + per-user UI config — public.user_info"""
+    """User PII + handle + per-user UI config — gdpr.user_info.
+
+    v40: merged the old public.user_info + auth.gdpr split into one
+    table in the gdpr schema. A GDPR delete drops this row (or the
+    whole schema) without touching auth.users / workspaces."""
 
     __tablename__ = "user_info"
+    __table_args__ = {"schema": "gdpr"}
 
     user_id: UUID = Field(primary_key=True, foreign_key="auth.users.user_id", description="UUID FK → auth.users")
+    email: str = Field(unique=True, description="Email address (unique)")
     user_name: str = Field(index=True, unique=True, description="URL-safe slug (unique)")
     config: dict[str, Any] = Field(
         default_factory=dict,
@@ -36,27 +42,13 @@ class UserInfo(SQLModel, table=True):
     )
 
 
-class Gdpr(SQLModel, table=True):
-    """PII — auth.gdpr (login_user role only)"""
-
-    __tablename__ = "gdpr"
-    __table_args__ = {"schema": "auth"}
-
-    user_id: UUID = Field(primary_key=True, foreign_key="auth.users.user_id", description="UUID FK → auth.users")
-    email: str = Field(unique=True, description="Email address (unique)")
-    legal_name: str = Field(default="", description="Legal name")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
-    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
-
-
 class UserResponse(SQLModel):
     """User response model for API"""
 
     user_id: UUID = Field(..., description="UUID identifier")
-    email: str = Field(default="", description="Email (from auth.gdpr; requires login session)")
-    legal_name: str = Field(default="", description="Legal name (from auth.gdpr)")
+    email: str = Field(default="", description="Email (from gdpr.user_info)")
     role: RoleType = Field(..., description="User role")
-    user_name: str | None = Field(default=None, description="Public handle from user_info")
+    user_name: str | None = Field(default=None, description="Public handle from gdpr.user_info")
     config: dict[str, Any] = Field(default_factory=dict, description="Per-user UI config blob")
 
     model_config = {
@@ -65,7 +57,6 @@ class UserResponse(SQLModel):
                 {
                     "user_id": "00000000-0000-0000-0000-000000000000",
                     "email": "user@example.com",
-                    "legal_name": "User",
                     "role": "user",
                     "user_name": "user",
                 }

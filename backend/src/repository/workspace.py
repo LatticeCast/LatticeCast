@@ -54,7 +54,7 @@ class WorkspaceRepository:
         return list(result.scalars().all())
 
     async def get_members_with_info(self, workspace_id: UUID) -> list["MemberFullResponse"]:
-        from models.user import Gdpr, UserInfo
+        from models.user import UserInfo
         from models.workspace import MemberFullResponse
 
         result = await self.session.execute(
@@ -63,16 +63,15 @@ class WorkspaceRepository:
                 WorkspaceMember.user_id,
                 WorkspaceMember.role,
                 UserInfo.user_name,
-                Gdpr.email,
+                UserInfo.email,
             )
             .outerjoin(UserInfo, WorkspaceMember.user_id == UserInfo.user_id)
-            .outerjoin(Gdpr, WorkspaceMember.user_id == Gdpr.user_id)
             .where(WorkspaceMember.workspace_id == workspace_id)
         )
         return [MemberFullResponse(**row) for row in result.mappings().all()]
 
     async def get_member_with_info(self, workspace_id: UUID, user_id: UUID) -> "MemberFullResponse | None":
-        from models.user import Gdpr, UserInfo
+        from models.user import UserInfo
         from models.workspace import MemberFullResponse
 
         result = await self.session.execute(
@@ -81,10 +80,9 @@ class WorkspaceRepository:
                 WorkspaceMember.user_id,
                 WorkspaceMember.role,
                 UserInfo.user_name,
-                Gdpr.email,
+                UserInfo.email,
             )
             .outerjoin(UserInfo, WorkspaceMember.user_id == UserInfo.user_id)
-            .outerjoin(Gdpr, WorkspaceMember.user_id == Gdpr.user_id)
             .where(
                 WorkspaceMember.workspace_id == workspace_id,
                 WorkspaceMember.user_id == user_id,

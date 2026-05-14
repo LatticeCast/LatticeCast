@@ -28,7 +28,7 @@ async def _resolve_member_user(
 ) -> User:
     """Resolve user by user_id (UUID), user_name, or user_email using app session.
 
-    app has SELECT on auth.gdpr after V32, so email lookups no longer need login_session.
+    v40: email lives on gdpr.user_info; app role has SELECT on it.
     """
     from models.user import UserInfo
 

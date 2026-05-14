@@ -42,9 +42,12 @@ def _make_engine(url: str, search_path: str) -> AsyncEngine:
 async def init_db():
     """
     Initialize async engines & session factories:
-      - app_engine:   general API     (search_path=public,auth)
-      - login_engine: auth endpoints  (search_path=auth)
+      - app_engine:   general API     (search_path=public,auth,gdpr)
+      - login_engine: auth endpoints  (search_path=auth,gdpr)
     Migrations are handled by the migrate container, not the backend.
+
+    v40: gdpr schema holds user_info (PII + handle + config). Both
+    engines need it on search_path so unqualified joins work.
     """
     global engine, async_session_factory
     global app_engine, app_session_factory
@@ -59,8 +62,8 @@ async def init_db():
 
     for attempt in range(5):
         try:
-            app_engine = _make_engine(app_url, "public,auth")
-            login_engine = _make_engine(login_url, "auth")
+            app_engine = _make_engine(app_url, "public,auth,gdpr")
+            login_engine = _make_engine(login_url, "public,auth,gdpr")
 
             app_session_factory = sessionmaker(app_engine, class_=AsyncSession, expire_on_commit=False)
             login_session_factory = sessionmaker(login_engine, class_=AsyncSession, expire_on_commit=False)
