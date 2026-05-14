@@ -159,6 +159,7 @@ services:
     network_mode: host
     volumes:
       - ./.browser:/output
+      - ./browser:/scripts
     environment:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     tty: true
