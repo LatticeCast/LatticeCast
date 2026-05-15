@@ -8,10 +8,10 @@ Migration runner — lint, test on temp DB, then apply to real DB.
 ║      docker compose --profile migration run --rm \\               ║
 ║        --entrypoint python migration migrate.py --dump           ║
 ║                                                                  ║
-║  Then run the migration. This dumps the live DB to               ║
-║  .tmp/db_<YYYYMMDD_HHMMSS>.sql so if the migration loses or      ║
-║  corrupts data you can restore in seconds. AWS Backup covers     ║
-║  prod; dev relies on this manual dump.                           ║
+║  Then run the migration. This clones the live DB into a sibling  ║
+║  db_<YYYYMMDD_HHMMSS> via `CREATE DATABASE … WITH TEMPLATE` so   ║
+║  if the migration loses or corrupts data you can restore by      ║
+║  renaming. AWS Backup covers prod; dev relies on this clone.     ║
 ╚══════════════════════════════════════════════════════════════════╝
 
 Flow:
@@ -20,7 +20,7 @@ Flow:
   3. Apply to real DB
 
 Usage:
-  python migrate.py --dump           # pg_dump live DB → .tmp/db_<ts>.sql (RUN FIRST!)
+  python migrate.py --dump           # clone live DB → db_<ts> (RUN FIRST!)
   python migrate.py                  # full flow: lint → verify checksums → test → apply
   python migrate.py --apply-only     # skip lint/test, apply directly
   python migrate.py --test-only      # lint + test only, no apply
@@ -39,13 +39,11 @@ import psycopg2
 
 MIGRATION_DIR = Path(__file__).parent
 CHECKSUMS_FILE = MIGRATION_DIR / "checksums.txt"
-BACKUP_DIR = MIGRATION_DIR / ".tmp"  # bound to project root .tmp/ in compose
 PG_IMAGE = "postgres:18"
 TEST_CONTAINER = "latticecast-migration-test"
 DBA_USER = "dba_user"
 DBA_PASSWORD = "dba_pws"
 TEST_DB = "testdb"
-LIVE_DB_CONTAINER = "latticecast-db-1"
 
 
 # ── SQL splitter (handles $$ dollar-quoting) ─────────────────────────────────
@@ -460,43 +458,56 @@ def _dbname_from_dsn(dsn: str) -> str:
 
 
 def step_dump() -> bool:
-    """pg_dump the live DB → .tmp/db_<YYYYMMDD_HHMMSS>.sql.
+    """Clone the live DB into a sibling db_<YYYYMMDD_HHMMSS> via
+    `CREATE DATABASE … WITH TEMPLATE`.
 
-    RUN THIS BEFORE EVERY MIGRATION. AWS Backup covers prod; dev
-    relies on this script. Output lands at the project-root .tmp/
-    via the ./.tmp:/jetbase/.tmp bind-mount on the migration service.
+    RUN THIS BEFORE EVERY MIGRATION. AWS Backup covers prod; dev/staging
+    relies on this clone. Recovery = `ALTER DATABASE` swap of the names.
+
+    No docker exec, no host filesystem dependency — just SQL. Connects
+    via DATABASE_URL (same DSN migrate already uses); terminates other
+    sessions on the source DB so PG allows the TEMPLATE copy.
     """
-    print("\n[dump] pg_dump live DB → .tmp/")
-    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    print("\n[dump] clone live DB → sibling db_<ts>")
 
     dsn = os.environ.get("DATABASE_URL", "postgresql://dba_user:dba_pws@db:5432/db")
-    dbname = _dbname_from_dsn(dsn)
-    container = os.environ.get("LIVE_DB_CONTAINER", LIVE_DB_CONTAINER)
-    user = os.environ.get("LIVE_DB_USER", DBA_USER)
-
+    src = _dbname_from_dsn(dsn)
     ts = time.strftime("%Y%m%d_%H%M%S")
-    out = BACKUP_DIR / f"db_{ts}.sql"
+    backup = f"{src}_{ts}"
+
+    # Connect to the maintenance DB (`postgres`) — can't CREATE DATABASE
+    # from inside the source DB.
+    admin_dsn = dsn.rsplit("/", 1)[0] + "/postgres"
+    conn = psycopg2.connect(admin_dsn)
+    conn.autocommit = True
+    cur = conn.cursor()
 
     try:
-        with open(out, "w") as fh:
-            subprocess.run(
-                ["docker", "exec", container,
-                 "pg_dump", f"--username={user}", "-d", dbname],
-                stdout=fh, check=True,
-            )
-    except subprocess.CalledProcessError as exc:
-        print(f"  ✗ pg_dump failed (exit {exc.returncode}). "
-              f"Is the live DB container '{container}' running?")
-        return False
-    except FileNotFoundError:
-        print("  ✗ 'docker' binary not found. Run from a host or container "
-              "with /var/run/docker.sock mounted.")
+        # Drop conflicting names in case a prior run aborted mid-clone
+        cur.execute(f'DROP DATABASE IF EXISTS "{backup}"')
+
+        # Kick everyone else off the source so TEMPLATE copy is allowed.
+        # Sessions reconnect automatically (backend will retry).
+        cur.execute(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+            "WHERE datname = %s AND pid <> pg_backend_pid()",
+            (src,),
+        )
+
+        cur.execute(f'CREATE DATABASE "{backup}" WITH TEMPLATE "{src}"')
+    except psycopg2.Error as exc:
+        print(f"  ✗ clone failed: {exc.pgerror or exc}")
+        cur.close()
+        conn.close()
         return False
 
-    size = out.stat().st_size
-    print(f"  ✓ wrote {out.name} ({size:,} bytes)")
-    print(f"  ℹ restore:  cat .tmp/{out.name} | docker compose exec -T db "
-          f"psql -U {user} -d {dbname}")
+    cur.close()
+    conn.close()
+
+    print(f"  ✓ cloned {src!r} → {backup!r}")
+    print(f"  ℹ restore (swap names):")
+    print(f'      DROP DATABASE "{src}";')
+    print(f'      ALTER DATABASE "{backup}" RENAME TO "{src}";')
     return True
 
 
