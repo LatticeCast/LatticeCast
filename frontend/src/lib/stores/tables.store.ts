@@ -154,10 +154,7 @@ export async function reorderViews(tableId: string, order: number[]): Promise<Ta
 	return schema;
 }
 
-export async function setDefaultView(
-	tableId: string,
-	viewId: number | null
-): Promise<TableSchema> {
+export async function setDefaultView(tableId: string, viewId: number | null): Promise<TableSchema> {
 	const schema = await patchSchema(tableId, { default_view: viewId });
 	applySchema(schema);
 	return schema;

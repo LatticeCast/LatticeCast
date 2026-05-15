@@ -127,7 +127,7 @@ class AppSettings(BaseSettings):
 
     debug_mode: bool = Field(default=False, alias="DEBUG_MODE")
     auth_required: bool = Field(default=True, alias="AUTH_REQUIRED")
-    backend_port: int = Field(default=8000, alias="BACKEND_PORT")
+    NGX_PORT: int = Field(default=8000, alias="NGX_PORT")
 
     # Nested settings
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)

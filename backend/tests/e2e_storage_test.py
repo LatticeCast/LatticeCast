@@ -20,8 +20,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-BACKEND_PORT = os.environ.get("BACKEND_PORT", "13491")
-BASE_URL = os.environ.get("BASE_URL", f"http://localhost:{BACKEND_PORT}")
+NGX_PORT = os.environ.get("NGX_PORT", "13491")
+BASE_URL = os.environ.get("BASE_URL", f"http://localhost:{NGX_PORT}")
 TOKENS_FILE = Path(__file__).parent / "tokens.json"
 
 

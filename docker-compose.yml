@@ -3,13 +3,12 @@ services:
     image: nginx:alpine
     restart: always
     ports:
-      - "${BACKEND_PORT}:${BACKEND_PORT}"
+      - "${NGX_PORT}:${NGX_PORT}"
     volumes:
       - ./nginx/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
     environment:
-      LISTEN_PORT: ${BACKEND_PORT}
-      BACKEND_PORT: ${BACKEND_PORT}
-      FRONTEND_PORT: ${FRONTEND_PORT}
+      LISTEN_PORT: ${NGX_PORT}
+      NGX_PORT: ${NGX_PORT}
     depends_on:
       - frontend
       - backend
@@ -134,7 +133,6 @@ services:
     networks:
       - app-network
 
-
   backend-test:
     profiles:
       - test
@@ -145,7 +143,7 @@ services:
     env_file:
       - .env
     environment:
-      BASE_URL: http://lattice-cast:${BACKEND_PORT}
+      BASE_URL: http://lattice-cast:${NGX_PORT}
     depends_on:
       - lattice-cast
     networks:
@@ -165,7 +163,7 @@ services:
     environment:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       DATABASE_URL: postgresql://dba_user:dba_pws@localhost:15432/${POSTGRES_DB:-db}
-      BASE_URL: http://localhost:${BACKEND_PORT:-13491}
+      BASE_URL: http://localhost:${NGX_PORT:-13491}
     tty: true
     stdin_open: true
 

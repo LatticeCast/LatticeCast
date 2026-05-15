@@ -703,7 +703,7 @@
 - Enforce epic→story→issue hierarchy in planning skills
 - Story branch management + auto-cascade (children merged → parent merged)
 - `immutable_timestamp()` PG function for date column B-tree indexes
-- Ports from .env: BACKEND_PORT=13491, FRONTEND_PORT=13492
+- Ports from .env: NGX_PORT=13491, NGX_PORT=13492
 
 ## v0.5 — 2026-03-29
 - Workspace-based multi-tenant architecture (workspaces, workspace_members, shared access)

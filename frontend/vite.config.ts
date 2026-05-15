@@ -7,17 +7,19 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
 import { sveltekit } from '@sveltejs/kit/vite';
 
-const backendPort = process.env.BACKEND_PORT ?? '13491';
-const frontendPort = process.env.FRONTEND_PORT ?? '13492';
+// Single nginx port — front + back are both reachable through it in dev.
+// Internal container listeners (vite + uvicorn) also bind to NGX_PORT so
+// nginx can proxy_pass http://backend:${NGX_PORT} / http://frontend:${NGX_PORT}.
+const ngxPort = process.env.NGX_PORT ?? '13491';
 
-// Same origin via nginx — use relative /api/ in dev, full URL in prod
+// Same origin via nginx — use the nginx URL in dev, prod domain in prod.
 const backendUrls = {
-	development: `http://localhost:${backendPort}`,
+	development: `http://localhost:${ngxPort}`,
 	production: 'https://lattice-cast.posetmage.com'
 } as const;
 
 const frontendUrls = {
-	development: `http://localhost:${backendPort}`,
+	development: `http://localhost:${ngxPort}`,
 	production: 'https://lattice-cast.posetmage.com'
 } as const;
 
@@ -42,7 +44,7 @@ export default defineConfig(({ mode }) => {
 		},
 		server: {
 			host: '0.0.0.0',
-			port: parseInt(frontendPort),
+			port: parseInt(ngxPort),
 			allowedHosts
 		},
 		define: {
