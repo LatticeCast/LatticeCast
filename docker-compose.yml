@@ -73,6 +73,8 @@ services:
       POSTGRES_USER: dba_user
       POSTGRES_PASSWORD: dba_pws
       POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "15432:5432"
     volumes:
       - db_data:/var/lib/postgresql
     healthcheck:
@@ -162,6 +164,8 @@ services:
       - ./browser:/scripts
     environment:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+      DATABASE_URL: postgresql://dba_user:dba_pws@localhost:15432/${POSTGRES_DB:-db}
+      BASE_URL: http://localhost:${BACKEND_PORT:-13491}
     tty: true
     stdin_open: true
 

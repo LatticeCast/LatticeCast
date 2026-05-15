@@ -22,7 +22,7 @@ async def _build_schema(workspace_id: str, session: Any) -> dict[str, Any]:
     tables = await table_repo.list_by_workspace(UUID(workspace_id))
     out: dict[str, Any] = {}
     for t in tables:
-        cols = await view_repo.get_schema(t.workspace_id, t.table_id)
+        cols = (await view_repo.get_tables_schema(t.workspace_id, t.table_id))["columns"]
         out[t.table_id] = {
             "table_id": t.table_id,
             "columns": {

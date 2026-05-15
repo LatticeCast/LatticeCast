@@ -31,9 +31,9 @@ templates with ticket docs in MinIO. Two conceptual layers:
 
 | Layer | Tech |
 |-------|------|
-| Frontend | SvelteKit 2, Svelte 5 (Runes), Tailwind 4, Vite 7, TS 5.9, chart.js (svelte-chartjs) |
+| Frontend | SvelteKit 2, Svelte 5 (Runes), Tailwind 4, Vite 7, TS 5.9, ECharts 5 |
 | Backend | FastAPI, Python 3.12, SQLModel, asyncpg, **aioboto3** (native async) |
-| DSL | `lattice-ql` (pure-Python, hatchling) — git dep `@v0.2.0` from `github.com/latticeCast/LatticeQL`; compiles dashboard widget queries to PG SQL |
+| DSL | `lattice-ql` (pure-Python, hatchling) — wheel `v0.3.3` from GitHub releases; compiles dashboard block queries to PG SQL |
 | DB | PostgreSQL 18 — JSONB, GIN/B-tree indexes, RLS policies |
 | Cache | Valkey 8 (redis-compat) |
 | Storage | MinIO (S3-compat) — ticket markdown docs |
@@ -47,7 +47,7 @@ Browser → Nginx :13491
            ├── /api/*  → Backend (FastAPI)
            └── /*      → Frontend (Vite)
 
-Backend → PG (asyncpg, app/login roles)
+Backend → PG (asyncpg, app/mgr roles)
         → Valkey (JWKS + shared cache)
         → MinIO (aioboto3 — never blocks event loop)
 ```
@@ -57,8 +57,8 @@ Backend → PG (asyncpg, app/login roles)
 | Role | Use case | Schema access |
 |---|---|---|
 | `dba_user` | Migrations only (DBA pwd in docker-compose, NOT .env) | ALL |
-| `app_user` | General API (incl. login lookups, role updates) | `public` CRUD + `auth.users` SELECT/UPDATE(role) + `auth.gdpr` SELECT |
-| `login_user` | Register / delete only (PII-writing boundary) | `auth` INSERT/DELETE on user creation paths |
+| `app_user` | General API (CRUD + RLS-filtered reads) | `public` CRUD + `auth` SELECT + `gdpr` SELECT/UPDATE (own row via RLS) |
+| `mgr_user` | Login/admin backend — **BYPASSRLS**, sees all rows | `public`/`auth`/`gdpr` full CRUD; no DDL |
 
 ## Directory Structure
 
@@ -87,32 +87,36 @@ lattice-cast/
 └── docker-compose.yml      DBA creds hardcoded here (not .env)
 ```
 
-## Database Schema (current, after V34)
+## Database Schema (current, after V18 — v0.40 squash)
 
 See `llm.arch.db.md` for full details.
 
 ```
-auth.users         (user_id UUID PK, role, created_at, updated_at)
-auth.gdpr          (user_id FK, email UNIQUE, legal_name)        # PII — login_mgr write, app SELECT (V32)
-public.user_info   (user_id FK, user_name VARCHAR(32) UNIQUE)    # public handle
-public.workspaces  (workspace_id UUID PK, workspace_name UNIQUE)
+auth.users          (user_id UUID PK, role, created_at, updated_at)
+gdpr.user_info      (user_id FK, email UNIQUE, user_name VARCHAR(32), config JSONB)  # PII + handle
+public.workspaces   (workspace_id UUID PK, workspace_name UNIQUE)
 public.workspace_members  ((workspace_id, user_id) PK, role)
-public.tables      ((workspace_id, table_id) composite PK)       # V34: identity-only
-public.table_views ((workspace_id, table_id, name) composite PK, type, config JSONB)
-public.rows        ((workspace_id, table_id, row_id) composite PK, row_data JSONB)
+public.tables       ((workspace_id, table_id) composite PK)          # identity-only
+public.table_schemas ((workspace_id, table_id) PK, config JSONB)    # {columns, view_order, default_view}
+public.table_views  ((workspace_id, table_id, view_id BIGINT) PK, config JSONB)  # one row per view
+public.rows         ((workspace_id, table_id, row_id BIGINT) PK, row_data JSONB)
 private.schema_migrations  (filename, checksum SHA-256, applied_at)
 ```
 
 Notes:
-- `public.table_views` is one row per "thing about a table". `type`
-  discriminates: `schema` (name=`__schema__`, config=column array),
-  `order` (name=`__order__`, config=ordered name array), or one of
-  `table|kanban|timeline|dashboard` (user-named view rows).
-- Schema row cannot be deleted (BEFORE-DELETE trigger). On `tables`
-  insert an AFTER-INSERT trigger auto-creates `__schema__` + `__order__`.
+- `gdpr.user_info` merges the old `public.user_info` + `auth.gdpr` split. A
+  GDPR purge drops one row without touching `auth.users` or workspace audit trails.
+- `public.table_schemas` holds one row per table with config
+  `{columns: [...], view_order: [view_id, ...], default_view: view_id|null}`.
+  Auto-created by AFTER INSERT trigger on `public.tables`.
+- `public.table_views` holds one row per user view. `view_id` is a per-table
+  auto-increment BIGINT (same pattern as `row_id`). View name/type/settings
+  live inside `config` JSONB. Route key: `view_id` (integer), not a name string.
+- PG functions in V11-V14 own schema/view mutations (add/update/delete column,
+  create/update/delete view). BE repositories are one-line wrappers.
 - Auto-managed PG indexes per column: B-tree (num/date), GIN (select/tags/text)
 - Ticket docs: MinIO at `{workspace_id}/{table_id}/{row_id}.md`
-- RLS on `tables` + `rows` enforces workspace membership
+- RLS on `gdpr.user_info` (self-only) + all `public.*` tables (workspace member)
 
 ## Key Patterns
 
@@ -144,7 +148,7 @@ All routes live under `/api/v1/*`:
 | `/api/v1/tables/*` | Tables + columns + views |
 | `/api/v1/tables/template/{pm,crm}` | Template seeders (Layer-2) |
 | `/api/v1/tables/{id}/rows/*` | Row CRUD + doc endpoints |
-| `/api/v1/tables/{id}/views/{name}/widgets/{wid}/query` | Dashboard widget LatticeQL execution |
+| `/api/v1/tables/{id}/views/{view_id}/blocks/{block_id}/query` | Dashboard block LatticeQL execution |
 | `/api/v1/storage/*` | User file upload/download |
 | `/api/v1/admin/*` | Admin-only endpoints |
 

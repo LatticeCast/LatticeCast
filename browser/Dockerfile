@@ -2,8 +2,8 @@ FROM mcr.microsoft.com/playwright/python:v1.50.0-noble
 
 WORKDIR /app
 
-# Install playwright Python package matching the base image version
-RUN pip install --no-cache-dir playwright==1.50.0
+# Install playwright + DB connector + HTTP client
+RUN pip install --no-cache-dir playwright==1.50.0 psycopg2-binary requests
 
 # Copy scripts
 COPY *.py ./

@@ -1,5 +1,72 @@
 # Changelog
 
+## v0.42 — 2026-05-15 (date-index fix + modular e2e + docs catch-up)
+
+### Migration
+
+- **V18 — fix `create_row_data_index()` for date/datetime columns.**
+  V11's index helper lumped `date`/`datetime` with `number` and cast
+  `row_data ->> col` to `::NUMERIC`, which raises on every insert into a
+  table containing a date column (ISO-8601 strings can't cast to numeric).
+  V18 adds `immutable_iso_to_ts(TEXT) → TIMESTAMP` (an `IMMUTABLE STRICT`
+  wrapper — required for use inside index expressions), splits the
+  `number` branch from a new `date`/`datetime` branch that uses the new
+  helper, and walks `table_schemas` to drop+rebuild every existing broken
+  date/datetime partial index. Idempotent — re-running is safe.
+- **`test_migration_schema.py`** verifies `immutable_iso_to_ts` exists and
+  that `immutable_iso_to_ts('2025-05-15')::DATE::TEXT` round-trips
+  correctly.
+
+### Backend
+
+- **`TableViewRepository.get_schema()` retired.** Every call site
+  (`rows.py` doc-template injection, doc-column filtering on
+  create/update/delete; `lattice_ql._build_schema`) now uses
+  `get_tables_schema()` and reads `["columns"]`. One read shape — the
+  full schema dict — instead of two near-duplicate methods. Removes
+  the last lingering v0.39-era surface from the BE.
+
+### E2E infrastructure
+
+- **Monolithic `browser/e2e_test.py` broken up.** Per-task test scripts
+  share a small toolkit instead of duplicating bootstrap and assertions:
+  - `bootstrap.py` — PG INSERT admin user (idempotent) + BE
+    `/login/password` → `/admin/users` → workspace resolve. Returns
+    `{admin, user}` dicts with tokens + IDs for tests to consume.
+  - `e2e_helper.py` — shared `E2E` context: Playwright page + psycopg2
+    cursor, plus `assert_db()` / `assert_visible()` helpers so each step
+    can verify DB state and UI state in one place.
+  - `snapshot_decorator.py` — opt-in `@snapshot` per-step screenshot.
+    No-op unless `--snapshot` flag is passed; captures even on failure
+    (try/finally) so a broken run still shows the progression up to the
+    failing step. Output goes to `/output/<step>.png` (bind-mounted to
+    `.browser/` on host).
+  - `test_e2e_auth.py` — admin login / logout / user login, each step
+    verifying both `auth.users.role` in DB and the corresponding UI
+    state.
+  - `test_e2e_workspace_table_create.py` — workspace create, blank
+    table create, PM template table create, sidebar listing — same
+    DB+UI dual-verify pattern.
+- **Browser container can reach DB and BE.**
+  `browser/Dockerfile` now installs `psycopg2-binary` + `requests`
+  alongside Playwright. `docker-compose.yml` exposes `db` on host port
+  `15432` and injects `DATABASE_URL` + `BASE_URL` into the browser
+  service so scripts work the same whether run inside the container or
+  on the host.
+
+### Docs
+
+- **`llm.arch.auth.md`, `llm.arch.db.md`, `llm.root.md`, `llm.user.md`
+  caught up with v0.40 reality.** They still described the pre-squash
+  world (`auth.gdpr` + `public.user_info` split, `login_mgr` role,
+  `search_path=auth` only, `widgets` instead of `blocks`,
+  chart.js+svelte-chartjs instead of ECharts). All four now reflect:
+  the merged `gdpr.user_info` schema (email + user_name + config in
+  one row), the `mgr` role with `BYPASSRLS`, the V15 explicit
+  grants (default-priv machinery silently skips dba_user-owned tables),
+  RLS shape per table, `search_path=public,auth,gdpr` on both engines,
+  and the new `/me/config` + `/me/email` endpoints.
+
 ## v0.41 — 2026-05-14 (post-squash bugfixes + e2e test)
 
 ### Bugfixes caught via the new e2e suite

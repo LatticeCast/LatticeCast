@@ -170,28 +170,23 @@ AUTH_REQUIRED=true  # Set false for dev (skip OAuth, token = user_id)
 ## Database Schema
 
 ```sql
--- auth.users (auth-relevant fields, owned by login_mgr)
+-- auth.users (identity only — UUID + role)
 auth.users (
     user_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     role       VARCHAR NOT NULL DEFAULT 'user',  -- 'user' | 'admin'
     timestamps
 )
 
--- auth.gdpr (PII — login_mgr only, app role cannot SELECT)
-auth.gdpr (
+-- gdpr.user_info (PII + handle — V40 merge of old auth.gdpr + public.user_info)
+gdpr.user_info (
     user_id    UUID PK FK auth.users,
     email      VARCHAR UNIQUE NOT NULL,
-    legal_name VARCHAR NOT NULL DEFAULT ''
-)
-
--- public.user_info (public handle — visible to app role)
-public.user_info (
-    user_id    UUID PK FK auth.users,
-    user_name  VARCHAR(32) UNIQUE NOT NULL
+    user_name  VARCHAR(32) UNIQUE NOT NULL,
+    config     JSONB NOT NULL DEFAULT '{}'
 )
 ```
 
-**Split rationale**: `login_mgr` role has CRUD on `auth.*` (needs email for OAuth flow). `app` role has SELECT on `auth.users` (to verify user exists) but cannot read `auth.gdpr` (PII). Everyone can read `public.user_info` for display purposes.
+**V40 merge rationale**: `auth.gdpr` and `public.user_info` are merged into a single `gdpr.user_info` row per user. All PII (email, handle, profile config) lives in one place. A GDPR purge drops that row (or the entire `gdpr` schema) without touching `auth.users` or workspace audit trails. `mgr` role (BYPASSRLS) has full CRUD — used by login/auth paths that need email. `app` role has SELECT and UPDATE on own row only via RLS (`user_id = current_user_id`). Both engines include `gdpr` in `search_path` (v40) so unqualified references to `user_info` resolve correctly.
 
 ## Adding Auth to New Endpoints
 

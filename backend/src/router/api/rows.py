@@ -68,7 +68,7 @@ def _build_doc_template(row_type: str, key: str, title: str) -> str:
 
 async def _inject_hierarchy(content: str, table, row: Row, session: AsyncSession) -> str:
     """Replace placeholder comments in doc with live parent/children links."""
-    columns = await TableViewRepository(session).get_schema(table.workspace_id, table.table_id)
+    columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
     cols = {c["name"]: c["column_id"] for c in columns}
     key_col_id = cols.get("Key", "")
     title_col_id = cols.get("Title", "")
@@ -155,7 +155,7 @@ async def create_row(
     )
 
     # Auto-create MinIO object and fill cell for every doc-type column
-    columns = await TableViewRepository(session).get_schema(table.workspace_id, table.table_id)
+    columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
     doc_cols = [c for c in columns if c.get("type") == "doc"]
     if doc_cols:
         import json as _json
@@ -252,7 +252,7 @@ async def update_row(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     # Silently drop any attempts to change doc-type column values (system-managed)
-    columns = await TableViewRepository(session).get_schema(table.workspace_id, table.table_id)
+    columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
     doc_col_ids = {c["column_id"] for c in columns if c.get("type") == "doc"}
     if doc_col_ids:
         data = RowUpdate(row_data={k: v for k, v in data.row_data.items() if k not in doc_col_ids})
@@ -435,7 +435,7 @@ async def delete_row(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     # Delete MinIO objects for any doc-type columns (best-effort)
-    columns = await TableViewRepository(session).get_schema(table.workspace_id, table.table_id)
+    columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
     doc_cols = [c for c in columns if c.get("type") == "doc"]
     for doc_col in doc_cols:
         minio_key = row.row_data.get(doc_col["column_id"])

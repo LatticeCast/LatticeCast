@@ -116,8 +116,9 @@ class TableRepository:
         return f"idx_rd_{ascii_tid}_{cid}"
 
     async def create_column_index(self, table_id: str, column_id: str, col_type: str) -> None:
-        """app_user has no DDL — V27 defines create_row_data_index as
-        SECURITY DEFINER owned by dba; we call it via SELECT."""
+        """app_user has no DDL — V11 defines create_row_data_index as
+        SECURITY DEFINER owned by dba; V18 fixed it to use
+        immutable_iso_to_ts() for date columns instead of ::NUMERIC."""
         if col_type not in BTREE_TYPES and col_type not in GIN_TYPES:
             return
         idx_name = self._index_name(table_id, column_id)

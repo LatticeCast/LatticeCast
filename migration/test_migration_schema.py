@@ -228,4 +228,22 @@ def verify(psql_fn) -> list[str]:
         if not result:
             errors.append(f"MISSING TRIGGER FUNCTION: {fn_name}")
 
+    # V18: immutable_iso_to_ts must exist so create_row_data_index() can
+    # build btree indexes on date columns (::NUMERIC cast fails on ISO strings).
+    result = psql_fn(
+        "SELECT 1 FROM pg_proc WHERE proname='immutable_iso_to_ts';"
+    )
+    if not result:
+        errors.append("MISSING FUNCTION: immutable_iso_to_ts (V18)")
+
+    # V18: verify immutable_iso_to_ts correctly converts an ISO date string.
+    result = psql_fn(
+        "SELECT immutable_iso_to_ts('2025-05-15')::DATE::TEXT;"
+    )
+    if result.strip() != "2025-05-15":
+        errors.append(
+            f"WRONG RESULT: immutable_iso_to_ts('2025-05-15') "
+            f"expected '2025-05-15' got '{result.strip()}'"
+        )
+
     return errors
