@@ -2,12 +2,25 @@
 """
 Migration runner — lint, test on temp DB, then apply to real DB.
 
+╔══════════════════════════════════════════════════════════════════╗
+║  RULE: ALWAYS RUN `--dump` FIRST BEFORE ANY MIGRATION COMMAND.   ║
+║                                                                  ║
+║      docker compose --profile migration run --rm \\               ║
+║        --entrypoint python migration migrate.py --dump           ║
+║                                                                  ║
+║  Then run the migration. This dumps the live DB to               ║
+║  .tmp/db_<YYYYMMDD_HHMMSS>.sql so if the migration loses or      ║
+║  corrupts data you can restore in seconds. AWS Backup covers     ║
+║  prod; dev relies on this manual dump.                           ║
+╚══════════════════════════════════════════════════════════════════╝
+
 Flow:
   1. SQLFluff lint (static analysis)
   2. Apply to temp DB → run schema/RLS verification
   3. Apply to real DB
 
 Usage:
+  python migrate.py --dump           # pg_dump live DB → .tmp/db_<ts>.sql (RUN FIRST!)
   python migrate.py                  # full flow: lint → verify checksums → test → apply
   python migrate.py --apply-only     # skip lint/test, apply directly
   python migrate.py --test-only      # lint + test only, no apply
@@ -26,11 +39,13 @@ import psycopg2
 
 MIGRATION_DIR = Path(__file__).parent
 CHECKSUMS_FILE = MIGRATION_DIR / "checksums.txt"
+BACKUP_DIR = MIGRATION_DIR / ".tmp"  # bound to project root .tmp/ in compose
 PG_IMAGE = "postgres:18"
 TEST_CONTAINER = "latticecast-migration-test"
-TEST_USER = "dba_user"
-TEST_PASSWORD = "dba_pws"
+DBA_USER = "dba_user"
+DBA_PASSWORD = "dba_pws"
 TEST_DB = "testdb"
+LIVE_DB_CONTAINER = "latticecast-db-1"
 
 
 # ── SQL splitter (handles $$ dollar-quoting) ─────────────────────────────────
@@ -306,7 +321,7 @@ def psql_query(sql: str) -> str:
     """Run SQL against the test container."""
     result = run(
         ["docker", "exec", TEST_CONTAINER,
-         "psql", f"--username={TEST_USER}", f"--dbname={TEST_DB}",
+         "psql", f"--username={DBA_USER}", f"--dbname={TEST_DB}",
          "--no-password", "--tuples-only", "--no-align",
          "--command", sql],
         capture=True,
@@ -377,8 +392,8 @@ def step_test() -> bool:
         run_args = [
             "docker", "run", "--rm", "--detach",
             "--name", TEST_CONTAINER,
-            "--env", f"POSTGRES_USER={TEST_USER}",
-            "--env", f"POSTGRES_PASSWORD={TEST_PASSWORD}",
+            "--env", f"POSTGRES_USER={DBA_USER}",
+            "--env", f"POSTGRES_PASSWORD={DBA_PASSWORD}",
             "--env", f"POSTGRES_DB={TEST_DB}",
         ]
         if pg_host == "localhost":
@@ -389,7 +404,7 @@ def step_test() -> bool:
         run(run_args)
 
         # Wait for ready — retry actual connection, not just pg_isready
-        test_dsn = f"postgresql://{TEST_USER}:{TEST_PASSWORD}@{pg_host}:{pg_port}/{TEST_DB}"
+        test_dsn = f"postgresql://{DBA_USER}:{DBA_PASSWORD}@{pg_host}:{pg_port}/{TEST_DB}"
         for attempt in range(20):
             try:
                 conn = psycopg2.connect(test_dsn)
@@ -439,6 +454,52 @@ def step_apply() -> bool:
     return True
 
 
+def _dbname_from_dsn(dsn: str) -> str:
+    """postgresql://user:pw@host:port/dbname → dbname"""
+    return dsn.rsplit("/", 1)[-1].split("?", 1)[0]
+
+
+def step_dump() -> bool:
+    """pg_dump the live DB → .tmp/db_<YYYYMMDD_HHMMSS>.sql.
+
+    RUN THIS BEFORE EVERY MIGRATION. AWS Backup covers prod; dev
+    relies on this script. Output lands at the project-root .tmp/
+    via the ./.tmp:/jetbase/.tmp bind-mount on the migration service.
+    """
+    print("\n[dump] pg_dump live DB → .tmp/")
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+
+    dsn = os.environ.get("DATABASE_URL", "postgresql://dba_user:dba_pws@db:5432/db")
+    dbname = _dbname_from_dsn(dsn)
+    container = os.environ.get("LIVE_DB_CONTAINER", LIVE_DB_CONTAINER)
+    user = os.environ.get("LIVE_DB_USER", DBA_USER)
+
+    ts = time.strftime("%Y%m%d_%H%M%S")
+    out = BACKUP_DIR / f"db_{ts}.sql"
+
+    try:
+        with open(out, "w") as fh:
+            subprocess.run(
+                ["docker", "exec", container,
+                 "pg_dump", f"--username={user}", "-d", dbname],
+                stdout=fh, check=True,
+            )
+    except subprocess.CalledProcessError as exc:
+        print(f"  ✗ pg_dump failed (exit {exc.returncode}). "
+              f"Is the live DB container '{container}' running?")
+        return False
+    except FileNotFoundError:
+        print("  ✗ 'docker' binary not found. Run from a host or container "
+              "with /var/run/docker.sock mounted.")
+        return False
+
+    size = out.stat().st_size
+    print(f"  ✓ wrote {out.name} ({size:,} bytes)")
+    print(f"  ℹ restore:  cat .tmp/{out.name} | docker compose exec -T db "
+          f"psql -U {user} -d {dbname}")
+    return True
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -451,6 +512,12 @@ def main() -> None:
         _write_checksums_file(checksums)
         print(f"\n✅ Wrote {CHECKSUMS_FILE.name} ({len(checksums)} file(s)).")
         print("   Commit it alongside your SQL changes.")
+        return
+
+    if "--dump" in sys.argv:
+        if not step_dump():
+            sys.exit(1)
+        print("\n✅ Done.")
         return
 
     test_only = "--test-only" in sys.argv

@@ -97,6 +97,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./migration:/jetbase
+      - ./.tmp:/jetbase/.tmp
     command: ["python", "migrate.py"]
     depends_on:
       db:
