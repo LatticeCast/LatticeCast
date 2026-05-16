@@ -65,6 +65,7 @@
 
 	<!-- Editor panel -->
 	<div
+		data-testid="doc-cell-editor"
 		class="fixed top-1/2 left-1/2 z-[10000] flex h-[70vh] w-[80vw] max-w-5xl -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl shadow-2xl {isDark.value
 			? 'bg-gray-800'
 			: 'bg-white'}"
@@ -100,6 +101,7 @@
 					{docSaving ? 'saving…' : 'Markdown'}
 				</span>
 				<button
+					data-testid="doc-cell-editor-close"
 					onclick={handleClose}
 					class="rounded-lg p-1.5 text-white/70 transition hover:bg-white/20 hover:text-white"
 					aria-label="Close"
@@ -159,6 +161,7 @@
 			>
 				<!-- Editor pane -->
 				<textarea
+					data-testid="doc-cell-editor-textarea"
 					class="flex-1 resize-none border-none px-5 py-4 font-mono text-sm outline-none {isDark.value
 						? 'bg-gray-800 text-gray-200'
 						: 'text-gray-800'}"

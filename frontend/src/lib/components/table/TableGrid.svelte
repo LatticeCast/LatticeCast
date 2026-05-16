@@ -738,6 +738,7 @@
 										</button>
 									{:else if col.type === 'doc'}
 										<button
+											data-testid="doc-open-{row.row_id}-{col.column_id}"
 											class="flex items-center gap-1.5 rounded px-2 py-1 text-xs transition hover:bg-blue-50 hover:text-blue-700"
 											onclick={(e) => {
 												e.stopPropagation();
