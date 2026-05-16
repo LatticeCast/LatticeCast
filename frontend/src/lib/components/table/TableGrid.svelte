@@ -226,6 +226,7 @@
 										</svg>
 									</span>
 									<button
+										data-testid="col-menu-toggle-{col.column_id}"
 										onclick={(e) => {
 											e.stopPropagation();
 											onColMenuChange(colMenuId === col.column_id ? null : col.column_id);
@@ -293,6 +294,7 @@
 									</button>
 									{#if col.type === 'select' || col.type === 'tags'}
 										<button
+											data-testid="col-manage-options-{col.column_id}"
 											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value
 												? 'text-gray-300 hover:bg-gray-700'
 												: 'text-gray-700 hover:bg-gray-50'}"
@@ -781,6 +783,7 @@
 										{#if selVal}
 											{@const color = getChoiceColor(col, selVal)}
 											<span
+												data-testid="select-cell-{row.row_id}-{col.column_id}"
 												class="inline-flex cursor-pointer items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.cls}"
 												style={color.style}>{selVal}</span
 											>

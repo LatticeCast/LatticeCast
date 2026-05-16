@@ -325,6 +325,7 @@
 						: 'border-gray-200'}"
 				>
 					<span
+						data-testid="kanban-lane-header-{lane.value || 'empty'}"
 						class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.cls}"
 						style={color.style}
 					>
