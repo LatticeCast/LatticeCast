@@ -15,6 +15,7 @@ if touch migration sql, ALWAYS need load skill sql
 ## Rules
 - When editing any `.claude/skills/*/SKILL.md`, MUST bump `version:` in frontmatter (patch for fixes, minor for features). No exceptions.
 - `.claude/skills/` is a **git submodule**. After editing files inside it, MUST commit inside the submodule first (`cd .claude/skills && git add && git commit`), then commit the submodule reference in the parent repo (`git add .claude/skills && git commit`).
+- **Long leading `sleep` is blocked by the harness.** `sleep 30 && cat <file>` will not run. To wait for a background job, poll with `until <check>; do sleep 2; done` (Monitor tool also works for streaming events). Never chain shorter sleeps to work around the block.
 
 ## Frontend Debug
 
