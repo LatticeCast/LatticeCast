@@ -29,7 +29,6 @@ from datetime import datetime
 import requests
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
-from e2e_base import install_be_reroute
 
 BASE_URL = os.environ.get("BASE_URL", "http://localhost:13491").rstrip("/")
 BROWSER_WS = os.environ.get("BROWSER_WS", "")
@@ -198,7 +197,6 @@ def run(snapshot: bool = False) -> dict:
 
     try:
         page = browser.new_page(viewport={"width": 1400, "height": 900})
-        install_be_reroute(page)
         # Seed auth in localStorage before any navigation
         page.goto(BASE_URL, wait_until="domcontentloaded")
         page.evaluate(

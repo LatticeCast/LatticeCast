@@ -26,7 +26,6 @@ import time
 import requests
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
-from e2e_base import install_be_reroute
 
 BASE = os.environ["BASE_URL"].rstrip("/")
 # Vite dev mode bakes "localhost" as the backend URL. In the browser
@@ -177,7 +176,6 @@ def main(snapshot: bool = False) -> None:
         ctx = browser.new_context(viewport={"width": 1400, "height": 900})
         ctx.add_init_script(f"localStorage.setItem('loginInfo', {repr(login_info)});")
         page = ctx.new_page()
-        install_be_reroute(page)
 
         wait_table_page(page, ws_name, TABLE_ID)
         print("[ok] navigated to table page")

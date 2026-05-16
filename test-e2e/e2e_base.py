@@ -4,11 +4,8 @@ Test files import from here instead of redefining env / reroute / auth
 boilerplate. Keeps the per-test scripts focused on one topic.
 
 Exports:
-    BASE        — backend base URL (BASE_URL env, lattice-cast inside docker)
+    BASE        — backend base URL (BASE_URL env, default http://localhost:13491)
     BROWSER_WS  — playwright remote ws URL (BROWSER_WS env)
-    install_be_reroute(page)
-                — wire URL rewrite so the FE's vite-baked
-                  http://localhost:13491 reaches the BE service hostname.
     login(user_name, password="") -> token
     api(method, path, token, **kw) -> requests.Response
     make_login_info(token, user_name, role="admin") -> JSON str
@@ -27,7 +24,7 @@ from typing import Any
 
 import requests
 
-BASE: str = os.environ.get("BASE_URL", "http://lattice-cast:13491").rstrip("/")
+BASE: str = os.environ.get("BASE_URL", "http://localhost:13491").rstrip("/")
 BROWSER_WS: str = os.environ.get("BROWSER_WS", "")
 
 
@@ -42,26 +39,12 @@ def connect_browser(pw):
         fatal("BROWSER_WS env var not set — must point at ws://browser:4444")
     return pw.chromium.connect(BROWSER_WS)
 
-# Vite dev mode bakes the public URL as the backend. From inside the
-# browser container, that hostname isn't reachable — we rewrite it on
-# the fly via Playwright's page.route() to the in-cluster service name.
-_FRONTEND_BE: str = BASE.replace("lattice-cast", "localhost")
-
 
 def fatal(msg: str) -> None:
     print(f"FAIL: {msg}", file=sys.stderr)
     sys.exit(1)
 
 
-def install_be_reroute(page) -> None:
-    """Rewrite FE → BE requests so the browser container can reach the BE."""
-    if _FRONTEND_BE == BASE:
-        return
-
-    def _reroute(route):
-        route.continue_(url=route.request.url.replace(_FRONTEND_BE, BASE))
-
-    page.route(f"{_FRONTEND_BE}/**", _reroute)
 
 
 def login(user_name: str, password: str = "") -> str:

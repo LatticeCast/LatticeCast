@@ -146,21 +146,27 @@ services:
     env_file:
       - .env
     environment:
-      BASE_URL: http://lattice-cast:${NGX_PORT}
-      # Playwright server endpoint on the browser service:
-      BROWSER_WS: ws://browser:4444
+      # E2E targets — override in .env to test against staging/prod.
+      # Defaults assume local dev with `network_mode: host` below, so
+      # `localhost:${NGX_PORT}` inside the container IS the host's nginx,
+      # identical to what a real developer hits in their browser.
+      BASE_URL: ${E2E_BASE_URL:-http://localhost:${NGX_PORT}}
+      # Browser's playwright run-server is also on host network → localhost.
+      BROWSER_WS: ${E2E_BROWSER_WS:-ws://localhost:4444}
+    # Bridge straight to host network — same network namespace as the
+    # developer's machine. Tests run exactly like a real user: open
+    # http://localhost:${NGX_PORT}/, FE fetches http://localhost:${NGX_PORT}/api/...
+    network_mode: host
     depends_on:
       - lattice-cast
       - browser
-    networks:
-      - shared-network
     tty: true
     stdin_open: true
 
-  # Headless Chromium host. Runs `playwright run-server` so test-e2e can
-  # remote-drive the browser via the BROWSER_WS endpoint. The Playwright
-  # Python image bundles browser binaries but NOT the pip package, so a
-  # tiny Dockerfile.browser layers `pip install playwright` on top.
+  # Headless Chromium host. Runs `playwright run-server` on :4444 so the
+  # test-e2e container can remote-drive it. Also shares the host network
+  # so the FE running inside Chromium can fetch http://localhost:13491/api/...
+  # exactly like the developer's local browser would.
   browser:
     profiles:
       - test
@@ -171,8 +177,7 @@ services:
       - ./.browser:/output
     environment:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
-    networks:
-      - shared-network
+    network_mode: host
 
 networks:
   app-network:

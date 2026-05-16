@@ -35,7 +35,7 @@ import time
 import requests
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, BROWSER_WS, fatal, install_be_reroute, login, api, seed_login_info
+from e2e_base import BASE, BROWSER_WS, fatal, login, api, seed_login_info
 
 ADMIN_USER = "lattice"
 _SUFFIX = int(time.time()) % 100000
@@ -129,7 +129,6 @@ def main() -> None:
         with sync_playwright() as pw:
             browser = pw.chromium.connect(BROWSER_WS)
             page = browser.new_page(viewport={"width": 1400, "height": 900})
-            install_be_reroute(page)
             seed_login_info(page, token, ADMIN_USER)
 
             goto_table(page, ws_id, TABLE_ID)

@@ -39,7 +39,6 @@ import time
 import requests
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
-from e2e_base import install_be_reroute
 
 BASE = os.environ["BASE_URL"].rstrip("/")
 WS_URL = os.environ["BROWSER_WS"]
@@ -48,8 +47,6 @@ _SUFFIX = int(time.time()) % 100000
 WORKSPACE_NAME = f"kb-grp-{_SUFFIX}"
 TABLE_ID = f"kb-{_SUFFIX}"
 
-# Vite dev mode bakes in localhost as the backend URL.
-# In the browser container, localhost != lattice-cast, so we rewrite.
 
 
 def fatal(msg: str) -> None:
@@ -147,7 +144,6 @@ def main() -> None:
         with sync_playwright() as pw:
             browser = pw.chromium.connect(WS_URL)
             page = browser.new_page(viewport={"width": 1400, "height": 900})
-            install_be_reroute(page)
 
             # Inject auth into localStorage before navigating to the table
             page.goto(BASE, wait_until="domcontentloaded")

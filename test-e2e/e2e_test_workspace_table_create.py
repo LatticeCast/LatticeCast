@@ -25,9 +25,8 @@ import urllib.error
 from datetime import datetime
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
-from e2e_base import install_be_reroute
 
-BASE_URL = os.environ.get("BASE_URL", "http://lattice-cast:13491").rstrip("/")
+BASE_URL = os.environ.get("BASE_URL", "http://localhost:13491").rstrip("/")
 SCREENSHOT_DIR = "/output"
 
 # Auth: use /login/password to get UUID token (user_name lookup via app session
@@ -135,7 +134,6 @@ def run(snapshot: bool = False) -> dict:
             f"localStorage.setItem('loginInfo', JSON.stringify({json.dumps(login_info)}));"
         )
         page = _make_page(ctx)
-        install_be_reroute(page)
 
         # ── Step 1: Navigate to the user's workspace ────────────────────────────
         print(f"[1] Navigate to /{ws_name}/ workspace")
