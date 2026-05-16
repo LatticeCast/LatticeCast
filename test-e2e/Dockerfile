@@ -1,14 +1,13 @@
-FROM mcr.microsoft.com/playwright/python:v1.50.0-noble
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-WORKDIR /app
+WORKDIR /scripts
 
-# Install playwright + DB connector + HTTP client
-RUN pip install --no-cache-dir playwright==1.50.0 psycopg2-binary requests
-
-# Copy scripts
-COPY *.py ./
-
-# Create output directory
-RUN mkdir -p /output
+# Test runner deps only — psycopg2 for DB checks, requests for BE API,
+# docker SDK to drive the separate .browser container for UI steps.
+# Playwright/Chromium stay in the browser image; test-e2e does NOT run
+# them itself.
+COPY pyproject.toml ./
+ENV UV_HTTP_TIMEOUT=180
+RUN uv pip install --system --no-cache -r pyproject.toml
 
 CMD ["tail", "-f", "/dev/null"]

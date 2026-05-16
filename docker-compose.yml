@@ -133,39 +133,51 @@ services:
     networks:
       - app-network
 
-  backend-test:
+  # E2E test runner — uv image, has Playwright (client lib) + requests.
+  # No browsers installed here; chromium runs in the `browser` service
+  # and test-e2e connects to it via `sync_playwright().chromium.connect()`.
+  test-e2e:
     profiles:
       - test
     build:
-      context: ./backend
+      context: ./test-e2e
     volumes:
-      - ./backend/tests:/app/tests:ro
+      - ./test-e2e:/scripts
     env_file:
       - .env
     environment:
       BASE_URL: http://lattice-cast:${NGX_PORT}
+      # Playwright server endpoint on the browser service:
+      BROWSER_WS: ws://browser:4444
     depends_on:
       - lattice-cast
+      - browser
     networks:
       - shared-network
-    command: ["python", "tests/run_all_tests.py"]
-
-  browser:
-    profiles:
-      - browser
-    build:
-      context: ./browser
-    user: "1000:1000"
-    network_mode: host
-    volumes:
-      - ./.browser:/output
-      - ./browser:/scripts
-    environment:
-      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
-      DATABASE_URL: postgresql://dba_user:dba_pws@localhost:15432/${POSTGRES_DB:-db}
-      BASE_URL: http://localhost:${NGX_PORT:-13491}
     tty: true
     stdin_open: true
+
+  # Headless Chromium host. Runs `playwright run-server` so test-e2e can
+  # remote-drive the browser via the BROWSER_WS endpoint.
+  browser:
+    profiles:
+      - test
+    image: mcr.microsoft.com/playwright/python:v1.50.0-noble
+    volumes:
+      - ./.browser:/output
+    environment:
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    networks:
+      - shared-network
+    command:
+      - python
+      - -m
+      - playwright
+      - run-server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "4444"
 
 networks:
   app-network:
