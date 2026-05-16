@@ -110,7 +110,6 @@ def main() -> None:
         created_row_ids.append(row["row_id"])
         # Each row also gets a doc (markdown body uploaded to MinIO)
         d = api("PUT", f"/api/v1/tables/{TABLE_ID}/rows/{row['row_id']}/doc", token,
-                headers={"Authorization": f"Bearer {token}", "Content-Type": "text/plain"},
                 data=body)
         if d.status_code not in (200, 201):
             fatal(f"upload doc for row {row['row_id']}: {d.status_code} {d.text[:200]}")

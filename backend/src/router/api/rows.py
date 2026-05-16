@@ -237,6 +237,22 @@ async def list_rows(
 # --------------------------------------------------
 
 
+@router.get("/tables/{table_id}/rows/{row_id}", response_model=RowResponse)
+async def get_row(
+    table_id: str,
+    row_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+):
+    """Get a single row by row_id (user must be a workspace member)"""
+    table = await _get_table_for_member(table_id, user, session)
+    repo = RowRepository(session)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+    return row
+
+
 @router.put("/tables/{table_id}/rows/{row_id}", response_model=RowResponse)
 async def update_row(
     table_id: str,
