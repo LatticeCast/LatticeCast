@@ -108,10 +108,22 @@
 		if (!from || !$authStore?.accessToken) return;
 		const wsId = $page.params.workspace_id;
 		if (!wsId) return;
-		const found = workspaces.some(
-			(w) => w.workspace_id === wsId || w.workspace_name === decodeURIComponent(wsId)
+		const decoded = decodeURIComponent(wsId);
+		const ws = workspaces.find(
+			(w) => w.workspace_id === wsId || w.workspace_name === decoded
 		);
-		if (!found) loadSidebarData();
+		if (!ws) {
+			loadSidebarData();
+			return;
+		}
+		// Refresh when navigating to a table the sidebar hasn't seen yet
+		// (e.g. just-created via "Create" or PM template) — without this,
+		// the sidebar tree shows stale until the user reloads.
+		const tableId = $page.params.table_id;
+		if (tableId) {
+			const known = tablesByWorkspace[ws.workspace_id]?.some((t) => t.table_id === tableId);
+			if (!known) loadSidebarData();
+		}
 	});
 
 	const handleLogout = () => {
@@ -149,6 +161,7 @@
 							{@const isExpanded = expandedWorkspaces.has(ws.workspace_id)}
 							<div>
 								<button
+									data-testid="sidebar-workspace-{ws.workspace_name}"
 									onclick={() => toggleWorkspace(ws.workspace_id)}
 									class="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm text-gray-700 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-400"
 								>
@@ -197,6 +210,7 @@
 										</button>
 										{#each wsTables as table (table.table_id)}
 											<button
+												data-testid="sidebar-table-{table.table_id}"
 												onclick={() => {
 													navigate(`/${ws.workspace_id}/${table.table_id}`);
 												}}

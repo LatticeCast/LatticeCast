@@ -23,11 +23,16 @@ class TableViewRepository:
     # ── Row access ────────────────────────────────────────────────────────
 
     async def list_all(self, workspace_id: UUID, table_id: str) -> list[TableView]:
+        # populate_existing=True forces SA to overwrite any cached
+        # TableView instances in the identity map with fresh DB rows.
+        # Without it, after a PG-function UPDATE the session keeps the
+        # stale ORM object (expire_on_commit=False) and returns it here
+        # — leading to PUT /views/{vid} responses with the OLD config.
         result = await self.session.execute(
             select(TableView).where(
                 TableView.workspace_id == workspace_id,
                 TableView.table_id == table_id,
-            )
+            ).execution_options(populate_existing=True)
         )
         return list(result.scalars().all())
 
@@ -39,7 +44,7 @@ class TableViewRepository:
                 TableView.workspace_id == workspace_id,
                 TableView.table_id == table_id,
                 TableView.view_id == view_id,
-            )
+            ).execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
 

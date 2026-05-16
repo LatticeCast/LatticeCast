@@ -4,7 +4,7 @@
 // applySchema() replaces local stores from that one response — FE never
 // derives or merges schema state.
 
-import { writable } from 'svelte/store';
+import { writable, get } from 'svelte/store';
 import type {
 	Column,
 	Row,
@@ -100,9 +100,13 @@ export async function loadTable(table: Table): Promise<void> {
 	}
 }
 
-export async function refreshTable(tableId: string): Promise<void> {
+export async function refreshTable(tableId: string, workspaceId?: string): Promise<void> {
+	// Default to the currently-loaded table's workspace so all the
+	// mutation-then-refresh paths stay disambiguated without every
+	// caller having to pass it explicitly. See fetchTable() doc.
+	const wsId = workspaceId ?? get(currentTable)?.workspace_id;
 	try {
-		const table = await fetchTable(tableId);
+		const table = await fetchTable(tableId, wsId);
 		currentTable.set(table);
 		columns.set(table.columns ?? []);
 		views.set(table.views ?? []);

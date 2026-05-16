@@ -10,6 +10,7 @@
 """
 
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -81,10 +82,14 @@ async def list_tables(
 @router.get("/{table_id}", response_model=TableResponse)
 async def get_table(
     table_id: str,
+    workspace_id: UUID | None = None,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    table = await _get_table_for_member(table_id, user, session)
+    """Read a table's full schema. `workspace_id` query param disambiguates
+    when the user belongs to multiple workspaces that each have a table
+    with this `table_id` (the URL `/{ws}/{tid}` collision case)."""
+    table = await _get_table_for_member(table_id, user, session, workspace_id=workspace_id)
     return await _build_table_response(table, session)
 
 

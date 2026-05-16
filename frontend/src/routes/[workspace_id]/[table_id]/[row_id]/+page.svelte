@@ -43,7 +43,7 @@
 			return;
 		}
 		try {
-			const [t, rows] = await Promise.all([fetchTable(tableId), fetchRows(tableId, 0, 200)]);
+			const [t, rows] = await Promise.all([fetchTable(tableId, $page.params.workspace_id), fetchRows(tableId, 0, 200)]);
 			table = t;
 			row = rows.find((r) => r.row_id === rowNumberParam) ?? null;
 			if (!row) {

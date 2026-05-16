@@ -366,19 +366,19 @@ def run(snapshot: bool = False) -> dict:
         menu_nav = page.get_by_test_id("menu-nav")
         menu_nav.wait_for(state="visible", timeout=5000)
 
-        # Expand the new workspace in the sidebar tree (click workspace button by name)
-        ws_expand_btn = menu_nav.get_by_text(NEW_WS_NAME, exact=False).first
-        try:
-            ws_expand_btn.wait_for(state="visible", timeout=5000)
-            ws_expand_btn.click()
-        except PlaywrightTimeout:
-            pass  # Workspace may already be expanded
+        # Click the new workspace's sidebar entry to expand it. Idempotent —
+        # if already expanded, click toggles; we re-check visibility either way.
+        ws_btn = page.get_by_test_id(f"sidebar-workspace-{NEW_WS_NAME}")
+        ws_btn.wait_for(state="visible", timeout=5000)
+        # Expand if not already (table testids only render under expanded ws)
+        if not page.get_by_test_id(f"sidebar-table-{BLANK_TABLE_NAME}").count():
+            ws_btn.click()
 
         if snapshot:
             _snap(page, "t15_09_sidebar_expanded")
 
-        blank_in_sidebar = menu_nav.get_by_text(BLANK_TABLE_NAME, exact=True).count()
-        pm_in_sidebar = menu_nav.get_by_text(PM_TABLE_NAME, exact=True).count()
+        blank_in_sidebar = page.get_by_test_id(f"sidebar-table-{BLANK_TABLE_NAME}").count()
+        pm_in_sidebar = page.get_by_test_id(f"sidebar-table-{PM_TABLE_NAME}").count()
 
         results["checks"]["sidebar_blank"] = "pass" if blank_in_sidebar > 0 else f"fail: '{BLANK_TABLE_NAME}' not found in sidebar"
         results["checks"]["sidebar_pm"] = "pass" if pm_in_sidebar > 0 else f"fail: '{PM_TABLE_NAME}' not found in sidebar"

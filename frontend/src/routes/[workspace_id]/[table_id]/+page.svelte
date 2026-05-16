@@ -172,7 +172,7 @@
 				return;
 			}
 			try {
-				const [table] = await Promise.all([fetchTable(tableId), loadWorkspaces()]);
+				const [table] = await Promise.all([fetchTable(tableId, $page.params.workspace_id), loadWorkspaces()]);
 				await loadTable(table);
 				tableLoaded = true;
 				// Non-blocking: load doc flags in background, don't block page render

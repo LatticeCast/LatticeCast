@@ -38,9 +38,13 @@ export async function createTable(data: CreateTable): Promise<Table> {
 	return response.json();
 }
 
-export async function fetchTable(tableId: string): Promise<Table> {
+export async function fetchTable(tableId: string, workspaceId?: string): Promise<Table> {
+	// workspaceId disambiguates when two of the user's workspaces both
+	// have a table with the same `tableId` — without it BE picks one
+	// arbitrarily (the bug behind seo_framework's empty-Title-cell render).
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}`, { headers });
+	const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}${qs}`, { headers });
 	if (!response.ok) throw new Error(`Failed to fetch table: ${response.statusText}`);
 	return response.json();
 }

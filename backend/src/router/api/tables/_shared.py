@@ -1,4 +1,5 @@
 from typing import Any
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,12 +19,31 @@ async def _get_table_for_member(
     table_id: str,
     user: User,
     session: AsyncSession,
+    workspace_id: UUID | None = None,
 ) -> Table:
+    """Resolve a table the user can access.
+
+    table_id is unique only WITHIN a workspace — different workspaces may
+    each have a table with the same string id (e.g. two users both have
+    `articles`). When the caller knows the workspace (URL like
+    /{workspace_id}/{table_id}), pass `workspace_id` to scope the lookup
+    unambiguously. When omitted, we fall back to a search across every
+    workspace the user belongs to and pick the first match — fine for
+    the rare case where only the table_id is known, but ambiguous when
+    names collide.
+    """
     ws_repo = WorkspaceRepository(session)
-    workspaces = await ws_repo.list_by_user(user.user_id)
-    workspace_ids = [ws.workspace_id for ws in workspaces]
     table_repo = TableRepository(session)
-    table = await table_repo.resolve_table_global(table_id, workspace_ids)
+
+    if workspace_id is not None:
+        if not await ws_repo.is_member(workspace_id, user.user_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
+        table = await table_repo.resolve_table_global(table_id, [workspace_id])
+    else:
+        workspaces = await ws_repo.list_by_user(user.user_id)
+        workspace_ids = [ws.workspace_id for ws in workspaces]
+        table = await table_repo.resolve_table_global(table_id, workspace_ids)
+
     if not table:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
     if not await ws_repo.is_member(table.workspace_id, user.user_id):
