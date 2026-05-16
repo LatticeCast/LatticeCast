@@ -83,52 +83,52 @@ async def create_user(
         role=data.role,
         user_name=data.user_name,
     )
-    return await _build_response(user, session)
+    return await _build_response(user, login_session)
 
 
 @router.get("", response_model=UserListResponse)
 async def list_users(
     offset: int = Query(default=0, ge=0, description="Number of records to skip"),
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum number of records to return"),
-    session: AsyncSession = Depends(get_session),
+    login_session: AsyncSession = Depends(get_login_session),
 ) -> UserListResponse:
-    count_result = await session.execute(select(func.count()).select_from(User))
+    count_result = await login_session.execute(select(func.count()).select_from(User))
     total = count_result.scalar() or 0
 
-    result = await session.execute(select(User).offset(offset).limit(limit))
+    result = await login_session.execute(select(User).offset(offset).limit(limit))
     users = result.scalars().all()
 
-    out = [await _build_response(u, session) for u in users]
+    out = [await _build_response(u, login_session) for u in users]
     return UserListResponse(users=out, total=total, offset=offset, limit=limit)
 
 
 @router.get("/{user_email}", response_model=UserResponse)
 async def get_user(
     user_email: str,
-    session: AsyncSession = Depends(get_session),
+    login_session: AsyncSession = Depends(get_login_session),
 ):
-    user = await UserRepository(session).get_by_email(user_email)
+    user = await UserRepository(login_session).get_by_email(user_email)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-    return await _build_response(user, session)
+    return await _build_response(user, login_session)
 
 
 @router.put("/{user_email}", response_model=UserResponse)
 async def update_user(
     user_email: str,
     data: UserUpdate,
-    session: AsyncSession = Depends(get_session),
+    login_session: AsyncSession = Depends(get_login_session),
 ):
-    user = await UserRepository(session).get_by_email(user_email)
+    user = await UserRepository(login_session).get_by_email(user_email)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     if data.role is not None:
         user.role = data.role
-        session.add(user)
-        await session.commit()
-        await session.refresh(user)
-    return await _build_response(user, session)
+        login_session.add(user)
+        await login_session.commit()
+        await login_session.refresh(user)
+    return await _build_response(user, login_session)
 
 
 @router.delete("/{user_email}", status_code=status.HTTP_204_NO_CONTENT)
