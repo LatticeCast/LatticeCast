@@ -379,7 +379,8 @@
 				<div class="mb-3 flex gap-2">
 					<input
 						type="text"
-						bind:value={newTableNames[activeWorkspace.workspace_id]}
+						data-testid="create-table-name-input"
+							bind:value={newTableNames[activeWorkspace.workspace_id]}
 						onkeydown={(e) => {
 							if (e.key === 'Enter') handleCreate(activeWorkspace.workspace_id);
 						}}
@@ -387,7 +388,8 @@
 						class="flex-1 rounded-2xl border-2 {T.inputBorder} {T.inputBg} px-4 py-2.5 {T.body} {T.placeholder} {T.inputFocusBorder} focus:outline-none"
 					/>
 					<button
-						onclick={() => handleCreate(activeWorkspace.workspace_id)}
+						data-testid="create-table-submit"
+							onclick={() => handleCreate(activeWorkspace.workspace_id)}
 						disabled={creating[activeWorkspace.workspace_id] ||
 							!(newTableNames[activeWorkspace.workspace_id] ?? '').trim()}
 						class="rounded-2xl bg-blue-600 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
@@ -395,7 +397,8 @@
 						{creating[activeWorkspace.workspace_id] ? 'Creating...' : 'Create'}
 					</button>
 					<button
-						onclick={() => openTemplateModal(activeWorkspace.workspace_id)}
+						data-testid="create-table-from-template-btn"
+							onclick={() => openTemplateModal(activeWorkspace.workspace_id)}
 						class="rounded-2xl border-2 {T.badgeBorder} {T.cardBg} px-4 py-2.5 font-semibold {T.badgeText} transition {T.hoverBg}"
 					>
 						From Template
@@ -414,6 +417,7 @@
 								class="flex items-center gap-3 rounded-2xl {T.cardBg} px-4 py-4 shadow-sm transition {T.hoverBg}"
 							>
 								<button
+									data-testid="table-card-{table.table_id}"
 									onclick={() =>
 										goto(
 											`/${encodeURIComponent(activeWorkspace.workspace_name)}/${table.table_id}`
@@ -614,6 +618,7 @@
 				<input
 					type="text"
 					bind:value={templateName}
+					data-testid="pm-template-name-input"
 					placeholder="Project name..."
 					class="w-full rounded-xl border-2 {T.inputBorder} {T.inputBg} px-3 py-2 {T.body} {T.placeholder} {T.inputFocusBorder} focus:outline-none"
 				/>
@@ -627,6 +632,7 @@
 					Cancel
 				</button>
 				<button
+					data-testid="pm-template-submit"
 					onclick={handlePmTemplate}
 					disabled={creatingTemplate || !templateName.trim()}
 					class="rounded-2xl {T.buttonGradient} px-5 py-2 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"

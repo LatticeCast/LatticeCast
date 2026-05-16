@@ -29,6 +29,8 @@ from datetime import datetime
 import requests
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
+from e2e_base import install_be_reroute
+
 BASE_URL = os.environ.get("BASE_URL", "http://localhost:13491").rstrip("/")
 BROWSER_WS = os.environ.get("BROWSER_WS", "")
 SCREENSHOT_DIR = "/output"
@@ -182,15 +184,13 @@ def run(snapshot: bool = False) -> dict:
         return results
     results["checks"]["setup"] = f"pass: kanban={kanban_view_id} timeline={timeline_view_id}"
 
-    # Verify initial default_view is null (fresh table)
-    try:
-        tbl = _get_table(TABLE_ID, token)
-        if tbl.get("default_view") is not None:
-            results["checks"]["initial_default_null"] = f"warn: default_view={tbl['default_view']}"
-        else:
-            results["checks"]["initial_default_null"] = "pass"
-    except Exception as exc:
-        results["checks"]["initial_default_null"] = f"fail: {exc}"
+    # Verify initial default_view is null (fresh table). API failure aborts.
+    tbl = _get_table(TABLE_ID, token)
+    if tbl.get("default_view") is not None:
+        results["checks"]["initial_default_null"] = f"fail: default_view={tbl['default_view']!r}, expected null"
+        print(json.dumps(results, indent=2))
+        return results
+    results["checks"]["initial_default_null"] = "pass"
 
     # ── Browser session ───────────────────────────────────────────────────────
     pw = sync_playwright().start()
@@ -198,6 +198,7 @@ def run(snapshot: bool = False) -> dict:
 
     try:
         page = browser.new_page(viewport={"width": 1400, "height": 900})
+        install_be_reroute(page)
         # Seed auth in localStorage before any navigation
         page.goto(BASE_URL, wait_until="domcontentloaded")
         page.evaluate(

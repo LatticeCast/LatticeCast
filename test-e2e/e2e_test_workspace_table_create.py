@@ -16,6 +16,7 @@ Usage:
 """
 
 import json
+import os
 import re
 import sys
 import time
@@ -24,7 +25,9 @@ import urllib.error
 from datetime import datetime
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
-BASE_URL = "http://localhost:13491"
+from e2e_base import install_be_reroute
+
+BASE_URL = os.environ.get("BASE_URL", "http://lattice-cast:13491").rstrip("/")
 SCREENSHOT_DIR = "/output"
 
 # Auth: use /login/password to get UUID token (user_name lookup via app session
@@ -104,14 +107,10 @@ def run(snapshot: bool = False) -> dict:
 
     # ── Pre-flight: get UUID token + workspace via API ────────────────────────
     print("[0] Get auth token via /login/password")
-    try:
-        token, ws_id, ws_name = _get_token_and_workspace()
-        print(f"    user={_USER_NAME} ws_name={ws_name} ws_id={ws_id[:8]}...")
-        results["ws_name"] = ws_name
-    except Exception as exc:
-        results["checks"]["preflight"] = f"fail: {exc}"
-        print(json.dumps(results, indent=2))
-        return results
+    # Pre-flight failures abort loudly — no workaround.
+    token, ws_id, ws_name = _get_token_and_workspace()
+    print(f"    user={_USER_NAME} ws_name={ws_name} ws_id={ws_id[:8]}...")
+    results["ws_name"] = ws_name
     results["checks"]["preflight"] = "pass"
 
     login_info = {
@@ -122,7 +121,10 @@ def run(snapshot: bool = False) -> dict:
     }
 
     pw = sync_playwright().start()
-    browser = pw.chromium.launch(headless=True)
+    browser_ws = os.environ.get("BROWSER_WS")
+    if not browser_ws:
+        raise RuntimeError("BROWSER_WS must point at ws://browser:4444")
+    browser = pw.chromium.connect(browser_ws)
 
     try:
         ctx = browser.new_context(
@@ -133,13 +135,17 @@ def run(snapshot: bool = False) -> dict:
             f"localStorage.setItem('loginInfo', JSON.stringify({json.dumps(login_info)}));"
         )
         page = _make_page(ctx)
+        install_be_reroute(page)
 
         # ── Step 1: Navigate to the user's workspace ────────────────────────────
         print(f"[1] Navigate to /{ws_name}/ workspace")
         try:
             page.goto(f"{BASE_URL}/{ws_name}/", wait_until="networkidle", timeout=20000)
         except PlaywrightTimeout:
-            pass
+            results["checks"]["auth"] = "fail: goto workspace timed out"
+            _snap(page, "t15_FAIL_goto_workspace")
+            print(json.dumps(results, indent=2))
+            return results
 
         if "/login" in page.url:
             results["checks"]["auth"] = "fail: redirected to /login"
@@ -195,7 +201,7 @@ def run(snapshot: bool = False) -> dict:
 
         # Wait for workspace page with create-table form
         try:
-            page.wait_for_selector("input[placeholder='New table name...']", timeout=10000)
+            page.wait_for_selector("[data-testid='create-table-name-input']", timeout=10000)
         except PlaywrightTimeout:
             results["checks"]["workspace_page_load"] = "fail: table name input not found"
             _snap(page, "t15_FAIL_ws_page")
@@ -211,17 +217,17 @@ def run(snapshot: bool = False) -> dict:
         # ── Step 3: Create blank table ───────────────────────────────────────────
         print(f"[3] Create blank table '{BLANK_TABLE_NAME}'")
 
-        table_input = page.locator("input[placeholder='New table name...']")
+        table_input = page.get_by_test_id("create-table-name-input")
         table_input.fill(BLANK_TABLE_NAME)
 
         # handleCreate does NOT navigate — table card just appears in the list
-        create_btn = page.locator("button:has-text('Create')").first
+        create_btn = page.get_by_test_id("create-table-submit")
         create_btn.click()
 
         # Wait for the table card to appear
         try:
             page.wait_for_selector(
-                f"button:has-text('{BLANK_TABLE_NAME}')", timeout=10000
+                f"[data-testid='table-card-{BLANK_TABLE_NAME}']", timeout=10000
             )
             results["checks"]["blank_table_create"] = "pass: table card appeared"
         except PlaywrightTimeout:
@@ -236,19 +242,16 @@ def run(snapshot: bool = False) -> dict:
         # ── Step 4: Navigate to blank table and verify grid ───────────────────────
         print("[4] Navigate to blank table and verify grid")
 
-        table_btn = page.locator(f"button:has-text('{BLANK_TABLE_NAME}')").first
+        table_btn = page.get_by_test_id(f"table-card-{BLANK_TABLE_NAME}")
         table_btn.click()
         # SvelteKit client-side nav — wait for URL to include the table id
         try:
             page.wait_for_url(f"**/{BLANK_TABLE_NAME}**", timeout=8000)
         except PlaywrightTimeout:
-            pass  # proceed and let the grid check fail with context
-
-        # Wait for loading spinner to disappear before checking grid
-        try:
-            page.wait_for_selector("text=Loading...", state="hidden", timeout=12000)
-        except PlaywrightTimeout:
-            pass
+            results["checks"]["blank_table_url"] = f"fail: URL={page.url}"
+            _snap(page, "t15_FAIL_blank_nav")
+            print(json.dumps(results, indent=2))
+            return results
 
         results["checks"]["blank_table_url"] = page.url
 
@@ -270,7 +273,7 @@ def run(snapshot: bool = False) -> dict:
         page.goto(ws_url, wait_until="networkidle", timeout=15000)
 
         try:
-            page.wait_for_selector("button:has-text('From Template')", timeout=10000)
+            page.wait_for_selector("[data-testid='create-table-from-template-btn']", timeout=10000)
         except PlaywrightTimeout:
             results["checks"]["ws_back_nav"] = "fail: 'From Template' not found after returning"
             _snap(page, "t15_FAIL_ws_back")
@@ -280,7 +283,7 @@ def run(snapshot: bool = False) -> dict:
 
         print(f"[6] Create PM template '{PM_TABLE_NAME}'")
 
-        page.locator("button:has-text('From Template')").first.click()
+        page.get_by_test_id("create-table-from-template-btn").click()
 
         try:
             page.wait_for_selector("text=New from Template", timeout=5000)
@@ -294,25 +297,20 @@ def run(snapshot: bool = False) -> dict:
         if snapshot:
             _snap(page, "t15_06_pm_template_modal")
 
-        pm_input = page.locator("input[placeholder='Project name...']").first
+        pm_input = page.get_by_test_id("pm-template-name-input")
         pm_input.fill(PM_TABLE_NAME)
 
         # PM create uses SvelteKit goto() — wait for URL to include PM table name
-        page.locator("button:has-text('Create PM Project')").first.click()
+        page.get_by_test_id("pm-template-submit").click()
         try:
             page.wait_for_url(f"**/{PM_TABLE_NAME}**", timeout=20000)
         except PlaywrightTimeout:
-            pass  # proceed and let grid check fail with context
+            results["checks"]["pm_create_url"] = f"fail: URL={page.url}"
+            _snap(page, "t15_FAIL_pm_create_url")
+            print(json.dumps(results, indent=2))
+            return results
 
         results["checks"]["pm_create_url"] = page.url
-
-        # Wait for loading spinner to clear — loadWorkspaces + loadTable both toggle
-        # the loading store, so networkidle fires before DOM updates to loading=false.
-        # Instead: wait for "Loading..." text to disappear.
-        try:
-            page.wait_for_selector("text=Loading...", state="hidden", timeout=20000)
-        except PlaywrightTimeout:
-            pass
 
         if snapshot:
             _snap(page, "t15_07_after_pm_create")
@@ -322,13 +320,15 @@ def run(snapshot: bool = False) -> dict:
 
         # PM template lands on Sprint Board (Kanban) by default — click Schema tab
         # to switch to Table view so we can inspect <thead> columns.
-        schema_tab = page.locator("button:has-text('Schema')").first
+        schema_tab = page.get_by_test_id("view-tab-Schema")
         try:
             schema_tab.wait_for(state="visible", timeout=8000)
-            schema_tab.click()
-            page.wait_for_timeout(500)
         except PlaywrightTimeout:
-            pass
+            results["checks"]["pm_grid"] = "fail: view-tab-Schema not visible"
+            _snap(page, "t15_FAIL_no_schema_tab")
+            print(json.dumps(results, indent=2))
+            return results
+        schema_tab.click()
 
         try:
             page.wait_for_selector("table thead", timeout=10000)
@@ -346,8 +346,8 @@ def run(snapshot: bool = False) -> dict:
             results["checks"]["pm_columns"] = f"fail: missing {missing}; found {pm_cols}"
 
         # Verify PM views tabs (Sprint Board + Roadmap)
-        sprint_board = page.locator("button:has-text('Sprint Board')")
-        roadmap = page.locator("button:has-text('Roadmap')")
+        sprint_board = page.locator("[data-testid='view-tab-Sprint Board']")
+        roadmap = page.locator("[data-testid='view-tab-Roadmap']")
         if sprint_board.count() >= 1 and roadmap.count() >= 1:
             results["checks"]["pm_views"] = "pass: Sprint Board + Roadmap tabs found"
         else:
@@ -364,7 +364,6 @@ def run(snapshot: bool = False) -> dict:
         toggle = page.get_by_test_id("menu-toggle")
         toggle.wait_for(state="visible", timeout=5000)
         toggle.click()
-        page.wait_for_timeout(400)
 
         menu_nav = page.get_by_test_id("menu-nav")
         menu_nav.wait_for(state="visible", timeout=5000)
@@ -374,7 +373,6 @@ def run(snapshot: bool = False) -> dict:
         try:
             ws_expand_btn.wait_for(state="visible", timeout=5000)
             ws_expand_btn.click()
-            page.wait_for_timeout(400)
         except PlaywrightTimeout:
             pass  # Workspace may already be expanded
 

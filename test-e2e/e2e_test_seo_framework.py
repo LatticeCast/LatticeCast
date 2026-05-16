@@ -23,7 +23,9 @@ import sys
 import time
 
 import requests
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+
+from e2e_base import install_be_reroute
 
 BASE = os.environ["BASE_URL"].rstrip("/")
 WS_URL = os.environ["BROWSER_WS"]
@@ -115,12 +117,16 @@ def main() -> None:
             fatal(f"upload doc for row {row['row_id']}: {d.status_code} {d.text[:200]}")
         print(f"[ok] CREATE row {row['row_id']} {slug!r} + doc ({len(body)}B)")
 
-    if created_row_ids != [1, 2, 3]:
-        fatal(f"row_ids should be sequential 1,2,3 (got {created_row_ids})")
+    # row_id is a global BE sequence — don't assume [1,2,3]. Only require
+    # we got 3 distinct ascending IDs back.
+    if len(set(created_row_ids)) != 3 or created_row_ids != sorted(created_row_ids):
+        fatal(f"row_ids must be 3 distinct ascending values (got {created_row_ids})")
 
     # ── 4. READ in (2, 1, 3) order — out-of-natural-order addressing ──────
-    expected_by_id = {1: ARTICLES[0], 2: ARTICLES[1], 3: ARTICLES[2]}
-    for rid in READ_ORDER:
+    # Map the test's index into the actual returned row_ids.
+    expected_by_id = {created_row_ids[i]: ARTICLES[i] for i in range(3)}
+    actual_read_order = [created_row_ids[i - 1] for i in READ_ORDER]
+    for rid in actual_read_order:
         r = api("GET", f"/api/v1/tables/{TABLE_ID}/rows/{rid}", token)
         if r.status_code != 200:
             fatal(f"GET row {rid}: {r.status_code} {r.text[:200]}")
@@ -146,19 +152,32 @@ def main() -> None:
     with sync_playwright() as pw:
         browser = pw.chromium.connect(WS_URL)
         page = browser.new_page(viewport={"width": 1280, "height": 800})
+        install_be_reroute(page)
         page.goto(BASE, wait_until="domcontentloaded")
         page.evaluate(
             "(info) => localStorage.setItem('loginInfo', info)", login_info,
         )
-        page.goto(f"{BASE}/{ws_id}/{TABLE_ID}", wait_until="networkidle")
-        page.wait_for_timeout(2000)
-        # Three Title cells should be visible
-        for slug, _ in ARTICLES:
-            if not page.locator(f"text={slug}").first.is_visible(timeout=5000):
-                fatal(f"UI missing {slug!r}")
+        page.goto(f"{BASE}/{ws_id}/{TABLE_ID}", wait_until="domcontentloaded")
+        # Wait for each created row's <tr data-testid="grid-row-{rid}"> to
+        # render — that's the real hydration signal. Replaces a 2000ms hard
+        # sleep (see developing-e2e-test skill — banned patterns).
+        for rid in created_row_ids:
+            try:
+                page.wait_for_selector(
+                    f'[data-testid="grid-row-{rid}"]', state="visible", timeout=10000
+                )
+            except PlaywrightTimeout:
+                page.screenshot(path="/output/e2e_seo_framework_FAIL_no_row.png", full_page=True)
+                fatal(f"UI: row {rid} not rendered")
+        # Each row should contain its slug as cell text.
+        for rid, (slug, _) in zip(created_row_ids, ARTICLES):
+            row_loc = page.locator(f'[data-testid="grid-row-{rid}"]')
+            row_text = row_loc.text_content() or ""
+            if slug not in row_text:
+                fatal(f"UI row {rid}: slug {slug!r} not in row text {row_text!r}")
         page.screenshot(path="/output/e2e_seo_framework.png", full_page=True)
         browser.close()
-    print("[ok] UI shows all 3 article slugs (screenshot → .browser/e2e_seo_framework.png)")
+    print("[ok] UI shows all 3 article rows (screenshot → .browser/e2e_seo_framework.png)")
 
     # ── 6. KILL workspace (cascades to tables + rows) ──────────────────────
     r = api("DELETE", f"/api/v1/workspaces/{ws_id}", token)

@@ -39,6 +39,8 @@ import time
 import requests
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
+from e2e_base import install_be_reroute
+
 BASE = os.environ["BASE_URL"].rstrip("/")
 WS_URL = os.environ["BROWSER_WS"]
 ADMIN_USER = "lattice"
@@ -48,7 +50,6 @@ TABLE_ID = f"kb-{_SUFFIX}"
 
 # Vite dev mode bakes in localhost as the backend URL.
 # In the browser container, localhost != lattice-cast, so we rewrite.
-_FRONTEND_BE = BASE.replace("lattice-cast", "localhost")
 
 
 def fatal(msg: str) -> None:
@@ -146,12 +147,7 @@ def main() -> None:
         with sync_playwright() as pw:
             browser = pw.chromium.connect(WS_URL)
             page = browser.new_page(viewport={"width": 1400, "height": 900})
-
-            # Rewrite localhost → lattice-cast for Vite dev API calls.
-            if _FRONTEND_BE != BASE:
-                def _reroute(route):
-                    route.continue_(url=route.request.url.replace(_FRONTEND_BE, BASE))
-                page.route(f"{_FRONTEND_BE}/**", _reroute)
+            install_be_reroute(page)
 
             # Inject auth into localStorage before navigating to the table
             page.goto(BASE, wait_until="domcontentloaded")
@@ -220,8 +216,8 @@ def main() -> None:
             print(f"[ok] step 2 — API: config.group_by={got_group_by!r} confirmed in DB")
 
             # ── step 3: navigate away and back; verify persistence ────────────
+            # goto_table waits for view-tab-Schema — no hard sleep needed.
             page.goto(f"{BASE}/{ws_id}/", wait_until="domcontentloaded")
-            page.wait_for_timeout(300)
             goto_table(page, ws_id, TABLE_ID)
 
             try:

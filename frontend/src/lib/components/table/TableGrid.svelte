@@ -568,6 +568,7 @@
 					{:else}
 						{@const row = item.row}
 						<tr
+							data-testid="grid-row-{row.row_id}"
 							class="border-b transition {isDark.value
 								? 'border-gray-700 hover:bg-blue-900/20'
 								: 'border-gray-100 hover:bg-blue-50/50'} {deletingRowId === row.row_id

@@ -33,9 +33,9 @@ DATABASE_URL = os.environ.get(
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _open_sidebar(ctx: E2E) -> None:
-    """Click menu-toggle and wait for the 300ms CSS transition."""
+    """Click menu-toggle; menu-nav becoming visible is the real signal."""
     ctx.page.click('[data-testid="menu-toggle"]')
-    ctx.page.wait_for_timeout(400)
+    ctx.page.wait_for_selector('[data-testid="menu-nav"]', state="visible", timeout=5000)
 
 
 # ── steps ─────────────────────────────────────────────────────────────────────

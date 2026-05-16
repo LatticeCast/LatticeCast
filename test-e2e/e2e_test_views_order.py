@@ -18,6 +18,8 @@ import time
 import requests
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
+from e2e_base import install_be_reroute
+
 BASE = os.environ["BASE_URL"].rstrip("/")
 WS_URL = os.environ["BROWSER_WS"]
 ADMIN_USER = "lattice"
@@ -27,10 +29,6 @@ T1 = f"t1v{SUFFIX}"
 T2 = f"t2v{SUFFIX}"
 SNAP_DIR = "/output"
 
-# Vite dev mode hard-codes BACKEND_URL to http://localhost:{port}.
-# In the browser container, localhost != lattice-cast, so API calls would fail.
-# Intercept those requests and rewrite the host so they reach the real service.
-_FRONTEND_BE = BASE.replace("lattice-cast", "localhost")
 
 # View names — define once to keep assertions and drags in sync
 V1A = "Kanban"    # table1 view A (created first)
@@ -200,11 +198,7 @@ def main(with_snapshot: bool = False) -> None:
         browser = pw.chromium.connect(WS_URL)
         page = browser.new_page(viewport={"width": 1400, "height": 900})
 
-        # Route localhost API calls → lattice-cast (Vite dev bakes in localhost URL).
-        def _reroute(route):
-            route.continue_(url=route.request.url.replace(_FRONTEND_BE, BASE))
-
-        page.route(f"{_FRONTEND_BE}/**", _reroute)
+        install_be_reroute(page)
 
         page.goto(BASE, wait_until="domcontentloaded")
         page.evaluate("(info) => localStorage.setItem('loginInfo', info)", login_info)

@@ -22,6 +22,8 @@ import time
 import requests
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
+from e2e_base import install_be_reroute
+
 BASE = os.environ["BASE_URL"].rstrip("/")
 WS_URL = os.environ["BROWSER_WS"]
 ADMIN_USER = "lattice"
@@ -31,7 +33,6 @@ TABLE_ID = f"col-ord-{_TS}"
 
 # Vite dev mode bakes in localhost as the backend URL.
 # In the browser container localhost != lattice-cast, so we rewrite.
-_FRONTEND_BE = BASE.replace("lattice-cast", "localhost")
 
 SNAPSHOT = "--snapshot" in sys.argv
 
@@ -164,13 +165,7 @@ def main() -> None:
         with sync_playwright() as pw:
             browser = pw.chromium.connect(WS_URL)
             page = browser.new_page(viewport={"width": 1400, "height": 900})
-
-            # Rewrite localhost → lattice-cast for Vite dev API calls.
-            # Without this, the browser container can't reach the backend.
-            if _FRONTEND_BE != BASE:
-                def _reroute(route):
-                    route.continue_(url=route.request.url.replace(_FRONTEND_BE, BASE))
-                page.route(f"{_FRONTEND_BE}/**", _reroute)
+            install_be_reroute(page)
 
             page.goto(BASE, wait_until="domcontentloaded")
             page.evaluate("(info) => localStorage.setItem('loginInfo', info)", login_info)
@@ -209,10 +204,20 @@ def main() -> None:
             # <th>, the data-testid span is just a visual grab handle inside it.
             src_sel = f'th[draggable="true"]:has([data-testid="col-drag-handle-{title_id}"])'
             tgt_sel = f'th[draggable="true"]:has([data-testid="col-drag-handle-{col_c_id}"])'
-            page.drag_and_drop(src_sel, tgt_sel)
+
+            # Wait for the PATCH /schema to land BEFORE moving on. Replaces a
+            # 1500ms hard wait — see developing-e2e-test skill banned-pattern
+            # rule. The FE issues PATCH after drag; we must observe it.
+            with page.expect_response(
+                lambda r: r.request.method == "PATCH"
+                          and r.url.rstrip("/").endswith(f"/api/v1/tables/{TABLE_ID}/schema")
+                          and r.ok,
+                timeout=10000,
+            ):
+                page.drag_and_drop(src_sel, tgt_sel)
             snap(page, "e2e_col_order_02_after_drag")
 
-            # ── 9. Wait for UI to reflect new order ───────────────────────────
+            # ── 9. UI reflects new order ──────────────────────────────────────
             title_after_colc_js = """() => {
                 const ths = Array.from(document.querySelectorAll('table thead th'));
                 const names = ths
@@ -241,8 +246,7 @@ def main() -> None:
             print(f"[ok] UI post-drag order: {names_after}")
 
             # ── 10. API verify: backend persisted new col_order ───────────────
-            # Wait briefly for PATCH /schema round-trip to complete
-            page.wait_for_timeout(1500)
+            # PATCH already awaited via expect_response above; can GET safely.
             r2 = api("GET", f"/api/v1/tables/{TABLE_ID}", token)
             if r2.status_code != 200:
                 fatal(f"GET schema after drag: {r2.status_code} {r2.text[:200]}")
@@ -255,15 +259,20 @@ def main() -> None:
             print(f"[ok] API order after drag: {api_names_after}")
 
             # ── 11. Navigate away then back — verify persistence ───────────────
+            # Navigate to workspace root (away) then back to table. goto_table
+            # waits for view-tab-Schema to be visible (hydration signal); we
+            # then wait for the column drag-handles to be present, which is
+            # the real "table grid hydrated" signal.
             page.goto(f"{BASE}/{ws_id}", wait_until="domcontentloaded")
-            page.wait_for_timeout(500)
             goto_table(page, ws_id, TABLE_ID)
             try:
                 page.wait_for_selector("table thead", timeout=15000)
+                page.wait_for_selector(
+                    f'[data-testid="col-drag-handle-{title_id}"]', timeout=8000
+                )
             except PlaywrightTimeout:
                 page.screenshot(path="/output/e2e_col_order_FAIL_persist_no_table.png")
-                fatal("Table did not render after navigation back")
-            page.wait_for_timeout(500)
+                fatal("Table did not render / hydrate after navigation back")
             snap(page, "e2e_col_order_03_after_nav")
 
             names_repersist = col_names(page)
