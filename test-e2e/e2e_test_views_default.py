@@ -6,13 +6,13 @@ Topic: switching to a view sets it as the default so that navigating away
        and back (without ?view= in the URL) restores the same view.
 
 Flow:
-  Setup — login, create test table + Kanban view + Timeline view via API.
+  Setup — login, create fresh workspace + test table + Kanban + Timeline views.
   Step 1 — load table page; verify Schema tab is active (default_view=null).
   Step 2 — click Kanban tab; wait for PATCH /schema; API + UI assert.
-  Step 3 — navigate away (workspace); navigate back (no ?view=); assert Kanban still active.
+  Step 3 — navigate away (workspace root); navigate back (no ?view=); assert Kanban still active.
   Step 4 — click Timeline tab; wait for PATCH /schema; API + UI assert.
   Step 5 — navigate away; navigate back; assert Timeline still active.
-  Teardown — DELETE test table.
+  Teardown — DELETE workspace (cascades to table).
 
 Cross-view coverage: Kanban + Timeline (two view types) per e2e skill rules.
 
@@ -29,20 +29,20 @@ from datetime import datetime
 import requests
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
-BASE_URL = os.environ.get("BASE_URL", "http://localhost:13491")
+BASE_URL = os.environ.get("BASE_URL", "http://localhost:13491").rstrip("/")
 BROWSER_WS = os.environ.get("BROWSER_WS", "")
 SCREENSHOT_DIR = "/output"
-
-_USER_NAME = "lattice"
+ADMIN_USER = "lattice"
 _SUFFIX = int(time.time()) % 100000
-TABLE_ID = f"e2e-views-default-{_SUFFIX}"
+WS_NAME = f"e2e-vd-{_SUFFIX}"
+TABLE_ID = f"e2e-vd-tbl-{_SUFFIX}"
 
 
-# ── API helpers ──────────────────────────────────────────────────────────────
+# ── API helpers ───────────────────────────────────────────────────────────────
 
 
-def _login(user_name: str) -> tuple[str, str, str]:
-    """POST /login/password → (token, workspace_id, workspace_name)."""
+def _login(user_name: str) -> str:
+    """POST /login/password → access_token."""
     r = requests.post(
         f"{BASE_URL}/api/v1/login/password",
         json={"user_name": user_name, "password": ""},
@@ -50,17 +50,7 @@ def _login(user_name: str) -> tuple[str, str, str]:
     )
     if r.status_code != 200:
         raise RuntimeError(f"login failed {r.status_code}: {r.text[:200]}")
-    token = r.json()["access_token"]
-
-    r2 = requests.get(
-        f"{BASE_URL}/api/v1/workspaces",
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=10,
-    )
-    if r2.status_code != 200:
-        raise RuntimeError(f"list workspaces failed: {r2.text[:200]}")
-    ws = r2.json()[0]
-    return token, str(ws["workspace_id"]), ws["workspace_name"]
+    return r.json()["access_token"]
 
 
 def _api(method: str, path: str, token: str, **kw) -> requests.Response:
@@ -70,6 +60,44 @@ def _api(method: str, path: str, token: str, **kw) -> requests.Response:
         timeout=10,
         **kw,
     )
+
+
+def _setup(token: str) -> tuple[str, int, int]:
+    """Create workspace + table + Kanban + Timeline views.
+
+    Returns (workspace_id, kanban_view_id, timeline_view_id).
+    """
+    r = _api("post", "/workspaces", token, json={"workspace_name": WS_NAME})
+    if r.status_code != 201:
+        raise RuntimeError(f"create workspace: {r.status_code} {r.text[:200]}")
+    ws_id = str(r.json()["workspace_id"])
+
+    r = _api("post", "/tables", token, json={"table_id": TABLE_ID, "workspace_id": ws_id})
+    if r.status_code != 201:
+        raise RuntimeError(f"create table: {r.status_code} {r.text[:200]}")
+
+    r = _api("post", f"/tables/{TABLE_ID}/views", token, json={"name": "Kanban", "type": "kanban"})
+    if r.status_code != 201:
+        raise RuntimeError(f"create Kanban view: {r.status_code} {r.text[:200]}")
+    schema = r.json()
+    kanban_view_id = next(v["view_id"] for v in schema.get("views", []) if v["name"] == "Kanban")
+
+    r = _api("post", f"/tables/{TABLE_ID}/views", token, json={"name": "Timeline", "type": "timeline"})
+    if r.status_code != 201:
+        raise RuntimeError(f"create Timeline view: {r.status_code} {r.text[:200]}")
+    schema = r.json()
+    timeline_view_id = next(v["view_id"] for v in schema.get("views", []) if v["name"] == "Timeline")
+
+    print(f"[setup] ws={ws_id!r} table={TABLE_ID!r} kanban={kanban_view_id} timeline={timeline_view_id}")
+    return ws_id, kanban_view_id, timeline_view_id
+
+
+def _teardown(token: str, ws_id: str) -> None:
+    r = _api("delete", f"/workspaces/{ws_id}", token)
+    if r.status_code not in (200, 204):
+        print(f"[warn] teardown DELETE workspace {ws_id!r}: {r.status_code}", file=sys.stderr)
+    else:
+        print(f"[teardown] workspace {ws_id!r} deleted")
 
 
 def _get_table(table_id: str, token: str) -> dict:
@@ -88,7 +116,16 @@ def _snap(page, name: str, enabled: bool) -> None:
         pass
 
 
-# ── UI helpers ───────────────────────────────────────────────────────────────
+# ── UI helpers ────────────────────────────────────────────────────────────────
+
+
+def _goto_table(page, ws_id: str, table_id: str, timeout: int = 20000) -> None:
+    """Navigate to the table page and wait for view tabs to render."""
+    page.goto(f"{BASE_URL}/{ws_id}/{table_id}", wait_until="domcontentloaded", timeout=timeout)
+    try:
+        page.wait_for_selector('[data-testid="view-tab-Schema"]', state="visible", timeout=timeout)
+    except PlaywrightTimeout:
+        raise AssertionError(f"View tabs did not load for table {table_id!r}")
 
 
 def _wait_tab_active(page, view_name: str, timeout: int = 8000) -> None:
@@ -118,17 +155,7 @@ def _assert_tab_inactive(page, view_name: str) -> None:
     assert "text-blue-600" not in cls, f"Tab '{view_name}' should not be active; class={cls!r}"
 
 
-def _wait_table_page(page, ws_name: str, table_id: str, timeout: int = 20000) -> None:
-    """Navigate to the table page and wait for the ViewSwitcher to render."""
-    page.goto(f"{BASE_URL}/{ws_name}/{table_id}", wait_until="domcontentloaded", timeout=timeout)
-    # Wait for the view switcher add button to appear (proves ViewSwitcher mounted)
-    try:
-        page.wait_for_selector('[data-testid="view-switcher-add-btn"]', timeout=timeout)
-    except PlaywrightTimeout:
-        raise AssertionError(f"ViewSwitcher did not render for table {table_id!r}")
-
-
-# ── Main test ────────────────────────────────────────────────────────────────
+# ── Main test ─────────────────────────────────────────────────────────────────
 
 
 def run(snapshot: bool = False) -> dict:
@@ -140,87 +167,61 @@ def run(snapshot: bool = False) -> dict:
         "passed": False,
     }
 
-    # ── Pre-flight: login + create test table + two views ────────────────────
-    print("[0] Pre-flight: login and create test table via API")
+    # ── Pre-flight: login + create workspace + table + views ─────────────────
+    print("[0] Pre-flight: login and create workspace + table + views via API")
+    ws_id: str | None = None
+    token: str | None = None
+    kanban_view_id: int = 0
+    timeline_view_id: int = 0
     try:
-        token, ws_uuid, ws_name = _login(_USER_NAME)
-        print(f"    user={_USER_NAME!r} ws={ws_name!r}")
+        token = _login(ADMIN_USER)
+        ws_id, kanban_view_id, timeline_view_id = _setup(token)
     except Exception as exc:
-        results["checks"]["login"] = f"fail: {exc}"
+        results["checks"]["setup"] = f"fail: {exc}"
         print(json.dumps(results, indent=2))
         return results
-    results["checks"]["login"] = "pass"
-
-    # Create test table
-    r = _api("post", "/tables", token, json={"table_id": TABLE_ID, "workspace_id": ws_name})
-    if r.status_code != 201:
-        results["checks"]["create_table"] = f"fail: {r.status_code} {r.text[:200]}"
-        print(json.dumps(results, indent=2))
-        return results
-    results["checks"]["create_table"] = "pass"
-
-    # Create Kanban view
-    r = _api("post", f"/tables/{TABLE_ID}/views", token, json={"name": "Kanban", "type": "kanban"})
-    if r.status_code != 201:
-        results["checks"]["create_kanban"] = f"fail: {r.status_code} {r.text[:200]}"
-        print(json.dumps(results, indent=2))
-        return results
-    schema = r.json()
-    kanban_view_id = next(v["view_id"] for v in schema.get("views", []) if v["name"] == "Kanban")
-    results["checks"]["create_kanban"] = f"pass: view_id={kanban_view_id}"
-
-    # Create Timeline view
-    r = _api("post", f"/tables/{TABLE_ID}/views", token, json={"name": "Timeline", "type": "timeline"})
-    if r.status_code != 201:
-        results["checks"]["create_timeline"] = f"fail: {r.status_code} {r.text[:200]}"
-        print(json.dumps(results, indent=2))
-        return results
-    schema = r.json()
-    timeline_view_id = next(v["view_id"] for v in schema.get("views", []) if v["name"] == "Timeline")
-    results["checks"]["create_timeline"] = f"pass: view_id={timeline_view_id}"
+    results["checks"]["setup"] = f"pass: kanban={kanban_view_id} timeline={timeline_view_id}"
 
     # Verify initial default_view is null (fresh table)
-    tbl = _get_table(TABLE_ID, token)
-    if tbl.get("default_view") is not None:
-        results["checks"]["initial_default_null"] = f"warn: default_view={tbl['default_view']} (expected null)"
-    else:
-        results["checks"]["initial_default_null"] = "pass"
+    try:
+        tbl = _get_table(TABLE_ID, token)
+        if tbl.get("default_view") is not None:
+            results["checks"]["initial_default_null"] = f"warn: default_view={tbl['default_view']}"
+        else:
+            results["checks"]["initial_default_null"] = "pass"
+    except Exception as exc:
+        results["checks"]["initial_default_null"] = f"fail: {exc}"
 
-    login_info = {
-        "provider": "none",
-        "accessToken": token,
-        "userInfo": {"sub": token, "email": f"{_USER_NAME}@local", "name": _USER_NAME},
-        "role": "user",
-    }
-
-    # ── Browser session ──────────────────────────────────────────────────────
+    # ── Browser session ───────────────────────────────────────────────────────
     pw = sync_playwright().start()
     browser = pw.chromium.connect(BROWSER_WS) if BROWSER_WS else pw.chromium.launch(headless=True)
 
     try:
-        ctx = browser.new_context(
-            viewport={"width": 1400, "height": 900},
-            ignore_https_errors=True,
+        page = browser.new_page(viewport={"width": 1400, "height": 900})
+        # Seed auth in localStorage before any navigation
+        page.goto(BASE_URL, wait_until="domcontentloaded")
+        page.evaluate(
+            "(info) => localStorage.setItem('loginInfo', info)",
+            json.dumps({
+                "provider": "none",
+                "accessToken": token,
+                "userInfo": {"sub": token, "email": "lattice@example.com", "name": ADMIN_USER},
+                "role": "admin",
+            }),
         )
-        ctx.add_init_script(
-            f"localStorage.setItem('loginInfo', JSON.stringify({json.dumps(login_info)}));"
-        )
-        page = ctx.new_page()
 
-        # ── Step 1: Load table page; Schema tab active by default ────────────
+        # ── Step 1: Load table page; Schema tab active by default ─────────────
         print("[1] Load table page; verify Schema tab active")
         try:
-            _wait_table_page(page, ws_name, TABLE_ID)
+            _goto_table(page, ws_id, TABLE_ID)
         except AssertionError as exc:
             results["checks"]["step1_page_load"] = f"fail: {exc}"
             _snap(page, "vd_FAIL_s1_load", snapshot)
             print(json.dumps(results, indent=2))
             return results
 
-        if snapshot:
-            _snap(page, "vd_01_initial_load", snapshot)
+        _snap(page, "vd_01_initial_load", snapshot)
 
-        # Schema is the implicit default when default_view=null
         try:
             _wait_tab_active(page, "Schema")
             _assert_tab_inactive(page, "Kanban")
@@ -241,6 +242,7 @@ def run(snapshot: bool = False) -> dict:
                 page.locator('[data-testid="view-tab-Kanban"]').click()
             patch_resp = resp_info.value
             assert patch_resp.status == 200, f"PATCH /schema returned {patch_resp.status}"
+            results["checks"]["step2_patch_schema"] = "pass"
         except PlaywrightTimeout:
             results["checks"]["step2_patch_schema"] = "fail: PATCH /schema timed out after click"
             _snap(page, "vd_FAIL_s2_patch", snapshot)
@@ -248,13 +250,12 @@ def run(snapshot: bool = False) -> dict:
             return results
         except AssertionError as exc:
             results["checks"]["step2_patch_schema"] = f"fail: {exc}"
+            _snap(page, "vd_FAIL_s2_patch", snapshot)
             print(json.dumps(results, indent=2))
             return results
 
-        if snapshot:
-            _snap(page, "vd_02_kanban_clicked", snapshot)
+        _snap(page, "vd_02_kanban_clicked", snapshot)
 
-        # UI assert: Kanban tab active
         try:
             _assert_tab_active(page, "Kanban")
             _assert_tab_inactive(page, "Schema")
@@ -265,7 +266,6 @@ def run(snapshot: bool = False) -> dict:
             print(json.dumps(results, indent=2))
             return results
 
-        # API assert: default_view == kanban_view_id
         tbl = _get_table(TABLE_ID, token)
         if tbl.get("default_view") == kanban_view_id:
             results["checks"]["step2_api_default_view"] = f"pass: default_view={kanban_view_id}"
@@ -273,29 +273,19 @@ def run(snapshot: bool = False) -> dict:
             results["checks"]["step2_api_default_view"] = (
                 f"fail: expected default_view={kanban_view_id}, got {tbl.get('default_view')}"
             )
+            _snap(page, "vd_FAIL_s2_api", snapshot)
             print(json.dumps(results, indent=2))
             return results
 
-        # ── Step 3: Navigate away; navigate back; verify Kanban restored ─────
-        print("[3] Navigate away to workspace; navigate back; assert Kanban still active")
+        # ── Step 3: Navigate away; navigate back; verify Kanban restored ──────
+        print("[3] Navigate away to workspace root; navigate back; assert Kanban still active")
+        page.goto(f"{BASE_URL}/{ws_id}", wait_until="domcontentloaded", timeout=15000)
+        _goto_table(page, ws_id, TABLE_ID)
 
-        page.goto(f"{BASE_URL}/{ws_name}", wait_until="domcontentloaded", timeout=15000)
-
-        try:
-            _wait_table_page(page, ws_name, TABLE_ID)
-        except AssertionError as exc:
-            results["checks"]["step3_page_reload"] = f"fail: {exc}"
-            _snap(page, "vd_FAIL_s3_reload", snapshot)
-            print(json.dumps(results, indent=2))
-            return results
-
-        # Verify no ?view= param in URL (we navigated without it)
         assert "view=" not in page.url, f"URL unexpectedly contains ?view=: {page.url}"
 
-        if snapshot:
-            _snap(page, "vd_03_back_after_kanban", snapshot)
+        _snap(page, "vd_03_back_after_kanban", snapshot)
 
-        # UI assert: Kanban still active (restored from default_view)
         try:
             _wait_tab_active(page, "Kanban")
             _assert_tab_inactive(page, "Schema")
@@ -306,7 +296,6 @@ def run(snapshot: bool = False) -> dict:
             print(json.dumps(results, indent=2))
             return results
 
-        # API assert: default_view unchanged
         tbl = _get_table(TABLE_ID, token)
         if tbl.get("default_view") == kanban_view_id:
             results["checks"]["step3_api_unchanged"] = "pass"
@@ -325,6 +314,7 @@ def run(snapshot: bool = False) -> dict:
                 page.locator('[data-testid="view-tab-Timeline"]').click()
             patch_resp = resp_info.value
             assert patch_resp.status == 200, f"PATCH /schema returned {patch_resp.status}"
+            results["checks"]["step4_patch_schema"] = "pass"
         except PlaywrightTimeout:
             results["checks"]["step4_patch_schema"] = "fail: PATCH /schema timed out after click"
             _snap(page, "vd_FAIL_s4_patch", snapshot)
@@ -332,13 +322,12 @@ def run(snapshot: bool = False) -> dict:
             return results
         except AssertionError as exc:
             results["checks"]["step4_patch_schema"] = f"fail: {exc}"
+            _snap(page, "vd_FAIL_s4_patch", snapshot)
             print(json.dumps(results, indent=2))
             return results
 
-        if snapshot:
-            _snap(page, "vd_04_timeline_clicked", snapshot)
+        _snap(page, "vd_04_timeline_clicked", snapshot)
 
-        # UI assert: Timeline tab active
         try:
             _assert_tab_active(page, "Timeline")
             _assert_tab_inactive(page, "Kanban")
@@ -349,7 +338,6 @@ def run(snapshot: bool = False) -> dict:
             print(json.dumps(results, indent=2))
             return results
 
-        # API assert: default_view == timeline_view_id
         tbl = _get_table(TABLE_ID, token)
         if tbl.get("default_view") == timeline_view_id:
             results["checks"]["step4_api_default_view"] = f"pass: default_view={timeline_view_id}"
@@ -357,28 +345,19 @@ def run(snapshot: bool = False) -> dict:
             results["checks"]["step4_api_default_view"] = (
                 f"fail: expected default_view={timeline_view_id}, got {tbl.get('default_view')}"
             )
+            _snap(page, "vd_FAIL_s4_api", snapshot)
             print(json.dumps(results, indent=2))
             return results
 
-        # ── Step 5: Navigate away; navigate back; verify Timeline restored ────
+        # ── Step 5: Navigate away; navigate back; verify Timeline restored ─────
         print("[5] Navigate away; navigate back; assert Timeline still active")
-
-        page.goto(f"{BASE_URL}/{ws_name}", wait_until="domcontentloaded", timeout=15000)
-
-        try:
-            _wait_table_page(page, ws_name, TABLE_ID)
-        except AssertionError as exc:
-            results["checks"]["step5_page_reload"] = f"fail: {exc}"
-            _snap(page, "vd_FAIL_s5_reload", snapshot)
-            print(json.dumps(results, indent=2))
-            return results
+        page.goto(f"{BASE_URL}/{ws_id}", wait_until="domcontentloaded", timeout=15000)
+        _goto_table(page, ws_id, TABLE_ID)
 
         assert "view=" not in page.url, f"URL unexpectedly contains ?view=: {page.url}"
 
-        if snapshot:
-            _snap(page, "vd_05_back_after_timeline", snapshot)
+        _snap(page, "vd_05_back_after_timeline", snapshot)
 
-        # UI assert: Timeline still active
         try:
             _wait_tab_active(page, "Timeline")
             _assert_tab_inactive(page, "Kanban")
@@ -389,7 +368,6 @@ def run(snapshot: bool = False) -> dict:
             print(json.dumps(results, indent=2))
             return results
 
-        # API assert: default_view unchanged
         tbl = _get_table(TABLE_ID, token)
         if tbl.get("default_view") == timeline_view_id:
             results["checks"]["step5_api_unchanged"] = "pass"
@@ -398,10 +376,8 @@ def run(snapshot: bool = False) -> dict:
                 f"fail: expected {timeline_view_id}, got {tbl.get('default_view')}"
             )
 
-        if snapshot:
-            _snap(page, "vd_06_final", snapshot)
+        _snap(page, "vd_06_final", snapshot)
 
-        # ── Final result ─────────────────────────────────────────────────────
         failed = [k for k, v in results["checks"].items() if str(v).startswith("fail")]
         results["passed"] = len(failed) == 0
         if failed:
@@ -413,12 +389,8 @@ def run(snapshot: bool = False) -> dict:
         except Exception:
             pass
         pw.stop()
-
-        # Teardown: delete test table
-        print(f"[teardown] DELETE /tables/{TABLE_ID}")
-        r = _api("delete", f"/tables/{TABLE_ID}", token)
-        if r.status_code not in (200, 204):
-            print(f"  warn: teardown delete returned {r.status_code}", file=sys.stderr)
+        if ws_id is not None and token is not None:
+            _teardown(token, ws_id)
 
     print(json.dumps(results, indent=2))
     return results

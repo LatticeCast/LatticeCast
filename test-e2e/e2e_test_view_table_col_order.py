@@ -8,9 +8,11 @@ Verifies that dragging a column header to a new position in the Table
 
 Drag logic (handleDragReorderColumns):
     ordered.splice(fromIdx, 1); ordered.splice(toIdx, 0, fromId)
-    Drag Title (idx 0) to Col C (idx 2):
-        remove Title → [Col B, Col C]
-        insert at 2 → [Col B, Col C, Title]
+    Blank table default columns: Title, Doc, Description.
+    After adding Col B and Col C: [Title, Doc, Description, Col B, Col C].
+    Drag Title (idx 0) to Col C (idx 4):
+        remove Title → [Doc, Description, Col B, Col C]
+        insert at 4 → [Doc, Description, Col B, Col C, Title]
 
 Two-container architecture (developing-e2e-test v0.8.0):
   - Connects to browser container via BROWSER_WS.
@@ -124,9 +126,10 @@ def main() -> None:
         col_c_id = col_c["column_id"]
         print(f"[ok] added Col C={col_c_id[:8]}…")
 
-        # API verify: initial order is [Title, Col B, Col C]
+        # API verify: initial order is [Title, Doc, Description, Col B, Col C]
+        # (blank table ships with Title, Doc, Description by default)
         initial_api_names = [c["name"] for c in schema["columns"]]
-        if initial_api_names != ["Title", "Col B", "Col C"]:
+        if initial_api_names != ["Title", "Doc", "Description", "Col B", "Col C"]:
             fatal(f"unexpected initial API col order: {initial_api_names}")
         print(f"[ok] API initial order: {initial_api_names}")
 
@@ -154,7 +157,7 @@ def main() -> None:
 
             # ── 5. UI verify: initial column order ──────────────────────────
             names_before = col_names(page)
-            if names_before != ["Title", "Col B", "Col C"]:
+            if names_before != ["Title", "Doc", "Description", "Col B", "Col C"]:
                 page.screenshot(path="/output/e2e_col_order_FAIL_initial.png")
                 fatal(f"UI initial order wrong: {names_before}")
             print(f"[ok] UI initial order: {names_before}")
@@ -175,15 +178,15 @@ def main() -> None:
             snap(page, "e2e_col_order_02_after_drag")
 
             # ── 7. UI verify: new column order after drag ────────────────────
-            # Drag Title(0) to ColC(2):
-            #   splice(0,1) → [Col B, Col C]
-            #   splice(2,0,Title) → [Col B, Col C, Title]
+            # Drag Title(0) to ColC(4):
+            #   splice(0,1) → [Doc, Description, Col B, Col C]
+            #   splice(4,0,Title) → [Doc, Description, Col B, Col C, Title]
             names_after = col_names(page)
-            if names_after != ["Col B", "Col C", "Title"]:
+            if names_after != ["Doc", "Description", "Col B", "Col C", "Title"]:
                 page.screenshot(path="/output/e2e_col_order_FAIL_after_drag.png")
                 fatal(
                     f"UI post-drag order wrong: {names_after} "
-                    "(expected ['Col B', 'Col C', 'Title'])"
+                    "(expected ['Doc', 'Description', 'Col B', 'Col C', 'Title'])"
                 )
             print(f"[ok] UI post-drag order: {names_after}")
 
@@ -192,7 +195,7 @@ def main() -> None:
             if r2.status_code != 200:
                 fatal(f"GET schema after drag: {r2.status_code} {r2.text[:200]}")
             api_names_after = [c["name"] for c in r2.json()["columns"]]
-            if api_names_after != ["Col B", "Col C", "Title"]:
+            if api_names_after != ["Doc", "Description", "Col B", "Col C", "Title"]:
                 fatal(f"API col order wrong after drag: {api_names_after}")
             print(f"[ok] API order after drag: {api_names_after}")
 
@@ -205,7 +208,7 @@ def main() -> None:
             snap(page, "e2e_col_order_03_after_nav")
 
             names_repersist = col_names(page)
-            if names_repersist != ["Col B", "Col C", "Title"]:
+            if names_repersist != ["Doc", "Description", "Col B", "Col C", "Title"]:
                 page.screenshot(path="/output/e2e_col_order_FAIL_persist.png")
                 fatal(f"UI order after nav-back wrong: {names_repersist}")
             print(f"[ok] UI order persisted after navigation: {names_repersist}")

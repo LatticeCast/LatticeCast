@@ -24,14 +24,14 @@ import sys
 import time
 
 import requests
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 BASE = os.environ["BASE_URL"].rstrip("/")
 WS_URL = os.environ["BROWSER_WS"]
 ADMIN_USER = "lattice"
 _TS = int(time.time())
 WORKSPACE_NAME = f"view-rename-{_TS}"
-TABLE_ID = "views-rename"
+TABLE_ID = f"views-rename-{_TS}"
 
 RENAMED_TABLE_VIEW = "Renamed Table"
 RENAMED_KANBAN_VIEW = "Renamed Kanban"
@@ -50,7 +50,9 @@ def login(user_name: str) -> str:
     )
     if r.status_code != 200:
         fatal(f"login {user_name!r}: {r.status_code} {r.text[:200]}")
-    return r.json()["access_token"]
+    token = r.json()["access_token"]
+    print(f"[ok] login {user_name!r}")
+    return token
 
 
 def api(method: str, path: str, token: str, **kw) -> requests.Response:
@@ -78,6 +80,15 @@ def assert_api_view_name(token: str, table_id: str, view_id: int, expected: str)
         fatal(f"API view name for view_id={view_id}: got {got!r}, want {expected!r}")
 
 
+def snap(page, name: str, enabled: bool) -> None:
+    if not enabled:
+        return
+    try:
+        page.screenshot(path=f"/output/{name}.png", full_page=True)
+    except Exception:
+        pass
+
+
 def rename_view_via_ui(page, old_name: str, new_name: str) -> None:
     """Hover view tab to reveal rename button, click it, fill new name, Enter."""
     tab = page.locator(f'[data-testid="view-tab-{old_name}"]')
@@ -93,45 +104,59 @@ def rename_view_via_ui(page, old_name: str, new_name: str) -> None:
     page.locator(f'[data-testid="view-tab-{new_name}"]').wait_for(state="visible", timeout=5000)
 
 
+def wait_table_page(page, ws_name: str, table_id: str) -> None:
+    page.goto(f"{BASE}/{ws_name}/{table_id}", wait_until="domcontentloaded", timeout=20000)
+    try:
+        page.wait_for_selector('[data-testid="view-switcher-add-btn"]', timeout=15000)
+    except PlaywrightTimeout:
+        fatal(f"ViewSwitcher did not render for table {table_id!r}")
+
+
 def main(snapshot: bool = False) -> None:
     token = login(ADMIN_USER)
-    print(f"[ok] login {ADMIN_USER!r}")
 
-    # ── Setup: workspace + table ───────────────────────────────────────────
+    # ── Setup: workspace ───────────────────────────────────────────────────────
     r = api("POST", "/api/v1/workspaces", token, json={"workspace_name": WORKSPACE_NAME})
     if r.status_code != 201:
         fatal(f"create workspace: {r.status_code} {r.text[:200]}")
-    ws_id = r.json()["workspace_id"]
-    print(f"[ok] CREATE workspace {WORKSPACE_NAME!r} → {ws_id}")
+    ws_data = r.json()
+    ws_uuid = str(ws_data["workspace_id"])
+    ws_name = ws_data["workspace_name"]
+    print(f"[ok] CREATE workspace {ws_name!r} → {ws_uuid}")
 
-    r = api("POST", "/api/v1/tables", token, json={"table_id": TABLE_ID, "workspace_id": ws_id})
+    # ── Setup: blank table (no views by default — must create explicitly) ──────
+    r = api("POST", "/api/v1/tables", token, json={"table_id": TABLE_ID, "workspace_id": ws_name})
     if r.status_code != 201:
         fatal(f"create table: {r.status_code} {r.text[:200]}")
-    table = r.json()
     print(f"[ok] CREATE table {TABLE_ID!r}")
 
-    views = table.get("views", [])
-    if not views:
-        fatal("blank table returned no views")
-    table_view = next((v for v in views if v.get("type") == "table"), views[0])
+    # ── Create a table-type view explicitly ────────────────────────────────────
+    r = api("POST", f"/api/v1/tables/{TABLE_ID}/views", token,
+            json={"name": "Table View", "type": "table"})
+    if r.status_code not in (200, 201):
+        fatal(f"create table view: {r.status_code} {r.text[:200]}")
+    schema = r.json()
+    table_view = next((v for v in schema.get("views", []) if v.get("type") == "table"), None)
+    if table_view is None:
+        fatal(f"table-type view not found after creation; views={schema.get('views')}")
     table_view_id = table_view["view_id"]
-    original_table_name = table_view["name"]
-    print(f"[ok] initial table-type view id={table_view_id} name={original_table_name!r}")
+    table_view_name = table_view["name"]
+    print(f"[ok] CREATE table view id={table_view_id} name={table_view_name!r}")
 
-    # Add a kanban view so we cover a second view type
+    # ── Create a kanban view ───────────────────────────────────────────────────
     r = api("POST", f"/api/v1/tables/{TABLE_ID}/views", token,
             json={"name": "Kanban View", "type": "kanban"})
     if r.status_code not in (200, 201):
         fatal(f"create kanban view: {r.status_code} {r.text[:200]}")
-    all_views = get_views(token, TABLE_ID)
-    kanban_view = next((v for v in all_views if v.get("type") == "kanban"), None)
+    schema = r.json()
+    kanban_view = next((v for v in schema.get("views", []) if v.get("type") == "kanban"), None)
     if kanban_view is None:
-        fatal(f"kanban view not found after creation; views={all_views}")
+        fatal(f"kanban view not found after creation; views={schema.get('views')}")
     kanban_view_id = kanban_view["view_id"]
-    original_kanban_name = kanban_view["name"]
-    print(f"[ok] CREATE kanban view id={kanban_view_id} name={original_kanban_name!r}")
+    kanban_view_name = kanban_view["name"]
+    print(f"[ok] CREATE kanban view id={kanban_view_id} name={kanban_view_name!r}")
 
-    # ── Playwright session ──────────────────────────────────────────────────
+    # ── Playwright session ──────────────────────────────────────────────────────
     login_info = (
         '{"provider":"none",'
         f'"accessToken":"{token}",'
@@ -141,67 +166,69 @@ def main(snapshot: bool = False) -> None:
 
     with sync_playwright() as pw:
         browser = pw.chromium.connect(WS_URL)
-        page = browser.new_page(viewport={"width": 1400, "height": 900})
-        page.goto(BASE, wait_until="domcontentloaded")
-        page.evaluate("(info) => localStorage.setItem('loginInfo', info)", login_info)
-        page.goto(f"{BASE}/{ws_id}/{TABLE_ID}", wait_until="networkidle")
-        page.wait_for_timeout(2000)
+        ctx = browser.new_context(viewport={"width": 1400, "height": 900})
+        ctx.add_init_script(f"localStorage.setItem('loginInfo', {repr(login_info)});")
+        page = ctx.new_page()
+
+        wait_table_page(page, ws_name, TABLE_ID)
         print("[ok] navigated to table page")
 
-        if snapshot:
-            page.screenshot(path="/output/views_rename_01_initial.png", full_page=True)
+        snap(page, "vr_01_initial", snapshot)
 
-        # ── Step 1: rename table-type view via UI ──────────────────────────
-        rename_view_via_ui(page, original_table_name, RENAMED_TABLE_VIEW)
-        print(f"[ok] UI: renamed table view → {RENAMED_TABLE_VIEW!r}")
+        # ── Step 1: rename table-type view via UI ──────────────────────────────
+        rename_view_via_ui(page, table_view_name, RENAMED_TABLE_VIEW)
+        print(f"[ok] UI: renamed table view {table_view_name!r} → {RENAMED_TABLE_VIEW!r}")
 
-        if snapshot:
-            page.screenshot(path="/output/views_rename_02_table_renamed.png", full_page=True)
+        snap(page, "vr_02_table_renamed", snapshot)
 
-        # API verify: BE returned updated name
+        # API verify: BE persisted new name
         assert_api_view_name(token, TABLE_ID, table_view_id, RENAMED_TABLE_VIEW)
         print(f"[ok] API: table view name = {RENAMED_TABLE_VIEW!r}")
 
-        # ── Step 2: navigate away + back → table rename persists ───────────
-        page.goto(BASE, wait_until="domcontentloaded")
-        page.goto(f"{BASE}/{ws_id}/{TABLE_ID}", wait_until="networkidle")
-        page.locator(f'[data-testid="view-tab-{RENAMED_TABLE_VIEW}"]').wait_for(
-            state="visible", timeout=8000
-        )
+        # ── Step 2: navigate away + back → table rename persists ───────────────
+        page.goto(f"{BASE}/{ws_name}", wait_until="domcontentloaded", timeout=15000)
+        wait_table_page(page, ws_name, TABLE_ID)
+        try:
+            page.locator(f'[data-testid="view-tab-{RENAMED_TABLE_VIEW}"]').wait_for(
+                state="visible", timeout=8000
+            )
+        except PlaywrightTimeout:
+            fatal(f"table view tab {RENAMED_TABLE_VIEW!r} not visible after navigation")
         print(f"[ok] table view name {RENAMED_TABLE_VIEW!r} persists after navigation")
 
-        if snapshot:
-            page.screenshot(path="/output/views_rename_03_table_persists.png", full_page=True)
+        snap(page, "vr_03_table_persists", snapshot)
 
-        # ── Step 3: rename kanban view via UI ──────────────────────────────
-        rename_view_via_ui(page, original_kanban_name, RENAMED_KANBAN_VIEW)
-        print(f"[ok] UI: renamed kanban view → {RENAMED_KANBAN_VIEW!r}")
+        # ── Step 3: rename kanban view via UI ──────────────────────────────────
+        rename_view_via_ui(page, kanban_view_name, RENAMED_KANBAN_VIEW)
+        print(f"[ok] UI: renamed kanban view {kanban_view_name!r} → {RENAMED_KANBAN_VIEW!r}")
 
-        if snapshot:
-            page.screenshot(path="/output/views_rename_04_kanban_renamed.png", full_page=True)
+        snap(page, "vr_04_kanban_renamed", snapshot)
 
         # API verify
         assert_api_view_name(token, TABLE_ID, kanban_view_id, RENAMED_KANBAN_VIEW)
         print(f"[ok] API: kanban view name = {RENAMED_KANBAN_VIEW!r}")
 
-        # ── Step 4: navigate away + back → kanban rename persists ──────────
-        page.goto(BASE, wait_until="domcontentloaded")
-        page.goto(f"{BASE}/{ws_id}/{TABLE_ID}", wait_until="networkidle")
-        page.locator(f'[data-testid="view-tab-{RENAMED_KANBAN_VIEW}"]').wait_for(
-            state="visible", timeout=8000
-        )
+        # ── Step 4: navigate away + back → kanban rename persists ─────────────
+        page.goto(f"{BASE}/{ws_name}", wait_until="domcontentloaded", timeout=15000)
+        wait_table_page(page, ws_name, TABLE_ID)
+        try:
+            page.locator(f'[data-testid="view-tab-{RENAMED_KANBAN_VIEW}"]').wait_for(
+                state="visible", timeout=8000
+            )
+        except PlaywrightTimeout:
+            fatal(f"kanban view tab {RENAMED_KANBAN_VIEW!r} not visible after navigation")
         print(f"[ok] kanban view name {RENAMED_KANBAN_VIEW!r} persists after navigation")
 
-        if snapshot:
-            page.screenshot(path="/output/views_rename_05_kanban_persists.png", full_page=True)
+        snap(page, "vr_05_kanban_persists", snapshot)
 
         browser.close()
 
-    # ── Teardown ────────────────────────────────────────────────────────────
-    r = api("DELETE", f"/api/v1/workspaces/{ws_id}", token)
+    # ── Teardown ────────────────────────────────────────────────────────────────
+    r = api("DELETE", f"/api/v1/workspaces/{ws_uuid}", token)
     if r.status_code not in (200, 204):
-        fatal(f"delete workspace: {r.status_code} {r.text[:200]}")
-    print(f"[ok] DELETE workspace {ws_id}")
+        print(f"warn: delete workspace returned {r.status_code}", file=sys.stderr)
+    else:
+        print(f"[ok] DELETE workspace {ws_uuid}")
 
     print("\n=== PASSED — e2e_test_views_rename ===")
 

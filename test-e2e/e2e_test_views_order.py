@@ -1,6 +1,6 @@
 """E2E: drag-reorder view tabs persists across reload + tables.
 
-Covers two view-type pairs (cross-view rule):
+Covers two view-type pairs (cross-view rule per developing-e2e-test skill):
   T1: Kanban(kanban) + Timeline(timeline) → drag Timeline before Kanban
   T2: Board(kanban) + Tbl(table)          → drag Tbl before Board
 
@@ -28,13 +28,13 @@ T2 = f"t2v{SUFFIX}"
 SNAP_DIR = "/output"
 
 # View names — define once to keep assertions and drags in sync
-V1A = "Kanban"    # table1 view A (created first → view_id=1)
-V1B = "Timeline"  # table1 view B (created second → view_id=2)
-V2A = "Board"     # table2 view A: kanban (view_id=1)
-V2B = "Tbl"       # table2 view B: table type (view_id=2)
+V1A = "Kanban"    # table1 view A (created first)
+V1B = "Timeline"  # table1 view B (created second)
+V2A = "Board"     # table2 view A: kanban
+V2B = "Tbl"       # table2 view B: table type
 
 
-# ── Helpers ─────────────────────────────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────────────────
 
 def fatal(msg: str) -> None:
     print(f"FAIL: {msg}", file=sys.stderr)
@@ -101,27 +101,18 @@ def tab_x(page, name: str) -> float:
 
 
 def drag_tab(page, source_name: str, target_name: str) -> None:
-    """Dispatch HTML5 drag events to reorder view tabs."""
-    page.evaluate(
-        """
-        ([srcId, tgtId]) => {
-            const srcBtn = document.querySelector(`[data-testid="${srcId}"]`);
-            const tgtBtn = document.querySelector(`[data-testid="${tgtId}"]`);
-            if (!srcBtn || !tgtBtn) throw new Error(`Tab not found: ${srcId} or ${tgtId}`);
-            const src = srcBtn.parentElement;
-            const tgt = tgtBtn.parentElement;
-            const dt = new DataTransfer();
-            src.dispatchEvent(new DragEvent('dragstart', {bubbles:true, cancelable:true, dataTransfer:dt}));
-            tgt.dispatchEvent(new DragEvent('dragover',  {bubbles:true, cancelable:true, dataTransfer:dt}));
-            tgt.dispatchEvent(new DragEvent('drop',      {bubbles:true, cancelable:true, dataTransfer:dt}));
-            src.dispatchEvent(new DragEvent('dragend',   {bubbles:true}));
-        }
-        """,
-        [f"view-tab-{source_name}", f"view-tab-{target_name}"],
-    )
+    """Drag the draggable wrapper div for source_name onto the one for target_name.
+
+    Uses Playwright's native drag_and_drop which dispatches HTML5 DragEvents
+    via CDP Input.dispatchDragEvent — more reliable than synthetic dispatchEvent.
+    The draggable <div> wraps each <button data-testid="view-tab-{name}">.
+    """
+    src_sel = f'[draggable="true"]:has([data-testid="view-tab-{source_name}"])'
+    tgt_sel = f'[draggable="true"]:has([data-testid="view-tab-{target_name}"])'
+    page.drag_and_drop(src_sel, tgt_sel)
 
 
-def wait_tab_order(page, first: str, second: str, timeout: int = 5000) -> None:
+def wait_tab_order(page, first: str, second: str, timeout: int = 8000) -> None:
     """Wait until `first` tab appears to the left of `second` tab in the DOM."""
     try:
         page.wait_for_function(
