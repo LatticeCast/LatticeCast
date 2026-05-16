@@ -27,7 +27,7 @@ import sys
 import time
 
 import requests
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
 BASE = os.environ["BASE_URL"].rstrip("/")
 WS_URL = os.environ["BROWSER_WS"]
@@ -35,6 +35,10 @@ ADMIN_USER = "lattice"
 _SUFFIX = int(time.time()) % 100000
 WORKSPACE_NAME = f"tl-grp-{_SUFFIX}"
 TABLE_ID = f"tl-{_SUFFIX}"
+
+# Vite dev mode bakes in localhost as the backend URL.
+# In the browser container, localhost != lattice-cast, so we rewrite.
+_FRONTEND_BE = BASE.replace("lattice-cast", "localhost")
 
 
 def fatal(msg: str) -> None:
@@ -64,8 +68,19 @@ def api(method: str, path: str, token: str, **kw) -> requests.Response:
 def _col_id(schema: dict, name: str) -> str:
     col = next((c for c in schema["columns"] if c["name"] == name), None)
     if col is None:
-        fatal(f"column {name!r} not found in schema; columns={[c['name'] for c in schema['columns']]}")
+        fatal(f"column {name!r} not found; columns={[c['name'] for c in schema['columns']]}")
     return col["column_id"]
+
+
+def goto_table(page, ws_id: str, table_id: str) -> None:
+    """Navigate to a table and wait for view tabs to render."""
+    page.goto(f"{BASE}/{ws_id}/{table_id}", wait_until="domcontentloaded")
+    try:
+        page.wait_for_selector(
+            '[data-testid="view-tab-Schema"]', state="visible", timeout=15000
+        )
+    except PlaywrightTimeout:
+        fatal(f"View tabs did not load for table {table_id}")
 
 
 def main() -> None:
@@ -80,142 +95,218 @@ def main() -> None:
     ws_id = r.json()["workspace_id"]
     print(f"[ok] workspace {WORKSPACE_NAME!r} → {ws_id}")
 
-    # ── 2. Create blank table ────────────────────────────────────────────────
-    r = api("POST", "/api/v1/tables", token,
-            json={"table_id": TABLE_ID, "workspace_id": ws_id})
-    if r.status_code != 201:
-        fatal(f"create table: {r.status_code} {r.text[:200]}")
-    print(f"[ok] table {TABLE_ID!r}")
+    try:
+        # ── 2. Create blank table ────────────────────────────────────────────
+        r = api("POST", "/api/v1/tables", token,
+                json={"table_id": TABLE_ID, "workspace_id": ws_id})
+        if r.status_code != 201:
+            fatal(f"create table: {r.status_code} {r.text[:200]}")
+        print(f"[ok] table {TABLE_ID!r}")
 
-    # ── 3. Add date + select columns ─────────────────────────────────────────
-    r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
-            json={"name": "Start", "type": "date"})
-    if r.status_code != 201:
-        fatal(f"add Start col: {r.status_code} {r.text[:200]}")
-    schema = r.json()
-    start_col_id = _col_id(schema, "Start")
-    print(f"[ok] Start col → {start_col_id}")
+        # ── 3. Add date + select columns ─────────────────────────────────────
+        r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
+                json={"name": "Start", "type": "date"})
+        if r.status_code != 201:
+            fatal(f"add Start col: {r.status_code} {r.text[:200]}")
+        schema = r.json()
+        start_col_id = _col_id(schema, "Start")
+        print(f"[ok] Start col → {start_col_id}")
 
-    r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
-            json={"name": "End", "type": "date"})
-    if r.status_code != 201:
-        fatal(f"add End col: {r.status_code} {r.text[:200]}")
-    schema = r.json()
-    end_col_id = _col_id(schema, "End")
-    print(f"[ok] End col → {end_col_id}")
+        r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
+                json={"name": "End", "type": "date"})
+        if r.status_code != 201:
+            fatal(f"add End col: {r.status_code} {r.text[:200]}")
+        schema = r.json()
+        end_col_id = _col_id(schema, "End")
+        print(f"[ok] End col → {end_col_id}")
 
-    r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
-            json={"name": "Status", "type": "select",
-                  "options": {"choices": [{"label": "Todo"}, {"label": "Done"}]}})
-    if r.status_code != 201:
-        fatal(f"add Status col: {r.status_code} {r.text[:200]}")
-    schema = r.json()
-    status_col_id = _col_id(schema, "Status")
-    print(f"[ok] Status col → {status_col_id}")
+        r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
+                json={"name": "Status", "type": "select",
+                      "options": {"choices": [{"label": "Todo"}, {"label": "Done"}]}})
+        if r.status_code != 201:
+            fatal(f"add Status col: {r.status_code} {r.text[:200]}")
+        schema = r.json()
+        status_col_id = _col_id(schema, "Status")
+        print(f"[ok] Status col → {status_col_id}")
 
-    # ── 4. Create timeline view with start/end pre-configured ────────────────
-    r = api("POST", f"/api/v1/tables/{TABLE_ID}/views", token,
-            json={"name": "Roadmap", "type": "timeline",
-                  "config": {"start_col": start_col_id, "end_col": end_col_id}})
-    if r.status_code != 201:
-        fatal(f"create timeline view: {r.status_code} {r.text[:200]}")
-    views = r.json().get("views", [])
-    tl_view = next((v for v in views if v["name"] == "Roadmap"), None)
-    if tl_view is None:
-        fatal(f"Roadmap view not in response; views={[v['name'] for v in views]}")
-    tl_view_id = tl_view["view_id"]
-    print(f"[ok] timeline view 'Roadmap' → view_id={tl_view_id}")
+        r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
+                json={"name": "Category", "type": "select",
+                      "options": {"choices": [{"label": "A"}, {"label": "B"}]}})
+        if r.status_code != 201:
+            fatal(f"add Category col: {r.status_code} {r.text[:200]}")
+        schema = r.json()
+        category_col_id = _col_id(schema, "Category")
+        print(f"[ok] Category col → {category_col_id}")
 
-    # ── 5 + 6 + 7. UI: set group_by, API verify, navigate + UI assert ────────
-    login_info = (
-        '{"provider":"none",'
-        f'"accessToken":"{token}",'
-        f'"userInfo":{{"sub":"{token}","email":"lattice@example.com","name":"lattice"}},'
-        '"role":"admin"}'
-    )
+        # ── 4. Create timeline view with start/end + initial group_by=Status ────
+        r = api("POST", f"/api/v1/tables/{TABLE_ID}/views", token,
+                json={"name": "Roadmap", "type": "timeline",
+                      "config": {
+                          "start_col": start_col_id,
+                          "end_col": end_col_id,
+                          "group_by": status_col_id,
+                      }})
+        if r.status_code != 201:
+            fatal(f"create timeline view: {r.status_code} {r.text[:200]}")
+        views = r.json().get("views", [])
+        tl_view = next((v for v in views if v["name"] == "Roadmap"), None)
+        if tl_view is None:
+            fatal(f"Roadmap view not in response; views={[v['name'] for v in views]}")
+        tl_view_id = tl_view["view_id"]
+        initial_group_by = tl_view.get("config", {}).get("group_by")
+        print(f"[ok] timeline view 'Roadmap' → view_id={tl_view_id}, group_by={initial_group_by!r}")
 
-    with sync_playwright() as pw:
-        browser = pw.chromium.connect(WS_URL)
-        page = browser.new_page(viewport={"width": 1400, "height": 900})
-
-        # Inject auth into localStorage before navigating
-        page.goto(BASE, wait_until="domcontentloaded")
-        page.evaluate("(info) => localStorage.setItem('loginInfo', info)", login_info)
-
-        # Navigate to table (default view loads first)
-        page.goto(f"{BASE}/{ws_id}/{TABLE_ID}", wait_until="networkidle")
-        page.wait_for_timeout(1000)
-
-        # Switch to Roadmap (timeline) view tab
-        roadmap_tab = page.locator("button:has-text('Roadmap')").first
-        roadmap_tab.wait_for(state="visible", timeout=10000)
-        roadmap_tab.click()
-
-        # Wait for the group-by selector to appear
-        grp_select = page.locator('[data-testid="timeline-group-by-select"]')
-        grp_select.wait_for(state="visible", timeout=10000)
-        print("[ok] UI: timeline-group-by-select visible")
-
-        # Select Status as group_by; wait for the PUT to complete
-        with page.expect_response(
-            lambda resp: (
-                f"/api/v1/tables/{TABLE_ID}/views/{tl_view_id}" in resp.url
-                and resp.request.method == "PUT"
-            ),
-            timeout=10000,
-        ):
-            page.select_option('[data-testid="timeline-group-by-select"]', status_col_id)
-        print(f"[ok] UI: selected Status ({status_col_id}) as group_by; PUT confirmed")
-
-        if snapshot:
-            page.screenshot(path="/output/tl_groupby_set.png", full_page=True)
-
-        # ── 6. API verify: group_by is in the DB ─────────────────────────────
+        # API verify: initial group_by is set
         r = api("GET", f"/api/v1/tables/{TABLE_ID}/views/{tl_view_id}", token)
         if r.status_code != 200:
             fatal(f"GET view {tl_view_id}: {r.status_code} {r.text[:200]}")
-        got_group_by = r.json().get("config", {}).get("group_by")
-        if got_group_by != status_col_id:
-            fatal(f"API: config.group_by={got_group_by!r}, expected {status_col_id!r}")
-        print(f"[ok] API: config.group_by={got_group_by!r} confirmed in DB")
+        api_initial = r.json().get("config", {}).get("group_by")
+        if api_initial != status_col_id:
+            fatal(f"API setup: config.group_by={api_initial!r}, expected {status_col_id!r}")
+        print(f"[ok] API setup: config.group_by={api_initial!r} confirmed")
 
-        # ── 7. Navigate away and back — group_by must survive ────────────────
-        page.goto(f"{BASE}/{ws_id}/", wait_until="networkidle")
-        page.wait_for_timeout(300)
-        page.goto(f"{BASE}/{ws_id}/{TABLE_ID}", wait_until="networkidle")
-        page.wait_for_timeout(1000)
+        # ── 5–7. UI + API pillars inside a Playwright session ─────────────────
+        login_info = (
+            '{"provider":"none",'
+            f'"accessToken":"{token}",'
+            f'"userInfo":{{"sub":"{token}","email":"lattice@example.com","name":"lattice"}},'
+            '"role":"admin"}'
+        )
 
-        # Switch to Roadmap tab again
-        roadmap_tab2 = page.locator("button:has-text('Roadmap')").first
-        roadmap_tab2.wait_for(state="visible", timeout=10000)
-        roadmap_tab2.click()
+        with sync_playwright() as pw:
+            browser = pw.chromium.connect(WS_URL)
+            page = browser.new_page(viewport={"width": 1400, "height": 900})
 
-        grp_select2 = page.locator('[data-testid="timeline-group-by-select"]')
-        grp_select2.wait_for(state="visible", timeout=10000)
-        selected_val = grp_select2.input_value()
-        if selected_val != status_col_id:
-            fatal(
-                f"UI after nav: group_by select shows {selected_val!r}, "
-                f"expected {status_col_id!r}"
-            )
-        print("[ok] UI after nav: group_by selection persists across navigation")
+            # Rewrite localhost → lattice-cast for Vite dev API calls.
+            if _FRONTEND_BE != BASE:
+                def _reroute(route):
+                    route.continue_(url=route.request.url.replace(_FRONTEND_BE, BASE))
+                page.route(f"{_FRONTEND_BE}/**", _reroute)
 
-        if snapshot:
-            page.screenshot(path="/output/tl_groupby_after_nav.png", full_page=True)
+            # Inject auth into localStorage before navigating to the table
+            page.goto(BASE, wait_until="domcontentloaded")
+            page.evaluate("(info) => localStorage.setItem('loginInfo', info)", login_info)
 
-        browser.close()
+            goto_table(page, ws_id, TABLE_ID)
 
-    # ── 8. Teardown: delete workspace (cascades tables + views) ─────────────
-    r = api("DELETE", f"/api/v1/workspaces/{ws_id}", token)
-    if r.status_code not in (200, 204):
-        fatal(f"delete workspace: {r.status_code} {r.text[:200]}")
-    print(f"[ok] deleted workspace {ws_id}")
+            # ── step 1: click Roadmap tab → confirm group-by selector visible ──
+            try:
+                roadmap_tab = page.locator('[data-testid="view-tab-Roadmap"]')
+                roadmap_tab.wait_for(state="visible", timeout=10000)
+            except PlaywrightTimeout:
+                if snapshot:
+                    page.screenshot(path="/output/tl_groupby_FAIL_no_tab.png")
+                fatal("Roadmap tab not visible — view tabs may not have loaded")
+            roadmap_tab.click()
+            print("[ok] clicked Roadmap tab")
 
-    # Confirm workspace is gone
-    listed = {w["workspace_name"] for w in api("GET", "/api/v1/workspaces", token).json()}
-    if WORKSPACE_NAME in listed:
-        fatal(f"workspace {WORKSPACE_NAME!r} still listed after DELETE")
-    print(f"[ok] workspace no longer listed")
+            try:
+                grp_select = page.locator('[data-testid="timeline-group-by-select"]')
+                grp_select.wait_for(state="visible", timeout=10000)
+            except PlaywrightTimeout:
+                if snapshot:
+                    page.screenshot(path="/output/tl_groupby_FAIL_no_selector.png")
+                fatal("timeline-group-by-select not visible after clicking Roadmap tab")
+
+            # UI pillar: initial group_by matches the DB value from setup
+            current_val = grp_select.input_value()
+            if current_val != status_col_id:
+                fatal(
+                    f"UI step 1: group-by shows {current_val!r}, "
+                    f"expected initial {status_col_id!r}"
+                )
+            print(f"[ok] step 1 — UI: initial group_by={current_val!r} matches DB")
+
+            if snapshot:
+                page.screenshot(path="/output/tl_groupby_01_initial.png", full_page=True)
+
+            # ── step 2: change group_by; wait for PUT; verify UI + API ──────────
+            with page.expect_response(
+                lambda resp: (
+                    f"/api/v1/tables/{TABLE_ID}/views/{tl_view_id}" in resp.url
+                    and resp.request.method == "PUT"
+                ),
+                timeout=10000,
+            ):
+                page.select_option('[data-testid="timeline-group-by-select"]', category_col_id)
+            print(f"[ok] selected Category ({category_col_id}) as group_by; PUT confirmed")
+
+            # UI pillar
+            ui_val = grp_select.input_value()
+            if ui_val != category_col_id:
+                fatal(f"UI step 2: group-by shows {ui_val!r}, expected {category_col_id!r}")
+            print(f"[ok] step 2 — UI: group_by={ui_val!r}")
+
+            if snapshot:
+                page.screenshot(path="/output/tl_groupby_02_changed.png", full_page=True)
+
+            # API pillar
+            r = api("GET", f"/api/v1/tables/{TABLE_ID}/views/{tl_view_id}", token)
+            if r.status_code != 200:
+                fatal(f"GET view {tl_view_id}: {r.status_code} {r.text[:200]}")
+            got_group_by = r.json().get("config", {}).get("group_by")
+            if got_group_by != category_col_id:
+                fatal(f"API step 2: config.group_by={got_group_by!r}, expected {category_col_id!r}")
+            print(f"[ok] step 2 — API: config.group_by={got_group_by!r} confirmed in DB")
+
+            # ── step 3: navigate away and back; verify persistence ────────────
+            page.goto(f"{BASE}/{ws_id}/", wait_until="domcontentloaded")
+            page.wait_for_timeout(300)
+            goto_table(page, ws_id, TABLE_ID)
+
+            try:
+                roadmap_tab2 = page.locator('[data-testid="view-tab-Roadmap"]')
+                roadmap_tab2.wait_for(state="visible", timeout=10000)
+            except PlaywrightTimeout:
+                if snapshot:
+                    page.screenshot(path="/output/tl_groupby_FAIL_no_tab_after_nav.png")
+                fatal("Roadmap tab not visible after navigation back")
+            roadmap_tab2.click()
+
+            try:
+                grp_select2 = page.locator('[data-testid="timeline-group-by-select"]')
+                grp_select2.wait_for(state="visible", timeout=10000)
+            except PlaywrightTimeout:
+                if snapshot:
+                    page.screenshot(path="/output/tl_groupby_FAIL_no_selector_after_nav.png")
+                fatal("timeline-group-by-select not visible after navigation back")
+
+            selected_val = grp_select2.input_value()
+            if selected_val != category_col_id:
+                fatal(
+                    f"UI step 3 (after nav): group_by shows {selected_val!r}, "
+                    f"expected {category_col_id!r}"
+                )
+            print("[ok] step 3 — UI: group_by persists across navigation")
+
+            if snapshot:
+                page.screenshot(path="/output/tl_groupby_03_after_nav.png", full_page=True)
+
+            # API pillar after round-trip navigation
+            r = api("GET", f"/api/v1/tables/{TABLE_ID}/views/{tl_view_id}", token)
+            if r.status_code != 200:
+                fatal(f"GET view after nav: {r.status_code} {r.text[:200]}")
+            got_group_by2 = r.json().get("config", {}).get("group_by")
+            if got_group_by2 != category_col_id:
+                fatal(
+                    f"API step 3 (after nav): config.group_by={got_group_by2!r}, "
+                    f"expected {category_col_id!r}"
+                )
+            print(f"[ok] step 3 — API: config.group_by={got_group_by2!r} persisted after nav")
+
+            browser.close()
+
+    finally:
+        # ── Teardown: delete workspace (cascades tables + views) ──────────────
+        r = api("DELETE", f"/api/v1/workspaces/{ws_id}", token)
+        if r.status_code not in (200, 204):
+            print(f"WARN: delete workspace {ws_id}: {r.status_code}", file=sys.stderr)
+        else:
+            listed = {w["workspace_name"] for w in api("GET", "/api/v1/workspaces", token).json()}
+            if WORKSPACE_NAME in listed:
+                print(f"WARN: workspace {WORKSPACE_NAME!r} still listed after DELETE", file=sys.stderr)
+            else:
+                print(f"[ok] deleted workspace {ws_id}")
 
     print("\n=== PASSED — e2e_test_view_timeline_groupby ===")
 
