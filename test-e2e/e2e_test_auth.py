@@ -8,8 +8,8 @@ Steps:
   step_login_as_user  → DB: auth.users role=user; UI: workspace in sidebar
 
 Run:
-  docker compose exec browser python3 /scripts/test_e2e_auth.py
-  docker compose exec browser python3 /scripts/test_e2e_auth.py --snapshot
+  docker compose exec test-e2e python3 /scripts/e2e_test_auth.py
+  docker compose exec test-e2e python3 /scripts/e2e_test_auth.py --snapshot
 """
 
 import argparse

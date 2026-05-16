@@ -158,26 +158,21 @@ services:
     stdin_open: true
 
   # Headless Chromium host. Runs `playwright run-server` so test-e2e can
-  # remote-drive the browser via the BROWSER_WS endpoint.
+  # remote-drive the browser via the BROWSER_WS endpoint. The Playwright
+  # Python image bundles browser binaries but NOT the pip package, so a
+  # tiny Dockerfile.browser layers `pip install playwright` on top.
   browser:
     profiles:
       - test
-    image: mcr.microsoft.com/playwright/python:v1.50.0-noble
+    build:
+      context: ./test-e2e
+      dockerfile: Dockerfile.browser
     volumes:
       - ./.browser:/output
     environment:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     networks:
       - shared-network
-    command:
-      - python
-      - -m
-      - playwright
-      - run-server
-      - --host
-      - 0.0.0.0
-      - --port
-      - "4444"
 
 networks:
   app-network:

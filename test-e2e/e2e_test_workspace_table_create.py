@@ -12,7 +12,7 @@ Flow:
   7. Open sidebar → expand workspace → verify both tables listed
 
 Usage:
-    docker compose exec browser python3 /app/test_e2e_workspace_table_create.py [--snapshot]
+    docker compose exec test-e2e python3 /scripts/e2e_test_workspace_table_create.py [--snapshot]
 """
 
 import json
