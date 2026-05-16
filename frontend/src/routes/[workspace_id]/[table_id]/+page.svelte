@@ -113,6 +113,7 @@
 	// View state
 	let activeViewId = $state<number>(0);
 	let _applyingConfig = false;
+	let tableLoaded = $state(false);
 	let viewColOrder = $state<string[] | null>(null);
 
 	// Column resize
@@ -164,6 +165,7 @@
 
 	$effect(() => {
 		const tableId = $page.params.table_id!;
+		tableLoaded = false;
 		(async () => {
 			if (!$authStore?.role) {
 				goto('/login');
@@ -172,6 +174,7 @@
 			try {
 				const [table] = await Promise.all([fetchTable(tableId), loadWorkspaces()]);
 				await loadTable(table);
+				tableLoaded = true;
 				// Non-blocking: load doc flags in background, don't block page render
 				loadDocFlags(table.table_id).catch(() => {});
 				const ws = get(workspaces).find((w) => w.workspace_id === table.workspace_id);
@@ -932,7 +935,8 @@
 	}
 </script>
 
-<div class="flex h-full flex-col bg-white {resizingColId ? 'cursor-col-resize select-none' : ''}">
+<div class="flex h-full flex-col bg-white {resizingColId ? 'cursor-col-resize select-none' : ''}"
+	data-table-loaded={tableLoaded ? 'true' : undefined}>
 	{#if $error}
 		<div class="mx-4 mt-2 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{$error}</div>
 	{/if}

@@ -104,16 +104,20 @@ def rename_view_via_ui(page, old_name: str, new_name: str) -> None:
     rename_input = page.locator(f'[data-testid="view-tab-rename-input-{old_name}"]')
     rename_input.wait_for(state="visible", timeout=3000)
     rename_input.fill(new_name)
-    rename_input.press("Enter")
+    with page.expect_response(
+        lambda r: "/api/v1/tables/" in r.url and "/views/" in r.url and r.request.method == "PUT"
+    ) as resp_info:
+        rename_input.press("Enter")
+    assert resp_info.value.ok, f"rename view API returned {resp_info.value.status}"
     page.locator(f'[data-testid="view-tab-{new_name}"]').wait_for(state="visible", timeout=5000)
 
 
 def wait_table_page(page, ws_name: str, table_id: str) -> None:
     page.goto(f"{BASE}/{ws_name}/{table_id}", wait_until="domcontentloaded", timeout=20000)
     try:
-        page.wait_for_selector('[data-testid="view-switcher-add-btn"]', timeout=15000)
+        page.wait_for_selector('[data-table-loaded="true"]', timeout=15000)
     except PlaywrightTimeout:
-        fatal(f"ViewSwitcher did not render for table {table_id!r}")
+        fatal(f"Table views did not finish loading for {table_id!r}")
 
 
 def main(snapshot: bool = False) -> None:
