@@ -197,6 +197,7 @@
 							<div class="flex items-center gap-1">
 								{#if renamingColId === col.column_id}
 									<input
+										data-testid="col-rename-input-{col.column_id}"
 										class="min-w-0 flex-1 rounded border border-blue-400 bg-white px-2 py-0.5 text-sm text-gray-800 outline-none"
 										value={renameValue}
 										oninput={(e) =>
@@ -270,6 +271,7 @@
 									role="menu"
 								>
 									<button
+										data-testid="col-rename-btn-{col.column_id}"
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value
 											? 'text-gray-300 hover:bg-gray-700'
 											: 'text-gray-700 hover:bg-gray-50'}"
