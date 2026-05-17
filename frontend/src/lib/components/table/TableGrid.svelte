@@ -1,11 +1,12 @@
 <script lang="ts">
 	import type { Column, Row } from '$lib/types/table';
-	import { TAG_COLORS, isDark, T } from '$lib/UI/theme.svelte';
+	import { isDark, T } from '$lib/UI/theme.svelte';
 	import {
 		type RenderItem,
 		getItemKey,
 		getChoices,
 		getChoiceColor,
+		colorToStyle,
 		getTagValues,
 		formatDate,
 		sortLabels
@@ -848,15 +849,15 @@
 															data-testid="tags-popup-{row.row_id}-{col.column_id}"
 														>
 															{#each available as choice (choice.value)}
-																{@const color =
-																	TAG_COLORS.find((c) => c.bg === choice.color) ?? TAG_COLORS[0]}
+																{@const cs = colorToStyle(choice.color)}
 																<button
 																	class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-50"
 																	data-testid="tags-choice-{row.row_id}-{col.column_id}-{choice.value}"
 																	onclick={() => onAddTag(row.row_id, col, choice.value)}
 																>
 																	<span
-																		class="inline-flex items-center rounded-full border px-2 py-0.5 font-medium {color.bg} {color.text} {color.border}"
+																		class="inline-flex items-center rounded-full border px-2 py-0.5 font-medium {cs.cls}"
+																		style={cs.style}
 																		>{choice.value}</span
 																	>
 																</button>

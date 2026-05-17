@@ -27,7 +27,19 @@ import {
 	updateRow,
 	batchDocsExist
 } from '$lib/backend/tables';
-import { TAG_COLORS } from '$lib/UI/theme.svelte';
+
+function randomHex(): string {
+	const h = Math.floor(Math.random() * 360);
+	const s = 60 + Math.random() * 15;
+	const l = 55 + Math.random() * 10;
+	const f = (n: number) => {
+		const k = (n + h / 30) % 12;
+		const a = (s / 100) * Math.min(l / 100, 1 - l / 100);
+		return Math.round(255 * (l / 100 - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
+	};
+	return `#${[f(0), f(8), f(4)].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
 import {
 	type FilterCondition,
 	type ContextMenuState,
@@ -649,7 +661,7 @@ class TablePageStore {
 			for (const nc of this.importNewColumns) {
 				const choices =
 					nc.values && nc.values.length > 0
-						? nc.values.map((v, vi) => ({ value: v, color: TAG_COLORS[vi % TAG_COLORS.length].bg }))
+						? nc.values.map((v) => ({ value: v, color: randomHex() }))
 						: [];
 				await createColumn(tableId, {
 					name: nc.name,

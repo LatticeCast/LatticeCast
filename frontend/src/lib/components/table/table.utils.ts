@@ -1,5 +1,5 @@
 import type { Column, ColumnChoice, ColumnType, Row } from '$lib/types/table';
-import { TAG_COLORS } from '$lib/UI/theme.svelte';
+
 
 export const COLUMN_TYPES = [
 	'text',
@@ -72,15 +72,11 @@ export interface ChoiceStyle {
 }
 
 export function colorToStyle(color: string): ChoiceStyle {
-	if (!color || color.startsWith('bg-')) {
-		const tc = TAG_COLORS.find((c) => c.bg === color) ?? TAG_COLORS[0];
-		return { cls: `${tc.bg} ${tc.text} ${tc.border}`, style: '' };
-	}
-	// Outlined pill: subtle 12% tint background, full-strength border + text.
-	// Reads as "this thing has this color" without flooding the cell visually.
+	if (!color) return { cls: '', style: 'background-color: #9ca3af20; color: #9ca3af; border-color: #9ca3af;' };
+	const hex = color.startsWith('#') ? color : '#9ca3af';
 	return {
 		cls: '',
-		style: `background-color: ${color}20; color: ${color}; border-color: ${color};`
+		style: `background-color: ${hex}20; color: ${hex}; border-color: ${hex};`
 	};
 }
 
