@@ -167,6 +167,15 @@ services:
   # test-e2e container can remote-drive it. Also shares the host network
   # so the FE running inside Chromium can fetch http://localhost:13491/api/...
   # exactly like the developer's local browser would.
+  #
+  # mem_limit + cpus: a buggy e2e test can put Chromium into a
+  # pathological case (infinite re-render, leaked contexts, runaway
+  # memory). Without a cap, the host gets starved and the entire
+  # bot run hangs. With these limits, Chromium is OOM-killed when it
+  # exceeds them — playwright run-server dies, test-e2e gets a
+  # connect/protocol error, worker.sh's ERR trap flips the ticket to
+  # debugging, and the orchestrator advances to the next one. Host
+  # stays alive regardless of what the test does.
   browser:
     profiles:
       - test
@@ -177,6 +186,8 @@ services:
       - ./.browser:/output
     environment:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    mem_limit: 2g
+    cpus: 2.0
     network_mode: host
 
 networks:
