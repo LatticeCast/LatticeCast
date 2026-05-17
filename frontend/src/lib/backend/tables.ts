@@ -8,10 +8,10 @@ import { get } from 'svelte/store';
 import { authStore } from '$lib/stores/auth.store';
 import { BACKEND_URL } from './config';
 import { getAuthHeaders, getBearerHeader } from './http';
-import { columns, viewOrder, applySchema } from '$lib/stores/table_schema';
-import { views } from '$lib/stores/table_views';
-import { rows } from '$lib/stores/table_rows';
-import { tables, currentTableId } from '$lib/stores/menu';
+import { columns, viewOrder, applySchema } from '$lib/stores/table_schema.store';
+import { views } from '$lib/stores/table_views.store';
+import { rows } from '$lib/stores/table_rows.store';
+import { tables, currentTableId } from '$lib/stores/menu.store';
 import type {
 	Table,
 	TableSchema,

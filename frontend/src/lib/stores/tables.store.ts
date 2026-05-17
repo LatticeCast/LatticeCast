@@ -9,10 +9,10 @@ import { writable, get } from 'svelte/store';
 import type { Table, TableSchema, UpdateView, Workspace } from '$lib/types/table';
 
 // Local imports for use in orchestrator functions
-import { columns, viewOrder, applySchema } from './table_schema';
-import { views } from './table_views';
-import { rows } from './table_rows';
-import { workspaces, tables } from './menu';
+import { columns, viewOrder, applySchema } from './table_schema.store';
+import { views } from './table_views.store';
+import { rows } from './table_rows.store';
+import { workspaces, tables } from './menu.store';
 import {
 	fetchTable as _fetchTable,
 	fetchRows as _fetchRows,

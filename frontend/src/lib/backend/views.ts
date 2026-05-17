@@ -4,7 +4,7 @@
 
 import { BACKEND_URL } from './config';
 import { getAuthHeaders } from './http';
-import { applySchema } from '$lib/stores/table_schema';
+import { applySchema } from '$lib/stores/table_schema.store';
 import type { TableSchema, UpdateView, ViewConfig } from '$lib/types/table';
 
 // ── Reads ──────────────────────────────────────────────────────────────

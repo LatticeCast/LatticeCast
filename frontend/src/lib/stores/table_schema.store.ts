@@ -1,11 +1,11 @@
-// src/lib/stores/table_schema.ts
+// src/lib/stores/table_schema.store.ts
 //
 // Model: pure SSOT for table schema (columns + view_order + default_view).
 // No logic — just reactive state. Controllers write here after BE calls.
 
 import { writable } from 'svelte/store';
 import type { Column, TableSchema } from '$lib/types/table';
-import { views } from './table_views';
+import { views } from './table_views.store';
 
 export const columns = writable<Column[]>([]);
 export const viewOrder = writable<number[]>([]);

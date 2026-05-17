@@ -1,4 +1,4 @@
-// src/lib/stores/table_rows.ts
+// src/lib/stores/table_rows.store.ts
 //
 // Model: pure SSOT for table row data.
 // Controllers write here after BE calls.

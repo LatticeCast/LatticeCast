@@ -5,7 +5,7 @@
 import { get } from 'svelte/store';
 import { BACKEND_URL } from './config';
 import { getAuthHeaders } from './http';
-import { workspaces, currentWorkspaceId, tables } from '$lib/stores/menu';
+import { workspaces, currentWorkspaceId, tables } from '$lib/stores/menu.store';
 import type { Workspace, WorkspaceMemberFull } from '$lib/types/table';
 
 export interface CreateWorkspace {

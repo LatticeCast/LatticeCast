@@ -8,9 +8,9 @@
 	import { authStore } from '$lib/stores/auth.store';
 
 	// Model (SSOT stores)
-	import { columns } from '$lib/stores/table_schema';
-	import { views as viewsStore } from '$lib/stores/table_views';
-	import { rows } from '$lib/stores/table_rows';
+	import { columns } from '$lib/stores/table_schema.store';
+	import { views as viewsStore } from '$lib/stores/table_views.store';
+	import { rows } from '$lib/stores/table_rows.store';
 
 	// Controller
 	import { fetchTable } from '$lib/backend/tables';
@@ -31,7 +31,7 @@
 		updateView,
 		deleteView
 	} from '$lib/stores/tables.store';
-	import { workspaces } from '$lib/stores/menu';
+	import { workspaces } from '$lib/stores/menu.store';
 
 	// View store — all UI state + handlers
 	import { s, IMPLICIT_TABLE_VIEW } from '$lib/stores/tablePage.store.svelte';
