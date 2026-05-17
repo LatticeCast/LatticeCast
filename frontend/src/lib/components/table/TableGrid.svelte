@@ -766,6 +766,7 @@
 										{@const urlVal = (row.row_data[col.column_id] as string) ?? ''}
 										{#if urlVal && (urlVal.startsWith('http://') || urlVal.startsWith('https://'))}
 											<a
+												data-testid="url-cell-{row.row_id}-{col.column_id}"
 												href={urlVal}
 												target="_blank"
 												rel="noopener noreferrer"
@@ -775,13 +776,17 @@
 											>
 										{:else if urlVal}
 											<a
+												data-testid="url-cell-{row.row_id}-{col.column_id}"
 												href="/{urlVal}"
 												class="block max-w-full truncate text-blue-600 underline hover:text-blue-800"
 												onclick={(e) => e.stopPropagation()}
 												title={urlVal}>{urlVal}</a
 											>
 										{:else}
-											<span class="block min-h-[1.5rem] cursor-text py-1 text-gray-300">—</span>
+											<span
+												data-testid="url-cell-empty-{row.row_id}-{col.column_id}"
+												class="block min-h-[1.5rem] cursor-text py-1 text-gray-300">—</span
+											>
 										{/if}
 									{:else if col.type === 'select'}
 										{@const selVal = (row.row_data[col.column_id] as string) ?? ''}
