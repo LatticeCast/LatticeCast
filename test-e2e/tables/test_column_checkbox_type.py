@@ -1,4 +1,4 @@
-"""E2E test: e2e_test_column_checkbox_type — checkbox toggle.
+"""E2E test: checkbox column toggle.
 
 Topic: A checkbox column cell renders as a toggle switch, clicking it
 flips the value (false→true, true→false), the new state is persisted
@@ -25,247 +25,203 @@ Flow:
   teardown: DELETE workspace
 
 Usage:
-    docker compose exec test-e2e python3 /scripts/e2e_test_column_checkbox_type.py
-    docker compose exec test-e2e python3 /scripts/e2e_test_column_checkbox_type.py --snapshot
+    docker compose exec -T test-e2e pytest tables/test_column_checkbox_type.py -v
+    docker compose exec -T test-e2e pytest tables/test_column_checkbox_type.py -v --snapshot
 """
 
 from __future__ import annotations
 
-import sys
 import time
 
+import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
-from playwright.sync_api import sync_playwright
 
-from e2e_base import BASE, BROWSER_WS, api, fatal, login, seed_login_info
+from e2e_base import BASE, api
 
-ADMIN_USER = "lattice"
-_TS = int(time.time()) % 100000
-WS_NAME = f"e2e-chk-{_TS}"
-TABLE_ID = f"chk-{_TS}"
 COL_NAME = "Done"
 
-SNAPSHOT = "--snapshot" in sys.argv
 
-
-def snap(page, name: str) -> None:
-    if SNAPSHOT:
+def snap(page, name: str, snapshot: bool) -> None:
+    if snapshot:
         try:
             page.screenshot(path=f"/output/{name}.png", full_page=True)
         except Exception:
             pass
 
 
-def goto_table(page, ws_name: str, table_id: str) -> None:
+def goto_table(page, ws_name: str, table_id: str, snapshot: bool) -> None:
     page.goto(f"{BASE}/{ws_name}/{table_id}", wait_until="domcontentloaded")
     try:
         page.wait_for_selector('[data-table-loaded="true"]', state="attached", timeout=15000)
     except PlaywrightTimeout:
-        snap(page, "chk_FAIL_table_not_loaded")
-        fatal(f"Table {table_id!r} did not finish loading")
+        snap(page, "chk_FAIL_table_not_loaded", snapshot)
+        pytest.fail(f"Table {table_id!r} did not finish loading")
 
 
-def main() -> None:
-    token = login(ADMIN_USER)
-    print(f"[ok] login {ADMIN_USER!r}")
+def test_checkbox_toggle(authed_page, workspace, admin_token, snapshot):
+    page = authed_page
+    token = admin_token
+    ws_id, ws_name = workspace
 
-    # ── 1. Create workspace ────────────────────────────────────────────────────
-    r = api("POST", "/api/v1/workspaces", token, json={"workspace_name": WS_NAME})
-    if r.status_code != 201:
-        fatal(f"create workspace: {r.status_code} {r.text[:200]}")
-    ws_data = r.json()
-    ws_id = str(ws_data["workspace_id"])
-    ws_name = ws_data["workspace_name"]
-    print(f"[ok] workspace {WS_NAME!r} → {ws_id}")
+    _ts = int(time.time()) % 100000
+    table_id = f"chk-{_ts}"
+
+    # ── 1. Create blank table ──────────────────────────────────────────────
+    r = api("POST", "/api/v1/tables", token,
+            json={"table_id": table_id, "workspace_id": ws_name})
+    assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+    schema = r.json()
+    print(f"[ok] table {table_id!r} (cols={len(schema['columns'])})")
+
+    # ── 2. Add checkbox column ─────────────────────────────────────────────
+    r = api("POST", f"/api/v1/tables/{table_id}/columns", token,
+            json={"name": COL_NAME, "type": "checkbox"})
+    assert r.status_code == 201, f"add checkbox column: {r.status_code} {r.text[:200]}"
+    schema = r.json()
+    col = next((c for c in schema["columns"] if c["name"] == COL_NAME), None)
+    assert col is not None, f"column {COL_NAME!r} missing after create; got {[c['name'] for c in schema['columns']]}"
+    col_id = col["column_id"]
+    print(f"[ok] checkbox column {COL_NAME!r} → {col_id[:8]}…")
+
+    # ── 3. Create table view ───────────────────────────────────────────────
+    r = api("POST", f"/api/v1/tables/{table_id}/views", token,
+            json={"name": "Table", "type": "table", "config": {}})
+    assert r.status_code in (200, 201), f"create table view: {r.status_code} {r.text[:200]}"
+    print("[ok] table view created")
+
+    # ── 4. Create row with checkbox=false ──────────────────────────────────
+    r = api("POST", f"/api/v1/tables/{table_id}/rows", token,
+            json={"row_data": {col_id: False}})
+    assert r.status_code in (200, 201), f"create row: {r.status_code} {r.text[:200]}"
+    row = r.json()
+    row_id = row["row_id"]
+    print(f"[ok] row id={row_id} checkbox=false")
+
+    # ── 5. API pillar: verify initial value (false) ────────────────────────
+    r = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", token)
+    assert r.status_code == 200, f"GET row: {r.status_code} {r.text[:200]}"
+    stored = r.json()["row_data"].get(col_id)
+    assert stored is False, f"API: initial checkbox={stored!r}, expected False"
+    print("[ok] API: initial checkbox=False confirmed")
+
+    # ── 6. Browser session ─────────────────────────────────────────────────
+    goto_table(page, ws_name, table_id, snapshot)
+    snap(page, "chk_01_initial", snapshot)
+
+    # Click Table view tab
+    table_tab = '[data-testid="view-tab-Table"]'
+    try:
+        page.wait_for_selector(table_tab, state="visible", timeout=8000)
+    except PlaywrightTimeout:
+        snap(page, "chk_FAIL_no_table_tab", snapshot)
+        pytest.fail("'Table' view tab not visible")
+    page.click(table_tab)
+
+    # ── step 3: UI — checkbox renders with aria-checked=false ──────────
+    chk_sel = f'[data-testid="checkbox-cell-{row_id}-{col_id}"]'
+    try:
+        page.wait_for_selector(chk_sel, state="visible", timeout=10000)
+    except PlaywrightTimeout:
+        snap(page, "chk_FAIL_no_checkbox_cell", snapshot)
+        pytest.fail(
+            f"checkbox-cell-{row_id}-{col_id[:8]}… not visible — "
+            "missing data-testid on checkbox button in TableGrid?"
+        )
+
+    aria = page.get_attribute(chk_sel, "aria-checked")
+    if aria != "false":
+        snap(page, "chk_FAIL_initial_aria", snapshot)
+        pytest.fail(f"UI: initial aria-checked={aria!r}, expected 'false'")
+    print("[ok] UI: checkbox aria-checked='false' (initial)")
+    snap(page, "chk_02_initial_false", snapshot)
+
+    # ── step 4: Click checkbox → toggles to true ───────────────────────
+    with page.expect_response(lambda r: "/api/v1/tables/" in r.url and r.request.method == "PUT") as resp_info:
+        page.click(chk_sel)
+    resp_info.value
+
+    # Wait for UI to update
+    page.wait_for_function(
+        f'document.querySelector(\'{chk_sel}\')?.getAttribute("aria-checked") === "true"',
+        timeout=5000,
+    )
+    aria = page.get_attribute(chk_sel, "aria-checked")
+    if aria != "true":
+        snap(page, "chk_FAIL_toggle_true", snapshot)
+        pytest.fail(f"UI: after click aria-checked={aria!r}, expected 'true'")
+    print("[ok] UI: checkbox toggled to aria-checked='true'")
+    snap(page, "chk_03_toggled_true", snapshot)
+
+    # ── step 5: API pillar — verify toggled to true ────────────────────
+    r = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", token)
+    assert r.status_code == 200, f"GET row after toggle: {r.status_code} {r.text[:200]}"
+    stored = r.json()["row_data"].get(col_id)
+    assert stored is True, f"API: after toggle checkbox={stored!r}, expected True"
+    print("[ok] API: checkbox=True confirmed after toggle")
+
+    # ── step 6: Click again → toggles back to false ────────────────────
+    with page.expect_response(lambda r: "/api/v1/tables/" in r.url and r.request.method == "PUT") as resp_info:
+        page.click(chk_sel)
+    resp_info.value
+
+    page.wait_for_function(
+        f'document.querySelector(\'{chk_sel}\')?.getAttribute("aria-checked") === "false"',
+        timeout=5000,
+    )
+    aria = page.get_attribute(chk_sel, "aria-checked")
+    if aria != "false":
+        snap(page, "chk_FAIL_toggle_false", snapshot)
+        pytest.fail(f"UI: after 2nd click aria-checked={aria!r}, expected 'false'")
+    print("[ok] UI: checkbox toggled back to aria-checked='false'")
+    snap(page, "chk_04_toggled_false", snapshot)
+
+    # ── step 7: API pillar — verify back to false ──────────────────────
+    r = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", token)
+    assert r.status_code == 200, f"GET row after 2nd toggle: {r.status_code} {r.text[:200]}"
+    stored = r.json()["row_data"].get(col_id)
+    assert stored is False, f"API: after 2nd toggle checkbox={stored!r}, expected False"
+    print("[ok] API: checkbox=False confirmed after 2nd toggle")
+
+    # ── step 8: Durability — toggle to true, navigate away and back ────
+    with page.expect_response(lambda r: "/api/v1/tables/" in r.url and r.request.method == "PUT") as resp_info:
+        page.click(chk_sel)
+    resp_info.value
+
+    page.wait_for_function(
+        f'document.querySelector(\'{chk_sel}\')?.getAttribute("aria-checked") === "true"',
+        timeout=5000,
+    )
+    print("[ok] UI: checkbox set to true for durability check")
+
+    page.goto(f"{BASE}/{ws_name}", wait_until="domcontentloaded")
+    goto_table(page, ws_name, table_id, snapshot)
 
     try:
-        # ── 2. Create blank table ──────────────────────────────────────────────
-        r = api("POST", "/api/v1/tables", token,
-                json={"table_id": TABLE_ID, "workspace_id": ws_name})
-        if r.status_code != 201:
-            fatal(f"create table: {r.status_code} {r.text[:200]}")
-        schema = r.json()
-        print(f"[ok] table {TABLE_ID!r} (cols={len(schema['columns'])})")
+        page.wait_for_selector(table_tab, state="visible", timeout=8000)
+    except PlaywrightTimeout:
+        snap(page, "chk_FAIL_no_table_tab_after_nav", snapshot)
+        pytest.fail("'Table' view tab not visible after navigation back")
+    page.click(table_tab)
 
-        # ── 3. Add checkbox column ─────────────────────────────────────────────
-        r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
-                json={"name": COL_NAME, "type": "checkbox"})
-        if r.status_code != 201:
-            fatal(f"add checkbox column: {r.status_code} {r.text[:200]}")
-        schema = r.json()
-        col = next((c for c in schema["columns"] if c["name"] == COL_NAME), None)
-        if col is None:
-            fatal(f"column {COL_NAME!r} missing after create; got {[c['name'] for c in schema['columns']]}")
-        col_id = col["column_id"]
-        print(f"[ok] checkbox column {COL_NAME!r} → {col_id[:8]}…")
+    try:
+        page.wait_for_selector(chk_sel, state="visible", timeout=10000)
+    except PlaywrightTimeout:
+        snap(page, "chk_FAIL_no_checkbox_after_nav", snapshot)
+        pytest.fail("checkbox-cell not visible after navigation back")
 
-        # ── 4. Create table view ───────────────────────────────────────────────
-        r = api("POST", f"/api/v1/tables/{TABLE_ID}/views", token,
-                json={"name": "Table", "type": "table", "config": {}})
-        if r.status_code not in (200, 201):
-            fatal(f"create table view: {r.status_code} {r.text[:200]}")
-        print("[ok] table view created")
+    aria = page.get_attribute(chk_sel, "aria-checked")
+    if aria != "true":
+        snap(page, "chk_FAIL_durability", snapshot)
+        pytest.fail(f"Durability: aria-checked={aria!r} after nav, expected 'true'")
+    print("[ok] Durability: checkbox still true after navigation")
 
-        # ── 5. Create row with checkbox=false ──────────────────────────────────
-        r = api("POST", f"/api/v1/tables/{TABLE_ID}/rows", token,
-                json={"row_data": {col_id: False}})
-        if r.status_code not in (200, 201):
-            fatal(f"create row: {r.status_code} {r.text[:200]}")
-        row = r.json()
-        row_id = row["row_id"]
-        print(f"[ok] row id={row_id} checkbox=false")
+    # API confirm durability
+    r = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", token)
+    assert r.status_code == 200, f"GET row durability: {r.status_code} {r.text[:200]}"
+    stored = r.json()["row_data"].get(col_id)
+    assert stored is True, f"API durability: checkbox={stored!r}, expected True"
+    print("[ok] API: durability confirmed checkbox=True")
 
-        # ── 6. API pillar: verify initial value (false) ────────────────────────
-        r = api("GET", f"/api/v1/tables/{TABLE_ID}/rows/{row_id}", token)
-        if r.status_code != 200:
-            fatal(f"GET row: {r.status_code} {r.text[:200]}")
-        stored = r.json()["row_data"].get(col_id)
-        if stored is not False:
-            fatal(f"API: initial checkbox={stored!r}, expected False")
-        print("[ok] API: initial checkbox=False confirmed")
+    snap(page, "chk_05_durability_pass", snapshot)
 
-        # ── 7. Browser session ─────────────────────────────────────────────────
-        with sync_playwright() as pw:
-            browser = pw.chromium.connect(BROWSER_WS)
-            page = browser.new_page(viewport={"width": 1400, "height": 900})
-            seed_login_info(page, token, ADMIN_USER)
-
-            goto_table(page, ws_name, TABLE_ID)
-            snap(page, "chk_01_initial")
-
-            # Click Table view tab
-            table_tab = '[data-testid="view-tab-Table"]'
-            try:
-                page.wait_for_selector(table_tab, state="visible", timeout=8000)
-            except PlaywrightTimeout:
-                snap(page, "chk_FAIL_no_table_tab")
-                fatal("'Table' view tab not visible")
-            page.click(table_tab)
-
-            # ── step 3: UI — checkbox renders with aria-checked=false ──────────
-            chk_sel = f'[data-testid="checkbox-cell-{row_id}-{col_id}"]'
-            try:
-                page.wait_for_selector(chk_sel, state="visible", timeout=10000)
-            except PlaywrightTimeout:
-                snap(page, "chk_FAIL_no_checkbox_cell")
-                fatal(
-                    f"checkbox-cell-{row_id}-{col_id[:8]}… not visible — "
-                    "missing data-testid on checkbox button in TableGrid?"
-                )
-
-            aria = page.get_attribute(chk_sel, "aria-checked")
-            if aria != "false":
-                snap(page, "chk_FAIL_initial_aria")
-                fatal(f"UI: initial aria-checked={aria!r}, expected 'false'")
-            print("[ok] UI: checkbox aria-checked='false' (initial)")
-            snap(page, "chk_02_initial_false")
-
-            # ── step 4: Click checkbox → toggles to true ───────────────────────
-            with page.expect_response(lambda r: "/api/v1/tables/" in r.url and r.request.method == "PUT") as resp_info:
-                page.click(chk_sel)
-            resp_info.value
-
-            # Wait for UI to update
-            page.wait_for_function(
-                f'document.querySelector(\'{chk_sel}\')?.getAttribute("aria-checked") === "true"',
-                timeout=5000,
-            )
-            aria = page.get_attribute(chk_sel, "aria-checked")
-            if aria != "true":
-                snap(page, "chk_FAIL_toggle_true")
-                fatal(f"UI: after click aria-checked={aria!r}, expected 'true'")
-            print("[ok] UI: checkbox toggled to aria-checked='true'")
-            snap(page, "chk_03_toggled_true")
-
-            # ── step 5: API pillar — verify toggled to true ────────────────────
-            r = api("GET", f"/api/v1/tables/{TABLE_ID}/rows/{row_id}", token)
-            if r.status_code != 200:
-                fatal(f"GET row after toggle: {r.status_code} {r.text[:200]}")
-            stored = r.json()["row_data"].get(col_id)
-            if stored is not True:
-                fatal(f"API: after toggle checkbox={stored!r}, expected True")
-            print("[ok] API: checkbox=True confirmed after toggle")
-
-            # ── step 6: Click again → toggles back to false ────────────────────
-            with page.expect_response(lambda r: "/api/v1/tables/" in r.url and r.request.method == "PUT") as resp_info:
-                page.click(chk_sel)
-            resp_info.value
-
-            page.wait_for_function(
-                f'document.querySelector(\'{chk_sel}\')?.getAttribute("aria-checked") === "false"',
-                timeout=5000,
-            )
-            aria = page.get_attribute(chk_sel, "aria-checked")
-            if aria != "false":
-                snap(page, "chk_FAIL_toggle_false")
-                fatal(f"UI: after 2nd click aria-checked={aria!r}, expected 'false'")
-            print("[ok] UI: checkbox toggled back to aria-checked='false'")
-            snap(page, "chk_04_toggled_false")
-
-            # ── step 7: API pillar — verify back to false ──────────────────────
-            r = api("GET", f"/api/v1/tables/{TABLE_ID}/rows/{row_id}", token)
-            if r.status_code != 200:
-                fatal(f"GET row after 2nd toggle: {r.status_code} {r.text[:200]}")
-            stored = r.json()["row_data"].get(col_id)
-            if stored is not False:
-                fatal(f"API: after 2nd toggle checkbox={stored!r}, expected False")
-            print("[ok] API: checkbox=False confirmed after 2nd toggle")
-
-            # ── step 8: Durability — toggle to true, navigate away and back ────
-            with page.expect_response(lambda r: "/api/v1/tables/" in r.url and r.request.method == "PUT") as resp_info:
-                page.click(chk_sel)
-            resp_info.value
-
-            page.wait_for_function(
-                f'document.querySelector(\'{chk_sel}\')?.getAttribute("aria-checked") === "true"',
-                timeout=5000,
-            )
-            print("[ok] UI: checkbox set to true for durability check")
-
-            page.goto(f"{BASE}/{ws_name}", wait_until="domcontentloaded")
-            goto_table(page, ws_name, TABLE_ID)
-
-            try:
-                page.wait_for_selector(table_tab, state="visible", timeout=8000)
-            except PlaywrightTimeout:
-                snap(page, "chk_FAIL_no_table_tab_after_nav")
-                fatal("'Table' view tab not visible after navigation back")
-            page.click(table_tab)
-
-            try:
-                page.wait_for_selector(chk_sel, state="visible", timeout=10000)
-            except PlaywrightTimeout:
-                snap(page, "chk_FAIL_no_checkbox_after_nav")
-                fatal(f"checkbox-cell not visible after navigation back")
-
-            aria = page.get_attribute(chk_sel, "aria-checked")
-            if aria != "true":
-                snap(page, "chk_FAIL_durability")
-                fatal(f"Durability: aria-checked={aria!r} after nav, expected 'true'")
-            print("[ok] Durability: checkbox still true after navigation")
-
-            # API confirm durability
-            r = api("GET", f"/api/v1/tables/{TABLE_ID}/rows/{row_id}", token)
-            if r.status_code != 200:
-                fatal(f"GET row durability: {r.status_code} {r.text[:200]}")
-            stored = r.json()["row_data"].get(col_id)
-            if stored is not True:
-                fatal(f"API durability: checkbox={stored!r}, expected True")
-            print("[ok] API: durability confirmed checkbox=True")
-
-            snap(page, "chk_05_durability_pass")
-
-            browser.close()
-
-    finally:
-        r = api("DELETE", f"/api/v1/workspaces/{ws_id}", token)
-        if r.status_code not in (200, 204):
-            print(f"WARN: delete workspace {ws_id}: {r.status_code}", file=sys.stderr)
-        else:
-            print(f"[ok] deleted workspace {ws_id}")
-
-    print("\n=== PASSED — e2e_test_column_checkbox_type ===")
-
-
-if __name__ == "__main__":
-    main()
+    print("\n=== PASSED — test_column_checkbox_type ===")
