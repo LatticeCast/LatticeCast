@@ -807,6 +807,7 @@
 										{@const available = choices.filter((c) => !tagVals.includes(c.value))}
 										<div
 											class="flex min-h-[1.75rem] flex-wrap items-center gap-1"
+											data-testid="tags-cell-{row.row_id}-{col.column_id}"
 											onclick={(e) => e.stopPropagation()}
 										>
 											{#each tagVals as tag (tag)}
@@ -814,10 +815,12 @@
 												<span
 													class="inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs font-medium {color.cls}"
 													style={color.style}
+													data-testid="tag-pill-{row.row_id}-{col.column_id}-{tag}"
 												>
 													{tag}
 													<button
 														class="ml-0.5 rounded-full leading-none hover:opacity-60"
+														data-testid="tag-remove-{row.row_id}-{col.column_id}-{tag}"
 														onclick={() => onRemoveTag(row.row_id, col, tag)}
 														aria-label="Remove {tag}">×</button
 													>
@@ -827,6 +830,7 @@
 												<div class="relative">
 													<button
 														class="rounded-full border border-gray-300 px-1.5 py-0.5 text-xs text-gray-400 hover:border-blue-400 hover:text-blue-600"
+														data-testid="tags-add-btn-{row.row_id}-{col.column_id}"
 														onclick={() =>
 															onTagsPopupChange(
 																tagsPopupCell?.rowId === row.row_id &&
@@ -840,12 +844,14 @@
 															class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border py-1 shadow-xl {isDark.value
 																? 'border-gray-700 bg-gray-800'
 																: 'border-gray-100 bg-white'}"
+															data-testid="tags-popup-{row.row_id}-{col.column_id}"
 														>
 															{#each available as choice (choice.value)}
 																{@const color =
 																	TAG_COLORS.find((c) => c.bg === choice.color) ?? TAG_COLORS[0]}
 																<button
 																	class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-gray-50"
+																	data-testid="tags-choice-{row.row_id}-{col.column_id}-{choice.value}"
 																	onclick={() => onAddTag(row.row_id, col, choice.value)}
 																>
 																	<span
