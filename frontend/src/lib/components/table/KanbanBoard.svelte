@@ -307,6 +307,7 @@
 		{#each lanes as lane (lane.value)}
 			{@const color = getLaneColor(lane.value)}
 			<div
+				data-testid="kanban-lane-{lane.value || 'empty'}"
 				role="group"
 				aria-label="{lane.value || 'Uncategorized'} lane"
 				class="flex w-72 shrink-0 flex-col rounded-xl border transition-shadow {isDark.value
