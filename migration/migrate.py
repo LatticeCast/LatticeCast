@@ -365,12 +365,13 @@ def step_lint() -> bool:
         print("  ⚠️  No SQL files found")
         return False
 
+    linter = Path(__file__).parent / "linter.py"
     result = run(
-        ["sqlfluff", "lint"] + [str(f) for f in sql_files],
+        [sys.executable, str(linter)] + [str(f) for f in sql_files],
         check=False, capture=True,
     )
     if result.returncode == 0:
-        print("  ✓ lint passed")
+        print(result.stdout.strip() if result.stdout else "  ✓ lint passed")
         return True
     print(f"  ✗ lint failed:\n{result.stdout}")
     return False
