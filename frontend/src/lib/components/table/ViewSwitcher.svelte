@@ -119,7 +119,7 @@
 />
 
 <!-- Outer wrapper: position:relative so the panel is clipped by it, not by overflow-x-auto -->
-<div class="relative">
+<div class="relative" data-active-view-id={activeViewId}>
 	<!-- Tab bar: flex row — scrollable tabs on left, sticky Add view button on right -->
 	<div class="flex items-center border-b border-gray-200 bg-white">
 		<!-- Scrollable view tabs -->
@@ -215,6 +215,7 @@
 						{/if}
 						{#if onDeleteView && !isFixed(view)}
 							<button
+								data-testid="view-tab-delete-{view.name}"
 								onclick={(e) => {
 									e.stopPropagation();
 									if (canDelete(view)) onDeleteView(view);
