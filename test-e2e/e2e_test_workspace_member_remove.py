@@ -126,16 +126,12 @@ def run() -> None:
         print("[8] UI: removed user navigates to workspace → denied")
         page2 = browser.new_page(viewport={"width": 1400, "height": 900})
         seed_login_info(page2, member_token, member_user_name, role="user")
-        page2.goto(f"{BASE}/{WS_NAME}/members", wait_until="networkidle")
+        page2.goto(f"{BASE}/{WS_NAME}/members", wait_until="commit")
+        page2.wait_for_load_state("domcontentloaded")
+        page2.wait_for_url(lambda url: "/members" not in url, timeout=10000)
         snap(page2, "t50_03_member_denied")
 
-        denied = (
-            "/login" in page2.url
-            or page2.get_by_text("not found").count() > 0
-            or page2.get_by_text("denied").count() > 0
-            or page2.get_by_text("no access").count() > 0
-            or page2.get_by_test_id("members-heading").count() == 0
-        )
+        denied = "/members" not in page2.url
         assert denied, f"Removed user should not see members page; url={page2.url}"
         print(f"    removed user denied access (url={page2.url})")
 
