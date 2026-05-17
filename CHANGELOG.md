@@ -1,5 +1,53 @@
 # Changelog
 
+## v0.46 — 2026-05-17 (pytest migration + E2E fixes + Hide Fields removed)
+
+### E2E Tests — pytest migration
+
+- **All 47 e2e tests migrated to pytest.** Converted from standalone
+  scripts (`python3 test_*.py`) to pytest with shared fixtures
+  (`conftest.py`: `authed_page`, `admin_token`, `workspace`, `pm_table`,
+  `snapshot`). Tests organized into domain folders: `tables/`,
+  `table_views/`, `workspace/`, `columns/`, `rows/`.
+
+- **`conftest.py` shared fixtures.** `authed_page` handles login +
+  browser connection; `workspace` creates/tears-down a workspace per
+  test; `pm_table` creates a PM-template table with views.
+
+### E2E Tests — fixes
+
+- **`test_kanban_drag_card`:** replaced Playwright `drag_to()` with
+  manual `DragEvent` dispatch — native HTML5 drag detached the card DOM
+  node during Playwright's mouse simulation.
+
+- **`test_workspace_rename`:** fixed trailing-slash URL assertion.
+
+- **`test_workspace_create`:** removed duplicate-name error check
+  (workspace names are intentionally non-unique); fixed teardown to
+  verify delete by `workspace_id`.
+
+- **`test_col_hide`:** deleted (feature removed).
+
+- **`test_column_add`:** added `networkidle` wait + longer timeout for
+  persistence step.
+
+### Frontend
+
+- **Hide Fields feature removed.** Removed `hiddenCols` from
+  `table-page.svelte.ts`, `TableToolbar.svelte`, `TableHeader.svelte`,
+  `TableGrid.svelte`, `ContextMenu.svelte`, `table.utils.ts`, and
+  `+page.svelte`. Feature was unused and untested.
+
+- **DocCellEditor always opens textarea.** Fixed race where `docEditing`
+  stayed false when content loaded before click — textarea now mounts
+  unconditionally after load.
+
+- **Select cell `data-testid` persists across edit mode.** Wrapped
+  edit-mode `<select>` in `<span data-testid="select-cell-...">` so
+  Playwright can find the element after double-click triggers edit mode.
+
+---
+
 ## v0.45 — 2026-05-17 (Merge table_schemas + FE store split + color unification)
 
 ### Database

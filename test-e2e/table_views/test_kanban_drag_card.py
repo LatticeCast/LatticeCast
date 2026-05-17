@@ -131,7 +131,6 @@ def test_kanban_drag_card(authed_page, pm_table, admin_token, snapshot):
         snap(page, "kb_drag_FAIL_no_dest_lane", snapshot)
         pytest.fail(f"Destination lane (data-testid=kanban-lane-{DEST_LANE}) not visible")
 
-    card_el = page.locator(card_sel)
     with page.expect_response(
         lambda resp: (
             f"/api/v1/tables/{table_id}/rows/{row_id}" in resp.url
@@ -139,7 +138,29 @@ def test_kanban_drag_card(authed_page, pm_table, admin_token, snapshot):
         ),
         timeout=15000,
     ):
-        card_el.drag_to(dest_lane)
+        page.evaluate(
+            """({ src, dst }) => {
+                const source = document.querySelector(src);
+                const dest   = document.querySelector(dst);
+                const dt     = new DataTransfer();
+                source.dispatchEvent(new DragEvent('dragstart', {
+                    dataTransfer: dt, bubbles: true, cancelable: true
+                }));
+                dest.dispatchEvent(new DragEvent('dragover', {
+                    dataTransfer: dt, bubbles: true, cancelable: true
+                }));
+                dest.dispatchEvent(new DragEvent('drop', {
+                    dataTransfer: dt, bubbles: true, cancelable: true
+                }));
+                source.dispatchEvent(new DragEvent('dragend', {
+                    dataTransfer: dt, bubbles: true
+                }));
+            }""",
+            {
+                "src": card_sel,
+                "dst": f'[data-testid="kanban-lane-{DEST_LANE}"]',
+            },
+        )
 
     print(f"[ok] dragged card {row_id} to {DEST_LANE!r} — PUT fired")
 
