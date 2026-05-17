@@ -84,7 +84,7 @@ class TableViewRepository:
         created_by: UUID,
     ) -> dict[str, Any]:
         """V14 create_view: inserts the row and appends view_id to
-        table_schemas.config.view_order atomically. Returns the full
+        tables.config.view_order atomically. Returns the full
         schema snapshot {columns, view_order, default_view, views}."""
         await self.session.execute(
             sa_text(
@@ -152,7 +152,7 @@ class TableViewRepository:
         await self.session.commit()
         return await self.get_tables_schema(workspace_id, table_id)
 
-    # ── Schema reads (table_schemas) ──────────────────────────────────────
+    # ── Schema reads (tables.config) ──────────────────────────────────────
 
     async def get_tables_schema(
         self, workspace_id: UUID, table_id: str
@@ -162,7 +162,7 @@ class TableViewRepository:
         and every mutation endpoint (server-is-SSOT)."""
         result = await self.session.execute(
             sa_text(
-                "SELECT config FROM public.table_schemas "
+                "SELECT config FROM public.tables "
                 "WHERE workspace_id = CAST(:ws AS uuid) AND table_id = :tid"
             ),
             {"ws": str(workspace_id), "tid": table_id},

@@ -24,19 +24,14 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "workspace_members", "workspace_id", "uuid"),
     ("public", "workspace_members", "user_id", "uuid"),
     ("public", "workspace_members", "role", "character varying"),
-    # public.tables
+    # public.tables (V23: merged table_schemas into tables)
     ("public", "tables", "workspace_id", "uuid"),
     ("public", "tables", "table_id", "character varying"),
+    ("public", "tables", "config", "jsonb"),
+    ("public", "tables", "created_by", "uuid"),
+    ("public", "tables", "updated_by", "uuid"),
     ("public", "tables", "created_at", "timestamp"),
     ("public", "tables", "updated_at", "timestamp"),
-    # public.table_schemas
-    ("public", "table_schemas", "workspace_id", "uuid"),
-    ("public", "table_schemas", "table_id", "character varying"),
-    ("public", "table_schemas", "config", "jsonb"),
-    ("public", "table_schemas", "created_by", "uuid"),
-    ("public", "table_schemas", "updated_by", "uuid"),
-    ("public", "table_schemas", "created_at", "timestamp"),
-    ("public", "table_schemas", "updated_at", "timestamp"),
     # public.rows
     ("public", "rows", "workspace_id", "uuid"),
     ("public", "rows", "table_id", "character varying"), 
@@ -68,10 +63,10 @@ FORBIDDEN_COLUMNS: list[tuple[str, str, str]] = [
     ("public", "workspaces", "display_id"),
     ("public", "tables", "name"),
     ("public", "tables", "table_name"),
-    ("public", "tables", "columns"),         # in table_schemas.config now
+    ("public", "tables", "columns"),         # in tables.config JSONB now
     ("public", "table_views", "name"),       # in config jsonb now
     ("public", "table_views", "type"),       # in config jsonb now
-    ("public", "table_views", "is_default"), # default_view in table_schemas.config
+    ("public", "table_views", "is_default"), # default_view in tables.config
 ]
 
 
@@ -139,17 +134,8 @@ def verify(psql_fn) -> list[str]:
     if not result:
         errors.append("MISSING TRIGGER: rows.trg_rows_row_id")
 
-    # V43 replaces V34's schema+order trigger with one that auto-creates
-    # the table_schemas SSOT row on table insert.
-    for trg_name, tbl in [
-        ("trg_tables_create_table_schema", "tables"),
-    ]:
-        result = psql_fn(
-            f"SELECT 1 FROM information_schema.triggers "
-            f"WHERE event_object_table='{tbl}' AND trigger_name='{trg_name}';"
-        )
-        if not result:
-            errors.append(f"MISSING TRIGGER: {tbl}.{trg_name}")
+    # V23 dropped trg_tables_create_table_schema (table_schemas merged
+    # into tables — config column has a DEFAULT now).
 
     # V41 drops V37's partial unique index (default_view moved into config).
     result = psql_fn(
@@ -212,15 +198,7 @@ def verify(psql_fn) -> list[str]:
             "(expected ON DELETE CASCADE)"
         )
 
-    # V43 trigger function (replaces V34's trg_create_schema_and_order_fn).
-    for fn_name in (
-        "trg_create_table_schema_fn",
-    ):
-        result = psql_fn(
-            f"SELECT 1 FROM pg_proc WHERE proname='{fn_name}';"
-        )
-        if not result:
-            errors.append(f"MISSING TRIGGER FUNCTION: {fn_name}")
+    # V23 dropped trg_create_table_schema_fn (no longer needed).
 
     # V18: immutable_iso_to_ts must exist so create_row_data_index() can
     # build btree indexes on date columns (::NUMERIC cast fails on ISO strings).
