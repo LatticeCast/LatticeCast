@@ -23,6 +23,7 @@ templates with ticket docs in MinIO. Two conceptual layers:
 > - `llm.arch.auth.md` - OAuth flow
 > - `llm.endpoint.md` - API endpoints
 > - `llm.storage.md` - MinIO storage (aioboto3 async)
+> - `llm.e2e.md` - E2E tests (Playwright + Python)
 > - `llm.snapshot.md` - Browser snapshot guide (Playwright)
 > - `llm.user.md` - User management
 > - `llm.deploy.md` - Docker / k8s deployment
@@ -87,36 +88,23 @@ lattice-cast/
 └── docker-compose.yml      DBA creds hardcoded here (not .env)
 ```
 
-## Database Schema (current, after V18 — v0.40 squash)
-
-See `llm.arch.db.md` for full details.
+## Database Schema (v0.45 — see `llm.arch.db.md` for full details)
 
 ```
-auth.users          (user_id UUID PK, role, created_at, updated_at)
-gdpr.user_info      (user_id FK, email UNIQUE, user_name VARCHAR(32), config JSONB)  # PII + handle
-public.workspaces   (workspace_id UUID PK, workspace_name UNIQUE)
+auth.users          (user_id UUID PK, role, timestamps)
+gdpr.user_info      (user_id FK, email UNIQUE, user_name UNIQUE, config JSONB)
+public.workspaces   (workspace_id UUID PK, workspace_name)
 public.workspace_members  ((workspace_id, user_id) PK, role)
-public.tables       ((workspace_id, table_id) composite PK)          # identity-only
-public.table_schemas ((workspace_id, table_id) PK, config JSONB)    # {columns, view_order, default_view}
-public.table_views  ((workspace_id, table_id, view_id BIGINT) PK, config JSONB)  # one row per view
+public.tables       ((workspace_id, table_id) PK, config JSONB, audit cols)
+public.table_views  ((workspace_id, table_id, view_id BIGINT) PK, config JSONB)
 public.rows         ((workspace_id, table_id, row_id BIGINT) PK, row_data JSONB)
-private.schema_migrations  (filename, checksum SHA-256, applied_at)
+private.schema_migrations  (filename, checksum, applied_at)
 ```
 
-Notes:
-- `gdpr.user_info` merges the old `public.user_info` + `auth.gdpr` split. A
-  GDPR purge drops one row without touching `auth.users` or workspace audit trails.
-- `public.table_schemas` holds one row per table with config
-  `{columns: [...], view_order: [view_id, ...], default_view: view_id|null}`.
-  Auto-created by AFTER INSERT trigger on `public.tables`.
-- `public.table_views` holds one row per user view. `view_id` is a per-table
-  auto-increment BIGINT (same pattern as `row_id`). View name/type/settings
-  live inside `config` JSONB. Route key: `view_id` (integer), not a name string.
-- PG functions in V11-V14 own schema/view mutations (add/update/delete column,
-  create/update/delete view). BE repositories are one-line wrappers.
-- Auto-managed PG indexes per column: B-tree (num/date), GIN (select/tags/text)
-- Ticket docs: MinIO at `{workspace_id}/{table_id}/{row_id}.md`
-- RLS on `gdpr.user_info` (self-only) + all `public.*` tables (workspace member)
+- `tables.config` = `{columns, view_order, default_view}` (V23 merged table_schemas)
+- `table_views.config` = `{name, type, view-specific...}` — view_id is auto-increment BIGINT
+- PG functions own all schema/view mutations — BE repos are thin wrappers
+- RLS on all public tables + gdpr.user_info (workspace member / self-only)
 
 ## Key Patterns
 

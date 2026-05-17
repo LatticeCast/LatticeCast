@@ -1,5 +1,40 @@
 # Changelog
 
+## v0.45 — 2026-05-17 (Merge table_schemas + FE store split + color unification)
+
+### Database
+
+- **V23: `public.table_schemas` merged into `public.tables`.**
+  The two tables were always 1:1. `config`, `created_by`, `updated_by`
+  columns absorbed into `public.tables`. All 10 PG functions rewritten
+  (`add_column`, `update_column`, `delete_column`, `update_col_order`,
+  `update_view_order`, `update_default_view`, `create_view`, `update_view`,
+  `delete_view`, `create_table_from_template`). Auto-create trigger and
+  RLS policy on old table dropped.
+
+### Frontend
+
+- **Option colors unified to hex-only.** Removed `TAG_COLORS` (Tailwind
+  class objects) and `CHOICE_HEX_PALETTE` from theme. `colorToStyle()`
+  now takes hex from BE — single render path for select/tags/status.
+
+- **`tablePage.store.svelte.ts` split.** Stores directory now only
+  contains plain `.store.ts` files. Reactive class (`$state()` + handlers)
+  moved to `components/table/table-page.svelte.ts`. `tables.store.ts`
+  restored with re-exports + orchestrators + `IMPLICIT_TABLE_VIEW`.
+
+- **`tables.store.ts` shim consumers rewired** (S3+S4 of Epic #271).
+  All 8 consumers import directly from canonical SSOT stores and
+  controllers. View-switch race condition fixed with `_suppressPersist`
+  counter.
+
+### Backend
+
+- **`table_view.py` query updated.** `SELECT config FROM public.tables`
+  replaces `public.table_schemas` reference.
+
+---
+
 ## v0.44 — 2026-05-17 (Dashboard view + row handler cleanup)
 
 ### Frontend

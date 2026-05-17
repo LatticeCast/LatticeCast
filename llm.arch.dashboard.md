@@ -32,13 +32,13 @@ Dashboard configs are stored/updated via existing view CRUD endpoints — no new
 ## Widget Query Endpoint
 
 ```
-POST /api/v1/tables/{tid}/views/{view_name}/widgets/{wid}/query
+POST /api/v1/tables/{tid}/views/{view_id}/blocks/{block_id}/query
 Authorization: Bearer <token>
 → [ { dim_0: "qualified", value: 42000 }, ... ]
 ```
 
 Flow:
-1. Load table row → read `views[view_name].config.widgets[wid].lql`
+1. Load view row from `table_views` → read `config.widgets[block_id].lql`
 2. Build workspace schema dict (table column map) → cache in Valkey 60s
 3. `lattice_ql.compile(lql, schema)` → SQL string with `$1` for workspace_id
 4. Adapter inlines `$1` as `'<workspace_uuid>'` and rewrites the
@@ -72,4 +72,4 @@ build) — no Rust toolchain involved.
 3. **Registry** — add to `DashboardView.svelte` chart selector (`chart === "scatter" → ScatterWidget`)
 4. **Backend binding** — no change needed; `binding` is passed through as-is; component maps columns
 
-Chart library: `chart.js` via `svelte-chartjs`. Keep all data-transform logic in `lib/dashboard/` TS modules; `.svelte` files configure and render only.
+Chart library: ECharts 5.6. Keep all data-transform logic in TS modules; `.svelte` files configure and render only.

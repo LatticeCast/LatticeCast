@@ -80,19 +80,19 @@ Content-Type: application/json
 | GET | `/api/v1/tables/{table_id}` | Member | Get table by ID |
 | PUT | `/api/v1/tables/{table_id}` | Member | Update table name |
 | DELETE | `/api/v1/tables/{table_id}` | Member | Delete table |
-| GET | `/api/v1/tables/{table_id}/columns` | Member | List columns (read from `__schema__` row) |
-| POST | `/api/v1/tables/{table_id}/columns` | Member | Add column → updates `__schema__` row's config |
+| GET | `/api/v1/tables/{table_id}/columns` | Member | List columns (from `tables.config`) |
+| POST | `/api/v1/tables/{table_id}/columns` | Member | Add column → PG function updates `tables.config` |
 | PUT | `/api/v1/tables/{table_id}/columns/{column_id}` | Member | Update column |
 | DELETE | `/api/v1/tables/{table_id}/columns/{column_id}` | Member | Delete column |
-| GET | `/api/v1/tables/{table_id}/views` | Member | List user views, ordered per `__order__` row |
-| POST | `/api/v1/tables/{table_id}/views` | Member | Create user view (type ∈ table\|kanban\|timeline\|dashboard) — appended to `__order__` |
-| PUT | `/api/v1/tables/{table_id}/views/{view_name}` | Member | Update view (rename, retype, or set config) — returns single view JSON |
-| DELETE | `/api/v1/tables/{table_id}/views/{view_name}` | Member | Delete user view + remove from `__order__` |
-| GET | `/api/v1/tables/{table_id}/view-order` | Member | Read the `__order__` row's array |
-| PUT | `/api/v1/tables/{table_id}/view-order` | Member | Replace the order array (`{order: ["A","B"]}`); self-heals stale names |
+| GET | `/api/v1/tables/{table_id}/views` | Member | List views, ordered per `tables.config.view_order` |
+| POST | `/api/v1/tables/{table_id}/views` | Member | Create view (type ∈ table\|kanban\|timeline\|dashboard) |
+| PUT | `/api/v1/tables/{table_id}/views/{view_id}` | Member | Update view config |
+| DELETE | `/api/v1/tables/{table_id}/views/{view_id}` | Member | Delete view |
+| GET | `/api/v1/tables/{table_id}/view-order` | Member | Read view order array from `tables.config` |
+| PUT | `/api/v1/tables/{table_id}/view-order` | Member | Replace the view order array |
 | POST | `/api/v1/tables/template/pm` | User | Create PM template table (Kanban+Timeline) |
 | POST | `/api/v1/tables/template/crm` | User | Create CRM template table (Dashboard view) |
-| POST | `/api/v1/tables/{table_id}/views/{view_name}/widgets/{widget_id}/query` | Member | Execute dashboard widget's LatticeQL query → aggregated rows |
+| POST | `/api/v1/tables/{table_id}/views/{view_id}/blocks/{block_id}/query` | Member | Execute dashboard block's LatticeQL query → aggregated rows |
 
 ## Rows
 
@@ -138,7 +138,7 @@ Content-Type: application/json
 {"id": "uuid", "table_id": "uuid", "name": "Status", "type": "select", "options": {...}, "position": 0, "created_at": "..."}
 ```
 
-> **Note:** V34 — columns live in the `__schema__` row of `public.table_views` (one row per table). The `tables` table holds identity only. View order is the `__order__` row's array, mutated via `PUT /view-order`. See `llm.arch.airtable.md`.
+> **Note:** Columns live in `tables.config.columns` (V23 merged `table_schemas` into `tables`). Views are rows in `table_views` with auto-increment BIGINT `view_id`. View order is `tables.config.view_order`. See `llm.arch.airtable.md`.
 
 ### Column Types
 
