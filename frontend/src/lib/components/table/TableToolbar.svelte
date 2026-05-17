@@ -188,6 +188,7 @@
 					<label class="flex cursor-pointer items-center gap-2 px-3 py-1.5 hover:bg-gray-50">
 						<input
 							type="checkbox"
+							data-testid="hide-col-checkbox-{col.column_id}"
 							checked={!hiddenCols.has(col.column_id)}
 							onchange={() => onToggleHideCol(col.column_id)}
 							class="accent-blue-500"
@@ -198,6 +199,7 @@
 				{#if hiddenCols.size > 0}
 					<hr class="my-1 border-gray-100" />
 					<button
+						data-testid="hide-col-show-all-btn"
 						class="w-full px-3 py-1.5 text-left text-xs text-blue-500 hover:bg-blue-50"
 						onclick={onClearHiddenCols}
 						role="menuitem">Show all fields</button

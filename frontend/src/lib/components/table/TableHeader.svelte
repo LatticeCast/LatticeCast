@@ -67,6 +67,7 @@
 		</th>
 		{#each sortedColumns as col, i (col.column_id)}
 			<th
+				data-testid="col-header-{col.column_id}"
 				class="relative border-b px-3 py-2 text-left text-xs font-semibold tracking-wide uppercase {isDark.value
 					? 'border-gray-700 text-gray-400'
 					: 'border-gray-200 text-gray-500'}
@@ -263,6 +264,7 @@
 						</button>
 						<hr class={isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'} />
 						<button
+							data-testid="col-menu-hide-{col.column_id}"
 							class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value
 								? 'text-gray-400 hover:bg-gray-700'
 								: 'text-gray-500 hover:bg-gray-50'}"

@@ -425,6 +425,7 @@
 									</button>
 									<hr class={isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'} />
 									<button
+										data-testid="col-delete-{col.column_id}"
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
 										onclick={() => {
 											onDeleteColumn(col.column_id);
