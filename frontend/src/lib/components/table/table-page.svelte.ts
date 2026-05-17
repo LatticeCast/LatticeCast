@@ -21,11 +21,7 @@ import {
 	patchSchema,
 	batchDocsExist
 } from '$lib/backend/tables';
-import {
-	createView,
-	updateView,
-	deleteView
-} from '$lib/backend/views';
+import { createView, updateView, deleteView } from '$lib/backend/views';
 
 function randomHex(): string {
 	const h = Math.floor(Math.random() * 360);
@@ -82,7 +78,6 @@ class TablePageStore {
 	sortConfig = $state<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
 	filterConditions = $state<FilterCondition[]>([]);
 	showFilterPanel = $state(false);
-	hiddenCols = new SvelteSet<string>();
 	searchQuery = $state('');
 	groupConfig = $state<{ colId: string; granularity?: 'month' | 'day' } | null>(null);
 	collapsedGroups = new SvelteSet<string>();
@@ -132,7 +127,6 @@ class TablePageStore {
 		this.sortConfig = null;
 		this.filterConditions = [];
 		this.showFilterPanel = false;
-		this.hiddenCols.clear();
 		this.searchQuery = '';
 		this.groupConfig = null;
 		this.collapsedGroups.clear();
@@ -389,11 +383,6 @@ class TablePageStore {
 		this.filterConditions = this.filterConditions.filter((c) => c.id !== id);
 	}
 
-	toggleHideCol(colId: string) {
-		if (this.hiddenCols.has(colId)) this.hiddenCols.delete(colId);
-		else this.hiddenCols.add(colId);
-	}
-
 	toggleCollapseGroup(key: string) {
 		if (this.collapsedGroups.has(key)) this.collapsedGroups.delete(key);
 		else this.collapsedGroups.add(key);
@@ -447,10 +436,6 @@ class TablePageStore {
 		} else {
 			this.filterConditions = [];
 		}
-		this.hiddenCols.clear();
-		if (view.config?.hidden && Array.isArray(view.config.hidden)) {
-			for (const colId of view.config.hidden as string[]) this.hiddenCols.add(colId);
-		}
 		if (
 			view.config?.widths &&
 			typeof view.config.widths === 'object' &&
@@ -480,7 +465,6 @@ class TablePageStore {
 				this.filterConditions.length > 0
 					? this.filterConditions.map(({ colId, operator, value }) => ({ colId, operator, value }))
 					: undefined,
-			hidden: this.hiddenCols.size > 0 ? [...this.hiddenCols] : undefined,
 			widths: Object.keys(this.localWidths).length > 0 ? { ...this.localWidths } : undefined,
 			colOrder: this.viewColOrder ?? undefined
 		};

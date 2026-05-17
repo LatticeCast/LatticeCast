@@ -49,7 +49,7 @@
 
 	let tableLoaded = $state(false);
 
-	const sortedColumns = $derived(buildSortedColumns($columns, s.viewColOrder, s.hiddenCols));
+	const sortedColumns = $derived(buildSortedColumns($columns, s.viewColOrder));
 
 	const sortedRows = $derived(
 		sortRows(applyFilters($rows, s.filterConditions, s.searchQuery), s.sortConfig, $columns)
@@ -121,7 +121,6 @@
 		JSON.stringify(s.sortConfig);
 		JSON.stringify(s.groupConfig);
 		JSON.stringify(s.filterConditions);
-		[...s.hiddenCols].sort().join(',');
 		JSON.stringify(s.localWidths);
 		JSON.stringify(s.viewColOrder);
 		const _dragging = s.resizingColId;
@@ -201,14 +200,11 @@
 			columns={$columns}
 			sortConfig={s.sortConfig}
 			groupConfig={s.groupConfig}
-			hiddenCols={s.hiddenCols}
 			filterConditions={s.filterConditions}
 			showFilterPanel={s.showFilterPanel}
 			searchQuery={s.searchQuery}
 			onSortChange={(c) => (s.sortConfig = c)}
 			onGroupChange={(c) => (s.groupConfig = c)}
-			onToggleHideCol={(id) => s.toggleHideCol(id)}
-			onClearHiddenCols={() => s.hiddenCols.clear()}
 			onShowFilterPanelChange={(v) => (s.showFilterPanel = v)}
 			onSearchQueryChange={(q) => (s.searchQuery = q)}
 			onExportTemplate={() => s.handleExportTemplate()}
@@ -260,7 +256,6 @@
 			onSortChange={(c) => (s.sortConfig = c)}
 			onFilterAdd={(id) => s.addFilterForColumn(id)}
 			onShowFilterPanel={() => (s.showFilterPanel = true)}
-			onHideCol={(id) => s.hiddenCols.add(id)}
 			onDeleteColumn={(id) => s.handleDeleteColumn(id)}
 			onDragReorderColumns={handleDragReorderColumns}
 			onResizeStart={(e, col) => s.handleResizeStart(e, col)}
@@ -315,7 +310,6 @@
 		onRenameColumn={(id, name) => s.startRename(id, name)}
 		onSortChange={(c) => (s.sortConfig = c)}
 		onAddFilter={(id) => s.addFilterForColumn(id)}
-		onHideColumn={(id) => s.hiddenCols.add(id)}
 		onDeleteColumn={(id) => s.handleDeleteColumn(id)}
 	/>
 {/if}

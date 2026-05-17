@@ -96,7 +96,8 @@
 				{#if block}
 					<div
 						class="{T.cardBg} flex flex-col overflow-hidden rounded-lg p-4 shadow-sm"
-						style="grid-column: {item.x + 1} / span {item.w}; grid-row: {item.y + 1} / span {item.h};"
+						style="grid-column: {item.x + 1} / span {item.w}; grid-row: {item.y +
+							1} / span {item.h};"
 						data-testid="dashboard-block-{item.id}"
 					>
 						<Block {block} {tableId} viewName={view.name} blockId={item.id} />

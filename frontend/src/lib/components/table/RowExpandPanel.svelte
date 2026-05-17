@@ -390,8 +390,7 @@
 												>
 													<span
 														class="inline-flex items-center rounded-full border px-2 py-0.5 font-medium {cs.cls}"
-														style={cs.style}
-														>{choice.value}</span
+														style={cs.style}>{choice.value}</span
 													>
 												</button>
 											{/each}

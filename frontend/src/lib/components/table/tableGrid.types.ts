@@ -38,7 +38,6 @@ export interface TableGridProps {
 	onSortChange: (config: { colId: string; dir: 'asc' | 'desc' } | null) => void;
 	onFilterAdd: (colId: string) => void;
 	onShowFilterPanel: () => void;
-	onHideCol: (colId: string) => void;
 	onDeleteColumn: (colId: string) => void;
 	onResizeStart: (e: MouseEvent, col: Column) => void;
 	onShowAddColumn: () => void;

@@ -30,7 +30,7 @@
 		fetchDoc(tableId, row.row_id)
 			.then((content) => {
 				docContent = content;
-				if (content) docEditing = true;
+				docEditing = true;
 			})
 			.catch(() => {})
 			.finally(() => {

@@ -1,6 +1,5 @@
 import type { Column, ColumnChoice, ColumnType, Row } from '$lib/types/table';
 
-
 export const COLUMN_TYPES = [
 	'text',
 	'string',
@@ -72,7 +71,11 @@ export interface ChoiceStyle {
 }
 
 export function colorToStyle(color: string): ChoiceStyle {
-	if (!color) return { cls: '', style: 'background-color: #9ca3af20; color: #9ca3af; border-color: #9ca3af;' };
+	if (!color)
+		return {
+			cls: '',
+			style: 'background-color: #9ca3af20; color: #9ca3af; border-color: #9ca3af;'
+		};
 	const hex = color.startsWith('#') ? color : '#9ca3af';
 	return {
 		cls: '',
@@ -302,20 +305,14 @@ export function buildRenderItems(
 	return items;
 }
 
-export function buildSortedColumns(
-	colList: Column[],
-	viewColOrder: string[] | null,
-	hiddenCols: Set<string>
-): Column[] {
-	const ordered =
-		viewColOrder && viewColOrder.length > 0
-			? [...colList].sort((a, b) => {
-					const ai = viewColOrder.indexOf(a.column_id);
-					const bi = viewColOrder.indexOf(b.column_id);
-					return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
-				})
-			: colList;
-	return ordered.filter((c) => !hiddenCols.has(c.column_id));
+export function buildSortedColumns(colList: Column[], viewColOrder: string[] | null): Column[] {
+	return viewColOrder && viewColOrder.length > 0
+		? [...colList].sort((a, b) => {
+				const ai = viewColOrder.indexOf(a.column_id);
+				const bi = viewColOrder.indexOf(b.column_id);
+				return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
+			})
+		: colList;
 }
 
 // ─── Export helpers ───────────────────────────────────────────────────────────

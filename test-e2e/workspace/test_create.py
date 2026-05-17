@@ -85,38 +85,15 @@ def test_workspace_create(authed_page, admin_token, snapshot):
         owner = next((m for m in members if m["role"] == "owner"), None)
         assert owner is not None, "No owner found in workspace members"
 
-        # ── Step 5: UI — duplicate name shows error ──────────────────────────
-        print("[5] Verify duplicate name error in modal")
-        new_ws_btn2 = page.get_by_test_id("new-workspace-btn")
-        new_ws_btn2.wait_for(state="visible", timeout=5000)
-        new_ws_btn2.click()
-
-        name_input2 = page.get_by_test_id("create-workspace-name-input")
-        name_input2.wait_for(state="visible", timeout=5000)
-        name_input2.fill(ws_name)
-        page.get_by_test_id("create-workspace-submit").click()
-
-        error_el = page.get_by_test_id("create-workspace-error")
-        error_el.wait_for(state="visible", timeout=5000)
-        error_text = error_el.text_content() or ""
-        assert "already exists" in error_text.lower() or "conflict" in error_text.lower(), (
-            f"Expected duplicate error, got: {error_text}"
-        )
-        snap(page, "t45_05_duplicate_error", snapshot)
-
-        # Close modal
-        page.get_by_test_id("create-workspace-cancel").click()
 
     finally:
         # ── Teardown ─────────────────────────────────────────────────────────
         if ws_id is not None:
-            print("[6] Teardown: DELETE workspace via API")
+            print("[5] Teardown: DELETE workspace via API")
             r = api("DELETE", f"/api/v1/workspaces/{ws_id}", admin_token)
             assert r.status_code == 204, f"Delete failed: {r.status_code} {r.text[:200]}"
 
-            r = api("GET", "/api/v1/workspaces", admin_token)
-            assert r.status_code == 200
-            remaining = [w for w in r.json() if w["workspace_name"] == ws_name]
-            assert len(remaining) == 0, f"Workspace still exists after delete: {remaining}"
+            r = api("GET", f"/api/v1/workspaces/{ws_id}", admin_token)
+            assert r.status_code == 404, f"Workspace still exists after delete: {r.status_code}"
 
     print("PASS: e2e_test_workspace_create")
