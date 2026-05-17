@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 E2E test: task-55 — PM template structure (12 columns, 2 views).
 
@@ -11,22 +10,15 @@ Verifies:
   6. UI: Sprint Board + Roadmap view tabs visible
 
 Usage:
-    docker compose exec test-e2e python3 /scripts/e2e_test_template_pm.py [--snapshot]
+    docker compose exec -T test-e2e pytest template/test_pm.py -v [--snapshot]
 """
 
-import os
 import re
-import sys
 import time
 
-from playwright.sync_api import sync_playwright
+import pytest
 
-from e2e_base import BASE, BROWSER_WS, api, connect_browser, fatal, login, seed_login_info
-
-USER = "lattice"
-SUFFIX = int(time.time()) % 100000
-WS_NAME = f"ws-pm-tpl-{SUFFIX}"
-TABLE_NAME = f"pm-tpl-{SUFFIX}"
+from e2e_base import BASE, api
 
 PM_COLUMNS = [
     ("Title", "text"),
@@ -48,37 +40,22 @@ STATUS_CHOICES = ["todo", "in_progress", "testing", "debugging", "review", "done
 PRIORITY_CHOICES = ["critical", "high", "medium", "low"]
 
 
-def main():
-    snapshot = "--snapshot" in sys.argv
+def test_pm_template_structure(authed_page, workspace, admin_token, snapshot):
+    ws_id, ws_name = workspace
+    suffix = int(time.time()) % 100000
+    table_name = f"pm-tpl-{suffix}"
 
-    # ── Setup: login + create workspace ──────────────────────────────────────
-    print("[0] Login + create workspace")
-    token = login(USER)
-
-    r = api("POST", "/api/v1/workspaces", token, json={"workspace_name": WS_NAME})
-    if r.status_code not in (200, 201):
-        fatal(f"create workspace: {r.status_code} {r.text[:200]}")
-    ws_id = r.json()["workspace_id"]
-
-    try:
-        _run_test(token, ws_id, snapshot)
-    finally:
-        # ── Cleanup ──────────────────────────────────────────────────────────
-        api("DELETE", f"/api/v1/workspaces/{ws_id}", token)
-        print("[cleanup] workspace deleted")
-
-
-def _run_test(token: str, ws_id: str, snapshot: bool):
     # ── Step 1: Create PM template via API ───────────────────────────────────
     print("[1] POST /api/v1/tables/template/pm")
     r = api(
         "POST",
         "/api/v1/tables/template/pm",
-        token,
-        json={"table_id": TABLE_NAME, "workspace_id": ws_id},
+        admin_token,
+        json={"table_id": table_name, "workspace_id": ws_id},
     )
-    if r.status_code not in (200, 201):
-        fatal(f"create PM template: {r.status_code} {r.text[:300]}")
+    assert r.status_code in (200, 201), (
+        f"create PM template: {r.status_code} {r.text[:300]}"
+    )
 
     data = r.json()
     columns = data.get("columns", [])
@@ -91,8 +68,7 @@ def _run_test(token: str, ws_id: str, snapshot: bool):
 
     expected_names = [name for name, _ in PM_COLUMNS]
     missing = [n for n in expected_names if n not in col_map]
-    if missing:
-        fatal(f"missing columns: {missing}; got {list(col_map.keys())}")
+    assert not missing, f"missing columns: {missing}; got {list(col_map.keys())}"
 
     assert len(columns) == len(PM_COLUMNS), (
         f"expected {len(PM_COLUMNS)} columns, got {len(columns)}: "
@@ -166,60 +142,52 @@ def _run_test(token: str, ws_id: str, snapshot: bool):
 
     # ── Step 4: UI verification ──────────────────────────────────────────────
     print("[4] UI: navigate to PM table")
-    with sync_playwright() as pw:
-        browser = connect_browser(pw)
-        page = browser.new_page(viewport={"width": 1400, "height": 900})
-        seed_login_info(page, token, USER)
+    page = authed_page
 
-        page.goto(f"{BASE}/{WS_NAME}/{TABLE_NAME}", wait_until="networkidle")
+    page.goto(f"{BASE}/{ws_name}/{table_name}", wait_until="networkidle")
 
-        # Wait for views to load (Schema tab is auto-prepended)
-        page.wait_for_selector("[data-testid='view-tab-Schema']", state="visible", timeout=10000)
+    # Wait for views to load (Schema tab is auto-prepended)
+    page.wait_for_selector("[data-testid='view-tab-Schema']", state="visible", timeout=10000)
 
-        if snapshot:
-            page.screenshot(path="/output/t55_01_pm_table_landing.png", full_page=True)
+    if snapshot:
+        page.screenshot(path="/output/t55_01_pm_table_landing.png", full_page=True)
 
-        # ── Step 5: verify view tabs exist ───────────────────────────────────
-        print("[5] UI: verify view tabs")
-        page.wait_for_selector(
-            "[data-testid='view-tab-Sprint Board']", state="visible", timeout=5000
-        )
-        page.wait_for_selector(
-            "[data-testid='view-tab-Roadmap']", state="visible", timeout=5000
-        )
-        print("    Sprint Board + Roadmap tabs visible")
+    # ── Step 5: verify view tabs exist ───────────────────────────────────
+    print("[5] UI: verify view tabs")
+    page.wait_for_selector(
+        "[data-testid='view-tab-Sprint Board']", state="visible", timeout=5000
+    )
+    page.wait_for_selector(
+        "[data-testid='view-tab-Roadmap']", state="visible", timeout=5000
+    )
+    print("    Sprint Board + Roadmap tabs visible")
 
-        # ── Step 6: click Schema tab and verify column headers ───────────────
-        print("[6] UI: click Schema tab, verify column headers")
-        page.get_by_test_id("view-tab-Schema").click()
-        page.wait_for_selector("table thead", state="visible", timeout=8000)
+    # ── Step 6: click Schema tab and verify column headers ───────────────
+    print("[6] UI: click Schema tab, verify column headers")
+    page.get_by_test_id("view-tab-Schema").click()
+    page.wait_for_selector("table thead", state="visible", timeout=8000)
 
-        if snapshot:
-            page.screenshot(path="/output/t55_02_schema_view.png", full_page=True)
+    if snapshot:
+        page.screenshot(path="/output/t55_02_schema_view.png", full_page=True)
 
-        th_elements = page.locator("table thead th").all()
-        rendered_names = []
-        for th in th_elements:
-            text = " ".join((th.text_content() or "").split())
-            col_name = re.sub(r"\s*\(\w+\)\s*$", "", text).strip()
-            if col_name and col_name != "#":
-                rendered_names.append(col_name)
+    th_elements = page.locator("table thead th").all()
+    rendered_names = []
+    for th in th_elements:
+        text = " ".join((th.text_content() or "").split())
+        col_name = re.sub(r"\s*\(\w+\)\s*$", "", text).strip()
+        if col_name and col_name != "#":
+            rendered_names.append(col_name)
 
-        expected_names_set = set(expected_names)
-        rendered_set = set(rendered_names)
-        missing_in_ui = expected_names_set - rendered_set
-        if missing_in_ui:
-            fatal(f"columns missing from UI thead: {missing_in_ui}; rendered: {rendered_names}")
+    expected_names_set = set(expected_names)
+    rendered_set = set(rendered_names)
+    missing_in_ui = expected_names_set - rendered_set
+    assert not missing_in_ui, (
+        f"columns missing from UI thead: {missing_in_ui}; rendered: {rendered_names}"
+    )
 
-        print(f"    all {len(expected_names)} columns rendered in thead")
+    print(f"    all {len(expected_names)} columns rendered in thead")
 
-        if snapshot:
-            page.screenshot(path="/output/t55_03_columns_verified.png", full_page=True)
-
-        browser.close()
+    if snapshot:
+        page.screenshot(path="/output/t55_03_columns_verified.png", full_page=True)
 
     print("PASS: e2e_test_template_pm")
-
-
-if __name__ == "__main__":
-    main()
