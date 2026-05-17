@@ -7,7 +7,8 @@
 	import { fetchMembers, addMember, removeMember, updateMemberRole } from '$lib/backend/workspaces';
 	import type { WorkspaceMemberFull } from '$lib/types/table';
 	import { get } from 'svelte/store';
-	import { currentWorkspace, workspaces, loadWorkspaces } from '$lib/stores/tables.store';
+	import { fetchWorkspaces } from '$lib/backend/workspaces';
+	import { currentWorkspace, workspaces, currentWorkspaceId } from '$lib/stores/menu.store';
 
 	let workspaceId = $derived($page.params.workspace_id ?? '');
 	let members = $state<WorkspaceMemberFull[]>([]);
@@ -49,7 +50,7 @@
 			}
 
 			if (get(currentWorkspace)?.workspace_id !== wsId) {
-				await loadWorkspaces();
+				await fetchWorkspaces();
 				const ws = get(workspaces).find(
 					(w) => w.workspace_id === wsId || w.workspace_name === wsId
 				);
@@ -57,7 +58,7 @@
 					goto('/');
 					return;
 				}
-				currentWorkspace.set(ws);
+				currentWorkspaceId.set(ws.workspace_id);
 			}
 
 			await loadMembers();

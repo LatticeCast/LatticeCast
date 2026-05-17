@@ -13,39 +13,20 @@
 	import { rows } from '$lib/stores/table_rows.store';
 
 	// Controller
-	import { fetchTable } from '$lib/backend/tables';
-
-	// Legacy orchestrators (backward compat — will migrate)
-	import {
-		currentWorkspace,
-		currentTable,
-		loading,
-		error,
-		loadWorkspaces,
-		loadTable,
-		refreshRows,
-		reorderColumns,
-		reorderViews,
-		setDefaultView,
-		createView,
-		updateView,
-		deleteView
-	} from '$lib/stores/tables.store';
-	import { workspaces } from '$lib/stores/menu.store';
-
-	// View store — all UI state + handlers
-	import { s, IMPLICIT_TABLE_VIEW } from '$lib/stores/tablePage.store.svelte';
+	import { fetchTable, fetchRows, patchSchema } from '$lib/backend/tables';
+	import { fetchWorkspaces } from '$lib/backend/workspaces';
+	import { currentWorkspaceId } from '$lib/stores/menu.store';
+	import { error, IMPLICIT_TABLE_VIEW } from '$lib/stores/tables.store';
+	import { s } from '$lib/components/table/table-page.svelte';
 
 	// Utils
 	import {
-		type FilterCondition,
 		applyFilters,
 		sortRows,
 		buildGroupedRows,
 		buildRenderItems,
 		buildSortedColumns
 	} from '$lib/components/table/table.utils';
-	import type { Column, Row, ViewConfig } from '$lib/types/table';
 
 	// Components
 	import TableToolbar from '$lib/components/table/TableToolbar.svelte';
@@ -106,14 +87,12 @@
 			try {
 				const [table] = await Promise.all([
 					fetchTable(tableId, $page.params.workspace_id),
-					loadWorkspaces()
+					fetchWorkspaces()
 				]);
-				await loadTable(table);
+				await fetchRows(table.table_id);
 				tableLoaded = true;
 				s.loadDocFlags(table.table_id).catch(() => {});
-				const ws = get(workspaces).find((w) => w.workspace_id === table.workspace_id);
-				if (ws) currentWorkspace.set(ws);
-				s._applyingConfig = true;
+				currentWorkspaceId.set(table.workspace_id);
 				const urlViewRaw = new URL(window.location.href).searchParams.get('view');
 				const urlViewId = urlViewRaw !== null ? Number(urlViewRaw) : NaN;
 				const loadedViews = get(viewsStore);
@@ -146,7 +125,7 @@
 		JSON.stringify(s.localWidths);
 		JSON.stringify(s.viewColOrder);
 		const _dragging = s.resizingColId;
-		if (!s._applyingConfig && s.activeViewId && !_dragging) {
+		if (s.activeViewId && !_dragging) {
 			s.persistViewConfig();
 		}
 	});
@@ -176,7 +155,7 @@
 			!$viewsStore.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id);
 		if (isImplicitTable) {
 			try {
-				await reorderColumns(tableId, ordered);
+				await patchSchema(tableId, { col_order: ordered });
 				s.viewColOrder = null;
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to save column order');
@@ -194,7 +173,7 @@
 		const reordered = [...userViewIds];
 		reordered.splice(fromIdx, 1);
 		reordered.splice(toIdx, 0, fromId);
-		await reorderViews(tableId, reordered).catch(() => {});
+		await patchSchema(tableId, { view_order: reordered }).catch(() => {});
 	}
 </script>
 
@@ -245,7 +224,7 @@
 		<TableGrid
 			{sortedColumns}
 			{renderItems}
-			loading={$loading}
+			loading={!tableLoaded}
 			{tableMinWidth}
 			addingRow={s.addingRow}
 			addingColumn={s.addingColumn}
@@ -300,7 +279,7 @@
 			rows={$rows}
 			viewConfig={activeView}
 			onOpenExpand={(row) => s.openExpand(row)}
-			onRowsRefresh={() => refreshRows($page.params.table_id!)}
+			onRowsRefresh={() => fetchRows($page.params.table_id!)}
 			onAddRow={(data) => s.openCreateTicket(data)}
 		/>
 	{:else if activeView.type === 'timeline'}
@@ -310,7 +289,7 @@
 			rows={$rows}
 			viewConfig={activeView}
 			onOpenExpand={(row) => s.openExpand(row)}
-			onRowsRefresh={() => refreshRows($page.params.table_id!)}
+			onRowsRefresh={() => fetchRows($page.params.table_id!)}
 			onAddRow={(data) => s.openCreateTicket(data)}
 		/>
 	{:else if activeView.type === 'dashboard'}

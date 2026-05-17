@@ -7,7 +7,7 @@
 	import { authStore, logout } from '$lib/stores/auth.store';
 	import { isDark } from '$lib/UI/theme.svelte';
 	import { browser } from '$app/environment';
-	import { currentTable } from '$lib/stores/tables.store';
+	import { currentTable } from '$lib/stores/menu.store';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { hydrateFromServer } from '$lib/stores/settings.store';
 	import { fetchWorkspaces } from '$lib/backend/workspaces';

@@ -5,7 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth.store';
 	import { fetchWorkspaces } from '$lib/backend/workspaces';
-	import { currentTable, pageTitle } from '$lib/stores/tables.store';
+	import { currentTableId } from '$lib/stores/menu.store';
 	import { T } from '$lib/UI/theme.svelte';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
 	import type { Workspace } from '$lib/types/table';
@@ -20,8 +20,7 @@
 			goto('/login');
 			return;
 		}
-		currentTable.set(null);
-		pageTitle.set('');
+		currentTableId.set(null);
 		try {
 			const ws = await fetchWorkspaces();
 			workspaces = ws;
@@ -39,9 +38,7 @@
 		}
 	});
 
-	onDestroy(() => {
-		pageTitle.set('');
-	});
+	onDestroy(() => {});
 </script>
 
 <div class="{T.pageBg} min-h-screen p-6">

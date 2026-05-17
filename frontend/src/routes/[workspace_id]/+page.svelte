@@ -13,7 +13,7 @@
 		createPmTemplate
 	} from '$lib/backend/tables';
 	import { fetchWorkspaces, updateWorkspace, deleteWorkspace } from '$lib/backend/workspaces';
-	import { currentTable, pageTitle } from '$lib/stores/tables.store';
+	import { currentTableId } from '$lib/stores/menu.store';
 	import type { Table, Workspace } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
@@ -83,14 +83,11 @@
 			goto('/login');
 			return;
 		}
-		currentTable.set(null);
-		pageTitle.set('');
+		currentTableId.set(null);
 		await loadData();
 	});
 
-	onDestroy(() => {
-		pageTitle.set('');
-	});
+	onDestroy(() => {});
 
 	async function loadData() {
 		loading = true;

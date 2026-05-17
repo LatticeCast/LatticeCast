@@ -1,23 +1,14 @@
-// src/lib/stores/tablePage.store.svelte.ts
-// All reactive UI state + handlers for the [table_id] page.
-// Extracted so that +page.svelte stays ≤ 400 LOC.
+// src/lib/components/table/table-page.svelte.ts
+// Reactive UI state + handlers for the [table_id] page.
+// Uses $state() runes — must be .svelte.ts.
 
 import { SvelteSet } from 'svelte/reactivity';
 import { get } from 'svelte/store';
 import { page } from '$app/stores';
-import {
-	rows,
-	columns,
-	views as viewsStore,
-	error,
-	currentTable,
-	refreshRows,
-	refreshTable,
-	createView,
-	updateView,
-	deleteView,
-	setDefaultView
-} from '$lib/stores/tables.store';
+import { columns } from '$lib/stores/table_schema.store';
+import { views as viewsStore } from '$lib/stores/table_views.store';
+import { rows } from '$lib/stores/table_rows.store';
+import { error, IMPLICIT_TABLE_VIEW } from '$lib/stores/tables.store';
 import {
 	createRow,
 	createColumn,
@@ -25,8 +16,16 @@ import {
 	updateColumn,
 	deleteRow as deleteRowApi,
 	updateRow,
+	fetchRows,
+	fetchTable,
+	patchSchema,
 	batchDocsExist
 } from '$lib/backend/tables';
+import {
+	createView,
+	updateView,
+	deleteView
+} from '$lib/backend/views';
 
 function randomHex(): string {
 	const h = Math.floor(Math.random() * 360);
@@ -61,13 +60,6 @@ import type {
 	Row,
 	ViewConfig
 } from '$lib/types/table';
-
-export const IMPLICIT_TABLE_VIEW: ViewConfig = {
-	view_id: 0,
-	name: 'Schema',
-	type: 'table',
-	config: {}
-};
 
 class TablePageStore {
 	// ─── UI State ──────────────────────────────────────────────────────────────
@@ -105,7 +97,7 @@ class TablePageStore {
 	managingOptionsCol = $state<Column | null>(null);
 	rowsWithDocs = new SvelteSet<string>();
 	activeViewId = $state<number>(0);
-	_applyingConfig = false;
+	private _suppressPersist = 0;
 	viewColOrder = $state<string[] | null>(null);
 	resizingColId = $state<string | null>(null);
 	resizeStartX = $state(0);
@@ -154,7 +146,7 @@ class TablePageStore {
 		this.managingOptionsCol = null;
 		this.rowsWithDocs.clear();
 		this.activeViewId = 0;
-		this._applyingConfig = false;
+		this._suppressPersist = 0;
 		this.viewColOrder = null;
 		this.localWidths = {};
 	}
@@ -253,7 +245,7 @@ class TablePageStore {
 	}
 
 	async handleRefreshRows(tableId: string) {
-		await refreshRows(tableId);
+		await fetchRows(tableId);
 		this.loadDocFlags(tableId).catch(() => {});
 	}
 
@@ -322,7 +314,7 @@ class TablePageStore {
 		error.set(null);
 		try {
 			await createColumn(tableId, { name, type: type as ColumnType });
-			await refreshTable(tableId);
+			await fetchTable(tableId);
 			this.showAddColumn = false;
 			this.scrollToColTrigger += 1;
 		} catch (e) {
@@ -336,7 +328,7 @@ class TablePageStore {
 		error.set(null);
 		try {
 			await deleteColumnApi(this.tableId, colId);
-			await refreshTable(this.tableId);
+			await fetchTable(this.tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to delete column');
 		}
@@ -355,7 +347,7 @@ class TablePageStore {
 		error.set(null);
 		try {
 			await updateColumn(this.tableId, colId, { name: this.renameValue.trim() });
-			await refreshTable(this.tableId);
+			await fetchTable(this.tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to rename column');
 		} finally {
@@ -369,7 +361,7 @@ class TablePageStore {
 		error.set(null);
 		try {
 			await updateColumn(this.tableId, colId, { options: { ...col.options, choices } });
-			await refreshTable(this.tableId);
+			await fetchTable(this.tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update options');
 		}
@@ -431,7 +423,7 @@ class TablePageStore {
 	// ─── View config ───────────────────────────────────────────────────────────
 
 	applyViewConfig(view: ViewConfig) {
-		this._applyingConfig = true;
+		this._suppressPersist++;
 		if (view.config?.sort) {
 			const s = view.config.sort as { colId: string; dir: 'asc' | 'desc' };
 			this.sortConfig = s.colId && s.dir ? s : null;
@@ -473,12 +465,11 @@ class TablePageStore {
 		} else {
 			this.viewColOrder = null;
 		}
-		Promise.resolve().then(() => {
-			this._applyingConfig = false;
-		});
+		queueMicrotask(() => this._suppressPersist--);
 	}
 
 	persistViewConfig() {
+		if (this._suppressPersist > 0) return;
 		const view = get(viewsStore).find((v) => v.view_id === this.activeViewId);
 		if (!view) return;
 		const newConfig = {
@@ -505,7 +496,7 @@ class TablePageStore {
 		history.replaceState(history.state, '', url.toString());
 		this.applyViewConfig(view);
 		const isImplicitTable = view.view_id === IMPLICIT_TABLE_VIEW.view_id;
-		if (!isImplicitTable) setDefaultView(this.tableId, view.view_id).catch(() => {});
+		if (!isImplicitTable) patchSchema(this.tableId, { default_view: view.view_id }).catch(() => {});
 	}
 
 	async handleAddView(type: string, name: string) {
@@ -549,7 +540,7 @@ class TablePageStore {
 	// ─── Export / Import ───────────────────────────────────────────────────────
 
 	handleExportTemplate() {
-		const tableId = get(currentTable)?.table_id ?? 'table';
+		const tableId = this.tableId || 'table';
 		triggerDownload(
 			buildTemplateJSON(get(columns)),
 			`${tableId}-template.json`,
@@ -574,17 +565,17 @@ class TablePageStore {
 				options: col.options ?? {}
 			});
 		}
-		await refreshTable(tableId);
+		await fetchTable(tableId);
 		this.showImportTemplateModal = false;
 	}
 
 	exportCSV() {
-		const tableId = get(currentTable)?.table_id ?? 'table';
+		const tableId = this.tableId || 'table';
 		triggerDownload(buildCSV(get(columns), get(rows)), `${tableId}.csv`, 'text/csv');
 	}
 
 	exportJSON() {
-		const tableId = get(currentTable)?.table_id ?? 'table';
+		const tableId = this.tableId || 'table';
 		triggerDownload(
 			buildExportJSON(get(columns), get(rows)),
 			`${tableId}-data.json`,
@@ -669,7 +660,7 @@ class TablePageStore {
 					options: { choices }
 				});
 			}
-			await refreshTable(tableId);
+			await fetchTable(tableId);
 			const currentCols = get(columns);
 			const headerColName = (h: string) => {
 				const m = h.match(/^(.+)\{\{(\w+)\}\}$/);

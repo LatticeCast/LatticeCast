@@ -13,7 +13,7 @@
 		getBarColorClasses
 	} from './timeline.utils';
 	import { updateRow } from '$lib/backend/tables';
-	import { updateView } from '$lib/stores/tables.store';
+	import { updateView } from '$lib/backend/views';
 	import { isDark } from '$lib/UI/theme.svelte';
 
 	let {

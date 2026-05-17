@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { ViewConfig } from '$lib/types/table';
-	import { IMPLICIT_TABLE_VIEW } from '$lib/stores/tablePage.store.svelte';
+	import { IMPLICIT_TABLE_VIEW } from '$lib/stores/tables.store';
 	import { createDragReorder } from './dragReorder.svelte';
 	import { VIEW_ICONS } from '$lib/icons/view';
 

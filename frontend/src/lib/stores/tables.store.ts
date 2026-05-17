@@ -6,7 +6,7 @@
 //   Controller: lib/backend/{tables, views, workspaces}.ts
 
 import { writable, get } from 'svelte/store';
-import type { Table, TableSchema, UpdateView, Workspace } from '$lib/types/table';
+import type { Table, TableSchema, UpdateView, ViewConfig, Workspace } from '$lib/types/table';
 
 // Local imports for use in orchestrator functions
 import { columns, viewOrder, applySchema } from './table_schema.store';
@@ -171,3 +171,12 @@ export async function updateView(
 export async function deleteView(tableId: string, viewId: number): Promise<TableSchema> {
 	return _apiDeleteView(tableId, viewId);
 }
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+export const IMPLICIT_TABLE_VIEW: ViewConfig = {
+	view_id: 0,
+	name: 'Schema',
+	type: 'table',
+	config: {}
+};
