@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 E2E test: task-49 — role change owner↔member
 
@@ -12,29 +11,20 @@ Verifies:
   7. UI: attempt to demote the LAST owner → error displayed.
   8. BE: role unchanged (still owner) after failed demotion.
   9. Teardown: delete workspace + test user.
-
-Usage:
-    docker compose exec test-e2e python3 /scripts/e2e_test_workspace_member_role.py [--snapshot]
 """
 
-import sys
 import time
 
-from playwright.sync_api import sync_playwright
+import pytest
 
-from e2e_base import BASE, api, connect_browser, fatal, login, seed_login_info
+from e2e_base import BASE, api, login, seed_login_info
 
-SNAPSHOT = "--snapshot" in sys.argv
 SCREENSHOT_DIR = "/output"
-
 ADMIN_USER = "lattice"
-SUFFIX = int(time.time()) % 100000
-WS_NAME = f"ws-role-{SUFFIX}"
-MEMBER_EMAIL = f"e2e-role-{SUFFIX}@e2e.local"
 
 
-def snap(page, name: str) -> None:
-    if not SNAPSHOT:
+def snap(page, name: str, snapshot: bool) -> None:
+    if not snapshot:
         return
     try:
         page.screenshot(path=f"{SCREENSHOT_DIR}/{name}.png", full_page=True)
@@ -42,49 +32,43 @@ def snap(page, name: str) -> None:
         pass
 
 
-def run() -> None:
-    # ── Auth ─────────────────────────────────────────────────────────────────
-    print("[0] Login as admin")
-    admin_token = login(ADMIN_USER)
+def test_member_role_change(authed_page, admin_token, snapshot):
+    """Role change owner↔member with last-owner protection."""
+    page = authed_page
+
+    suffix = int(time.time()) % 100000
+    ws_name = f"ws-role-{suffix}"
+    member_email = f"e2e-role-{suffix}@e2e.local"
 
     # ── Setup: create workspace ──────────────────────────────────────────────
-    print(f"[1] Setup: create workspace '{WS_NAME}'")
-    r = api("POST", "/api/v1/workspaces", admin_token, json={"workspace_name": WS_NAME})
-    if r.status_code != 201:
-        fatal(f"create workspace: {r.status_code} {r.text[:200]}")
+    print(f"[1] Setup: create workspace '{ws_name}'")
+    r = api("POST", "/api/v1/workspaces", admin_token, json={"workspace_name": ws_name})
+    assert r.status_code == 201, f"create workspace: {r.status_code} {r.text[:200]}"
     ws_id = r.json()["workspace_id"]
 
-    # ── Setup: create member user ────────────────────────────────────────────
-    print(f"[2] Setup: create member user '{MEMBER_EMAIL}'")
-    api("DELETE", f"/api/v1/admin/users/{MEMBER_EMAIL}", admin_token)
-    r = api("POST", "/api/v1/admin/users", admin_token, json={"email": MEMBER_EMAIL, "role": "user"})
-    if r.status_code != 201:
-        fatal(f"create member user: {r.status_code} {r.text[:200]}")
-    member_user_id = r.json()["user_id"]
-    print(f"    member user_id={member_user_id}")
+    try:
+        # ── Setup: create member user ────────────────────────────────────────
+        print(f"[2] Setup: create member user '{member_email}'")
+        api("DELETE", f"/api/v1/admin/users/{member_email}", admin_token)
+        r = api("POST", "/api/v1/admin/users", admin_token, json={"email": member_email, "role": "user"})
+        assert r.status_code == 201, f"create member user: {r.status_code} {r.text[:200]}"
+        member_user_id = r.json()["user_id"]
+        print(f"    member user_id={member_user_id}")
 
-    # ── Setup: add member to workspace ───────────────────────────────────────
-    print("[3] Setup: add member to workspace")
-    r = api("POST", f"/api/v1/workspaces/{ws_id}/members", admin_token,
-            json={"user_email": MEMBER_EMAIL, "role": "member"})
-    if r.status_code != 201:
-        fatal(f"add member: {r.status_code} {r.text[:200]}")
-
-    # ── Playwright ───────────────────────────────────────────────────────────
-    with sync_playwright() as pw:
-        browser = connect_browser(pw)
-        page = browser.new_page(viewport={"width": 1400, "height": 900})
-        seed_login_info(page, admin_token, ADMIN_USER, role="admin")
+        # ── Setup: add member to workspace ───────────────────────────────────
+        print("[3] Setup: add member to workspace")
+        r = api("POST", f"/api/v1/workspaces/{ws_id}/members", admin_token,
+                json={"user_email": member_email, "role": "member"})
+        assert r.status_code == 201, f"add member: {r.status_code} {r.text[:200]}"
 
         # ── Step 4: Navigate to members page ─────────────────────────────────
-        print(f"[4] UI: navigate to /{WS_NAME}/members")
-        page.goto(f"{BASE}/{WS_NAME}/members", wait_until="networkidle")
-        if "/login" in page.url:
-            fatal("Redirected to /login — auth failed")
+        print(f"[4] UI: navigate to /{ws_name}/members")
+        page.goto(f"{BASE}/{ws_name}/members", wait_until="networkidle")
+        assert "/login" not in page.url, "Redirected to /login — auth failed"
 
         heading = page.get_by_test_id("members-heading")
         heading.wait_for(state="visible", timeout=10000)
-        snap(page, "t49_01_members_page")
+        snap(page, "t49_01_members_page", snapshot)
 
         # ── Step 5: Verify role dropdown visible for member ──────────────────
         print("[5] UI: verify role dropdown for member")
@@ -100,7 +84,7 @@ def run() -> None:
             role_select.select_option("owner")
         resp = resp_info.value
         assert resp.status == 200, f"PUT role change returned {resp.status}"
-        snap(page, "t49_02_promoted_to_owner")
+        snap(page, "t49_02_promoted_to_owner", snapshot)
 
         # Verify UI updated
         updated_value = role_select.input_value()
@@ -123,7 +107,7 @@ def run() -> None:
             role_select.select_option("member")
         resp = resp_info.value
         assert resp.status == 200, f"PUT role change returned {resp.status}"
-        snap(page, "t49_03_demoted_to_member")
+        snap(page, "t49_03_demoted_to_member", snapshot)
 
         updated_value = role_select.input_value()
         assert updated_value == "member", f"UI not updated after demote: got '{updated_value}'"
@@ -153,7 +137,7 @@ def run() -> None:
             admin_role_select.select_option("member")
         resp = resp_info.value
         assert resp.status == 400, f"Expected 400 for last-owner demotion, got {resp.status}"
-        snap(page, "t49_04_last_owner_error")
+        snap(page, "t49_04_last_owner_error", snapshot)
 
         # Verify error message displayed
         error_el = page.get_by_test_id("members-error")
@@ -179,18 +163,13 @@ def run() -> None:
         assert admin_role_value == "owner", f"UI should revert to 'owner', got '{admin_role_value}'"
         print(f"    UI reverted: {admin_role_value}")
 
-        browser.close()
-
-    # ── Teardown ─────────────────────────────────────────────────────────────
-    print("[12] Teardown: delete workspace + member user")
-    r = api("DELETE", f"/api/v1/workspaces/{ws_id}", admin_token)
-    assert r.status_code == 204, f"Delete workspace failed: {r.status_code}"
-    r = api("DELETE", f"/api/v1/admin/users/{MEMBER_EMAIL}", admin_token)
-    if r.status_code not in (204, 404):
-        print(f"    WARN: delete user returned {r.status_code}")
+    finally:
+        # ── Teardown ─────────────────────────────────────────────────────────
+        print("[12] Teardown: delete workspace + member user")
+        r = api("DELETE", f"/api/v1/workspaces/{ws_id}", admin_token)
+        assert r.status_code == 204, f"Delete workspace failed: {r.status_code}"
+        r = api("DELETE", f"/api/v1/admin/users/{member_email}", admin_token)
+        if r.status_code not in (204, 404):
+            print(f"    WARN: delete user returned {r.status_code}")
 
     print("PASS: e2e_test_workspace_member_role")
-
-
-if __name__ == "__main__":
-    run()
