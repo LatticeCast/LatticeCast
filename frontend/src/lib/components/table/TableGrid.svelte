@@ -179,6 +179,7 @@
 					{#each sortedColumns as col, i (col.column_id)}
 						<th
 							{...colDrag.handlers(col)}
+							data-testid="col-header-{col.column_id}"
 							class="relative border-b px-3 py-2 text-left text-xs font-semibold tracking-wide uppercase {isDark.value
 								? 'border-gray-700 text-gray-400'
 								: 'border-gray-200 text-gray-500'}
@@ -448,6 +449,7 @@
 
 							<!-- Resize handle -->
 							<div
+								data-testid="col-resize-handle-{col.column_id}"
 								class="absolute top-0 right-0 h-full w-1.5 cursor-col-resize hover:bg-blue-400"
 								onmousedown={(e) => onResizeStart(e, col)}
 								role="separator"
