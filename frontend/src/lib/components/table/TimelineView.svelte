@@ -36,7 +36,9 @@
 
 	const isTicketTable = $derived(columns.some((c) => c.name === 'Key'));
 
-	let granularity = $state<Granularity>('month');
+	const granularity = $derived<Granularity>(
+		(viewConfig.config.granularity as Granularity) ?? 'month'
+	);
 
 	// Config
 	const startColId = $derived(viewConfig.config.start_col as string | undefined);
@@ -315,7 +317,7 @@
 					: isDark.value
 						? 'text-gray-400 hover:text-gray-200'
 						: 'text-gray-500 hover:text-gray-700'}"
-				onclick={() => (granularity = g)}
+				onclick={() => saveConfig({ granularity: g })}
 			>
 				{g}
 			</button>
