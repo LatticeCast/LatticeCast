@@ -41,7 +41,7 @@ class TableRepository:
             ),
             {"ws": str(workspace_id), "tid": tid, "kind": kind, "by": str(created_by)},
         )
-        await self.session.commit()
+        # SELECT within same transaction — row is visible before commit.
         result = await self.session.execute(
             text(
                 "SELECT workspace_id, table_id, created_at, updated_at FROM tables "
@@ -50,6 +50,7 @@ class TableRepository:
             {"ws": str(workspace_id), "tid": tid},
         )
         row = result.mappings().one()
+        await self.session.commit()
         return Table(
             workspace_id=row["workspace_id"],
             table_id=row["table_id"],

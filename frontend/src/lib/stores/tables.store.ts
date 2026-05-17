@@ -1,51 +1,71 @@
 // src/lib/stores/tables.store.ts
 //
-// v40 pattern: every schema mutation returns the full TableSchema.
-// applySchema() replaces local stores from that one response — FE never
-// derives or merges schema state.
+// Backward-compat shim — re-exports from SSOT stores + controllers.
+// New code should import directly:
+//   Model:      lib/stores/{table_schema, table_views, table_rows, menu}.ts
+//   Controller: lib/backend/{tables, views, workspaces}.ts
 
 import { writable, get } from 'svelte/store';
-import type {
-	Column,
-	Row,
-	Table,
-	TableSchema,
-	UpdateView,
-	ViewConfig,
-	Workspace
-} from '$lib/types/table';
-import { fetchTables, fetchTable, fetchRows, patchSchema } from '$lib/backend/tables';
-import {
-	createView as apiCreateView,
-	deleteView as apiDeleteView,
-	updateView as apiUpdateView
-} from '$lib/backend/views';
-import { fetchWorkspaces } from '$lib/backend/workspaces';
+import type { Table, TableSchema, UpdateView, Workspace } from '$lib/types/table';
 
-export const workspaces = writable<Workspace[]>([]);
+// Local imports for use in orchestrator functions
+import { columns, viewOrder, applySchema } from './table_schema';
+import { views } from './table_views';
+import { rows } from './table_rows';
+import { workspaces, tables } from './menu';
+import {
+	fetchTable as _fetchTable,
+	fetchRows as _fetchRows,
+	patchSchema as _patchSchema,
+	batchDocsExist as _batchDocsExist,
+	createRow as _createRow,
+	createColumn as _createColumn,
+	updateColumn as _updateColumn,
+	deleteColumn as _deleteColumn,
+	updateRow as _updateRow,
+	deleteRow as _deleteRow
+} from '$lib/backend/tables';
+import {
+	createView as _apiCreateView,
+	updateView as _apiUpdateView,
+	deleteView as _apiDeleteView
+} from '$lib/backend/views';
+import { fetchWorkspaces as _apiFetchWorkspaces } from '$lib/backend/workspaces';
+
+// ─── Re-export Model stores ───────────────────────────────────────────────────
+export { columns, viewOrder, applySchema };
+export { views };
+export { rows };
+export { workspaces, tables };
+
+// ─── Re-export Controller functions ───────────────────────────────────────────
+export {
+	_fetchTable as fetchTable,
+	_fetchRows as fetchRows,
+	_patchSchema as patchSchema,
+	_batchDocsExist as batchDocsExist,
+	_createRow as createRow,
+	_createColumn as createColumn,
+	_updateColumn as updateColumn,
+	_deleteColumn as deleteColumn,
+	_updateRow as updateRow,
+	_deleteRow as deleteRow
+};
+
+// ─── Legacy stores (will be removed once all consumers migrate) ───────────────
 export const currentWorkspace = writable<Workspace | null>(null);
-export const tables = writable<Table[]>([]);
 export const currentTable = writable<Table | null>(null);
-export const columns = writable<Column[]>([]);
-export const rows = writable<Row[]>([]);
-export const views = writable<ViewConfig[]>([]);
-export const viewOrder = writable<number[]>([]);
 export const loading = writable(false);
 export const error = writable<string | null>(null);
 export const pageTitle = writable<string>('');
 
-function applySchema(schema: TableSchema): void {
-	columns.set(schema.columns);
-	views.set(schema.views);
-	viewOrder.set(schema.view_order);
-}
+// ─── Orchestrator functions ───────────────────────────────────────────────────
 
 export async function loadWorkspaces(): Promise<void> {
 	loading.set(true);
 	error.set(null);
 	try {
-		const result = await fetchWorkspaces();
-		workspaces.set(result);
+		await _apiFetchWorkspaces();
 	} catch (e) {
 		error.set(e instanceof Error ? e.message : 'Failed to load workspaces');
 	} finally {
@@ -61,8 +81,8 @@ export async function switchWorkspace(workspace: Workspace): Promise<void> {
 	loading.set(true);
 	error.set(null);
 	try {
-		const result = await fetchTables();
-		tables.set(result.filter((t) => t.workspace_id === workspace.workspace_id));
+		const { fetchTables } = await import('$lib/backend/tables');
+		await fetchTables();
 	} catch (e) {
 		error.set(e instanceof Error ? e.message : 'Failed to load tables for workspace');
 	} finally {
@@ -74,8 +94,8 @@ export async function loadTables(): Promise<void> {
 	loading.set(true);
 	error.set(null);
 	try {
-		const result = await fetchTables();
-		tables.set(result);
+		const { fetchTables } = await import('$lib/backend/tables');
+		await fetchTables();
 	} catch (e) {
 		error.set(e instanceof Error ? e.message : 'Failed to load tables');
 	} finally {
@@ -88,9 +108,8 @@ export async function loadTable(table: Table): Promise<void> {
 	loading.set(true);
 	error.set(null);
 	try {
-		const rws = await fetchRows(table.table_id);
+		await _fetchRows(table.table_id);
 		columns.set(table.columns ?? []);
-		rows.set(rws);
 		views.set(table.views ?? []);
 		viewOrder.set(table.view_order ?? []);
 	} catch (e) {
@@ -101,16 +120,10 @@ export async function loadTable(table: Table): Promise<void> {
 }
 
 export async function refreshTable(tableId: string, workspaceId?: string): Promise<void> {
-	// Default to the currently-loaded table's workspace so all the
-	// mutation-then-refresh paths stay disambiguated without every
-	// caller having to pass it explicitly. See fetchTable() doc.
 	const wsId = workspaceId ?? get(currentTable)?.workspace_id;
 	try {
-		const table = await fetchTable(tableId, wsId);
+		const table = await _fetchTable(tableId, wsId);
 		currentTable.set(table);
-		columns.set(table.columns ?? []);
-		views.set(table.views ?? []);
-		viewOrder.set(table.view_order ?? []);
 	} catch (e) {
 		error.set(e instanceof Error ? e.message : 'Failed to refresh table');
 	}
@@ -118,22 +131,33 @@ export async function refreshTable(tableId: string, workspaceId?: string): Promi
 
 export async function refreshRows(tableId: string): Promise<void> {
 	try {
-		const result = await fetchRows(tableId);
-		rows.set(result);
+		await _fetchRows(tableId);
 	} catch (e) {
 		error.set(e instanceof Error ? e.message : 'Failed to refresh rows');
 	}
 }
 
-// ─── View CRUD — every call returns full TableSchema ───────────────────────
+// ─── Schema-level patches ─────────────────────────────────────────────────────
+
+export async function reorderColumns(tableId: string, colOrder: string[]): Promise<TableSchema> {
+	return _patchSchema(tableId, { col_order: colOrder });
+}
+
+export async function setDefaultView(tableId: string, viewId: number | null): Promise<TableSchema> {
+	return _patchSchema(tableId, { default_view: viewId });
+}
+
+export async function reorderViews(tableId: string, order: number[]): Promise<TableSchema> {
+	return _patchSchema(tableId, { view_order: order });
+}
+
+// ─── View CRUD ────────────────────────────────────────────────────────────────
 
 export async function createView(
 	tableId: string,
 	data: { name: string; type: string; config?: Record<string, unknown> }
 ): Promise<TableSchema> {
-	const schema = await apiCreateView(tableId, data);
-	applySchema(schema);
-	return schema;
+	return _apiCreateView(tableId, data);
 }
 
 export async function updateView(
@@ -141,31 +165,9 @@ export async function updateView(
 	viewId: number,
 	updates: UpdateView
 ): Promise<TableSchema> {
-	const schema = await apiUpdateView(tableId, viewId, updates);
-	applySchema(schema);
-	return schema;
+	return _apiUpdateView(tableId, viewId, updates);
 }
 
 export async function deleteView(tableId: string, viewId: number): Promise<TableSchema> {
-	const schema = await apiDeleteView(tableId, viewId);
-	applySchema(schema);
-	return schema;
-}
-
-export async function reorderViews(tableId: string, order: number[]): Promise<TableSchema> {
-	const schema = await patchSchema(tableId, { view_order: order });
-	applySchema(schema);
-	return schema;
-}
-
-export async function setDefaultView(tableId: string, viewId: number | null): Promise<TableSchema> {
-	const schema = await patchSchema(tableId, { default_view: viewId });
-	applySchema(schema);
-	return schema;
-}
-
-export async function reorderColumns(tableId: string, colOrder: string[]): Promise<TableSchema> {
-	const schema = await patchSchema(tableId, { col_order: colOrder });
-	applySchema(schema);
-	return schema;
+	return _apiDeleteView(tableId, viewId);
 }

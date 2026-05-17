@@ -50,7 +50,9 @@
 
 			if (get(currentWorkspace)?.workspace_id !== wsId) {
 				await loadWorkspaces();
-				const ws = get(workspaces).find((w) => w.workspace_id === wsId || w.workspace_name === wsId);
+				const ws = get(workspaces).find(
+					(w) => w.workspace_id === wsId || w.workspace_name === wsId
+				);
 				if (!ws) {
 					goto('/');
 					return;

@@ -1,5 +1,71 @@
 # Changelog
 
+## v0.43 — 2026-05-17 (FE MVC refactor + BE table-create fix)
+
+### Frontend — MVC SSOT architecture
+
+- **Three-layer split: Model / Controller / View.**
+  All FE state now flows: user action → Controller (`lib/backend/*.ts`)
+  calls BE API → BE returns updated JSON → Controller writes to Model
+  (stores) → View (`$derived` from stores) auto-re-renders. Like HTMX
+  but at data granularity — stores hold the exact JSON shape PG returns.
+
+- **New SSOT Model stores** (`lib/stores/`):
+  - `table_schema.ts` — columns, viewOrder, defaultView + `applySchema()`
+  - `table_views.ts` — views array (from BE response, not derived)
+  - `table_rows.ts` — rows array
+  - `menu.ts` — workspaces, tables, currentWorkspaceId, menuOpen +
+    derived `currentWorkspace`, `workspaceTables`, `currentTable`
+
+- **Controller layer** (`lib/backend/*.ts`):
+  - `tables.ts` — every column/row/table mutation now calls BE AND
+    writes the response to the SSOT store. One function call = API +
+    store update.
+  - `views.ts` — view CRUD calls BE then `applySchema()`.
+  - `workspaces.ts` — workspace CRUD calls BE then updates menu store.
+
+- **`+page.svelte` refactored from 1149 → 413 LOC.** All duplicate
+  local `$state` and handler functions removed. Page now uses the
+  `TablePageStore` class (`s`) for UI state + handlers. Data rendering
+  is purely `$derived` from SSOT stores.
+
+- **`types/table.ts` reorganized.** Types explicitly annotated as the
+  shared PG → BE (passthrough) → FE contract. `TableSchema` is the
+  single shape all three layers agree on.
+
+- **`tables.store.ts` retained as backward-compat re-export shim.**
+  Existing consumers continue to work unchanged; new code imports
+  directly from the SSOT stores + controllers.
+
+### Migration
+
+- **V22 — fix `delete_column` "column not found" on every call.**
+  The `WHERE c ->> 'column_id' <> p_column_id` filter removed the
+  target column before `bool_or` could check for it → `v_found`
+  always NULL → exception. Fix: separate existence check with
+  `IF NOT EXISTS (SELECT 1 FROM jsonb_array_elements WHERE ...)`,
+  then filter. Verified via `e2e_test_column_delete`.
+
+### Backend
+
+- **Fix table creation 500 (template + blank).** `create_from_template`
+  did `commit()` between the PG function call and the SELECT-back query.
+  After commit, a new implicit transaction started where RLS's
+  `app.current_user_id` (session-level `set_config`) worked but the
+  `STABLE`-cached `check_workspace_member` from the previous statement
+  wasn't re-evaluated. Fix: SELECT before commit — both run in the
+  same transaction where the inserted row is unconditionally visible.
+
+### E2E
+
+- **`e2e_test_column_delete.py`** — verifies delete propagates across
+  Table, Kanban (group-by + card-fields), and Timeline views, plus
+  durability after navigation.
+
+- **`e2e_test_workspace_member_remove.py`** — fixed flaky redirect
+  detection (`wait_until="commit"` + `wait_for_url` instead of
+  `networkidle`).
+
 ## v0.42 — 2026-05-15 (date-index fix + modular e2e + docs catch-up)
 
 ### Migration

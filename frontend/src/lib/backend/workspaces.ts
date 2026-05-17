@@ -1,8 +1,11 @@
 // lib/backend/workspaces.ts
-// API client for workspaces + members CRUD
+//
+// Controller: workspace + members CRUD → API call + menu store update.
 
+import { get } from 'svelte/store';
 import { BACKEND_URL } from './config';
 import { getAuthHeaders } from './http';
+import { workspaces, currentWorkspaceId, tables } from '$lib/stores/menu';
 import type { Workspace, WorkspaceMemberFull } from '$lib/types/table';
 
 export interface CreateWorkspace {
@@ -19,13 +22,15 @@ export interface AddMember {
 	role?: string;
 }
 
-// Workspaces
+// ─── Workspaces ───────────────────────────────────────────────────────────────
 
 export async function fetchWorkspaces(): Promise<Workspace[]> {
 	const headers = await getAuthHeaders();
 	const response = await fetch(`${BACKEND_URL}/api/v1/workspaces`, { headers });
 	if (!response.ok) throw new Error(`Failed to fetch workspaces: ${response.statusText}`);
-	return response.json();
+	const result: Workspace[] = await response.json();
+	workspaces.set(result);
+	return result;
 }
 
 export async function createWorkspace(data: CreateWorkspace): Promise<Workspace> {
@@ -36,7 +41,9 @@ export async function createWorkspace(data: CreateWorkspace): Promise<Workspace>
 		body: JSON.stringify(data)
 	});
 	if (!response.ok) throw new Error(`Failed to create workspace: ${response.statusText}`);
-	return response.json();
+	const ws: Workspace = await response.json();
+	workspaces.update((list) => [...list, ws]);
+	return ws;
 }
 
 export async function updateWorkspace(
@@ -53,7 +60,9 @@ export async function updateWorkspace(
 		const body = await response.json().catch(() => ({}));
 		throw new Error(body.detail || `Failed to update workspace: ${response.statusText}`);
 	}
-	return response.json();
+	const ws: Workspace = await response.json();
+	workspaces.update((list) => list.map((w) => (w.workspace_id === workspaceId ? ws : w)));
+	return ws;
 }
 
 export async function deleteWorkspace(workspaceId: string): Promise<void> {
@@ -63,9 +72,14 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
 		headers
 	});
 	if (!response.ok) throw new Error(`Failed to delete workspace: ${response.statusText}`);
+	workspaces.update((list) => list.filter((w) => w.workspace_id !== workspaceId));
+	if (get(currentWorkspaceId) === workspaceId) {
+		currentWorkspaceId.set(null);
+		tables.set([]);
+	}
 }
 
-// Members
+// ─── Members ──────────────────────────────────────────────────────────────────
 
 export async function fetchMembers(workspaceId: string): Promise<WorkspaceMemberFull[]> {
 	const headers = await getAuthHeaders();

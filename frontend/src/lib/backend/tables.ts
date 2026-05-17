@@ -1,10 +1,17 @@
 // lib/backend/tables.ts
-// API client for tables/rows CRUD (columns come from table.columns)
+//
+// Controller: API calls + store updates.
+// Every mutation calls BE, gets response, writes to SSOT stores.
+// .svelte View just calls these functions — stores auto-update → UI re-renders.
 
 import { get } from 'svelte/store';
 import { authStore } from '$lib/stores/auth.store';
 import { BACKEND_URL } from './config';
 import { getAuthHeaders, getBearerHeader } from './http';
+import { columns, viewOrder, applySchema } from '$lib/stores/table_schema';
+import { views } from '$lib/stores/table_views';
+import { rows } from '$lib/stores/table_rows';
+import { tables, currentTableId } from '$lib/stores/menu';
 import type {
 	Table,
 	TableSchema,
@@ -17,13 +24,28 @@ import type {
 	UpdateRow
 } from '$lib/types/table';
 
-// Tables
+// ─── Table CRUD ───────────────────────────────────────────────────────────────
 
 export async function fetchTables(): Promise<Table[]> {
 	const headers = await getAuthHeaders();
 	const response = await fetch(`${BACKEND_URL}/api/v1/tables`, { headers });
 	if (!response.ok) throw new Error(`Failed to fetch tables: ${response.statusText}`);
-	return response.json();
+	const result: Table[] = await response.json();
+	tables.set(result);
+	return result;
+}
+
+export async function fetchTable(tableId: string, workspaceId?: string): Promise<Table> {
+	const headers = await getAuthHeaders();
+	const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}${qs}`, { headers });
+	if (!response.ok) throw new Error(`Failed to fetch table: ${response.statusText}`);
+	const table: Table = await response.json();
+	currentTableId.set(table.table_id);
+	columns.set(table.columns ?? []);
+	views.set(table.views ?? []);
+	viewOrder.set(table.view_order ?? []);
+	return table;
 }
 
 export async function createTable(data: CreateTable): Promise<Table> {
@@ -34,18 +56,9 @@ export async function createTable(data: CreateTable): Promise<Table> {
 		body: JSON.stringify(data)
 	});
 	if (!response.ok) throw new Error(`Failed to create table: ${response.statusText}`);
-	return response.json();
-}
-
-export async function fetchTable(tableId: string, workspaceId?: string): Promise<Table> {
-	// workspaceId disambiguates when two of the user's workspaces both
-	// have a table with the same `tableId` — without it BE picks one
-	// arbitrarily (the bug behind seo_framework's empty-Title-cell render).
-	const headers = await getAuthHeaders();
-	const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
-	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}${qs}`, { headers });
-	if (!response.ok) throw new Error(`Failed to fetch table: ${response.statusText}`);
-	return response.json();
+	const table: Table = await response.json();
+	tables.update((list) => [...list, table]);
+	return table;
 }
 
 export async function updateTable(tableId: string, data: UpdateTable): Promise<Table> {
@@ -59,7 +72,9 @@ export async function updateTable(tableId: string, data: UpdateTable): Promise<T
 		const body = await response.json().catch(() => ({}));
 		throw new Error(body.detail || `Failed to update table: ${response.statusText}`);
 	}
-	return response.json();
+	const table: Table = await response.json();
+	tables.update((list) => list.map((t) => (t.table_id === tableId ? table : t)));
+	return table;
 }
 
 export async function deleteTable(tableId: string): Promise<void> {
@@ -69,9 +84,11 @@ export async function deleteTable(tableId: string): Promise<void> {
 		headers
 	});
 	if (!response.ok) throw new Error(`Failed to delete table: ${response.statusText}`);
+	tables.update((list) => list.filter((t) => t.table_id !== tableId));
+	if (get(currentTableId) === tableId) currentTableId.set(null);
 }
 
-// Columns — mutations return full TableSchema (V44+ server-is-SSOT).
+// ─── Columns — mutations return full TableSchema → applySchema ────────────────
 
 export async function createColumn(tableId: string, data: CreateColumn): Promise<TableSchema> {
 	const headers = await getAuthHeaders();
@@ -81,7 +98,9 @@ export async function createColumn(tableId: string, data: CreateColumn): Promise
 		body: JSON.stringify(data)
 	});
 	if (!response.ok) throw new Error(`Failed to create column: ${response.statusText}`);
-	return response.json();
+	const schema: TableSchema = await response.json();
+	applySchema(schema);
+	return schema;
 }
 
 export async function updateColumn(
@@ -96,7 +115,9 @@ export async function updateColumn(
 		body: JSON.stringify(data)
 	});
 	if (!response.ok) throw new Error(`Failed to update column: ${response.statusText}`);
-	return response.json();
+	const schema: TableSchema = await response.json();
+	applySchema(schema);
+	return schema;
 }
 
 export async function deleteColumn(tableId: string, columnId: string): Promise<TableSchema> {
@@ -106,13 +127,11 @@ export async function deleteColumn(tableId: string, columnId: string): Promise<T
 		headers
 	});
 	if (!response.ok) throw new Error(`Failed to delete column: ${response.statusText}`);
-	return response.json();
+	const schema: TableSchema = await response.json();
+	applySchema(schema);
+	return schema;
 }
 
-/** PATCH /tables/{tid}/schema — partial update of any subset of
- * {view_order, default_view, col_order}. Returns the new full
- * TableSchema. Use for FE drag-reorder-view, click-set-default-view,
- * drag-reorder-column. */
 export async function patchSchema(
 	tableId: string,
 	data: { view_order?: number[]; default_view?: number | null; col_order?: string[] }
@@ -124,10 +143,12 @@ export async function patchSchema(
 		body: JSON.stringify(data)
 	});
 	if (!response.ok) throw new Error(`Failed to patch schema: ${response.statusText}`);
-	return response.json();
+	const schema: TableSchema = await response.json();
+	applySchema(schema);
+	return schema;
 }
 
-// Rows
+// ─── Rows — mutations update rows store ───────────────────────────────────────
 
 export async function fetchRows(tableId: string, offset = 0, limit = 100): Promise<Row[]> {
 	const headers = await getAuthHeaders();
@@ -136,7 +157,9 @@ export async function fetchRows(tableId: string, offset = 0, limit = 100): Promi
 		{ headers }
 	);
 	if (!response.ok) throw new Error(`Failed to fetch rows: ${response.statusText}`);
-	return response.json();
+	const result: Row[] = await response.json();
+	rows.set(result);
+	return result;
 }
 
 export async function createRow(tableId: string, data: CreateRow): Promise<Row> {
@@ -147,7 +170,9 @@ export async function createRow(tableId: string, data: CreateRow): Promise<Row> 
 		body: JSON.stringify(data)
 	});
 	if (!response.ok) throw new Error(`Failed to create row: ${response.statusText}`);
-	return response.json();
+	const row: Row = await response.json();
+	rows.update((r) => [...r, row]);
+	return row;
 }
 
 export async function updateRow(tableId: string, rowNumber: number, data: UpdateRow): Promise<Row> {
@@ -158,7 +183,9 @@ export async function updateRow(tableId: string, rowNumber: number, data: Update
 		body: JSON.stringify(data)
 	});
 	if (!response.ok) throw new Error(`Failed to update row: ${response.statusText}`);
-	return response.json();
+	const row: Row = await response.json();
+	rows.update((r) => r.map((existing) => (existing.row_id === rowNumber ? row : existing)));
+	return row;
 }
 
 export async function deleteRow(tableId: string, rowNumber: number): Promise<void> {
@@ -168,9 +195,10 @@ export async function deleteRow(tableId: string, rowNumber: number): Promise<voi
 		headers
 	});
 	if (!response.ok) throw new Error(`Failed to delete row: ${response.statusText}`);
+	rows.update((r) => r.filter((row) => row.row_id !== rowNumber));
 }
 
-// Docs
+// ─── Docs ─────────────────────────────────────────────────────────────────────
 
 export async function fetchDoc(tableId: string, rowNumber: number): Promise<string> {
 	const headers = await getBearerHeader();
@@ -227,7 +255,7 @@ export async function batchDocsExist(tableId: string): Promise<Set<number>> {
 	}
 }
 
-// Templates
+// ─── Templates ────────────────────────────────────────────────────────────────
 
 export async function createPmTemplate(table_id: string, workspaceId: string): Promise<Table> {
 	const headers = await getAuthHeaders();
@@ -237,5 +265,7 @@ export async function createPmTemplate(table_id: string, workspaceId: string): P
 		body: JSON.stringify({ table_id: table_id, workspace_id: workspaceId })
 	});
 	if (!response.ok) throw new Error(`Failed to create PM template: ${response.statusText}`);
-	return response.json();
+	const table: Table = await response.json();
+	tables.update((list) => [...list, table]);
+	return table;
 }

@@ -6,56 +6,46 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { authStore } from '$lib/stores/auth.store';
+
+	// Model (SSOT stores)
+	import { columns } from '$lib/stores/table_schema';
+	import { views as viewsStore } from '$lib/stores/table_views';
+	import { rows } from '$lib/stores/table_rows';
+
+	// Controller
+	import { fetchTable } from '$lib/backend/tables';
+
+	// Legacy orchestrators (backward compat — will migrate)
 	import {
-		currentTable,
 		currentWorkspace,
-		workspaces,
-		columns,
-		rows,
-		views as viewsStore,
+		currentTable,
 		loading,
 		error,
-		loadTable,
 		loadWorkspaces,
+		loadTable,
 		refreshRows,
-		refreshTable,
+		reorderColumns,
+		reorderViews,
+		setDefaultView,
 		createView,
 		updateView,
-		deleteView,
-		reorderViews,
-		reorderColumns,
-		setDefaultView
+		deleteView
 	} from '$lib/stores/tables.store';
-	import {
-		fetchTable,
-		createRow,
-		createColumn,
-		deleteColumn,
-		updateColumn,
-		updateRow,
-		deleteRow
-	} from '$lib/backend/tables';
-	import type { Column, ColumnOptions, ColumnType, Row, ViewConfig } from '$lib/types/table';
-	import { TAG_COLORS } from '$lib/UI/theme.svelte';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { workspaces } from '$lib/stores/menu';
+
+	// View store — all UI state + handlers
+	import { s, IMPLICIT_TABLE_VIEW } from '$lib/stores/tablePage.store.svelte';
+
+	// Utils
 	import {
 		type FilterCondition,
-		type ContextMenuState,
-		parseCSV,
-		applyEditToRowData,
-		toggleCheckboxInRowData,
-		removeTagFromRowData,
-		addTagToRowData,
 		applyFilters,
 		sortRows,
 		buildGroupedRows,
 		buildRenderItems,
-		buildSortedColumns,
-		buildTemplateJSON,
-		buildCSV,
-		buildExportJSON,
-		triggerDownload
+		buildSortedColumns
 	} from '$lib/components/table/table.utils';
+	import type { Column, Row, ViewConfig } from '$lib/types/table';
 
 	// Components
 	import TableToolbar from '$lib/components/table/TableToolbar.svelte';
@@ -74,98 +64,40 @@
 	import DashboardView from '$lib/components/dashboard/DashboardView.svelte';
 	import type { DashboardView as DashboardViewType } from '$lib/types/dashboard';
 
-	// ─── State ───────────────────────────────────────────────────────────────────
+	// ─── Derived (from SSOT stores + view state) ──���──────────────────────────────
 
-	let addingRow = $state(false);
-	let addingColumn = $state(false);
-	let scrollToRowId = $state<number | null>(null);
-	let scrollToColTrigger = $state(0);
-	let showCreateTicket = $state(false);
-	let createTicketInitialData = $state<Record<string, unknown>>({});
-	let deletingRowId = $state<number | null>(null);
-	let expandedRow = $state<Row | null>(null);
-	let docCellState = $state<{ row: Row; col: Column } | null>(null);
-	let showAddColumn = $state(false);
-	let renamingColId = $state<string | null>(null);
-	let renameValue = $state('');
-	let editingCell = $state<{ rowId: number; colId: string } | null>(null);
-	let editValue = $state<string>('');
-	let tagsPopupCell = $state<{ rowId: number; colId: string } | null>(null);
-	let colMenuId = $state<string | null>(null);
-	let sortConfig = $state<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
-	let filterConditions = $state<FilterCondition[]>([]);
-	let showFilterPanel = $state(false);
-	let hiddenCols = new SvelteSet<string>();
-	let searchQuery = $state('');
-	let groupConfig = $state<{ colId: string; granularity?: 'month' | 'day' } | null>(null);
-	let collapsedGroups = new SvelteSet<string>();
-	let contextMenu = $state<ContextMenuState | null>(null);
-	let showImportTemplateModal = $state(false);
-	let showImportModal = $state(false);
-	let importPreviewHeaders = $state<string[]>([]);
-	let importPreviewRows = $state<Record<string, string>[]>([]);
-	let importNewColumns = $state<{ name: string; type: string; values?: string[] }[]>([]);
-	let importingData = $state(false);
-	let importError = $state<string | null>(null);
-	let managingOptionsCol = $state<Column | null>(null);
-	let rowsWithDocs = new SvelteSet<string>();
-
-	// View state
-	let activeViewId = $state<number>(0);
-	let _applyingConfig = false;
 	let tableLoaded = $state(false);
-	let viewColOrder = $state<string[] | null>(null);
 
-	// Column resize
-	let resizingColId = $state<string | null>(null);
-	let resizeStartX = $state(0);
-	let resizeStartWidth = $state(0);
-	let localWidths = $state<Record<string, number>>({});
-
-	function getColWidth(col: Column): number {
-		return localWidths[col.column_id] ?? col.options?.width ?? 150;
-	}
-
-	// ─── Derived ─────────────────────────────────────────────────────────────────
-
-	const sortedColumns = $derived(buildSortedColumns($columns, viewColOrder, hiddenCols));
+	const sortedColumns = $derived(buildSortedColumns($columns, s.viewColOrder, s.hiddenCols));
 
 	const sortedRows = $derived(
-		sortRows(applyFilters($rows, filterConditions, searchQuery), sortConfig, $columns)
+		sortRows(applyFilters($rows, s.filterConditions, s.searchQuery), s.sortConfig, $columns)
 	);
 
 	const tableMinWidth = $derived(
-		48 + sortedColumns.reduce((sum, col) => sum + getColWidth(col), 0) + 40 + 40
+		48 + sortedColumns.reduce((sum, col) => sum + s.getColWidth(col), 0) + 40 + 40
 	);
 
-	// V34: the schema row is the implicit default Schema view. Prepend it
-	// so the view switcher always has at least one tab even when no
-	// user views exist. Skip if the user happens to have a user view
-	// named 'Schema' to avoid duplicate tabs.
-	const IMPLICIT_TABLE_VIEW: ViewConfig = {
-		view_id: 0,
-		name: 'Schema',
-		type: 'table',
-		config: {}
-	};
 	const allViews = $derived(
 		$viewsStore.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id)
 			? $viewsStore
 			: [IMPLICIT_TABLE_VIEW, ...$viewsStore]
 	);
+
 	const activeView = $derived(
-		allViews.find((v) => v.view_id === activeViewId) ?? allViews[0] ?? IMPLICIT_TABLE_VIEW
+		allViews.find((v) => v.view_id === s.activeViewId) ?? allViews[0] ?? IMPLICIT_TABLE_VIEW
 	);
 
-	const groupedRows = $derived(buildGroupedRows(sortedRows, groupConfig, $columns));
+	const groupedRows = $derived(buildGroupedRows(sortedRows, s.groupConfig, $columns));
 
-	const renderItems = $derived(buildRenderItems(sortedRows, groupedRows, collapsedGroups));
+	const renderItems = $derived(buildRenderItems(sortedRows, groupedRows, s.collapsedGroups));
 
-	// ─── Lifecycle ───────────────────────────────────────────────────────────────
+	// ─── Lifecycle ───────���───────────────────────────────────────────────────────
 
 	$effect(() => {
 		const tableId = $page.params.table_id!;
 		tableLoaded = false;
+		s.reset();
 		(async () => {
 			if (!$authStore?.role) {
 				goto('/login');
@@ -178,17 +110,10 @@
 				]);
 				await loadTable(table);
 				tableLoaded = true;
-				// Non-blocking: load doc flags in background, don't block page render
-				loadDocFlags(table.table_id).catch(() => {});
+				s.loadDocFlags(table.table_id).catch(() => {});
 				const ws = get(workspaces).find((w) => w.workspace_id === table.workspace_id);
 				if (ws) currentWorkspace.set(ws);
-				// Guard against effect persisting during initial view config apply
-				_applyingConfig = true;
-				// Resume order: URL ?view= → table.default_view (per-table flag,
-				// V37 is_default) → implicit Table → first user view. Match
-				// against the candidate set INCLUDING the implicit Table view so
-				// default_view="Table" resumes correctly when no user "Table"
-				// view exists.
+				s._applyingConfig = true;
 				const urlViewRaw = new URL(window.location.href).searchParams.get('view');
 				const urlViewId = urlViewRaw !== null ? Number(urlViewRaw) : NaN;
 				const loadedViews = get(viewsStore);
@@ -196,192 +121,44 @@
 				const candidates = hasUserTable ? loadedViews : [IMPLICIT_TABLE_VIEW, ...loadedViews];
 				const defaultView = table.default_view ?? null;
 				if (!isNaN(urlViewId) && candidates.some((v) => v.view_id === urlViewId)) {
-					activeViewId = urlViewId;
+					s.activeViewId = urlViewId;
 				} else if (defaultView !== null && candidates.some((v) => v.view_id === defaultView)) {
-					activeViewId = defaultView;
+					s.activeViewId = defaultView;
 				} else if (candidates.length > 0) {
-					activeViewId = candidates[0].view_id;
+					s.activeViewId = candidates[0].view_id;
 				}
-				// Apply sort/group/filter from active view config
-				const initView = candidates.find((v) => v.view_id === activeViewId);
-				if (initView) applyViewConfig(initView); // also sets _applyingConfig = true and schedules reset
+				const initView = candidates.find((v) => v.view_id === s.activeViewId);
+				if (initView) s.applyViewConfig(initView);
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to load table');
 			}
 		})();
 	});
 
-	onMount(() => {
-		function onResizeMove(e: MouseEvent) {
-			if (!resizingColId) return;
-			const delta = e.clientX - resizeStartX;
-			localWidths = { ...localWidths, [resizingColId]: Math.max(60, resizeStartWidth + delta) };
-		}
+	onMount(() => s.setupMouseListeners());
 
-		function onResizeUp() {
-			if (!resizingColId) return;
-			resizingColId = null;
-			// localWidths already updated by onResizeMove; $effect will persist to view config
+	// Auto-persist view config on change
+	$effect(() => {
+		JSON.stringify(s.sortConfig);
+		JSON.stringify(s.groupConfig);
+		JSON.stringify(s.filterConditions);
+		[...s.hiddenCols].sort().join(',');
+		JSON.stringify(s.localWidths);
+		JSON.stringify(s.viewColOrder);
+		const _dragging = s.resizingColId;
+		if (!s._applyingConfig && s.activeViewId && !_dragging) {
+			s.persistViewConfig();
 		}
-
-		function onWindowClick() {
-			colMenuId = null;
-			contextMenu = null;
-		}
-
-		window.addEventListener('mousemove', onResizeMove);
-		window.addEventListener('mouseup', onResizeUp);
-		window.addEventListener('click', onWindowClick);
-		return () => {
-			window.removeEventListener('mousemove', onResizeMove);
-			window.removeEventListener('mouseup', onResizeUp);
-			window.removeEventListener('click', onWindowClick);
-		};
 	});
 
-	// ─── Handlers ────────────────────────────────────────────────────────────────
-
-	async function handleAddRow(editColId?: string) {
-		if (addingRow) return;
-		const tableId = $page.params.table_id!;
-		addingRow = true;
-		error.set(null);
-
-		// Optimistic: insert a temporary row immediately
-		const tempRowNumber = -Date.now();
-		const tempRow: Row = {
-			table_id: tableId,
-			row_id: tempRowNumber,
-			row_data: {},
-			created_by: null,
-			updated_by: null,
-			created_at: new Date().toISOString(),
-			updated_at: new Date().toISOString()
-		};
-		rows.update((r) => [...r, tempRow]);
-
-		if (editColId) {
-			editingCell = { rowId: tempRowNumber, colId: editColId };
-			editValue = '';
-		}
-
-		try {
-			const newRow = await createRow(tableId, { row_data: {} });
-			// Replace temp row with real row from backend
-			rows.update((r) => r.map((row) => (row.row_id === tempRowNumber ? newRow : row)));
-			scrollToRowId = newRow.row_id;
-			if (editColId) {
-				editingCell = { rowId: newRow.row_id, colId: editColId };
-			}
-		} catch (e) {
-			// Rollback optimistic row
-			rows.update((r) => r.filter((row) => row.row_id !== tempRowNumber));
-			editingCell = null;
-			error.set(e instanceof Error ? e.message : 'Failed to add row');
-		} finally {
-			addingRow = false;
-		}
-	}
-
-	function openCreateTicket(initialData: Record<string, unknown> = {}) {
-		createTicketInitialData = initialData;
-		showCreateTicket = true;
-	}
-
-	async function handleCreateTicket(rowData: Record<string, unknown>) {
-		const tableId = $page.params.table_id!;
-		showCreateTicket = false;
-		addingRow = true;
-		error.set(null);
-		try {
-			await createRow(tableId, { row_data: rowData });
-			await refreshRows(tableId);
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to create ticket');
-		} finally {
-			addingRow = false;
-		}
-	}
-
-	async function handleAddRowInGroup(groupKey: string, col: Column) {
-		if (addingRow) return;
-		const tableId = $page.params.table_id!;
-		addingRow = true;
-		error.set(null);
-
-		const val: unknown = groupKey === '(empty)' ? null : groupKey;
-		const tempRowNumber = -Date.now();
-		const tempRow: Row = {
-			table_id: tableId,
-			row_id: tempRowNumber,
-			row_data: { [col.column_id]: val },
-			created_by: null,
-			updated_by: null,
-			created_at: new Date().toISOString(),
-			updated_at: new Date().toISOString()
-		};
-		rows.update((r) => [...r, tempRow]);
-
-		try {
-			const newRow = await createRow(tableId, { row_data: { [col.column_id]: val } });
-			rows.update((r) => r.map((row) => (row.row_id === tempRowNumber ? newRow : row)));
-		} catch (e) {
-			rows.update((r) => r.filter((row) => row.row_id !== tempRowNumber));
-			error.set(e instanceof Error ? e.message : 'Failed to add row');
-		} finally {
-			addingRow = false;
-		}
-	}
-
-	async function handleDeleteRow(rowId: number) {
-		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_id === rowId);
-		if (!row) return;
-		deletingRowId = rowId;
-		error.set(null);
-		try {
-			await deleteRow(tableId, row.row_id);
-			await refreshRows(tableId);
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to delete row');
-		} finally {
-			deletingRowId = null;
-		}
-	}
-
-	async function handleAddColumn(name: string, type: string) {
-		const tableId = $page.params.table_id!;
-		addingColumn = true;
-		error.set(null);
-		try {
-			await createColumn(tableId, { name, type: type as ColumnType });
-			await refreshTable(tableId);
-			showAddColumn = false;
-			scrollToColTrigger += 1;
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to add column');
-		} finally {
-			addingColumn = false;
-		}
-	}
-
-	async function handleDeleteColumn(colId: string) {
-		const tableId = $page.params.table_id!;
-		error.set(null);
-		try {
-			await deleteColumn(tableId, colId);
-			await refreshTable(tableId);
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to delete column');
-		}
-	}
+	// ─── Page-specific handlers (not yet in store class) ─────────────────────────
 
 	async function handleDragReorderColumns(fromId: string, toId: string) {
 		const ordered = [...$columns]
 			.sort((a, b) => {
-				if (viewColOrder && viewColOrder.length > 0) {
-					const ai = viewColOrder.indexOf(a.column_id);
-					const bi = viewColOrder.indexOf(b.column_id);
+				if (s.viewColOrder && s.viewColOrder.length > 0) {
+					const ai = s.viewColOrder.indexOf(a.column_id);
+					const bi = s.viewColOrder.indexOf(b.column_id);
 					return (ai === -1 ? 9999 : ai) - (bi === -1 ? 9999 : bi);
 				}
 				return 0;
@@ -392,371 +169,18 @@
 		if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
 		ordered.splice(fromIdx, 1);
 		ordered.splice(toIdx, 0, fromId);
-		// Optimistic local update for snappy DOM.
-		viewColOrder = ordered;
-		// Persist: when on the implicit Schema view, write position fields
-		// back to __schema__ so the order is global. User views still
-		// auto-persist via the view.config.colOrder $effect.
+		s.viewColOrder = ordered;
 		const tableId = $page.params.table_id!;
 		const isImplicitTable =
-			activeViewId === IMPLICIT_TABLE_VIEW.view_id &&
+			s.activeViewId === IMPLICIT_TABLE_VIEW.view_id &&
 			!$viewsStore.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id);
 		if (isImplicitTable) {
 			try {
 				await reorderColumns(tableId, ordered);
-				await refreshTable(tableId);
-				// Now the global position fields reflect the new order; per-view
-				// override is no longer needed for the implicit view.
-				viewColOrder = null;
+				s.viewColOrder = null;
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to save column order');
 			}
-		}
-	}
-
-	function startRename(colId: string, currentName: string) {
-		renamingColId = colId;
-		renameValue = currentName;
-	}
-
-	async function commitRename(colId: string) {
-		if (!renameValue.trim()) {
-			renamingColId = null;
-			return;
-		}
-		const tableId = $page.params.table_id!;
-		error.set(null);
-		try {
-			await updateColumn(tableId, colId, { name: renameValue.trim() });
-			await refreshTable(tableId);
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to rename column');
-		} finally {
-			renamingColId = null;
-		}
-	}
-
-	function startEdit(rowId: number, col: Column, currentVal: unknown) {
-		editingCell = { rowId, colId: col.column_id };
-		editValue = currentVal === null || currentVal === undefined ? '' : String(currentVal);
-	}
-
-	async function commitEdit(rowId: number, col: Column) {
-		if (!editingCell) return;
-		editingCell = null;
-		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_id === rowId);
-		if (!row) return;
-		const newData = applyEditToRowData(row.row_data, col.column_id, editValue, col.type);
-		error.set(null);
-		try {
-			await updateRow(tableId, row.row_id, { row_data: newData });
-			await refreshRows(tableId);
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to update cell');
-		}
-	}
-
-	async function toggleCheckbox(rowId: number, col: Column) {
-		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_id === rowId);
-		if (!row) return;
-		const newData = toggleCheckboxInRowData(row.row_data, col.column_id);
-		error.set(null);
-		try {
-			await updateRow(tableId, row.row_id, { row_data: newData });
-			await refreshRows(tableId);
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to update cell');
-		}
-	}
-
-	async function removeTag(rowId: number, col: Column, tag: string) {
-		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_id === rowId);
-		if (!row) return;
-		const newData = removeTagFromRowData(row.row_data, col.column_id, tag);
-		try {
-			await updateRow(tableId, row.row_id, { row_data: newData });
-			await refreshRows(tableId);
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to update tags');
-		}
-	}
-
-	async function addTag(rowId: number, col: Column, tag: string) {
-		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_id === rowId);
-		if (!row) return;
-		const newData = addTagToRowData(row.row_data, col.column_id, tag);
-		if (newData === row.row_data) return; // tag already present
-		tagsPopupCell = null;
-		try {
-			await updateRow(tableId, row.row_id, { row_data: newData });
-			await refreshRows(tableId);
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to update tags');
-		}
-	}
-
-	async function handleUpdateRow(rowId: number, data: Record<string, unknown>) {
-		const tableId = $page.params.table_id!;
-		const row = $rows.find((r) => r.row_id === rowId);
-		if (!row) return;
-		await updateRow(tableId, row.row_id, { row_data: data });
-	}
-
-	async function loadDocFlags(tableId: string) {
-		const { batchDocsExist } = await import('$lib/backend/tables');
-		const docSet = await batchDocsExist(tableId);
-		rowsWithDocs.clear();
-		for (const rowNumber of docSet) {
-			rowsWithDocs.add(String(rowNumber));
-		}
-	}
-
-	async function handleRefreshRows(tableId: string) {
-		await refreshRows(tableId);
-		loadDocFlags(tableId);
-	}
-
-	function openExpand(row: Row) {
-		expandedRow = row;
-	}
-
-	function openContextMenu(e: MouseEvent, type: 'row' | 'col', id: string) {
-		e.preventDefault();
-		e.stopPropagation();
-		colMenuId = null;
-		contextMenu = { type, id, x: e.clientX, y: e.clientY };
-	}
-
-	async function handleDuplicateRow(rowId: number) {
-		const row = $rows.find((r) => r.row_id === rowId);
-		if (!row) return;
-		const tableId = $page.params.table_id!;
-		error.set(null);
-		try {
-			await createRow(tableId, { row_data: { ...row.row_data } });
-			await refreshRows(tableId);
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to duplicate row');
-		}
-		contextMenu = null;
-	}
-
-	async function handleSaveOptions(
-		colId: string,
-		choices: import('$lib/types/table').ColumnChoice[]
-	) {
-		const tableId = $page.params.table_id!;
-		const col = $columns.find((c) => c.column_id === colId);
-		if (!col) return;
-		error.set(null);
-		try {
-			await updateColumn(tableId, colId, { options: { ...col.options, choices } });
-			await refreshTable(tableId);
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to update options');
-		}
-	}
-
-	function handleResizeStart(e: MouseEvent, col: Column) {
-		e.preventDefault();
-		e.stopPropagation();
-		resizingColId = col.column_id;
-		resizeStartX = e.clientX;
-		resizeStartWidth = getColWidth(col);
-	}
-
-	// Filter helpers
-	function addFilterCondition() {
-		const firstCol = $columns[0];
-		filterConditions = [
-			...filterConditions,
-			{ id: crypto.randomUUID(), colId: firstCol?.column_id ?? '', operator: 'contains', value: '' }
-		];
-	}
-
-	function removeFilterCondition(id: string) {
-		filterConditions = filterConditions.filter((c) => c.id !== id);
-	}
-
-	function toggleHideCol(colId: string) {
-		if (hiddenCols.has(colId)) hiddenCols.delete(colId);
-		else hiddenCols.add(colId);
-	}
-
-	function toggleCollapseGroup(key: string) {
-		if (collapsedGroups.has(key)) collapsedGroups.delete(key);
-		else collapsedGroups.add(key);
-	}
-
-	function addFilterForColumn(colId: string) {
-		if (!filterConditions.find((c) => c.colId === colId)) {
-			filterConditions = [
-				...filterConditions,
-				{ id: crypto.randomUUID(), colId, operator: 'contains', value: '' }
-			];
-		}
-		showFilterPanel = true;
-	}
-
-	// View config helpers
-	function applyViewConfig(view: ViewConfig) {
-		_applyingConfig = true;
-		// Sort
-		if (view.config?.sort) {
-			const s = view.config.sort as { colId: string; dir: 'asc' | 'desc' };
-			if (s.colId && s.dir) sortConfig = s;
-			else sortConfig = null;
-		} else {
-			sortConfig = null;
-		}
-		// Group
-		if (view.config?.group) {
-			const g = view.config.group as { colId: string; granularity?: 'month' | 'day' };
-			if (g.colId) groupConfig = g;
-			else groupConfig = null;
-		} else {
-			groupConfig = null;
-		}
-		// Filter
-		if (view.config?.filter && Array.isArray(view.config.filter)) {
-			const saved = view.config.filter as { colId: string; operator: string; value: string }[];
-			filterConditions = saved.map((f) => ({
-				id: crypto.randomUUID(),
-				colId: f.colId,
-				operator: f.operator as FilterCondition['operator'],
-				value: f.value
-			}));
-		} else {
-			filterConditions = [];
-		}
-		// Hidden cols
-		hiddenCols.clear();
-		if (view.config?.hidden && Array.isArray(view.config.hidden)) {
-			for (const colId of view.config.hidden as string[]) {
-				hiddenCols.add(colId);
-			}
-		}
-		// Col widths (per-view override)
-		if (
-			view.config?.widths &&
-			typeof view.config.widths === 'object' &&
-			!Array.isArray(view.config.widths)
-		) {
-			localWidths = { ...(view.config.widths as Record<string, number>) };
-		} else {
-			localWidths = {};
-		}
-		// Col order (per-view override)
-		if (view.config?.colOrder && Array.isArray(view.config.colOrder)) {
-			viewColOrder = view.config.colOrder as string[];
-		} else {
-			viewColOrder = null;
-		}
-		Promise.resolve().then(() => {
-			_applyingConfig = false;
-		});
-	}
-
-	function persistViewConfig() {
-		const tableId = $page.params.table_id!;
-		// Use non-reactive get() so $viewsStore updates don't re-trigger this effect
-		const view = get(viewsStore).find((v) => v.view_id === activeViewId);
-		const newConfig = {
-			...(view?.config ?? {}),
-			sort: sortConfig ?? null,
-			group: groupConfig ?? null,
-			filter:
-				filterConditions.length > 0
-					? filterConditions.map(({ colId, operator, value }) => ({ colId, operator, value }))
-					: null,
-			hidden: hiddenCols.size > 0 ? [...hiddenCols] : [],
-			widths: Object.keys(localWidths).length > 0 ? { ...localWidths } : null,
-			colOrder: viewColOrder ?? null
-		};
-		if (!view) {
-			// Implicit Table view has no DB row yet — materialize it so config persists
-			if (activeViewId !== IMPLICIT_TABLE_VIEW.view_id) return;
-			createView(tableId, {
-				name: IMPLICIT_TABLE_VIEW.name,
-				type: IMPLICIT_TABLE_VIEW.type,
-				config: newConfig
-			})
-				.then((schema) => {
-					const created = schema.views.find((v) => v.name === IMPLICIT_TABLE_VIEW.name);
-					if (created) activeViewId = created.view_id;
-				})
-				.catch(() => {});
-			return;
-		}
-		updateView(tableId, view.view_id, { config: newConfig }).catch(() => {});
-	}
-
-	// Auto-persist view config when any view-local state changes (but not during applyViewConfig)
-	$effect(() => {
-		// Touch reactive state to establish dependencies without unused-var assignments
-		JSON.stringify(sortConfig);
-		JSON.stringify(groupConfig);
-		JSON.stringify(filterConditions);
-		[...hiddenCols].sort().join(',');
-		JSON.stringify(localWidths);
-		JSON.stringify(viewColOrder);
-		const _dragging = resizingColId;
-		if (!_applyingConfig && activeViewId && !_dragging) {
-			persistViewConfig();
-		}
-	});
-
-	// View handlers
-	function handleViewChange(view: ViewConfig) {
-		activeViewId = view.view_id;
-		const url = new URL(window.location.href);
-		url.searchParams.set('view', String(view.view_id));
-		history.replaceState(history.state, '', url.toString());
-		applyViewConfig(view);
-		// PG side does "clear all is_default + flag this one" atomically.
-		// Skip the implicit Schema tab (view_id=0) since it has no DB row.
-		if (view.view_id !== IMPLICIT_TABLE_VIEW.view_id) {
-			setDefaultView($page.params.table_id!, view.view_id).catch(() => {});
-		}
-	}
-
-	async function handleAddView(type: string, name: string) {
-		const tableId = $page.params.table_id!;
-		error.set(null);
-		try {
-			const schema = await createView(tableId, { name, type, config: {} });
-			const created = schema.views.find((v) => v.name === name);
-			if (created) activeViewId = created.view_id;
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to create view');
-		}
-	}
-
-	async function handleDeleteView(view: ViewConfig) {
-		const tableId = $page.params.table_id!;
-		error.set(null);
-		try {
-			await deleteView(tableId, view.view_id);
-			if (activeViewId === view.view_id) {
-				const remaining = $viewsStore;
-				activeViewId = remaining[0]?.view_id ?? IMPLICIT_TABLE_VIEW.view_id;
-			}
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to delete view');
-		}
-	}
-
-	async function handleRenameView(viewId: number, newName: string) {
-		const tableId = $page.params.table_id!;
-		error.set(null);
-		try {
-			await updateView(tableId, viewId, { name: newName });
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to rename view');
 		}
 	}
 
@@ -772,175 +196,10 @@
 		reordered.splice(toIdx, 0, fromId);
 		await reorderViews(tableId, reordered).catch(() => {});
 	}
-
-	// Export / Import
-	function handleExportTemplate() {
-		triggerDownload(
-			buildTemplateJSON($columns),
-			`${$currentTable?.table_id ?? 'table'}-template.json`,
-			'application/json'
-		);
-	}
-
-	async function handleImportTemplate(file: File) {
-		const tableId = $page.params.table_id!;
-		const text = await file.text();
-		const template = JSON.parse(text) as Array<{
-			name: string;
-			type: string;
-			options?: ColumnOptions;
-		}>;
-		if (!Array.isArray(template)) throw new Error('Invalid template: expected an array');
-		await Promise.all([...$columns].map((col) => deleteColumn(tableId, col.column_id)));
-		for (const col of template) {
-			await createColumn(tableId, {
-				name: col.name,
-				type: col.type as ColumnType,
-				options: col.options ?? {}
-			});
-		}
-		await refreshTable(tableId);
-		showImportTemplateModal = false;
-	}
-
-	function exportCSV() {
-		triggerDownload(
-			buildCSV($columns, $rows),
-			`${$currentTable?.table_id ?? 'table'}.csv`,
-			'text/csv'
-		);
-	}
-
-	function exportJSON() {
-		triggerDownload(
-			buildExportJSON($columns, $rows),
-			`${$currentTable?.table_id ?? 'table'}-data.json`,
-			'application/json'
-		);
-	}
-
-	function handleImportFile(e: Event) {
-		const input = e.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-		const reader = new FileReader();
-		reader.onload = (ev) => {
-			const text = ev.target?.result as string;
-			const parsed = parseCSV(text);
-			if (parsed.length < 1) return;
-			const headers = parsed[0];
-			importPreviewHeaders = headers;
-			importPreviewRows = parsed.slice(1).map((cells) => {
-				const obj: Record<string, string> = {};
-				headers.forEach((h, i) => {
-					obj[h] = cells[i] ?? '';
-				});
-				return obj;
-			});
-			importNewColumns = [];
-			const newColValueSets: Record<string, Set<string>> = {};
-			for (const h of headers) {
-				const m = h.match(/^(.+)\{\{(\w+)\}\}$/);
-				if (m) {
-					const colName = m[1].trim();
-					const colType = m[2].toLowerCase();
-					const exists = $columns.some((c) => c.name === colName);
-					if (!exists) {
-						newColValueSets[colName] = new Set<string>();
-						importNewColumns = [...importNewColumns, { name: colName, type: colType }];
-					}
-				}
-			}
-			const dataRows = parsed.slice(1);
-			for (const cells of dataRows) {
-				headers.forEach((h, i) => {
-					const m = h.match(/^(.+)\{\{(\w+)\}\}$/);
-					if (!m) return;
-					const colName = m[1].trim();
-					const colType = m[2].toLowerCase();
-					if (!newColValueSets[colName]) return;
-					const val = (cells[i] ?? '').trim();
-					if (!val) return;
-					if (colType === 'tags')
-						val
-							.split(',')
-							.map((v) => v.trim())
-							.filter(Boolean)
-							.forEach((v) => newColValueSets[colName].add(v));
-					else if (colType === 'select') newColValueSets[colName].add(val);
-				});
-			}
-			importNewColumns = importNewColumns.map((nc) => ({
-				...nc,
-				values: newColValueSets[nc.name] ? [...newColValueSets[nc.name]] : []
-			}));
-			importError = null;
-			showImportModal = true;
-		};
-		reader.readAsText(file);
-		input.value = '';
-	}
-
-	async function commitImport() {
-		importingData = true;
-		importError = null;
-		const tableId = $page.params.table_id!;
-		try {
-			for (let i = 0; i < importNewColumns.length; i++) {
-				const nc = importNewColumns[i];
-				const choices =
-					nc.values && nc.values.length > 0
-						? nc.values.map((v, vi) => ({ value: v, color: TAG_COLORS[vi % TAG_COLORS.length].bg }))
-						: [];
-				await createColumn(tableId, {
-					name: nc.name,
-					type: nc.type as ColumnType,
-					options: { choices }
-				});
-			}
-			await refreshTable(tableId);
-			const currentCols = get(columns);
-			function headerColName(h: string): string {
-				const m = h.match(/^(.+)\{\{(\w+)\}\}$/);
-				return m ? m[1].trim() : h;
-			}
-			for (const previewRow of importPreviewRows) {
-				const data: Record<string, unknown> = {};
-				for (const h of importPreviewHeaders) {
-					const colName = headerColName(h);
-					const col = currentCols.find((c) => c.name === colName);
-					if (!col) continue;
-					const rawVal = previewRow[h];
-					if (rawVal === '' || rawVal === undefined) continue;
-					if (col.type === 'tags')
-						data[col.column_id] = rawVal
-							.split(',')
-							.map((v) => v.trim())
-							.filter(Boolean);
-					else if (col.type === 'checkbox')
-						data[col.column_id] = rawVal.toLowerCase() === 'true' || rawVal === '1';
-					else if (col.type === 'number') {
-						const n = Number(rawVal);
-						data[col.column_id] = isNaN(n) ? null : n;
-					} else data[col.column_id] = rawVal;
-				}
-				await createRow(tableId, { row_data: data });
-			}
-			await refreshRows(tableId);
-			showImportModal = false;
-			importPreviewRows = [];
-			importPreviewHeaders = [];
-			importNewColumns = [];
-		} catch (e) {
-			importError = e instanceof Error ? e.message : 'Import failed';
-		} finally {
-			importingData = false;
-		}
-	}
 </script>
 
 <div
-	class="flex h-full flex-col bg-white {resizingColId ? 'cursor-col-resize select-none' : ''}"
+	class="flex h-full flex-col bg-white {s.resizingColId ? 'cursor-col-resize select-none' : ''}"
 	data-table-loaded={tableLoaded ? 'true' : undefined}
 >
 	{#if $error}
@@ -950,10 +209,10 @@
 	<ViewSwitcher
 		views={allViews}
 		activeViewId={activeView.view_id}
-		onViewChange={handleViewChange}
-		onAddView={handleAddView}
-		onDeleteView={handleDeleteView}
-		onRenameView={handleRenameView}
+		onViewChange={(v) => s.handleViewChange(v)}
+		onAddView={(type, name) => s.handleAddView(type, name)}
+		onDeleteView={(v) => s.handleDeleteView(v)}
+		onRenameView={(id, name) => s.handleRenameView(id, name)}
 		isRenameable={(v) => $viewsStore.some((uv) => uv.view_id === v.view_id)}
 		onReorderViews={handleReorderViews}
 	/>
@@ -961,26 +220,26 @@
 	{#if activeView.type === 'table'}
 		<TableToolbar
 			columns={$columns}
-			{sortConfig}
-			{groupConfig}
-			{hiddenCols}
-			{filterConditions}
-			{showFilterPanel}
-			{searchQuery}
-			onSortChange={(c) => (sortConfig = c)}
-			onGroupChange={(c) => (groupConfig = c)}
-			onToggleHideCol={toggleHideCol}
-			onClearHiddenCols={() => hiddenCols.clear()}
-			onShowFilterPanelChange={(s) => (showFilterPanel = s)}
-			onSearchQueryChange={(q) => (searchQuery = q)}
-			onExportTemplate={handleExportTemplate}
-			onShowImportTemplate={() => (showImportTemplateModal = true)}
-			onExportCSV={exportCSV}
-			onExportJSON={exportJSON}
-			onImportFile={handleImportFile}
-			onAddFilterCondition={addFilterCondition}
-			onRemoveFilterCondition={removeFilterCondition}
-			onClearAllFilters={() => (filterConditions = [])}
+			sortConfig={s.sortConfig}
+			groupConfig={s.groupConfig}
+			hiddenCols={s.hiddenCols}
+			filterConditions={s.filterConditions}
+			showFilterPanel={s.showFilterPanel}
+			searchQuery={s.searchQuery}
+			onSortChange={(c) => (s.sortConfig = c)}
+			onGroupChange={(c) => (s.groupConfig = c)}
+			onToggleHideCol={(id) => s.toggleHideCol(id)}
+			onClearHiddenCols={() => s.hiddenCols.clear()}
+			onShowFilterPanelChange={(v) => (s.showFilterPanel = v)}
+			onSearchQueryChange={(q) => (s.searchQuery = q)}
+			onExportTemplate={() => s.handleExportTemplate()}
+			onShowImportTemplate={() => (s.showImportTemplateModal = true)}
+			onExportCSV={() => s.exportCSV()}
+			onExportJSON={() => s.exportJSON()}
+			onImportFile={(e) => s.handleImportFile(e)}
+			onAddFilterCondition={() => s.addFilterCondition()}
+			onRemoveFilterCondition={(id) => s.removeFilterCondition(id)}
+			onClearAllFilters={() => (s.filterConditions = [])}
 		/>
 
 		<TableGrid
@@ -988,51 +247,51 @@
 			{renderItems}
 			loading={$loading}
 			{tableMinWidth}
-			{addingRow}
-			{addingColumn}
-			{scrollToRowId}
-			{scrollToColTrigger}
-			{deletingRowId}
-			{rowsWithDocs}
-			{editingCell}
-			{editValue}
-			{renamingColId}
-			{renameValue}
-			{colMenuId}
-			{tagsPopupCell}
-			{sortConfig}
-			{collapsedGroups}
-			{localWidths}
-			onStartEdit={startEdit}
-			onCommitEdit={commitEdit}
-			onEditValueChange={(v) => (editValue = v)}
-			onEditingCellChange={(c) => (editingCell = c)}
-			onToggleCheckbox={toggleCheckbox}
-			onRemoveTag={removeTag}
-			onAddTag={addTag}
-			onTagsPopupChange={(c) => (tagsPopupCell = c)}
-			onDeleteRow={handleDeleteRow}
-			onOpenExpand={openExpand}
-			onOpenContextMenu={openContextMenu}
-			onStartRename={startRename}
-			onCommitRename={commitRename}
-			onRenameValueChange={(v) => (renameValue = v)}
-			onRenamingColIdChange={(id) => (renamingColId = id)}
-			onColMenuChange={(id) => (colMenuId = id)}
-			onSortChange={(c) => (sortConfig = c)}
-			onFilterAdd={addFilterForColumn}
-			onShowFilterPanel={() => (showFilterPanel = true)}
-			onHideCol={(id) => hiddenCols.add(id)}
-			onDeleteColumn={handleDeleteColumn}
+			addingRow={s.addingRow}
+			addingColumn={s.addingColumn}
+			scrollToRowId={s.scrollToRowId}
+			scrollToColTrigger={s.scrollToColTrigger}
+			deletingRowId={s.deletingRowId}
+			rowsWithDocs={s.rowsWithDocs}
+			editingCell={s.editingCell}
+			editValue={s.editValue}
+			renamingColId={s.renamingColId}
+			renameValue={s.renameValue}
+			colMenuId={s.colMenuId}
+			tagsPopupCell={s.tagsPopupCell}
+			sortConfig={s.sortConfig}
+			collapsedGroups={s.collapsedGroups}
+			localWidths={s.localWidths}
+			onStartEdit={(rowId, col, val) => s.startEdit(rowId, col, val)}
+			onCommitEdit={(rowId, col) => s.commitEdit(rowId, col)}
+			onEditValueChange={(v) => (s.editValue = v)}
+			onEditingCellChange={(c) => (s.editingCell = c)}
+			onToggleCheckbox={(rowId, col) => s.toggleCheckbox(rowId, col)}
+			onRemoveTag={(rowId, col, tag) => s.removeTag(rowId, col, tag)}
+			onAddTag={(rowId, col, tag) => s.addTag(rowId, col, tag)}
+			onTagsPopupChange={(c) => (s.tagsPopupCell = c)}
+			onDeleteRow={(id) => s.handleDeleteRow(id)}
+			onOpenExpand={(row) => s.openExpand(row)}
+			onOpenContextMenu={(e, type, id) => s.openContextMenu(e, type, id)}
+			onStartRename={(id, name) => s.startRename(id, name)}
+			onCommitRename={(id) => s.commitRename(id)}
+			onRenameValueChange={(v) => (s.renameValue = v)}
+			onRenamingColIdChange={(id) => (s.renamingColId = id)}
+			onColMenuChange={(id) => (s.colMenuId = id)}
+			onSortChange={(c) => (s.sortConfig = c)}
+			onFilterAdd={(id) => s.addFilterForColumn(id)}
+			onShowFilterPanel={() => (s.showFilterPanel = true)}
+			onHideCol={(id) => s.hiddenCols.add(id)}
+			onDeleteColumn={(id) => s.handleDeleteColumn(id)}
 			onDragReorderColumns={handleDragReorderColumns}
-			onResizeStart={handleResizeStart}
-			onShowAddColumn={() => (showAddColumn = true)}
-			onAddRow={() => handleAddRow()}
-			onAddRowAndEdit={(colId) => handleAddRow(colId)}
-			onAddRowInGroup={handleAddRowInGroup}
-			onToggleCollapseGroup={toggleCollapseGroup}
-			onManageOptions={(col) => (managingOptionsCol = col)}
-			onOpenDocCell={(row, col) => (docCellState = { row, col })}
+			onResizeStart={(e, col) => s.handleResizeStart(e, col)}
+			onShowAddColumn={() => (s.showAddColumn = true)}
+			onAddRow={() => s.handleAddRow()}
+			onAddRowAndEdit={(colId) => s.handleAddRow(colId)}
+			onAddRowInGroup={(key, col) => s.handleAddRowInGroup(key, col)}
+			onToggleCollapseGroup={(key) => s.toggleCollapseGroup(key)}
+			onManageOptions={(col) => (s.managingOptionsCol = col)}
+			onOpenDocCell={(row, col) => (s.docCellState = { row, col })}
 		/>
 	{:else if activeView.type === 'kanban'}
 		<KanbanBoard
@@ -1040,9 +299,9 @@
 			columns={$columns}
 			rows={$rows}
 			viewConfig={activeView}
-			onOpenExpand={openExpand}
+			onOpenExpand={(row) => s.openExpand(row)}
 			onRowsRefresh={() => refreshRows($page.params.table_id!)}
-			onAddRow={openCreateTicket}
+			onAddRow={(data) => s.openCreateTicket(data)}
 		/>
 	{:else if activeView.type === 'timeline'}
 		<TimelineView
@@ -1050,9 +309,9 @@
 			columns={$columns}
 			rows={$rows}
 			viewConfig={activeView}
-			onOpenExpand={openExpand}
+			onOpenExpand={(row) => s.openExpand(row)}
 			onRowsRefresh={() => refreshRows($page.params.table_id!)}
-			onAddRow={openCreateTicket}
+			onAddRow={(data) => s.openCreateTicket(data)}
 		/>
 	{:else if activeView.type === 'dashboard'}
 		<DashboardView
@@ -1063,87 +322,87 @@
 </div>
 
 <!-- Overlays -->
-{#if contextMenu}
+{#if s.contextMenu}
 	<ContextMenu
-		{contextMenu}
+		contextMenu={s.contextMenu}
 		columns={$columns}
 		rows={$rows}
-		{sortConfig}
-		{filterConditions}
-		onClose={() => (contextMenu = null)}
-		onExpandRow={openExpand}
-		onDuplicateRow={handleDuplicateRow}
-		onDeleteRow={handleDeleteRow}
-		onRenameColumn={startRename}
-		onSortChange={(c) => (sortConfig = c)}
-		onAddFilter={addFilterForColumn}
-		onHideColumn={(id) => hiddenCols.add(id)}
-		onDeleteColumn={handleDeleteColumn}
+		sortConfig={s.sortConfig}
+		filterConditions={s.filterConditions}
+		onClose={() => (s.contextMenu = null)}
+		onExpandRow={(row) => s.openExpand(row)}
+		onDuplicateRow={(id) => s.handleDuplicateRow(id)}
+		onDeleteRow={(id) => s.handleDeleteRow(id)}
+		onRenameColumn={(id, name) => s.startRename(id, name)}
+		onSortChange={(c) => (s.sortConfig = c)}
+		onAddFilter={(id) => s.addFilterForColumn(id)}
+		onHideColumn={(id) => s.hiddenCols.add(id)}
+		onDeleteColumn={(id) => s.handleDeleteColumn(id)}
 	/>
 {/if}
 
 <AddColumnModal
-	show={showAddColumn}
-	onClose={() => (showAddColumn = false)}
-	onAdd={handleAddColumn}
-	pending={addingColumn}
+	show={s.showAddColumn}
+	onClose={() => (s.showAddColumn = false)}
+	onAdd={(name, type) => s.handleAddColumn(name, type)}
+	pending={s.addingColumn}
 />
 
-{#if expandedRow}
+{#if s.expandedRow}
 	<RowExpandPanel
-		row={expandedRow}
+		row={s.expandedRow}
 		columns={$columns}
-		onClose={() => (expandedRow = null)}
-		onUpdateRow={handleUpdateRow}
-		onRefreshRows={handleRefreshRows}
+		onClose={() => (s.expandedRow = null)}
+		onUpdateRow={(id, data) => s.handleUpdateRow(id, data)}
+		onRefreshRows={(tid) => s.handleRefreshRows(tid)}
 		tableId={$page.params.table_id!}
 		workspaceId={$page.params.workspace_id!}
 		onOpenDocCell={(row, col) => {
-			expandedRow = null;
-			docCellState = { row, col };
+			s.expandedRow = null;
+			s.docCellState = { row, col };
 		}}
 	/>
 {/if}
 
-{#if docCellState}
+{#if s.docCellState}
 	<DocCellEditor
-		row={docCellState.row}
-		column={docCellState.col}
+		row={s.docCellState.row}
+		column={s.docCellState.col}
 		tableId={$page.params.table_id!}
 		workspaceId={$page.params.workspace_id!}
-		onClose={() => (docCellState = null)}
+		onClose={() => (s.docCellState = null)}
 	/>
 {/if}
 
 <ImportTemplateModal
-	show={showImportTemplateModal}
-	onClose={() => (showImportTemplateModal = false)}
-	onImport={handleImportTemplate}
+	show={s.showImportTemplateModal}
+	onClose={() => (s.showImportTemplateModal = false)}
+	onImport={(file) => s.handleImportTemplate(file)}
 />
 
 <ImportPreviewModal
-	show={showImportModal}
-	headers={importPreviewHeaders}
-	previewRows={importPreviewRows}
-	newColumns={importNewColumns}
-	importing={importingData}
-	error={importError}
-	onClose={() => (showImportModal = false)}
-	onConfirm={commitImport}
+	show={s.showImportModal}
+	headers={s.importPreviewHeaders}
+	previewRows={s.importPreviewRows}
+	newColumns={s.importNewColumns}
+	importing={s.importingData}
+	error={s.importError}
+	onClose={() => (s.showImportModal = false)}
+	onConfirm={() => s.commitImport()}
 />
 
-{#if managingOptionsCol}
+{#if s.managingOptionsCol}
 	<ManageOptionsModal
-		col={managingOptionsCol}
-		onClose={() => (managingOptionsCol = null)}
-		onSave={handleSaveOptions}
+		col={s.managingOptionsCol}
+		onClose={() => (s.managingOptionsCol = null)}
+		onSave={(id, choices) => s.handleSaveOptions(id, choices)}
 	/>
 {/if}
 
 <CreateTicketModal
-	show={showCreateTicket}
+	show={s.showCreateTicket}
 	columns={$columns}
-	initialData={createTicketInitialData}
-	onClose={() => (showCreateTicket = false)}
-	onSubmit={handleCreateTicket}
+	initialData={s.createTicketInitialData}
+	onClose={() => (s.showCreateTicket = false)}
+	onSubmit={(data) => s.handleCreateTicket(data)}
 />

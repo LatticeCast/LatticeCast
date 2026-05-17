@@ -1,11 +1,10 @@
 // lib/backend/views.ts
 //
-// v40: view identity is view_id (number). Display name + type live
-// inside config. Mutation endpoints return the full TableSchema; FE
-// replaces its store from the response.
+// Controller: view CRUD → API call + applySchema to stores.
 
 import { BACKEND_URL } from './config';
 import { getAuthHeaders } from './http';
+import { applySchema } from '$lib/stores/table_schema';
 import type { TableSchema, UpdateView, ViewConfig } from '$lib/types/table';
 
 // ── Reads ──────────────────────────────────────────────────────────────
@@ -26,7 +25,7 @@ export async function fetchView(tableId: string, viewId: number): Promise<ViewCo
 	return response.json();
 }
 
-// ── Mutations — return TableSchema ─────────────────────────────────────
+// ── Mutations — call API + applySchema ────────────────────────────────
 
 export async function createView(
 	tableId: string,
@@ -39,7 +38,9 @@ export async function createView(
 		body: JSON.stringify(data)
 	});
 	if (!response.ok) throw new Error(`Failed to create view: ${response.statusText}`);
-	return response.json();
+	const schema: TableSchema = await response.json();
+	applySchema(schema);
+	return schema;
 }
 
 export async function updateView(
@@ -54,7 +55,9 @@ export async function updateView(
 		body: JSON.stringify(updates)
 	});
 	if (!response.ok) throw new Error(`Failed to update view: ${response.statusText}`);
-	return response.json();
+	const schema: TableSchema = await response.json();
+	applySchema(schema);
+	return schema;
 }
 
 export async function deleteView(tableId: string, viewId: number): Promise<TableSchema> {
@@ -64,5 +67,7 @@ export async function deleteView(tableId: string, viewId: number): Promise<Table
 		headers
 	});
 	if (!response.ok) throw new Error(`Failed to delete view: ${response.statusText}`);
-	return response.json();
+	const schema: TableSchema = await response.json();
+	applySchema(schema);
+	return schema;
 }
