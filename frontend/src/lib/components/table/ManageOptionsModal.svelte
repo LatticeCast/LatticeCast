@@ -221,6 +221,7 @@
 					</span>
 					<div class="flex-1"></div>
 					<button
+						data-testid="choice-remove-btn-{choice.value}"
 						onclick={() => removeChoice(choice.value)}
 						class="rounded p-1 text-gray-300 hover:bg-red-50 hover:text-red-500"
 						aria-label="Remove {choice.value}"
@@ -243,6 +244,7 @@
 		<!-- Add new choice -->
 		<div class="mb-5 flex gap-2">
 			<input
+				data-testid="manage-options-new-input"
 				class="min-w-0 flex-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
 				bind:value={newValue}
 				placeholder="New option..."
@@ -251,6 +253,7 @@
 				}}
 			/>
 			<button
+				data-testid="manage-options-add-btn"
 				onclick={addChoice}
 				disabled={!newValue.trim()}
 				class="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
