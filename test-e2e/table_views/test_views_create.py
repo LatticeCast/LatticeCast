@@ -14,57 +14,27 @@ Two-container architecture (developing-e2e-test):
 
 Usage:
     docker compose --profile test up -d browser test-e2e
-    docker compose exec test-e2e python3 /scripts/e2e_test_views_create.py [--snapshot]
+    docker compose exec -T test-e2e pytest table_views/test_views_create.py -v
 """
 
 from __future__ import annotations
 
-import argparse
-import os
-import sys
 import time
 
-import requests
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+import pytest
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-BASE = os.environ["BASE_URL"].rstrip("/")
-WS_URL = os.environ["BROWSER_WS"]
-ADMIN_USER = "lattice"
+from e2e_base import BASE, api
+
+
 _TS = int(time.time())
 WORKSPACE_NAME = f"view-create-{_TS}"
 TABLE_ID = f"views-create-{_TS}"
 
 
-def fatal(msg: str) -> None:
-    print(f"FAIL: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
-def login(user_name: str) -> str:
-    r = requests.post(
-        f"{BASE}/api/v1/login/password",
-        json={"user_name": user_name, "password": ""},
-        timeout=10,
-    )
-    if r.status_code != 200:
-        fatal(f"login {user_name!r}: {r.status_code} {r.text[:200]}")
-    token = r.json()["access_token"]
-    print(f"[ok] login {user_name!r}")
-    return token
-
-
-def api(method: str, path: str, token: str, **kw) -> requests.Response:
-    return requests.request(
-        method, f"{BASE}{path}",
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=15, **kw,
-    )
-
-
 def get_views(token: str, table_id: str) -> list[dict]:
     r = api("GET", f"/api/v1/tables/{table_id}", token)
-    if r.status_code != 200:
-        fatal(f"GET /tables/{table_id}: {r.status_code} {r.text[:200]}")
+    assert r.status_code == 200, f"GET /tables/{table_id}: {r.status_code} {r.text[:200]}"
     return r.json().get("views", [])
 
 
@@ -73,7 +43,7 @@ def assert_api_has_view(token: str, table_id: str, name: str, vtype: str) -> dic
     match = next((v for v in views if v["name"] == name and v["type"] == vtype), None)
     if match is None:
         names = [(v["name"], v["type"]) for v in views]
-        fatal(f"API: no view name={name!r} type={vtype!r} in {names}")
+        pytest.fail(f"API: no view name={name!r} type={vtype!r} in {names}")
     print(f"[ok] API: view name={name!r} type={vtype!r} view_id={match['view_id']}")
     return match
 
@@ -92,7 +62,7 @@ def wait_table_page(page, ws_name: str, table_id: str) -> None:
     try:
         page.wait_for_selector('[data-table-loaded="true"]', timeout=15000)
     except PlaywrightTimeout:
-        fatal(f"Table page did not finish loading for {table_id!r}")
+        pytest.fail(f"Table page did not finish loading for {table_id!r}")
 
 
 def click_add_view_type(page, vtype: str) -> None:
@@ -115,17 +85,17 @@ def assert_tab_visible(page, tab_name: str) -> None:
             state="visible", timeout=8000
         )
     except PlaywrightTimeout:
-        fatal(f"view tab {tab_name!r} not visible after creation")
+        pytest.fail(f"view tab {tab_name!r} not visible after creation")
     print(f"[ok] UI: tab {tab_name!r} visible")
 
 
-def main(snapshot: bool = False) -> None:
-    token = login(ADMIN_USER)
+def test_views_create(authed_page, admin_token, snapshot) -> None:
+    token = admin_token
+    page = authed_page
 
     # ── Setup: workspace ───────────────────────────────────────────────────────
     r = api("POST", "/api/v1/workspaces", token, json={"workspace_name": WORKSPACE_NAME})
-    if r.status_code != 201:
-        fatal(f"create workspace: {r.status_code} {r.text[:200]}")
+    assert r.status_code == 201, f"create workspace: {r.status_code} {r.text[:200]}"
     ws_data = r.json()
     ws_uuid = str(ws_data["workspace_id"])
     ws_name = ws_data["workspace_name"]
@@ -133,24 +103,10 @@ def main(snapshot: bool = False) -> None:
 
     # ── Setup: blank table (no views) ──────────────────────────────────────────
     r = api("POST", "/api/v1/tables", token, json={"table_id": TABLE_ID, "workspace_id": ws_name})
-    if r.status_code != 201:
-        fatal(f"create table: {r.status_code} {r.text[:200]}")
+    assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
     print(f"[ok] CREATE table {TABLE_ID!r}")
 
-    # ── Playwright session ─────────────────────────────────────────────────────
-    login_info = (
-        '{"provider":"none",'
-        f'"accessToken":"{token}",'
-        f'"userInfo":{{"sub":"{token}","email":"lattice@example.com","name":"lattice"}},'
-        '"role":"admin"}'
-    )
-
-    with sync_playwright() as pw:
-        browser = pw.chromium.connect(WS_URL)
-        ctx = browser.new_context(viewport={"width": 1400, "height": 900})
-        ctx.add_init_script(f"localStorage.setItem('loginInfo', {repr(login_info)});")
-        page = ctx.new_page()
-
+    try:
         wait_table_page(page, ws_name, TABLE_ID)
         print("[ok] navigated to table page")
         snap(page, "vc_01_initial", snapshot)
@@ -197,23 +153,15 @@ def main(snapshot: bool = False) -> None:
                     state="visible", timeout=8000
                 )
             except PlaywrightTimeout:
-                fatal(f"view tab {tab_name!r} not visible after navigation")
+                pytest.fail(f"view tab {tab_name!r} not visible after navigation")
             print(f"[ok] tab {tab_name!r} persists after navigation")
 
-        browser.close()
+    finally:
+        # ── Teardown ────────────────────────────────────────────────────────────
+        r = api("DELETE", f"/api/v1/workspaces/{ws_uuid}", token)
+        if r.status_code not in (200, 204):
+            print(f"warn: delete workspace returned {r.status_code}")
+        else:
+            print(f"[ok] DELETE workspace {ws_uuid}")
 
-    # ── Teardown ────────────────────────────────────────────────────────────────
-    r = api("DELETE", f"/api/v1/workspaces/{ws_uuid}", token)
-    if r.status_code not in (200, 204):
-        print(f"warn: delete workspace returned {r.status_code}", file=sys.stderr)
-    else:
-        print(f"[ok] DELETE workspace {ws_uuid}")
-
-    print("\n=== PASSED — e2e_test_views_create ===")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--snapshot", action="store_true", help="Capture screenshots at each step")
-    args = parser.parse_args()
-    main(snapshot=args.snapshot)
+    print("\n=== PASSED — test_views_create ===")
