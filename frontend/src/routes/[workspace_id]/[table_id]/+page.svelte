@@ -667,15 +667,15 @@
 		const view = get(viewsStore).find((v) => v.view_id === activeViewId);
 		const newConfig = {
 			...(view?.config ?? {}),
-			sort: sortConfig ?? undefined,
-			group: groupConfig ?? undefined,
+			sort: sortConfig ?? null,
+			group: groupConfig ?? null,
 			filter:
 				filterConditions.length > 0
 					? filterConditions.map(({ colId, operator, value }) => ({ colId, operator, value }))
-					: undefined,
+					: null,
 			hidden: hiddenCols.size > 0 ? [...hiddenCols] : [],
-			widths: Object.keys(localWidths).length > 0 ? { ...localWidths } : undefined,
-			colOrder: viewColOrder ?? undefined
+			widths: Object.keys(localWidths).length > 0 ? { ...localWidths } : null,
+			colOrder: viewColOrder ?? null
 		};
 		if (!view) {
 			// Implicit Table view has no DB row yet — materialize it so config persists
