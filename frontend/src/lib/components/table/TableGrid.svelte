@@ -721,6 +721,7 @@
 										{/if}
 									{:else if col.type === 'checkbox'}
 										<button
+											data-testid="checkbox-cell-{row.row_id}-{col.column_id}"
 											class="relative inline-flex h-5 w-9 items-center rounded-full transition {row
 												.row_data[col.column_id]
 												? 'bg-blue-500'
