@@ -704,7 +704,8 @@
 		[...hiddenCols].sort().join(',');
 		JSON.stringify(localWidths);
 		JSON.stringify(viewColOrder);
-		if (!_applyingConfig && activeViewId) {
+		const _dragging = resizingColId;
+		if (!_applyingConfig && activeViewId && !_dragging) {
 			persistViewConfig();
 		}
 	});
