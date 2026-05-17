@@ -5,22 +5,19 @@ Covers two view-type pairs (cross-view rule per developing-e2e-test skill):
   T2: Board(kanban) + Tbl(table)          → drag Tbl before Board
 
 Run:
-    docker compose exec test-e2e python3 /scripts/e2e_test_views_order.py [--snapshot]
+    docker compose exec -T test-e2e pytest table_views/test_views_order.py -v
 """
 
 from __future__ import annotations
 
-import argparse
-import os
-import sys
 import time
 
-import requests
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+import pytest
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+from e2e_base import BASE, api
 
 
-BASE = os.environ["BASE_URL"].rstrip("/")
-WS_URL = os.environ["BROWSER_WS"]
 ADMIN_USER = "lattice"
 SUFFIX = int(time.time()) % 100000
 WS_NAME = f"vo-{SUFFIX}"
@@ -28,8 +25,6 @@ T1 = f"t1v{SUFFIX}"
 T2 = f"t2v{SUFFIX}"
 SNAP_DIR = "/output"
 
-
-# View names — define once to keep assertions and drags in sync
 V1A = "Kanban"    # table1 view A (created first)
 V1B = "Timeline"  # table1 view B (created second)
 V2A = "Board"     # table2 view A: kanban
@@ -38,35 +33,10 @@ V2B = "Tbl"       # table2 view B: table type
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def fatal(msg: str) -> None:
-    print(f"FAIL: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
-def login(user_name: str) -> str:
-    r = requests.post(
-        f"{BASE}/api/v1/login/password",
-        json={"user_name": user_name, "password": ""},
-        timeout=10,
-    )
-    if r.status_code != 200:
-        fatal(f"login {user_name!r}: {r.status_code} {r.text[:200]}")
-    return r.json()["access_token"]
-
-
-def api(method: str, path: str, token: str, **kw) -> requests.Response:
-    return requests.request(
-        method, f"{BASE}{path}",
-        headers={"Authorization": f"Bearer {token}"},
-        timeout=15, **kw,
-    )
-
-
 def get_views_ordered(token: str, table_id: str) -> list[dict]:
     """GET /tables/{table_id}/views → ordered list of user views."""
     r = api("GET", f"/api/v1/tables/{table_id}/views", token)
-    if r.status_code != 200:
-        fatal(f"GET views {table_id}: {r.status_code} {r.text[:200]}")
+    assert r.status_code == 200, f"GET views {table_id}: {r.status_code} {r.text[:200]}"
     return r.json()
 
 
@@ -86,7 +56,7 @@ def goto_table(page, ws_id: str, table_id: str) -> None:
             '[data-testid="view-tab-Schema"]', state="visible", timeout=15000
         )
     except PlaywrightTimeout:
-        fatal(f"View tabs did not load for table {table_id}")
+        pytest.fail(f"View tabs did not load for table {table_id}")
 
 
 def tab_x(page, name: str) -> float:
@@ -95,10 +65,10 @@ def tab_x(page, name: str) -> float:
     try:
         loc.wait_for(state="visible", timeout=5000)
     except PlaywrightTimeout:
-        fatal(f"Tab '{name}' not visible within 5s")
+        pytest.fail(f"Tab '{name}' not visible within 5s")
     box = loc.bounding_box()
     if not box:
-        fatal(f"No bounding box for tab '{name}'")
+        pytest.fail(f"No bounding box for tab '{name}'")
     return box["x"]
 
 
@@ -127,7 +97,7 @@ def wait_tab_order(page, first: str, second: str, timeout: int = 8000) -> None:
             timeout=timeout,
         )
     except PlaywrightTimeout:
-        fatal(f"Timeout: tab '{first}' did not appear before '{second}' within {timeout}ms")
+        pytest.fail(f"Timeout: tab '{first}' did not appear before '{second}' within {timeout}ms")
 
 
 def assert_tab_order(page, first: str, second: str) -> None:
@@ -141,148 +111,121 @@ def assert_api_order(token: str, table_id: str, expected: list[str]) -> None:
     """Assert GET /views returns views in the given name order."""
     views = get_views_ordered(token, table_id)
     actual = [v["name"] for v in views]
-    if actual != expected:
-        fatal(f"API {table_id}: expected order {expected}, got {actual}")
+    assert actual == expected, f"API {table_id}: expected order {expected}, got {actual}"
 
 
 def setup_api(token: str) -> str:
     """Create workspace + 2 tables each with 2 user views. Returns workspace_id."""
     r = api("POST", "/api/v1/workspaces", token, json={"workspace_name": WS_NAME})
-    if r.status_code != 201:
-        fatal(f"create workspace: {r.status_code} {r.text[:200]}")
+    assert r.status_code == 201, f"create workspace: {r.status_code} {r.text[:200]}"
     ws_id = str(r.json()["workspace_id"])
     print(f"[setup] workspace {WS_NAME!r} → {ws_id}")
 
     for tid in (T1, T2):
         r = api("POST", "/api/v1/tables", token, json={"table_id": tid, "workspace_id": ws_id})
-        if r.status_code != 201:
-            fatal(f"create table {tid}: {r.status_code} {r.text[:200]}")
+        assert r.status_code == 201, f"create table {tid}: {r.status_code} {r.text[:200]}"
 
     for name, vtype in [(V1A, "kanban"), (V1B, "timeline")]:
         r = api("POST", f"/api/v1/tables/{T1}/views", token, json={"name": name, "type": vtype})
-        if r.status_code != 201:
-            fatal(f"create view {name!r} on {T1}: {r.status_code} {r.text[:200]}")
+        assert r.status_code == 201, f"create view {name!r} on {T1}: {r.status_code} {r.text[:200]}"
 
     for name, vtype in [(V2A, "kanban"), (V2B, "table")]:
         r = api("POST", f"/api/v1/tables/{T2}/views", token, json={"name": name, "type": vtype})
-        if r.status_code != 201:
-            fatal(f"create view {name!r} on {T2}: {r.status_code} {r.text[:200]}")
+        assert r.status_code == 201, f"create view {name!r} on {T2}: {r.status_code} {r.text[:200]}"
 
     print(f"[setup] T1={T1} views=[{V1A},{V1B}]  T2={T2} views=[{V2A},{V2B}]")
     return ws_id
 
 
-def teardown(token: str, ws_id: str) -> None:
+def teardown_ws(token: str, ws_id: str) -> None:
     r = api("DELETE", f"/api/v1/workspaces/{ws_id}", token)
     if r.status_code not in (200, 204):
-        print(f"[warn] teardown DELETE {ws_id}: {r.status_code}", file=sys.stderr)
+        print(f"[warn] teardown DELETE {ws_id}: {r.status_code}")
     else:
         print(f"[teardown] workspace {ws_id} deleted")
 
 
-def main(with_snapshot: bool = False) -> None:
-    token = login(ADMIN_USER)
+# ── Test ─────────────────────────────────────────────────────────────────────
+
+def test_views_order(authed_page, admin_token, snapshot):
+    token = admin_token
+    page = authed_page
     print(f"[ok] login {ADMIN_USER!r}")
 
     ws_id = setup_api(token)
 
-    login_info = (
-        '{"provider":"none",'
-        f'"accessToken":"{token}",'
-        f'"userInfo":{{"sub":"{token}","email":"lattice@example.com","name":"lattice"}},'
-        '"role":"admin"}'
-    )
+    try:
+        # ── step 1: initial tab order on T1 ──────────────────────────────────
+        print(f"[1] T1 initial order: Schema | {V1A} | {V1B}")
+        goto_table(page, ws_id, T1)
+        snap(page, "step1_initial_t1", snapshot)
 
-    with sync_playwright() as pw:
-        browser = pw.chromium.connect(WS_URL)
-        page = browser.new_page(viewport={"width": 1400, "height": 900})
+        assert_api_order(token, T1, [V1A, V1B])
+        sx = tab_x(page, "Schema")
+        assert sx < tab_x(page, V1A) < tab_x(page, V1B), \
+            f"UI: expected Schema < {V1A} < {V1B}"
+        print(f"[1] API+UI: order=Schema|{V1A}|{V1B} ✓")
 
+        # ── step 2: drag Timeline before Kanban on T1 ────────────────────────
+        print(f"[2] Drag {V1B} before {V1A} on T1")
+        drag_tab(page, V1B, V1A)
+        wait_tab_order(page, V1B, V1A)
+        page.wait_for_load_state("networkidle", timeout=8000)
+        snap(page, "step2_t1_after_drag", snapshot)
 
-        page.goto(BASE, wait_until="domcontentloaded")
-        page.evaluate("(info) => localStorage.setItem('loginInfo', info)", login_info)
+        assert_api_order(token, T1, [V1B, V1A])
+        assert_tab_order(page, V1B, V1A)
+        print(f"[2] API+UI: order=Schema|{V1B}|{V1A} ✓")
 
-        try:
-            # ── step 1: initial tab order on T1 ──────────────────────────────────
-            print(f"[1] T1 initial order: Schema | {V1A} | {V1B}")
-            goto_table(page, ws_id, T1)
-            snap(page, "step1_initial_t1", with_snapshot)
+        # ── step 3: reload — order persists ──────────────────────────────────
+        print(f"[3] Reload T1 — verify order persists")
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_selector(
+            '[data-testid="view-tab-Schema"]', state="visible", timeout=15000
+        )
+        snap(page, "step3_t1_after_reload", snapshot)
 
-            assert_api_order(token, T1, [V1A, V1B])
-            sx = tab_x(page, "Schema")
-            assert sx < tab_x(page, V1A) < tab_x(page, V1B), \
-                f"UI: expected Schema < {V1A} < {V1B}"
-            print(f"[1] API+UI: order=Schema|{V1A}|{V1B} ✓")
+        assert_api_order(token, T1, [V1B, V1A])
+        assert_tab_order(page, V1B, V1A)
+        print(f"[3] Reload: order=Schema|{V1B}|{V1A} persists ✓")
 
-            # ── step 2: drag Timeline before Kanban on T1 ────────────────────────
-            print(f"[2] Drag {V1B} before {V1A} on T1")
-            drag_tab(page, V1B, V1A)
-            wait_tab_order(page, V1B, V1A)
-            page.wait_for_load_state("networkidle", timeout=8000)
-            snap(page, "step2_t1_after_drag", with_snapshot)
+        # ── step 4: navigate T2 → back T1, order unchanged ───────────────────
+        print(f"[4] Navigate T2 → T1: verify T1 order unchanged")
+        goto_table(page, ws_id, T2)
+        snap(page, "step4_t2_initial", snapshot)
 
-            assert_api_order(token, T1, [V1B, V1A])
-            assert_tab_order(page, V1B, V1A)
-            print(f"[2] API+UI: order=Schema|{V1B}|{V1A} ✓")
+        assert_api_order(token, T2, [V2A, V2B])
+        assert_tab_order(page, V2A, V2B)
+        print(f"[4] T2 API+UI: order=Schema|{V2A}|{V2B} ✓")
 
-            # ── step 3: reload — order persists ──────────────────────────────────
-            print(f"[3] Reload T1 — verify order persists")
-            page.reload(wait_until="domcontentloaded")
-            page.wait_for_selector(
-                '[data-testid="view-tab-Schema"]', state="visible", timeout=15000
-            )
-            snap(page, "step3_t1_after_reload", with_snapshot)
+        goto_table(page, ws_id, T1)
+        snap(page, "step4_back_t1", snapshot)
 
-            assert_api_order(token, T1, [V1B, V1A])
-            assert_tab_order(page, V1B, V1A)
-            print(f"[3] Reload: order=Schema|{V1B}|{V1A} persists ✓")
+        assert_api_order(token, T1, [V1B, V1A])
+        assert_tab_order(page, V1B, V1A)
+        print(f"[4] T1 after T2 nav: order=Schema|{V1B}|{V1A} unchanged ✓")
 
-            # ── step 4: navigate T2 → back T1, order unchanged ───────────────────
-            print(f"[4] Navigate T2 → T1: verify T1 order unchanged")
-            goto_table(page, ws_id, T2)
-            snap(page, "step4_t2_initial", with_snapshot)
+        # ── step 5: drag Tbl before Board on T2 (table+kanban types) ─────────
+        print(f"[5] Navigate T2, drag {V2B} before {V2A}")
+        goto_table(page, ws_id, T2)
+        drag_tab(page, V2B, V2A)
+        wait_tab_order(page, V2B, V2A)
+        page.wait_for_load_state("networkidle", timeout=8000)
+        snap(page, "step5_t2_after_drag", snapshot)
 
-            assert_api_order(token, T2, [V2A, V2B])
-            assert_tab_order(page, V2A, V2B)
-            print(f"[4] T2 API+UI: order=Schema|{V2A}|{V2B} ✓")
+        assert_api_order(token, T2, [V2B, V2A])
+        assert_tab_order(page, V2B, V2A)
+        print(f"[5] T2 API+UI: order=Schema|{V2B}|{V2A} ✓")
 
-            goto_table(page, ws_id, T1)
-            snap(page, "step4_back_t1", with_snapshot)
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_selector(
+            '[data-testid="view-tab-Schema"]', state="visible", timeout=15000
+        )
+        assert_api_order(token, T2, [V2B, V2A])
+        assert_tab_order(page, V2B, V2A)
+        print(f"[5] T2 reload: order=Schema|{V2B}|{V2A} persists ✓")
 
-            assert_api_order(token, T1, [V1B, V1A])
-            assert_tab_order(page, V1B, V1A)
-            print(f"[4] T1 after T2 nav: order=Schema|{V1B}|{V1A} unchanged ✓")
+    finally:
+        teardown_ws(token, ws_id)
 
-            # ── step 5: drag Tbl before Board on T2 (table+kanban types) ─────────
-            print(f"[5] Navigate T2, drag {V2B} before {V2A}")
-            goto_table(page, ws_id, T2)
-            drag_tab(page, V2B, V2A)
-            wait_tab_order(page, V2B, V2A)
-            page.wait_for_load_state("networkidle", timeout=8000)
-            snap(page, "step5_t2_after_drag", with_snapshot)
-
-            assert_api_order(token, T2, [V2B, V2A])
-            assert_tab_order(page, V2B, V2A)
-            print(f"[5] T2 API+UI: order=Schema|{V2B}|{V2A} ✓")
-
-            page.reload(wait_until="domcontentloaded")
-            page.wait_for_selector(
-                '[data-testid="view-tab-Schema"]', state="visible", timeout=15000
-            )
-            assert_api_order(token, T2, [V2B, V2A])
-            assert_tab_order(page, V2B, V2A)
-            print(f"[5] T2 reload: order=Schema|{V2B}|{V2A} persists ✓")
-
-        finally:
-            browser.close()
-
-    teardown(token, ws_id)
-    print("\n=== PASSED — e2e_test_views_order ===")
-
-
-if __name__ == "__main__":
-    ap = argparse.ArgumentParser(
-        description="E2E: view tab drag-reorder persists across reload + tables"
-    )
-    ap.add_argument("--snapshot", action="store_true", help="save per-step screenshots")
-    args = ap.parse_args()
-    main(with_snapshot=args.snapshot)
+    print("\n=== PASSED — test_views_order ===")
