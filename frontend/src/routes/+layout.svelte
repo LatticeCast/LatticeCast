@@ -109,9 +109,7 @@
 		const wsId = $page.params.workspace_id;
 		if (!wsId) return;
 		const decoded = decodeURIComponent(wsId);
-		const ws = workspaces.find(
-			(w) => w.workspace_id === wsId || w.workspace_name === decoded
-		);
+		const ws = workspaces.find((w) => w.workspace_id === wsId || w.workspace_name === decoded);
 		if (!ws) {
 			loadSidebarData();
 			return;

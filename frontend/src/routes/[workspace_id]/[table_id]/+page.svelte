@@ -172,7 +172,10 @@
 				return;
 			}
 			try {
-				const [table] = await Promise.all([fetchTable(tableId, $page.params.workspace_id), loadWorkspaces()]);
+				const [table] = await Promise.all([
+					fetchTable(tableId, $page.params.workspace_id),
+					loadWorkspaces()
+				]);
 				await loadTable(table);
 				tableLoaded = true;
 				// Non-blocking: load doc flags in background, don't block page render
@@ -935,8 +938,10 @@
 	}
 </script>
 
-<div class="flex h-full flex-col bg-white {resizingColId ? 'cursor-col-resize select-none' : ''}"
-	data-table-loaded={tableLoaded ? 'true' : undefined}>
+<div
+	class="flex h-full flex-col bg-white {resizingColId ? 'cursor-col-resize select-none' : ''}"
+	data-table-loaded={tableLoaded ? 'true' : undefined}
+>
 	{#if $error}
 		<div class="mx-4 mt-2 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{$error}</div>
 	{/if}

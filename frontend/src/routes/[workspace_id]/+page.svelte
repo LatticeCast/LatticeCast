@@ -380,7 +380,7 @@
 					<input
 						type="text"
 						data-testid="create-table-name-input"
-							bind:value={newTableNames[activeWorkspace.workspace_id]}
+						bind:value={newTableNames[activeWorkspace.workspace_id]}
 						onkeydown={(e) => {
 							if (e.key === 'Enter') handleCreate(activeWorkspace.workspace_id);
 						}}
@@ -389,7 +389,7 @@
 					/>
 					<button
 						data-testid="create-table-submit"
-							onclick={() => handleCreate(activeWorkspace.workspace_id)}
+						onclick={() => handleCreate(activeWorkspace.workspace_id)}
 						disabled={creating[activeWorkspace.workspace_id] ||
 							!(newTableNames[activeWorkspace.workspace_id] ?? '').trim()}
 						class="rounded-2xl bg-blue-600 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
@@ -398,7 +398,7 @@
 					</button>
 					<button
 						data-testid="create-table-from-template-btn"
-							onclick={() => openTemplateModal(activeWorkspace.workspace_id)}
+						onclick={() => openTemplateModal(activeWorkspace.workspace_id)}
 						class="rounded-2xl border-2 {T.badgeBorder} {T.cardBg} px-4 py-2.5 font-semibold {T.badgeText} transition {T.hoverBg}"
 					>
 						From Template
