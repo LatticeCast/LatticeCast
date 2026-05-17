@@ -353,6 +353,7 @@
 						</svg>
 					</button>
 					<button
+						data-testid="ws-settings-btn"
 						onclick={(e) => openWsSettings(activeWorkspace, e)}
 						class="rounded-lg p-1 {T.muted} transition {T.hoverBg}"
 						aria-label="Workspace settings"
@@ -547,6 +548,7 @@
 				<label class="mb-1 block text-sm font-medium {T.body}" for="ws-rename-input">Name</label>
 				<input
 					id="ws-rename-input"
+					data-testid="ws-rename-input"
 					type="text"
 					bind:value={wsRenameValue}
 					onkeydown={(e) => {
@@ -558,7 +560,7 @@
 			</div>
 
 			{#if wsSettingsError}
-				<div class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
+				<div data-testid="ws-settings-error" class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
 					{wsSettingsError}
 				</div>
 			{/if}
@@ -573,12 +575,14 @@
 				</button>
 				<div class="flex gap-2">
 					<button
+						data-testid="ws-settings-cancel"
 						onclick={closeWsSettings}
 						class="rounded-xl px-4 py-2 text-sm {T.muted} {T.hoverBg}"
 					>
 						Cancel
 					</button>
 					<button
+						data-testid="ws-settings-save"
 						onclick={handleWsRename}
 						disabled={wsSaving || !wsRenameValue.trim()}
 						class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
