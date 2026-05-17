@@ -154,32 +154,14 @@ class TablePageStore {
 		const tableId = this.tableId;
 		this.addingRow = true;
 		error.set(null);
-
-		const tempRowNumber = -Date.now();
-		const tempRow: Row = {
-			table_id: tableId,
-			row_id: tempRowNumber,
-			row_data: {},
-			created_by: null,
-			updated_by: null,
-			created_at: new Date().toISOString(),
-			updated_at: new Date().toISOString()
-		};
-		rows.update((r) => [...r, tempRow]);
-
-		if (editColId) {
-			this.editingCell = { rowId: tempRowNumber, colId: editColId };
-			this.editValue = '';
-		}
-
 		try {
 			const newRow = await createRow(tableId, { row_data: {} });
-			rows.update((r) => r.map((row) => (row.row_id === tempRowNumber ? newRow : row)));
 			this.scrollToRowId = newRow.row_id;
-			if (editColId) this.editingCell = { rowId: newRow.row_id, colId: editColId };
+			if (editColId) {
+				this.editingCell = { rowId: newRow.row_id, colId: editColId };
+				this.editValue = '';
+			}
 		} catch (e) {
-			rows.update((r) => r.filter((row) => row.row_id !== tempRowNumber));
-			this.editingCell = null;
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
 		} finally {
 			this.addingRow = false;
@@ -198,7 +180,6 @@ class TablePageStore {
 		error.set(null);
 		try {
 			await createRow(tableId, { row_data: rowData });
-			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to create ticket');
 		} finally {
@@ -211,25 +192,10 @@ class TablePageStore {
 		const tableId = this.tableId;
 		this.addingRow = true;
 		error.set(null);
-
 		const val: unknown = groupKey === '(empty)' ? null : groupKey;
-		const tempRowNumber = -Date.now();
-		const tempRow: Row = {
-			table_id: tableId,
-			row_id: tempRowNumber,
-			row_data: { [col.column_id]: val },
-			created_by: null,
-			updated_by: null,
-			created_at: new Date().toISOString(),
-			updated_at: new Date().toISOString()
-		};
-		rows.update((r) => [...r, tempRow]);
-
 		try {
-			const newRow = await createRow(tableId, { row_data: { [col.column_id]: val } });
-			rows.update((r) => r.map((row) => (row.row_id === tempRowNumber ? newRow : row)));
+			await createRow(tableId, { row_data: { [col.column_id]: val } });
 		} catch (e) {
-			rows.update((r) => r.filter((row) => row.row_id !== tempRowNumber));
 			error.set(e instanceof Error ? e.message : 'Failed to add row');
 		} finally {
 			this.addingRow = false;
@@ -238,13 +204,10 @@ class TablePageStore {
 
 	async handleDeleteRow(rowId: number) {
 		const tableId = this.tableId;
-		const row = get(rows).find((r) => r.row_id === rowId);
-		if (!row) return;
 		this.deletingRowId = rowId;
 		error.set(null);
 		try {
-			await deleteRowApi(tableId, row.row_id);
-			await refreshRows(tableId);
+			await deleteRowApi(tableId, rowId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to delete row');
 		} finally {
@@ -259,7 +222,6 @@ class TablePageStore {
 		error.set(null);
 		try {
 			await createRow(tableId, { row_data: { ...row.row_data } });
-			await refreshRows(tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to duplicate row');
 		}
@@ -299,7 +261,6 @@ class TablePageStore {
 		error.set(null);
 		try {
 			await updateRow(this.tableId, row.row_id, { row_data: newData });
-			await refreshRows(this.tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
 		}
@@ -312,7 +273,6 @@ class TablePageStore {
 		error.set(null);
 		try {
 			await updateRow(this.tableId, row.row_id, { row_data: newData });
-			await refreshRows(this.tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
 		}
@@ -324,7 +284,6 @@ class TablePageStore {
 		const newData = removeTagFromRowData(row.row_data, col.column_id, tag);
 		try {
 			await updateRow(this.tableId, row.row_id, { row_data: newData });
-			await refreshRows(this.tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');
 		}
@@ -338,7 +297,6 @@ class TablePageStore {
 		this.tagsPopupCell = null;
 		try {
 			await updateRow(this.tableId, row.row_id, { row_data: newData });
-			await refreshRows(this.tableId);
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');
 		}
@@ -540,8 +498,9 @@ class TablePageStore {
 
 	async handleAddView(type: string, name: string) {
 		error.set(null);
+		const config = type === 'dashboard' ? { layout: [], blocks: {} } : {};
 		try {
-			const schema = await createView(this.tableId, { name, type, config: {} });
+			const schema = await createView(this.tableId, { name, type, config });
 			const created = schema.views.find((v) => v.name === name);
 			if (created) this.activeViewId = created.view_id;
 		} catch (e) {
@@ -725,7 +684,6 @@ class TablePageStore {
 				}
 				await createRow(tableId, { row_data: data });
 			}
-			await refreshRows(tableId);
 			this.showImportModal = false;
 			this.importPreviewRows = [];
 			this.importPreviewHeaders = [];

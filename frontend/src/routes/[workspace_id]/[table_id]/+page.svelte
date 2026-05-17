@@ -315,7 +315,7 @@
 		/>
 	{:else if activeView.type === 'dashboard'}
 		<DashboardView
-			view={activeView as unknown as DashboardViewType}
+			view={activeView as unknown as DashboardViewType & { view_id: number }}
 			tableId={$page.params.table_id!}
 		/>
 	{/if}

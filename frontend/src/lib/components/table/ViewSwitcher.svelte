@@ -2,6 +2,7 @@
 	import type { ViewConfig } from '$lib/types/table';
 	import { IMPLICIT_TABLE_VIEW } from '$lib/stores/tablePage.store.svelte';
 	import { createDragReorder } from './dragReorder.svelte';
+	import { VIEW_ICONS } from '$lib/icons/view';
 
 	let {
 		views,
@@ -85,6 +86,11 @@
 			type: 'timeline',
 			label: 'Timeline',
 			description: 'Visualize data along a time axis'
+		},
+		{
+			type: 'dashboard',
+			label: 'Dashboard',
+			description: 'Charts and widgets from your data'
 		}
 	];
 
@@ -165,31 +171,13 @@
 								? 'font-medium text-blue-600'
 								: 'text-gray-500 hover:text-gray-700'}"
 						>
-							{#if view.type === 'table'}
+							{#if VIEW_ICONS[view.type]}
 								<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path
 										stroke-linecap="round"
 										stroke-linejoin="round"
 										stroke-width="2"
-										d="M3 10h18M3 14h18M10 3v18M14 3v18M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"
-									/>
-								</svg>
-							{:else if view.type === 'kanban'}
-								<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"
-									/>
-								</svg>
-							{:else if view.type === 'timeline'}
-								<svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+										d={VIEW_ICONS[view.type]}
 									/>
 								</svg>
 							{/if}
