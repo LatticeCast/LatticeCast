@@ -66,6 +66,7 @@
 			<p class="mb-4 text-sm {T.muted}">Customize the look of the app</p>
 
 			<button
+				data-testid="darkmode-toggle"
 				onclick={() => ($settingsStore.darkMode = !$settingsStore.darkMode)}
 				class="flex w-full items-center justify-between rounded-2xl {T.inputBg} px-4 py-3"
 			>

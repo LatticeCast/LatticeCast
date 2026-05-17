@@ -63,7 +63,12 @@
 		errorMsg = '';
 		try {
 			members = await fetchMembers(workspaceId);
-		} catch {
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : '';
+			if (msg.includes('403') || msg.includes('Forbidden')) {
+				goto('/');
+				return;
+			}
 			errorMsg = 'Failed to load members';
 		} finally {
 			loading = false;
