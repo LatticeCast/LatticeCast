@@ -117,13 +117,31 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base-url", default="http://localhost:13491")
     ap.add_argument("--user", default="lattice", help="LatticeCast user_name")
+    ap.add_argument("--workspace", default=None, help="workspace_id or name (default: first owned)")
     args = ap.parse_args()
 
     token = login(args.base_url, args.user)
     workspaces = http("GET", f"{args.base_url}/api/v1/workspaces", token)
     if not workspaces:
         sys.exit("No workspace for user. Create one first.")
-    ws_id = workspaces[0]["workspace_id"]
+
+    if args.workspace:
+        ws = next((w for w in workspaces
+                   if w["workspace_id"] == args.workspace or w["workspace_name"] == args.workspace), None)
+        if not ws:
+            names = ", ".join(f'{w["workspace_name"]} ({w["workspace_id"]})' for w in workspaces)
+            sys.exit(f"Workspace '{args.workspace}' not found. Available: {names}")
+    else:
+        ws = workspaces[0]
+
+    ws_id = ws["workspace_id"]
+    print(f"User: {args.user} | Workspace: {ws['workspace_name']} ({ws_id})")
+
+    # Delete if exists, then recreate fresh
+    tables = http("GET", f"{args.base_url}/api/v1/tables", token)
+    if any(t["table_id"] == TBL for t in tables):
+        http("DELETE", f"{args.base_url}/api/v1/tables/{TBL}", token)
+        print(f"Deleted existing table {TBL}")
 
     table = http("POST", f"{args.base_url}/api/v1/tables/template/crm", token,
                  {"table_id": TBL, "workspace_id": ws_id})

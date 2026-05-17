@@ -48,6 +48,32 @@ class TableViewRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_name(
+        self, workspace_id: UUID, table_id: str, name: str
+    ) -> TableView | None:
+        result = await self.session.execute(
+            sa_text(
+                "SELECT * FROM table_views "
+                "WHERE workspace_id = CAST(:ws AS uuid) AND table_id = :tid "
+                "AND config->>'name' = :name LIMIT 1"
+            ),
+            {"ws": str(workspace_id), "tid": table_id, "name": name},
+        )
+        row = result.first()
+        if not row:
+            return None
+        mapping = row._mapping
+        return TableView(
+            workspace_id=mapping["workspace_id"],
+            table_id=mapping["table_id"],
+            view_id=mapping["view_id"],
+            config=mapping["config"],
+            created_by=mapping.get("created_by"),
+            updated_by=mapping.get("updated_by"),
+            created_at=mapping["created_at"],
+            updated_at=mapping["updated_at"],
+        )
+
     # ── User-view CRUD (V14 PG functions) ─────────────────────────────────
 
     async def create_view(

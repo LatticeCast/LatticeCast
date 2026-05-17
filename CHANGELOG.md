@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.44 — 2026-05-17 (Dashboard view + row handler cleanup)
+
+### Frontend
+
+- **Row handlers cleaned up — no more `refreshRows()` after mutations.**
+  All row CRUD (add, delete, duplicate, edit, toggle, tags) now just calls
+  the controller function which updates the SSOT `rows` store directly.
+  Removes redundant full-table refetches after every cell edit.
+
+- **Optimistic temp-row pattern removed from `handleAddRow`.** Both "+"
+  button and cell-click now follow the same path: call `createRow` →
+  controller appends to store → `$derived` re-renders. No more
+  double-append bugs or visual glitches.
+
+- **Dashboard view type added to "Add View" panel.** New dashboards
+  initialize with `{ layout: [], blocks: {} }` and provide an "Edit JSON"
+  button for configuring blocks/layout inline.
+
+- **View icons extracted to `lib/icons/view.ts`.** SVG paths stored as a
+  `Record<string, string>` map — ViewSwitcher uses a single dynamic
+  `<path d={...}>` instead of duplicated inline SVGs.
+
+### Backend
+
+- **`TableViewRepository.get_by_name()` added.** Dashboard block query
+  endpoint was calling a non-existent method → 500 on every block load.
+  Fix: query `config->>'name'` to resolve view by display name.
+
+### Examples
+
+- **`crm_demo.py` made idempotent.** Checks if table exists before
+  delete+recreate. Shows user + workspace in output. Accepts `--workspace`
+  flag to target a specific workspace by name or ID.
+
+---
+
 ## v0.43 — 2026-05-17 (FE MVC refactor + BE table-create fix)
 
 ### Frontend — MVC SSOT architecture
