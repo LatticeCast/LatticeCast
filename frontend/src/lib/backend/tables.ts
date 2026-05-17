@@ -8,7 +8,6 @@ import { getAuthHeaders, getBearerHeader } from './http';
 import type {
 	Table,
 	TableSchema,
-	Column,
 	Row,
 	CreateTable,
 	CreateColumn,

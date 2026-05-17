@@ -199,6 +199,7 @@
 					></textarea>
 				{:else if docContent}
 					<div class="prose prose-sm max-w-none px-5 py-4 text-gray-800">
+						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 						{@html docPreview}
 					</div>
 				{:else}

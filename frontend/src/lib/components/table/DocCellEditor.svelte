@@ -176,6 +176,7 @@
 						? 'text-gray-200 prose-invert'
 						: 'text-gray-800'}"
 				>
+					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 					{@html docPreview}
 				</div>
 			</div>

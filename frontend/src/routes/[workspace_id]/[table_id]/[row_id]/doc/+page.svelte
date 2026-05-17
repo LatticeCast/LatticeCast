@@ -192,6 +192,7 @@
 					: 'bg-white text-gray-800'}"
 			>
 				{#if docContent}
+					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 					{@html docPreview}
 				{:else}
 					<p class="text-gray-400">Preview will appear here…</p>

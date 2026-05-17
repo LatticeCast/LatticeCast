@@ -138,6 +138,7 @@
 	const lanes = $derived.by(() => {
 		if (!groupByColId || !groupCol) return [];
 
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		const buckets = new Map<string, Row[]>();
 		for (const c of choices) buckets.set(c.value, []);
 		buckets.set('', []);

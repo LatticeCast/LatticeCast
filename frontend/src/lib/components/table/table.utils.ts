@@ -71,19 +71,6 @@ export interface ChoiceStyle {
 	style: string;
 }
 
-function isDarkColor(color: string): boolean {
-	const hexMatch = color.match(/^#([0-9a-f]{6})$/i);
-	if (hexMatch) {
-		const r = parseInt(hexMatch[1].slice(0, 2), 16);
-		const g = parseInt(hexMatch[1].slice(2, 4), 16);
-		const b = parseInt(hexMatch[1].slice(4, 6), 16);
-		return 0.299 * r + 0.587 * g + 0.114 * b < 128;
-	}
-	const hslMatch = color.match(/hsl\(\s*[\d.]+[\s,]+[\d.]+%?[\s,]+([\d.]+)%?\s*\)/i);
-	if (hslMatch) return parseFloat(hslMatch[1]) < 50;
-	return false;
-}
-
 export function colorToStyle(color: string): ChoiceStyle {
 	if (!color || color.startsWith('bg-')) {
 		const tc = TAG_COLORS.find((c) => c.bg === color) ?? TAG_COLORS[0];

@@ -66,6 +66,7 @@
 
 {#if show}
 	<div
+		data-testid="create-ticket-modal"
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
 		onclick={(e) => {
 			if (e.target === e.currentTarget) handleClose();
@@ -91,6 +92,7 @@
 					>
 					<input
 						id="ticket-title"
+						data-testid="create-ticket-title-input"
 						class="w-full rounded-xl border px-4 py-2 outline-none focus:ring-1 focus:ring-blue-500 {isDark.value
 							? 'border-gray-600 bg-gray-700 text-gray-100 focus:border-blue-400'
 							: 'border-gray-200 bg-white text-gray-800 focus:border-blue-500'}"
@@ -116,6 +118,7 @@
 					>
 					<select
 						id="ticket-{col.column_id}"
+						data-testid="create-ticket-select-{col.column_id}"
 						class="w-full rounded-xl border px-4 py-2 outline-none focus:ring-1 focus:ring-blue-500 {isDark.value
 							? 'border-gray-600 bg-gray-700 text-gray-100 focus:border-blue-400'
 							: 'border-gray-200 bg-white text-gray-800 focus:border-blue-500'}"
@@ -145,6 +148,7 @@
 					Cancel
 				</button>
 				<button
+					data-testid="create-ticket-submit-btn"
 					onclick={handleSubmit}
 					class="flex-1 rounded-2xl bg-blue-600 px-4 py-2 font-semibold text-white transition hover:bg-blue-700"
 				>

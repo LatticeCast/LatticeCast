@@ -161,6 +161,7 @@
 			if (delta !== 0 && dragState.origDateStr) {
 				const orig = new Date(dragState.origDateStr + 'T00:00:00Z');
 				if (!isNaN(orig.getTime())) {
+					// eslint-disable-next-line svelte/prefer-svelte-reactivity
 					const newDate = new Date(orig);
 					newDate.setUTCDate(newDate.getUTCDate() + delta);
 					const newDateStr = newDate.toISOString().slice(0, 10);
@@ -195,6 +196,7 @@
 		}
 		const orig = new Date(dragState.origDateStr + 'T00:00:00Z');
 		if (isNaN(orig.getTime())) return { startDate, endDate };
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		const shifted = new Date(orig);
 		shifted.setUTCDate(shifted.getUTCDate() + dragDeltaDays);
 		if (dragState.handle === 'start') return { startDate: shifted, endDate };

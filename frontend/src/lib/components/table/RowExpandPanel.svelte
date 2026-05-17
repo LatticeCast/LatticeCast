@@ -44,7 +44,8 @@
 	let docEditing = $state(false);
 	let docSaving = $state(false);
 
-	// Local copy so we can update inline
+	// Local copy so we can update inline — mutated optimistically, so $state is correct
+	// eslint-disable-next-line svelte/prefer-writable-derived
 	let localRow = $state<Row>(row);
 	$effect(() => {
 		localRow = row;
@@ -266,6 +267,7 @@
 							? 'text-gray-200 prose-invert'
 							: 'text-gray-800'}"
 					>
+						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 						{@html docPreview}
 					</div>
 				</div>
