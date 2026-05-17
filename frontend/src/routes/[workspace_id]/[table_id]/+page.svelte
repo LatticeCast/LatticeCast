@@ -673,7 +673,7 @@
 				filterConditions.length > 0
 					? filterConditions.map(({ colId, operator, value }) => ({ colId, operator, value }))
 					: undefined,
-			hidden: hiddenCols.size > 0 ? [...hiddenCols] : undefined,
+			hidden: hiddenCols.size > 0 ? [...hiddenCols] : [],
 			widths: Object.keys(localWidths).length > 0 ? { ...localWidths } : undefined,
 			colOrder: viewColOrder ?? undefined
 		};
