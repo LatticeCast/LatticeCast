@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """task-54: e2e_test_auth_admin_only — non-admin 403 on /admin/users.
 
 Verifies:
@@ -17,28 +16,21 @@ Flow:
   8. (API) Non-admin → DELETE /admin/users/{email} → 403
   9. (UI)  Non-admin fetches /api/v1/admin/users via page.evaluate → 403
  10. (API) Teardown: delete test user
-
-Usage:
-    docker compose exec test-e2e python3 /scripts/e2e_test_auth_admin_only.py [--snapshot]
 """
 
 import json
-import sys
 import time
 
-from playwright.sync_api import sync_playwright
+import pytest
 
-from e2e_base import BASE, api, connect_browser, fatal, login
+from e2e_base import BASE, api, login
 
-SNAPSHOT = "--snapshot" in sys.argv
-SUFFIX = str(int(time.time()) % 100000)
-TEST_EMAIL = f"e2e-adminonly-{SUFFIX}@e2e.local"
 ADMIN_USER = "lattice"
 ADMIN_PATH = "/api/v1/admin/users"
 
 
-def snap(page, name: str) -> None:
-    if not SNAPSHOT:
+def snap(page, name: str, snapshot: bool) -> None:
+    if not snapshot:
         return
     try:
         page.screenshot(path=f"/output/{name}.png", full_page=True)
@@ -47,42 +39,59 @@ def snap(page, name: str) -> None:
 
 
 def assert_403(resp, label: str) -> None:
-    if resp.status_code != 403:
-        fatal(f"{label}: expected 403, got {resp.status_code} — {resp.text[:200]}")
+    assert resp.status_code == 403, (
+        f"{label}: expected 403, got {resp.status_code} — {resp.text[:200]}"
+    )
     body = resp.json()
-    if "Admin access required" not in body.get("detail", ""):
-        fatal(f"{label}: 403 but wrong detail — {body}")
+    assert "Admin access required" in body.get("detail", ""), (
+        f"{label}: 403 but wrong detail — {body}"
+    )
     print(f"    PASS: {label} → 403")
 
 
-def run() -> None:
-    print(f"[0] Setup — test email: {TEST_EMAIL}")
+@pytest.fixture()
+def test_user(admin_token):
+    suffix = str(int(time.time()) % 100000)
+    test_email = f"e2e-adminonly-{suffix}@e2e.local"
+
+    # Idempotent cleanup
+    api("DELETE", f"{ADMIN_PATH}/{test_email}", admin_token)
+
+    print(f"[0] Setup — test email: {test_email}")
+    print("[2] Create non-admin test user")
+    r = api("POST", ADMIN_PATH, admin_token, json={"email": test_email, "role": "user"})
+    assert r.status_code == 201, f"create user: {r.status_code} {r.text[:300]}"
+    user_name = r.json()["user_name"]
+    print(f"    created: {user_name}")
+
+    user_token = login(test_email)
+
+    yield test_email, user_name, user_token
+
+    # Step 10: Teardown
+    print("[10] Teardown: delete test user")
+    r = api("DELETE", f"{ADMIN_PATH}/{test_email}", admin_token)
+    if r.status_code not in (204, 404):
+        print(f"    WARN: delete returned {r.status_code}")
+    else:
+        print("    deleted")
+
+
+def test_admin_only(browser, admin_token, test_user, request):
+    snapshot = request.config.getoption("--snapshot", default=False)
+    test_email, user_name, user_token = test_user
 
     # Step 1: Admin login
     print("[1] Admin login")
-    admin_token = login(ADMIN_USER)
-
-    # Idempotent cleanup
-    api("DELETE", f"{ADMIN_PATH}/{TEST_EMAIL}", admin_token)
-
-    # Step 2: Create non-admin test user
-    print("[2] Create non-admin test user")
-    r = api("POST", ADMIN_PATH, admin_token, json={"email": TEST_EMAIL, "role": "user"})
-    if r.status_code != 201:
-        fatal(f"create user: {r.status_code} {r.text[:300]}")
-    user_name = r.json()["user_name"]
-    print(f"    created: {user_name}")
 
     # Step 3: Positive control — admin CAN access
     print("[3] Positive control: admin GET /admin/users → 200")
     r = api("GET", ADMIN_PATH, admin_token)
-    if r.status_code != 200:
-        fatal(f"admin GET failed: {r.status_code} {r.text[:200]}")
+    assert r.status_code == 200, f"admin GET failed: {r.status_code} {r.text[:200]}"
     print("    PASS: admin GET → 200")
 
     # Step 4: Non-admin login + GET /admin/users → 403
     print("[4] Non-admin: GET /admin/users → 403")
-    user_token = login(TEST_EMAIL)
     r = api("GET", ADMIN_PATH, user_token)
     assert_403(r, "GET /admin/users")
 
@@ -93,37 +102,35 @@ def run() -> None:
 
     # Step 6: Non-admin GET /admin/users/{email} → 403
     print("[6] Non-admin: GET /admin/users/{email} → 403")
-    r = api("GET", f"{ADMIN_PATH}/{TEST_EMAIL}", user_token)
+    r = api("GET", f"{ADMIN_PATH}/{test_email}", user_token)
     assert_403(r, "GET /admin/users/{email}")
 
     # Step 7: Non-admin PUT /admin/users/{email} → 403
     print("[7] Non-admin: PUT /admin/users/{email} → 403")
-    r = api("PUT", f"{ADMIN_PATH}/{TEST_EMAIL}", user_token, json={"role": "admin"})
+    r = api("PUT", f"{ADMIN_PATH}/{test_email}", user_token, json={"role": "admin"})
     assert_403(r, "PUT /admin/users/{email}")
 
     # Step 8: Non-admin DELETE /admin/users/{email} → 403
     print("[8] Non-admin: DELETE /admin/users/{email} → 403")
-    r = api("DELETE", f"{ADMIN_PATH}/{TEST_EMAIL}", user_token)
+    r = api("DELETE", f"{ADMIN_PATH}/{test_email}", user_token)
     assert_403(r, "DELETE /admin/users/{email}")
 
     # Step 9: UI pillar — browser-side fetch as non-admin → 403
     print("[9] UI: browser fetch /admin/users as non-admin → 403")
-    pw = sync_playwright().start()
-    browser = connect_browser(pw)
+    ctx = browser.new_context(viewport={"width": 1280, "height": 900}, ignore_https_errors=True)
+    login_info = json.dumps({
+        "provider": "none",
+        "accessToken": user_token,
+        "userInfo": {"sub": user_token, "email": test_email, "name": user_name},
+        "role": "user",
+    })
+    ctx.add_init_script(
+        f"localStorage.setItem('loginInfo', JSON.stringify({json.dumps(login_info)}));"
+    )
+    page = ctx.new_page()
     try:
-        ctx = browser.new_context(viewport={"width": 1280, "height": 900}, ignore_https_errors=True)
-        login_info = json.dumps({
-            "provider": "none",
-            "accessToken": user_token,
-            "userInfo": {"sub": user_token, "email": TEST_EMAIL, "name": user_name},
-            "role": "user",
-        })
-        ctx.add_init_script(
-            f"localStorage.setItem('loginInfo', JSON.stringify({json.dumps(login_info)}));"
-        )
-        page = ctx.new_page()
         page.goto(f"{BASE}/", wait_until="networkidle", timeout=15000)
-        snap(page, "auth_admin_only_01_home")
+        snap(page, "auth_admin_only_01_home", snapshot)
 
         status = page.evaluate(
             """async () => {
@@ -135,24 +142,12 @@ def run() -> None:
             }"""
         )
         if status != 403:
-            snap(page, "auth_admin_only_FAIL_browser_fetch")
-            fatal(f"browser fetch: expected 403, got {status}")
+            snap(page, "auth_admin_only_FAIL_browser_fetch", snapshot)
+        assert status == 403, f"browser fetch: expected 403, got {status}"
         print("    PASS: browser fetch → 403")
-        snap(page, "auth_admin_only_02_done")
+        snap(page, "auth_admin_only_02_done", snapshot)
     finally:
-        browser.close()
-        pw.stop()
-
-    # Step 10: Teardown
-    print("[10] Teardown: delete test user")
-    r = api("DELETE", f"{ADMIN_PATH}/{TEST_EMAIL}", admin_token)
-    if r.status_code not in (204, 404):
-        print(f"    WARN: delete returned {r.status_code}")
-    else:
-        print("    deleted")
+        page.close()
+        ctx.close()
 
     print("\nPASS")
-
-
-if __name__ == "__main__":
-    run()

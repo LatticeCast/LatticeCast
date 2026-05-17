@@ -13,6 +13,15 @@ from playwright.sync_api import sync_playwright
 from e2e_base import BASE, api, connect_browser, login, seed_login_info
 
 
+def pytest_addoption(parser):
+    parser.addoption("--snapshot", action="store_true", default=False, help="Enable screenshots")
+
+
+@pytest.fixture()
+def snapshot(request):
+    return request.config.getoption("--snapshot")
+
+
 @pytest.fixture(scope="session")
 def browser():
     pw = sync_playwright().start()

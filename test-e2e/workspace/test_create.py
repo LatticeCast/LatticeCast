@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 E2E test: task-45 — POST /workspaces (V17 SECURITY DEFINER)
 
@@ -9,28 +8,19 @@ Verifies:
   4. BE: GET /workspaces/{id}/members shows creator as owner
   5. UI: duplicate name → error message displayed in modal
   6. Teardown: DELETE /workspaces/{id}
-
-Usage:
-    docker compose exec test-e2e python3 /scripts/e2e_test_workspace_create.py [--snapshot]
 """
 
-import sys
 import time
 
-from playwright.sync_api import sync_playwright
+from e2e_base import BASE, api
 
-from e2e_base import BASE, BROWSER_WS, api, connect_browser, fatal, login, seed_login_info
-
-SNAPSHOT = "--snapshot" in sys.argv
 SCREENSHOT_DIR = "/output"
 
 USER = "lattice"
-SUFFIX = int(time.time()) % 100000
-WS_NAME = f"ws-create-{SUFFIX}"
 
 
-def snap(page, name: str) -> None:
-    if not SNAPSHOT:
+def snap(page, name: str, snapshot: bool) -> None:
+    if not snapshot:
         return
     try:
         page.screenshot(path=f"{SCREENSHOT_DIR}/{name}.png", full_page=True)
@@ -38,61 +28,58 @@ def snap(page, name: str) -> None:
         pass
 
 
-def run() -> None:
-    # ── Auth ─────────────────────────────────────────────────────────────────
-    print("[0] Login")
-    token = login(USER)
+def test_workspace_create(authed_page, admin_token, snapshot):
+    page = authed_page
 
-    # Get existing workspace to navigate to (the "+ New" btn lives there)
-    r = api("GET", "/api/v1/workspaces", token)
-    if r.status_code != 200 or not r.json():
-        fatal(f"Cannot list workspaces: {r.status_code} {r.text[:200]}")
-    existing_ws = r.json()[0]["workspace_name"]
+    suffix = int(time.time()) % 100000
+    ws_name = f"ws-create-{suffix}"
+    ws_id = None
 
-    # ── Playwright ───────────────────────────────────────────────────────────
-    with sync_playwright() as pw:
-        browser = connect_browser(pw)
-        page = browser.new_page(viewport={"width": 1400, "height": 900})
-        seed_login_info(page, token, USER, role="admin")
+    try:
+        # ── Step 0: Get existing workspace to navigate to ────────────────────
+        print("[0] Login")
+        r = api("GET", "/api/v1/workspaces", admin_token)
+        assert r.status_code == 200 and r.json(), (
+            f"Cannot list workspaces: {r.status_code} {r.text[:200]}"
+        )
+        existing_ws = r.json()[0]["workspace_name"]
 
         # ── Step 1: Navigate to existing workspace ───────────────────────────
         print(f"[1] Navigate to /{existing_ws}/")
         page.goto(f"{BASE}/{existing_ws}/", wait_until="networkidle")
-        if "/login" in page.url:
-            fatal("Redirected to /login — auth failed")
+        assert "/login" not in page.url, "Redirected to /login — auth failed"
 
-        # Wait for "+ New" workspace button in the tab strip
         new_ws_btn = page.get_by_test_id("new-workspace-btn")
         new_ws_btn.wait_for(state="visible", timeout=10000)
-        snap(page, "t45_01_workspace_page")
+        snap(page, "t45_01_workspace_page", snapshot)
 
         # ── Step 2: Open modal and create workspace ──────────────────────────
-        print(f"[2] Create workspace '{WS_NAME}' via modal")
+        print(f"[2] Create workspace '{ws_name}' via modal")
         new_ws_btn.click()
 
         name_input = page.get_by_test_id("create-workspace-name-input")
         name_input.wait_for(state="visible", timeout=5000)
-        name_input.fill(WS_NAME)
-        snap(page, "t45_02_modal_filled")
+        name_input.fill(ws_name)
+        snap(page, "t45_02_modal_filled", snapshot)
 
         page.get_by_test_id("create-workspace-submit").click()
 
         # ── Step 3: UI — verify navigation to new workspace ──────────────────
         print("[3] Verify URL navigated to new workspace")
-        page.wait_for_url(f"**/{WS_NAME}/**", timeout=10000)
-        assert WS_NAME in page.url, f"Expected '{WS_NAME}' in URL, got {page.url}"
-        snap(page, "t45_03_navigated")
+        page.wait_for_url(f"**/{ws_name}/**", timeout=10000)
+        assert ws_name in page.url, f"Expected '{ws_name}' in URL, got {page.url}"
+        snap(page, "t45_03_navigated", snapshot)
 
         # ── Step 4: BE — verify workspace exists via API ─────────────────────
         print("[4] BE verify: workspace listed + creator is owner")
-        r = api("GET", "/api/v1/workspaces", token)
+        r = api("GET", "/api/v1/workspaces", admin_token)
         assert r.status_code == 200
         ws_list = r.json()
-        created = next((w for w in ws_list if w["workspace_name"] == WS_NAME), None)
-        assert created is not None, f"Workspace '{WS_NAME}' not in API response"
+        created = next((w for w in ws_list if w["workspace_name"] == ws_name), None)
+        assert created is not None, f"Workspace '{ws_name}' not in API response"
         ws_id = created["workspace_id"]
 
-        r = api("GET", f"/api/v1/workspaces/{ws_id}/members", token)
+        r = api("GET", f"/api/v1/workspaces/{ws_id}/members", admin_token)
         assert r.status_code == 200
         members = r.json()
         owner = next((m for m in members if m["role"] == "owner"), None)
@@ -106,7 +93,7 @@ def run() -> None:
 
         name_input2 = page.get_by_test_id("create-workspace-name-input")
         name_input2.wait_for(state="visible", timeout=5000)
-        name_input2.fill(WS_NAME)
+        name_input2.fill(ws_name)
         page.get_by_test_id("create-workspace-submit").click()
 
         error_el = page.get_by_test_id("create-workspace-error")
@@ -115,26 +102,21 @@ def run() -> None:
         assert "already exists" in error_text.lower() or "conflict" in error_text.lower(), (
             f"Expected duplicate error, got: {error_text}"
         )
-        snap(page, "t45_05_duplicate_error")
+        snap(page, "t45_05_duplicate_error", snapshot)
 
         # Close modal
         page.get_by_test_id("create-workspace-cancel").click()
 
+    finally:
         # ── Teardown ─────────────────────────────────────────────────────────
-        print("[6] Teardown: DELETE workspace via API")
-        r = api("DELETE", f"/api/v1/workspaces/{ws_id}", token)
-        assert r.status_code == 204, f"Delete failed: {r.status_code} {r.text[:200]}"
+        if ws_id is not None:
+            print("[6] Teardown: DELETE workspace via API")
+            r = api("DELETE", f"/api/v1/workspaces/{ws_id}", admin_token)
+            assert r.status_code == 204, f"Delete failed: {r.status_code} {r.text[:200]}"
 
-        # Verify deletion
-        r = api("GET", "/api/v1/workspaces", token)
-        assert r.status_code == 200
-        remaining = [w for w in r.json() if w["workspace_name"] == WS_NAME]
-        assert len(remaining) == 0, f"Workspace still exists after delete: {remaining}"
-
-        browser.close()
+            r = api("GET", "/api/v1/workspaces", admin_token)
+            assert r.status_code == 200
+            remaining = [w for w in r.json() if w["workspace_name"] == ws_name]
+            assert len(remaining) == 0, f"Workspace still exists after delete: {remaining}"
 
     print("PASS: e2e_test_workspace_create")
-
-
-if __name__ == "__main__":
-    run()
