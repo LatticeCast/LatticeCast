@@ -157,7 +157,6 @@ services:
     # developer's machine. Tests run exactly like a real user: open
     # http://localhost:${NGX_PORT}/, FE fetches http://localhost:${NGX_PORT}/api/...
     network_mode: host
-    command: ["pytest", "--tb=short", "-q"]
     depends_on:
       - lattice-cast
       - browser

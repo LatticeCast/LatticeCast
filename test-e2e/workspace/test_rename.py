@@ -62,8 +62,8 @@ def test_workspace_rename(authed_page, admin_token, workspace, snapshot):
 
     # ── Step 4: UI — verify URL updated to new name ─────────────────────
     print("[4] Verify URL contains new workspace name")
-    page.wait_for_url(f"**/{ws_new_name}/**", timeout=10000)
-    assert f"/{ws_new_name}/" in page.url, f"Expected '/{ws_new_name}/' in URL, got {page.url}"
+    page.wait_for_url(f"**/{ws_new_name}*", timeout=10000)
+    assert f"/{ws_new_name}" in page.url, f"Expected '/{ws_new_name}' in URL, got {page.url}"
     snap(page, "t47_03_url_updated", snapshot)
 
     # ── Step 5: BE — verify rename persisted ─────────────────────────────

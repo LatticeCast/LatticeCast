@@ -9,4 +9,4 @@ COPY pyproject.toml ./
 ENV UV_HTTP_TIMEOUT=180
 RUN uv pip install --system --no-cache -r pyproject.toml
 
-CMD ["pytest", "--tb=short", "-q"]
+CMD ["tail", "-f", "/dev/null"]
