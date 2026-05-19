@@ -6,6 +6,7 @@
 	import { get } from 'svelte/store';
 	import { fetchDoc, saveDoc, fetchTable, fetchRows } from '$lib/backend/tables';
 	import { isDark } from '$lib/UI/theme.svelte';
+	import { BRAND } from '$lib/UI/brand';
 	import { marked } from 'marked';
 	import type { Table, Row } from '$lib/types/table';
 
@@ -84,7 +85,7 @@
 </script>
 
 <svelte:head>
-	<title>{rowTitle} · Doc — LatticeCast</title>
+	<title>{rowTitle} · Doc — {BRAND}</title>
 </svelte:head>
 
 <div

@@ -5,6 +5,7 @@
 	import { authStore } from '$lib/stores/auth.store';
 	import { startLogin } from '$lib/auth/auth.service';
 	import { loginState, validationError, submit } from '$lib/auth/login.svelte';
+	import { BRAND_DISPLAY } from '$lib/UI/brand';
 
 	let error = $derived(validationError());
 
@@ -20,7 +21,7 @@
 >
 	<div class="mx-auto w-full max-w-sm">
 		<div class="mb-8 text-center">
-			<h1 class="mb-2 text-4xl font-bold text-white">Lattice Cast</h1>
+			<h1 class="mb-2 text-4xl font-bold text-white">{BRAND_DISPLAY}</h1>
 			<p class="text-white/80">Sign in to continue</p>
 		</div>
 

@@ -8,6 +8,7 @@
 	import { get } from 'svelte/store';
 	import { fetchTable, fetchRows, fetchDoc, saveDoc, createRow } from '$lib/backend/tables';
 	import { getChoiceColor, getTagValues, formatDate } from '$lib/components/table/table.utils';
+	import { BRAND } from '$lib/UI/brand';
 	import type { Row, Table } from '$lib/types/table';
 	import { marked } from 'marked';
 	import CreateTicketModal from '$lib/components/table/CreateTicketModal.svelte';
@@ -97,7 +98,7 @@
 </script>
 
 <svelte:head>
-	<title>{getRowTitle()} — LatticeCast</title>
+	<title>{getRowTitle()} — {BRAND}</title>
 </svelte:head>
 
 <div class="min-h-screen bg-gray-50">
