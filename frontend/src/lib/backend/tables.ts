@@ -8,7 +8,7 @@ import { get } from 'svelte/store';
 import { authStore } from '$lib/stores/auth.store';
 import { BACKEND_URL } from './config';
 import { getAuthHeaders, getBearerHeader } from './http';
-import { columns, viewOrder, applySchema } from '$lib/stores/table_schema.store';
+import { columns, viewOrder, defaultView, applySchema } from '$lib/stores/table_schema.store';
 import { views } from '$lib/stores/table_views.store';
 import { rows } from '$lib/stores/table_rows.store';
 import { tables, currentTableId } from '$lib/stores/table_schemas.store';
@@ -45,6 +45,7 @@ export async function fetchTable(tableId: string, workspaceId?: string): Promise
 	columns.set(table.columns ?? []);
 	views.set(table.views ?? []);
 	viewOrder.set(table.view_order ?? []);
+	defaultView.set(table.default_view ?? null);
 	return table;
 }
 
