@@ -154,7 +154,7 @@ async def patch_schema(
             table.workspace_id, table.table_id, data.col_order, updated_by=user.user_id
         )
         await invalidate_schema_cache(str(table.workspace_id))
-    if data.default_view is not None:
+    if "default_view" in data.model_fields_set:
         try:
             await view_repo.set_default_view(
                 table.workspace_id, table.table_id, data.default_view, updated_by=user.user_id
