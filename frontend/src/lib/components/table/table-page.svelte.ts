@@ -412,6 +412,7 @@ class TablePageStore {
 	// ─── View config ───────────────────────────────────────────────────────────
 
 	applyViewConfig(view: ViewConfig) {
+		if (view.type !== 'table') return;
 		this._suppressPersist++;
 		if (view.config?.sort) {
 			const s = view.config.sort as { colId: string; dir: 'asc' | 'desc' };
@@ -456,7 +457,7 @@ class TablePageStore {
 	persistViewConfig() {
 		if (this._suppressPersist > 0) return;
 		const view = get(viewsStore).find((v) => v.view_id === this.activeViewId);
-		if (!view) return;
+		if (!view || view.type !== 'table') return;
 		const newConfig = {
 			...view.config,
 			sort: this.sortConfig ?? undefined,

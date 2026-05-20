@@ -79,16 +79,20 @@
 		const tableId = $page.params.table_id!;
 		tableLoaded = false;
 		s.reset();
+		error.set('');
 		(async () => {
 			if (!$authStore?.role) {
 				goto('/login');
 				return;
 			}
 			try {
-				const [table] = await Promise.all([
-					fetchTable(tableId, $page.params.workspace_id),
-					fetchWorkspaces()
-				]);
+				const wsList = await fetchWorkspaces();
+				let wsId: string | undefined = $page.params.workspace_id;
+				if (wsId && !/^[0-9a-f]{8}-/.test(wsId)) {
+					const ws = wsList.find((w) => w.workspace_name === wsId);
+					if (ws) wsId = ws.workspace_id;
+				}
+				const table = await fetchTable(tableId, wsId);
 				await fetchRows(table.table_id);
 				tableLoaded = true;
 				s.loadDocFlags(table.table_id).catch(() => {});
