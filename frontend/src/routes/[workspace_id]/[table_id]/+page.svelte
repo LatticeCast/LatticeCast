@@ -126,19 +126,6 @@
 
 	onMount(() => s.setupMouseListeners());
 
-	// Auto-persist view config on change
-	$effect(() => {
-		JSON.stringify(s.sortConfig);
-		JSON.stringify(s.groupConfig);
-		JSON.stringify(s.filterConditions);
-		JSON.stringify(s.localWidths);
-		JSON.stringify(s.viewColOrder);
-		const _dragging = s.resizingColId;
-		if (s.activeViewId && !_dragging) {
-			s.persistViewConfig();
-		}
-	});
-
 	// ─── Page-specific handlers (not yet in store class) ─────────────────────────
 
 	async function handleDragReorderColumns(fromId: string, toId: string) {

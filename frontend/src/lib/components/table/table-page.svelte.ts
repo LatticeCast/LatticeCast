@@ -75,11 +75,35 @@ class TablePageStore {
 	editValue = $state<string>('');
 	tagsPopupCell = $state<{ rowId: number; colId: string } | null>(null);
 	colMenuId = $state<string | null>(null);
-	sortConfig = $state<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
-	filterConditions = $state<FilterCondition[]>([]);
+	private _sortConfig = $state<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
+	get sortConfig() {
+		return this._sortConfig;
+	}
+	set sortConfig(v) {
+		this._sortConfig = v;
+		this.schedulePersist();
+	}
+
+	private _filterConditions = $state<FilterCondition[]>([]);
+	get filterConditions() {
+		return this._filterConditions;
+	}
+	set filterConditions(v) {
+		this._filterConditions = v;
+		this.schedulePersist();
+	}
+
 	showFilterPanel = $state(false);
 	searchQuery = $state('');
-	groupConfig = $state<{ colId: string; granularity?: 'month' | 'day' } | null>(null);
+
+	private _groupConfig = $state<{ colId: string; granularity?: 'month' | 'day' } | null>(null);
+	get groupConfig() {
+		return this._groupConfig;
+	}
+	set groupConfig(v) {
+		this._groupConfig = v;
+		this.schedulePersist();
+	}
 	collapsedGroups = new SvelteSet<string>();
 	contextMenu = $state<ContextMenuState | null>(null);
 	showImportTemplateModal = $state(false);
@@ -93,11 +117,29 @@ class TablePageStore {
 	rowsWithDocs = new SvelteSet<string>();
 	activeViewId = $state<number>(0);
 	private _suppressPersist = 0;
-	viewColOrder = $state<string[] | null>(null);
+	private _persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+	private _viewColOrder = $state<string[] | null>(null);
+	get viewColOrder() {
+		return this._viewColOrder;
+	}
+	set viewColOrder(v) {
+		this._viewColOrder = v;
+		this.schedulePersist();
+	}
+
 	resizingColId = $state<string | null>(null);
 	resizeStartX = $state(0);
 	resizeStartWidth = $state(0);
-	localWidths = $state<Record<string, number>>({});
+
+	private _localWidths = $state<Record<string, number>>({});
+	get localWidths() {
+		return this._localWidths;
+	}
+	set localWidths(v) {
+		this._localWidths = v;
+		this.schedulePersist();
+	}
 
 	get tableId(): string {
 		return get(page).params.table_id ?? '';
@@ -124,11 +166,11 @@ class TablePageStore {
 		this.editValue = '';
 		this.tagsPopupCell = null;
 		this.colMenuId = null;
-		this.sortConfig = null;
-		this.filterConditions = [];
+		this._sortConfig = null;
+		this._filterConditions = [];
 		this.showFilterPanel = false;
 		this.searchQuery = '';
-		this.groupConfig = null;
+		this._groupConfig = null;
 		this.collapsedGroups.clear();
 		this.contextMenu = null;
 		this.showImportTemplateModal = false;
@@ -141,8 +183,8 @@ class TablePageStore {
 		this.rowsWithDocs.clear();
 		this.activeViewId = 0;
 		this._suppressPersist = 0;
-		this.viewColOrder = null;
-		this.localWidths = {};
+		this._viewColOrder = null;
+		this._localWidths = {};
 	}
 
 	// ─── Row handlers ──────────────────────────────────────────────────────────
@@ -413,45 +455,49 @@ class TablePageStore {
 
 	applyViewConfig(view: ViewConfig) {
 		if (view.type !== 'table') return;
-		this._suppressPersist++;
 		if (view.config?.sort) {
 			const s = view.config.sort as { colId: string; dir: 'asc' | 'desc' };
-			this.sortConfig = s.colId && s.dir ? s : null;
+			this._sortConfig = s.colId && s.dir ? s : null;
 		} else {
-			this.sortConfig = null;
+			this._sortConfig = null;
 		}
 		if (view.config?.group) {
 			const g = view.config.group as { colId: string; granularity?: 'month' | 'day' };
-			this.groupConfig = g.colId ? g : null;
+			this._groupConfig = g.colId ? g : null;
 		} else {
-			this.groupConfig = null;
+			this._groupConfig = null;
 		}
 		if (view.config?.filter && Array.isArray(view.config.filter)) {
 			const saved = view.config.filter as { colId: string; operator: string; value: string }[];
-			this.filterConditions = saved.map((f) => ({
+			this._filterConditions = saved.map((f) => ({
 				id: crypto.randomUUID(),
 				colId: f.colId,
 				operator: f.operator as FilterCondition['operator'],
 				value: f.value
 			}));
 		} else {
-			this.filterConditions = [];
+			this._filterConditions = [];
 		}
 		if (
 			view.config?.widths &&
 			typeof view.config.widths === 'object' &&
 			!Array.isArray(view.config.widths)
 		) {
-			this.localWidths = { ...(view.config.widths as Record<string, number>) };
+			this._localWidths = { ...(view.config.widths as Record<string, number>) };
 		} else {
-			this.localWidths = {};
+			this._localWidths = {};
 		}
 		if (view.config?.colOrder && Array.isArray(view.config.colOrder)) {
-			this.viewColOrder = view.config.colOrder as string[];
+			this._viewColOrder = view.config.colOrder as string[];
 		} else {
-			this.viewColOrder = null;
+			this._viewColOrder = null;
 		}
-		queueMicrotask(() => this._suppressPersist--);
+	}
+
+	private schedulePersist() {
+		if (this._suppressPersist > 0 || this.resizingColId) return;
+		if (this._persistTimer) clearTimeout(this._persistTimer);
+		this._persistTimer = setTimeout(() => this.persistViewConfig(), 100);
 	}
 
 	persistViewConfig() {
@@ -695,7 +741,10 @@ class TablePageStore {
 			};
 		};
 		const onResizeUp = () => {
-			if (this.resizingColId) this.resizingColId = null;
+			if (this.resizingColId) {
+				this.resizingColId = null;
+				this.schedulePersist();
+			}
 		};
 		const onWindowClick = () => {
 			this.colMenuId = null;
