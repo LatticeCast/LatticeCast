@@ -5,9 +5,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends cron supervisor
 
 WORKDIR /app
 
+ENV UV_HTTP_TIMEOUT=180 
+ENV UV_CONCURRENT_DOWNLOADS=4
+
 COPY pyproject.toml uv.lock ./
-# pypi/cargo deps occasionally stall past uv's 30s default — bump so transient
-# network blips don't fail the whole build.
+RUN echo "precedence ::ffff:0:0/96 100" >> /etc/gai.conf
 ENV UV_HTTP_TIMEOUT=180
 RUN uv sync --no-dev
 
