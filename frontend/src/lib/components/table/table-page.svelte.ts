@@ -526,10 +526,7 @@ class TablePageStore {
 		url.searchParams.set('view', String(view.view_id));
 		history.replaceState(history.state, '', url.toString());
 		this.applyViewConfig(view);
-		const isImplicitTable = view.view_id === IMPLICIT_TABLE_VIEW.view_id;
-		patchSchema(this.tableId, { default_view: isImplicitTable ? null : view.view_id }).catch(
-			() => {}
-		);
+		patchSchema(this.tableId, { default_view: view.view_id }).catch(() => {});
 	}
 
 	async handleAddView(type: string, name: string) {
