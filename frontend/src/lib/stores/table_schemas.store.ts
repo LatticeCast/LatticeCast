@@ -35,7 +35,15 @@ export const currentWorkspaceId = writable<string | null>(null);
 export const currentTableId = writable<string | null>(null);
 export const menuOpen = writable<boolean>(true);
 
-// ── Derived helpers (same names as the old menu.store) ───────────────────────
+// ── Derived helpers (same names as the old menu.store) ───────────────────
+export const tablesByWorkspace = derived(tables, ($tables) => {
+	const grouped: Record<string, Table[]> = {};
+	for (const t of $tables) {
+		if (!grouped[t.workspace_id]) grouped[t.workspace_id] = [];
+		grouped[t.workspace_id].push(t);
+	}
+	return grouped;
+});
 export const currentWorkspace = derived(
 	[workspaces, currentWorkspaceId],
 	([$workspaces, $id]) => $workspaces.find((w) => w.workspace_id === $id) ?? null
@@ -90,4 +98,18 @@ export function resetMenu(): void {
 	tables.set([]);
 	currentWorkspaceId.set(null);
 	currentTableId.set(null);
+}
+
+export async function initSidebar(): Promise<void> {
+	try {
+		const { fetchSidebar } = await import('$lib/backend/table_schemas');
+		await fetchSidebar();
+	} catch {
+		// best-effort
+	}
+}
+
+export function resetSidebar(): void {
+	workspaces.set([]);
+	tables.set([]);
 }

@@ -6,12 +6,17 @@
 	import { page } from '$app/stores';
 	import { authStore, logout } from '$lib/stores/auth.store';
 	import { browser } from '$app/environment';
-	import { currentTable } from '$lib/stores/table_schemas.store';
+	import {
+		currentTable,
+		workspaces,
+		tablesByWorkspace,
+		initSidebar,
+		resetSidebar
+	} from '$lib/stores/table_schemas.store';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { hydrateFromServer } from '$lib/stores/settings.store';
-	import { fetchSidebar } from '$lib/backend/table_schemas';
 	import { fetchMe } from '$lib/backend/auth';
-	import type { Workspace, Table } from '$lib/types/table';
+	import type { Workspace } from '$lib/types/table';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
 	import { isUuid, prettifyWorkspacePathname } from '$lib/utils/url';
 
@@ -19,17 +24,23 @@
 	let menuOpen = $state(false);
 	let showCreateWorkspace = $state(false);
 
-	let workspaces = $state<Workspace[]>([]);
-	let tablesByWorkspace = $state<Record<string, Table[]>>({});
 	const expandedWorkspaces = new SvelteSet<string>();
+
+	async function refreshSidebar() {
+		await initSidebar();
+		expandedWorkspaces.clear();
+		for (const ws of $workspaces) {
+			if ($tablesByWorkspace[ws.workspace_id]?.length) expandedWorkspaces.add(ws.workspace_id);
+		}
+	}
 
 	$effect(() => {
 		if ($authStore?.accessToken) {
-			loadSidebarData();
+			refreshSidebar();
 			hydrateUserConfig($authStore.accessToken);
 		} else {
-			workspaces = [];
-			tablesByWorkspace = {};
+			resetSidebar();
+			expandedWorkspaces.clear();
 		}
 	});
 
@@ -38,7 +49,7 @@
 		if (!browser) return;
 		const wsId = $page.params.workspace_id;
 		if (!wsId || !isUuid(wsId)) return;
-		const ws = workspaces.find((w) => w.workspace_id === wsId);
+		const ws = $workspaces.find((w) => w.workspace_id === wsId);
 		if (!ws) return;
 		const newPathname = prettifyWorkspacePathname($page.url.pathname, wsId, ws.workspace_name);
 		if (newPathname !== $page.url.pathname) {
@@ -55,46 +66,13 @@
 		}
 	}
 
-	async function loadSidebarData() {
-		try {
-			const { workspaces: wsList, tables: tableList } = await fetchSidebar();
-			workspaces = wsList.map((w) => ({
-				workspace_id: w.workspace_id,
-				workspace_name: w.workspace_name,
-				created_at: '',
-				updated_at: ''
-			}));
-			const grouped: Record<string, Table[]> = {};
-			for (const t of tableList) {
-				if (!grouped[t.workspace_id]) grouped[t.workspace_id] = [];
-				grouped[t.workspace_id].push({
-					table_id: t.table_id,
-					workspace_id: t.workspace_id,
-					columns: t.config.columns ?? [],
-					view_order: t.config.view_order ?? [],
-					default_view: t.config.default_view ?? null,
-					views: [],
-					created_at: '',
-					updated_at: ''
-				});
-			}
-			tablesByWorkspace = grouped;
-			expandedWorkspaces.clear();
-			for (const ws of workspaces) {
-				if (grouped[ws.workspace_id]?.length) expandedWorkspaces.add(ws.workspace_id);
-			}
-		} catch {
-			// silently ignore — sidebar tree is best-effort
-		}
-	}
-
 	function toggleWorkspace(wsId: string) {
 		if (expandedWorkspaces.has(wsId)) expandedWorkspaces.delete(wsId);
 		else expandedWorkspaces.add(wsId);
 	}
 
 	function onWorkspaceCreated(ws: Workspace) {
-		workspaces = [...workspaces, ws];
+		workspaces.update((list) => [...list, ws]);
 		showCreateWorkspace = false;
 		navigate(`/${encodeURIComponent(ws.workspace_name)}/`);
 	}
@@ -104,18 +82,15 @@
 		const wsId = $page.params.workspace_id;
 		if (!wsId) return;
 		const decoded = decodeURIComponent(wsId);
-		const ws = workspaces.find((w) => w.workspace_id === wsId || w.workspace_name === decoded);
+		const ws = $workspaces.find((w) => w.workspace_id === wsId || w.workspace_name === decoded);
 		if (!ws) {
-			loadSidebarData();
+			refreshSidebar();
 			return;
 		}
-		// Refresh when navigating to a table the sidebar hasn't seen yet
-		// (e.g. just-created via "Create" or PM template) — without this,
-		// the sidebar tree shows stale until the user reloads.
 		const tableId = $page.params.table_id;
 		if (tableId) {
-			const known = tablesByWorkspace[ws.workspace_id]?.some((t) => t.table_id === tableId);
-			if (!known) loadSidebarData();
+			const known = $tablesByWorkspace[ws.workspace_id]?.some((t) => t.table_id === tableId);
+			if (!known) refreshSidebar();
 		}
 	});
 
@@ -142,15 +117,15 @@
 			<!-- Navigation -->
 			<nav data-testid="menu-nav" class="flex-1 space-y-1 overflow-y-auto px-4 pt-3">
 				<!-- Workspace → Tables tree -->
-				{#if workspaces.length > 0}
+				{#if $workspaces.length > 0}
 					<div>
 						<p
 							class="mb-1 px-3 text-xs font-semibold tracking-wide text-gray-400 uppercase dark:text-gray-500"
 						>
 							Workspaces
 						</p>
-						{#each workspaces as ws (ws.workspace_id)}
-							{@const wsTables = tablesByWorkspace[ws.workspace_id] ?? []}
+						{#each $workspaces as ws (ws.workspace_id)}
+							{@const wsTables = $tablesByWorkspace[ws.workspace_id] ?? []}
 							{@const isExpanded = expandedWorkspaces.has(ws.workspace_id)}
 							<div>
 								<div
@@ -428,7 +403,7 @@
 				<span class="shrink-0 text-white/40">/</span>
 				{#if $page.params.workspace_id}
 					{@const wsId = $page.params.workspace_id}
-					{@const wsName = workspaces.find((w) => w.workspace_id === wsId)?.workspace_name ?? wsId}
+					{@const wsName = $workspaces.find((w) => w.workspace_id === wsId)?.workspace_name ?? wsId}
 					<button
 						onclick={() => navigate(`/${wsId}`)}
 						data-testid="breadcrumb-workspace"
@@ -438,7 +413,7 @@
 					{#if $page.params.table_id}
 						{@const tableId = $page.params.table_id}
 						{@const tableName =
-							tablesByWorkspace[wsId]?.find((t) => t.table_id === tableId)?.table_id ??
+							$tablesByWorkspace[wsId]?.find((t) => t.table_id === tableId)?.table_id ??
 							$currentTable?.table_id ??
 							tableId}
 						<span class="shrink-0 text-white/40">/</span>
