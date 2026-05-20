@@ -2,7 +2,7 @@
 
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { goto, replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { authStore } from '$lib/stores/auth.store';
 	import {
@@ -67,7 +67,7 @@
 		if (!wsParam || !isUuid(wsParam)) return;
 		const ws = workspaces.find((w) => w.workspace_id === wsParam);
 		if (ws && typeof window !== 'undefined') {
-			history.replaceState({}, '', `/${encodeURIComponent(ws.workspace_name)}/`);
+			replaceState(`/${encodeURIComponent(ws.workspace_name)}/`, {});
 		}
 	});
 

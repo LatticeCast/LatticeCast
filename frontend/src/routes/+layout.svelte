@@ -2,7 +2,7 @@
 
 <script lang="ts">
 	import '../app.css';
-	import { goto, afterNavigate } from '$app/navigation';
+	import { goto, afterNavigate, replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { authStore, logout } from '$lib/stores/auth.store';
 	import { isDark } from '$lib/UI/theme.svelte';
@@ -51,7 +51,7 @@
 			if (!ws) return;
 			const newPathname = prettifyWorkspacePathname($page.url.pathname, wsId, ws.workspace_name);
 			if (newPathname !== $page.url.pathname) {
-				history.replaceState(history.state, '', newPathname + $page.url.search);
+				replaceState(newPathname + $page.url.search, $page.state);
 			}
 		} else {
 			// Resolve: name URL → UUID URL so SvelteKit routing receives UUID
@@ -170,16 +170,16 @@
 							{@const wsTables = tablesByWorkspace[ws.workspace_id] ?? []}
 							{@const isExpanded = expandedWorkspaces.has(ws.workspace_id)}
 							<div>
-								<div class="flex w-full items-center rounded-lg text-sm text-gray-700 dark:text-gray-200">
+								<div
+									class="flex w-full items-center rounded-lg text-sm text-gray-700 dark:text-gray-200"
+								>
 									<button
 										data-testid="sidebar-workspace-toggle-{ws.workspace_name}"
 										onclick={() => toggleWorkspace(ws.workspace_id)}
 										class="flex shrink-0 items-center justify-center rounded-l-lg px-1.5 py-1.5 transition hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400"
 									>
 										<svg
-											class="h-3.5 w-3.5 transition-transform {isExpanded
-												? 'rotate-90'
-												: ''}"
+											class="h-3.5 w-3.5 transition-transform {isExpanded ? 'rotate-90' : ''}"
 											fill="none"
 											stroke="currentColor"
 											viewBox="0 0 24 24"

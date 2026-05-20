@@ -4,6 +4,7 @@
 
 import { SvelteSet } from 'svelte/reactivity';
 import { get } from 'svelte/store';
+import { replaceState } from '$app/navigation';
 import { page } from '$app/stores';
 import { columns } from '$lib/stores/table_schema.store';
 import { views as viewsStore } from '$lib/stores/table_views.store';
@@ -478,7 +479,7 @@ class TablePageStore {
 		this.activeViewId = view.view_id;
 		const url = new URL(window.location.href);
 		url.searchParams.set('view', String(view.view_id));
-		history.replaceState(history.state, '', url.toString());
+		replaceState(url.toString(), {});
 		this.applyViewConfig(view);
 		const isImplicitTable = view.view_id === IMPLICIT_TABLE_VIEW.view_id;
 		if (!isImplicitTable) patchSchema(this.tableId, { default_view: view.view_id }).catch(() => {});
