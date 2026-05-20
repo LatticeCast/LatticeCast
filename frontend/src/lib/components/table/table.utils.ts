@@ -258,9 +258,10 @@ export function getGroupKey(row: Row, col: Column, granularity: 'month' | 'day' 
 }
 
 export function buildGroupedRows(
-	sortedRowList: Row[],
+	rowList: Row[],
 	groupConfig: { colId: string; granularity?: 'month' | 'day' } | null,
-	colList: Column[]
+	colList: Column[],
+	sortConfig?: { colId: string; dir: 'asc' | 'desc' } | null
 ): { groups: { key: string; rows: Row[] }[]; col: Column } | null {
 	if (!groupConfig) return null;
 	const col = colList.find((c) => c.column_id === groupConfig.colId);
@@ -268,7 +269,7 @@ export function buildGroupedRows(
 	const granularity = groupConfig.granularity ?? 'month';
 	const keyOrder: string[] = [];
 	const keyMap: Record<string, Row[]> = {};
-	for (const row of sortedRowList) {
+	for (const row of rowList) {
 		const key = getGroupKey(row, col, granularity);
 		if (!keyMap[key]) {
 			keyMap[key] = [];
@@ -276,7 +277,11 @@ export function buildGroupedRows(
 		}
 		keyMap[key].push(row);
 	}
-	return { groups: keyOrder.map((key) => ({ key, rows: keyMap[key] })), col };
+	const groups = keyOrder.map((key) => ({
+		key,
+		rows: sortConfig ? sortRows(keyMap[key], sortConfig, colList) : keyMap[key]
+	}));
+	return { groups, col };
 }
 
 export function buildRenderItems(

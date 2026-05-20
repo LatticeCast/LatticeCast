@@ -55,9 +55,8 @@
 
 	const sortedColumns = $derived(buildSortedColumns($columns, s.viewColOrder));
 
-	const sortedRows = $derived(
-		sortRows(applyFilters($rows, s.filterConditions, s.searchQuery), s.sortConfig, $columns)
-	);
+	const filteredRows = $derived(applyFilters($rows, s.filterConditions, s.searchQuery));
+	const sortedRows = $derived(sortRows(filteredRows, s.sortConfig, $columns));
 
 	const tableMinWidth = $derived(
 		48 + sortedColumns.reduce((sum, col) => sum + s.getColWidth(col), 0) + 40 + 40
@@ -73,7 +72,9 @@
 		allViews.find((v) => v.view_id === s.activeViewId) ?? allViews[0] ?? IMPLICIT_TABLE_VIEW
 	);
 
-	const groupedRows = $derived(buildGroupedRows(sortedRows, s.groupConfig, $columns));
+	const groupedRows = $derived(
+		buildGroupedRows(filteredRows, s.groupConfig, $columns, s.sortConfig)
+	);
 
 	const renderItems = $derived(buildRenderItems(sortedRows, groupedRows, s.collapsedGroups));
 
