@@ -5,7 +5,6 @@
 	import { goto, afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { authStore, logout } from '$lib/stores/auth.store';
-	import { isDark } from '$lib/UI/theme.svelte';
 	import { browser } from '$app/environment';
 	import { currentTable } from '$lib/stores/table_schemas.store';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -23,12 +22,6 @@
 	let workspaces = $state<Workspace[]>([]);
 	let tablesByWorkspace = $state<Record<string, Table[]>>({});
 	const expandedWorkspaces = new SvelteSet<string>();
-
-	$effect(() => {
-		if (browser) {
-			document.documentElement.classList.toggle('dark', isDark.value);
-		}
-	});
 
 	$effect(() => {
 		if ($authStore?.accessToken) {

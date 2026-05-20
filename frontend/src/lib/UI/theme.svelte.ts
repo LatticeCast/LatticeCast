@@ -1,11 +1,15 @@
 // src/lib/UI/theme.svelte.ts
 // Centralized color tokens for light/dark mode and tag palette
 
+import { browser } from '$app/environment';
 import { settingsStore } from '$lib/stores/settings.store';
 
 let _isDark = $state(false);
 settingsStore.subscribe((s) => {
 	_isDark = s.darkMode;
+	if (browser) {
+		document.documentElement.classList.toggle('dark', s.darkMode);
+	}
 });
 
 /** Reactive dark-mode flag — true when dark mode is enabled in settings. */
