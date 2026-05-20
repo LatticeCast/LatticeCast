@@ -61,16 +61,6 @@
 	let tableSaving = $state(false);
 	let tableSettingsError = $state('');
 
-	// UUID → name URL rewrite (runs when UUID is in the address bar)
-	$effect(() => {
-		const wsParam = $page.params.workspace_id;
-		if (!wsParam || !isUuid(wsParam)) return;
-		const ws = workspaces.find((w) => w.workspace_id === wsParam);
-		if (ws && typeof window !== 'undefined') {
-			history.replaceState({}, '', `/${encodeURIComponent(ws.workspace_name)}/`);
-		}
-	});
-
 	// Track last visited workspace in localStorage
 	$effect(() => {
 		const ws = activeWorkspace;

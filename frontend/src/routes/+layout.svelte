@@ -40,26 +40,16 @@
 		}
 	});
 
-	// Pretty URL: rewrite workspace_id in URL bar to workspace_name (or resolve name → UUID)
+	// Cosmetic: replace UUID in URL bar with workspace_name
 	$effect(() => {
 		if (!browser) return;
 		const wsId = $page.params.workspace_id;
-		if (!wsId) return;
-		if (isUuid(wsId)) {
-			// Cosmetic: replace UUID in URL bar with workspace_name
-			const ws = workspaces.find((w) => w.workspace_id === wsId);
-			if (!ws) return;
-			const newPathname = prettifyWorkspacePathname($page.url.pathname, wsId, ws.workspace_name);
-			if (newPathname !== $page.url.pathname) {
-				history.replaceState(history.state, '', newPathname + $page.url.search);
-			}
-		} else {
-			// Resolve: name URL → UUID URL so SvelteKit routing receives UUID
-			const decoded = decodeURIComponent(wsId);
-			const ws = workspaces.find((w) => w.workspace_name === decoded);
-			if (!ws) return;
-			const newPathname = $page.url.pathname.replace(`/${wsId}`, `/${ws.workspace_id}`);
-			goto(newPathname + $page.url.search, { replaceState: true });
+		if (!wsId || !isUuid(wsId)) return;
+		const ws = workspaces.find((w) => w.workspace_id === wsId);
+		if (!ws) return;
+		const newPathname = prettifyWorkspacePathname($page.url.pathname, wsId, ws.workspace_name);
+		if (newPathname !== $page.url.pathname) {
+			history.replaceState(history.state, '', newPathname + $page.url.search);
 		}
 	});
 

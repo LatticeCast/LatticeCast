@@ -15,7 +15,11 @@
 	// Controller
 	import { fetchTable, fetchRows, patchSchema } from '$lib/backend/tables';
 	import { fetchWorkspaces } from '$lib/backend/workspaces';
-	import { currentWorkspaceId, resolveWorkspaceParam } from '$lib/stores/table_schemas.store';
+	import {
+		currentWorkspaceId,
+		currentTableId,
+		resolveWorkspaceParam
+	} from '$lib/stores/table_schemas.store';
 	import { error, IMPLICIT_TABLE_VIEW } from '$lib/stores/tables.store';
 	import { s } from '$lib/components/table/table-page.svelte';
 
@@ -73,11 +77,15 @@
 
 	const renderItems = $derived(buildRenderItems(sortedRows, groupedRows, s.collapsedGroups));
 
+	// Derived from SSOT stores — used in template instead of $page.params
+	const tableId = $derived($currentTableId ?? '');
+	const wsId = $derived($currentWorkspaceId ?? '');
+
 	// ─── Lifecycle ───────���───────────────────────────────────────────────────────
 
 	$effect(() => {
-		const tableId = $page.params.table_id!;
-		const wsParam = $page.params.workspace_id!;
+		const _tableId = $page.params.table_id!;
+		const _wsParam = $page.params.workspace_id!;
 		tableLoaded = false;
 		s.reset();
 		error.set('');
@@ -88,9 +96,10 @@
 			}
 			try {
 				const wsList = await fetchWorkspaces();
-				const wsId = resolveWorkspaceParam(wsParam, wsList);
-				const table = await fetchTable(tableId, wsId ?? undefined);
+				const resolvedWsId = resolveWorkspaceParam(_wsParam, wsList);
+				const table = await fetchTable(_tableId, resolvedWsId ?? undefined);
 				await fetchRows(table.table_id);
+				currentTableId.set(table.table_id);
 				tableLoaded = true;
 				s.loadDocFlags(table.table_id).catch(() => {});
 				currentWorkspaceId.set(table.workspace_id);
@@ -149,13 +158,12 @@
 		ordered.splice(fromIdx, 1);
 		ordered.splice(toIdx, 0, fromId);
 		s.viewColOrder = ordered;
-		const tableId = $page.params.table_id!;
 		const isImplicitTable =
 			s.activeViewId === IMPLICIT_TABLE_VIEW.view_id &&
 			!$viewsStore.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id);
 		if (isImplicitTable) {
 			try {
-				await patchSchema(tableId, { col_order: ordered });
+				await patchSchema(s.tableId, { col_order: ordered });
 				s.viewColOrder = null;
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to save column order');
@@ -164,7 +172,6 @@
 	}
 
 	async function handleReorderViews(fromId: number, toId: number) {
-		const tableId = $page.params.table_id!;
 		const userViewIds = $viewsStore.map((v) => v.view_id);
 		const fromIdx = userViewIds.indexOf(fromId);
 		if (fromIdx === -1) return;
@@ -173,7 +180,7 @@
 		const reordered = [...userViewIds];
 		reordered.splice(fromIdx, 1);
 		reordered.splice(toIdx, 0, fromId);
-		await patchSchema(tableId, { view_order: reordered }).catch(() => {});
+		await patchSchema(s.tableId, { view_order: reordered }).catch(() => {});
 	}
 </script>
 
@@ -270,28 +277,28 @@
 		/>
 	{:else if activeView.type === 'kanban'}
 		<KanbanBoard
-			tableId={$page.params.table_id!}
+			{tableId}
 			columns={$columns}
 			rows={$rows}
 			viewConfig={activeView}
 			onOpenExpand={(row) => s.openExpand(row)}
-			onRowsRefresh={() => fetchRows($page.params.table_id!)}
+			onRowsRefresh={() => fetchRows(tableId)}
 			onAddRow={(data) => s.openCreateTicket(data)}
 		/>
 	{:else if activeView.type === 'timeline'}
 		<TimelineView
-			tableId={$page.params.table_id!}
+			{tableId}
 			columns={$columns}
 			rows={$rows}
 			viewConfig={activeView}
 			onOpenExpand={(row) => s.openExpand(row)}
-			onRowsRefresh={() => fetchRows($page.params.table_id!)}
+			onRowsRefresh={() => fetchRows(tableId)}
 			onAddRow={(data) => s.openCreateTicket(data)}
 		/>
 	{:else if activeView.type === 'dashboard'}
 		<DashboardView
 			view={activeView as unknown as DashboardViewType & { view_id: number }}
-			tableId={$page.params.table_id!}
+			{tableId}
 		/>
 	{/if}
 </div>
@@ -329,8 +336,8 @@
 		onClose={() => (s.expandedRow = null)}
 		onUpdateRow={(id, data) => s.handleUpdateRow(id, data)}
 		onRefreshRows={(tid) => s.handleRefreshRows(tid)}
-		tableId={$page.params.table_id!}
-		workspaceId={$page.params.workspace_id!}
+		{tableId}
+		workspaceId={wsId}
 		onOpenDocCell={(row, col) => {
 			s.expandedRow = null;
 			s.docCellState = { row, col };
@@ -342,8 +349,8 @@
 	<DocCellEditor
 		row={s.docCellState.row}
 		column={s.docCellState.col}
-		tableId={$page.params.table_id!}
-		workspaceId={$page.params.workspace_id!}
+		{tableId}
+		workspaceId={wsId}
 		onClose={() => (s.docCellState = null)}
 	/>
 {/if}
