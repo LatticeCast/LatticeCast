@@ -2,25 +2,25 @@
 
 ## Location
 
-`test-e2e/` — pytest + Playwright + requests against the live stack.
+`e2e/` — pytest + Playwright + requests against the live stack.
 
 ## How to Run
 
 ```bash
 # 1. Start test container (rebuild if deps changed)
-docker compose --profile test up -d --build test-e2e
+docker compose --profile test up -d --build e2e
 
 # 2. Run all tests
-docker compose --profile test exec test-e2e pytest -v
+docker compose --profile test exec e2e pytest -v
 
 # Run a single package
-docker compose --profile test exec test-e2e pytest tables/ -v
+docker compose --profile test exec e2e pytest tables/ -v
 
 # Run a single test
-docker compose --profile test exec test-e2e pytest tables/test_column_add.py -v
+docker compose --profile test exec e2e pytest tables/test_column_add.py -v
 
 # With screenshots
-docker compose --profile test exec test-e2e pytest -v --snapshot
+docker compose --profile test exec e2e pytest -v --snapshot
 ```
 
 Requires the full stack running (`docker compose up -d`) plus the `browser` container.
@@ -56,7 +56,7 @@ Requires the full stack running (`docker compose up -d`) plus the `browser` cont
 
 ## Writing New Tests
 
-1. Create `test-e2e/{package}/test_<name>.py`
+1. Create `e2e/{package}/test_<name>.py`
 2. Use conftest fixtures by parameter name: `def test_foo(authed_page, workspace, admin_token):`
 3. Import helpers from `e2e_base`: `from e2e_base import BASE, api`
 4. Use `assert` for verifications (pytest handles failures)

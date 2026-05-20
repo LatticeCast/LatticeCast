@@ -135,14 +135,14 @@ services:
 
   # E2E test runner — uv image, has Playwright (client lib) + requests.
   # No browsers installed here; chromium runs in the `browser` service
-  # and test-e2e connects to it via `sync_playwright().chromium.connect()`.
-  test-e2e:
+  # and e2e connects to it via `sync_playwright().chromium.connect()`.
+  e2e:
     profiles:
       - test
     build:
-      context: ./test-e2e
+      context: ./e2e
     volumes:
-      - ./test-e2e:/scripts
+      - ./e2e:/scripts
     env_file:
       - .env
     environment:
@@ -164,7 +164,7 @@ services:
     stdin_open: true
 
   # Headless Chromium host. Runs `playwright run-server` on :4444 so the
-  # test-e2e container can remote-drive it. Also shares the host network
+  # e2e container can remote-drive it. Also shares the host network
   # so the FE running inside Chromium can fetch http://localhost:13491/api/...
   # exactly like the developer's local browser would.
   #
@@ -172,7 +172,7 @@ services:
   # pathological case (infinite re-render, leaked contexts, runaway
   # memory). Without a cap, the host gets starved and the entire
   # bot run hangs. With these limits, Chromium is OOM-killed when it
-  # exceeds them — playwright run-server dies, test-e2e gets a
+  # exceeds them — playwright run-server dies, e2e gets a
   # connect/protocol error, worker.sh's ERR trap flips the ticket to
   # debugging, and the orchestrator advances to the next one. Host
   # stays alive regardless of what the test does.
@@ -180,7 +180,7 @@ services:
     profiles:
       - test
     build:
-      context: ./test-e2e
+      context: ./e2e
       dockerfile: Dockerfile.browser
     volumes:
       - ./.browser:/output
