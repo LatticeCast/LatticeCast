@@ -15,7 +15,7 @@
 	// Controller
 	import { fetchTable, fetchRows, patchSchema } from '$lib/backend/tables';
 	import { fetchWorkspaces } from '$lib/backend/workspaces';
-	import { currentWorkspaceId } from '$lib/stores/menu.store';
+	import { currentWorkspaceId } from '$lib/stores/table_schemas.store';
 	import { error, IMPLICIT_TABLE_VIEW } from '$lib/stores/tables.store';
 	import { s } from '$lib/components/table/table-page.svelte';
 

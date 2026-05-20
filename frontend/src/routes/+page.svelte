@@ -4,8 +4,9 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth.store';
-	import { fetchWorkspaces } from '$lib/backend/workspaces';
-	import { currentTableId } from '$lib/stores/menu.store';
+	import { fetchSidebar } from '$lib/backend/table_schemas';
+	import { currentTableId, workspaces as workspacesStore } from '$lib/stores/table_schemas.store';
+	import { get } from 'svelte/store';
 	import { T } from '$lib/UI/theme.svelte';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
 	import type { Workspace } from '$lib/types/table';
@@ -22,7 +23,8 @@
 		}
 		currentTableId.set(null);
 		try {
-			const ws = await fetchWorkspaces();
+			await fetchSidebar();
+			const ws = get(workspacesStore);
 			workspaces = ws;
 			if (ws.length > 0) {
 				const lastName =

@@ -8,7 +8,7 @@
 	import type { WorkspaceMemberFull } from '$lib/types/table';
 	import { get } from 'svelte/store';
 	import { fetchWorkspaces } from '$lib/backend/workspaces';
-	import { currentWorkspace, workspaces, currentWorkspaceId } from '$lib/stores/menu.store';
+	import { currentWorkspace, workspaces, currentWorkspaceId } from '$lib/stores/table_schemas.store';
 
 	let workspaceId = $derived($page.params.workspace_id ?? '');
 	let members = $state<WorkspaceMemberFull[]>([]);

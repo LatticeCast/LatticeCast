@@ -11,7 +11,7 @@ import { getAuthHeaders, getBearerHeader } from './http';
 import { columns, viewOrder, applySchema } from '$lib/stores/table_schema.store';
 import { views } from '$lib/stores/table_views.store';
 import { rows } from '$lib/stores/table_rows.store';
-import { tables, currentTableId } from '$lib/stores/menu.store';
+import { tables, currentTableId } from '$lib/stores/table_schemas.store';
 import type {
 	Table,
 	TableSchema,

@@ -12,7 +12,7 @@ import type { Table, TableSchema, UpdateView, ViewConfig, Workspace } from '$lib
 import { columns, viewOrder, applySchema } from './table_schema.store';
 import { views } from './table_views.store';
 import { rows } from './table_rows.store';
-import { workspaces, tables } from './menu.store';
+import { workspaces, tables } from './table_schemas.store';
 import {
 	fetchTable as _fetchTable,
 	fetchRows as _fetchRows,

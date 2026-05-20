@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.47 — 2026-05-20 (sidebar preload + data recovery)
+
+### Performance — first-table-click latency removed
+
+- **New PG function `public.get_user_sidebar(uid)`** (V24) returns
+  `{workspaces, tables}` in one call. SECURITY DEFINER, GRANT EXECUTE
+  to `app` + `mgr`. Two separate arrays (not joined) so empty
+  workspaces still appear.
+
+- **New BE endpoint `GET /api/v1/sidebar`** — thin passthrough, 13
+  lines. Heavy work stays in PG.
+
+- **New FE store `table_schemas.store.ts`** (replaces `menu.store.ts`)
+  + `fetchSidebar()` controller. Layout and home pages call it once on
+  mount; every table's schema (columns, view_order, default_view) is
+  already in memory before the user clicks. Eliminates the schema
+  round-trip on first table click — only `rows` still fetches per
+  open.
+
+- Sidebar now does **1 call** instead of `Promise.all([
+  fetchWorkspaces(), fetchTables() ])`.
+
+### Data recovery — local DB rebuild
+
+- Renamed live `db` → `db_0518` (backup) and applied V1–V24 to a fresh
+  `db`. Per-table cross-database recovery via `dblink`: `auth.users`,
+  `gdpr.user_info`, `public.{workspaces, workspace_members, tables,
+  rows, table_views}`.
+
+- **V23 merge fixup during recovery** — old `public.table_schemas` was
+  joined into `public.tables.config` (column, view_order,
+  default_view) along with `created_by` / `updated_by`.
+
+- **view_order rebuilt** — 22 views had no entry in
+  `tables.config.view_order` (stale config carried over from
+  pre-merge). Rebuilt from actual `table_views` rows, set
+  `default_view` to the smallest view_id where missing.
+
+### E2E — `lattice` admin unblock
+
+- Discovered `lattice` user had `role='user'` not `'admin'` in both
+  old and new DB, so 5 e2e tests hit `403 Admin access required`
+  via the `admin_token = login("lattice")` fixture. Promoted via
+  `UPDATE auth.users SET role='admin'` on this DB. (Seed migration
+  was prepared then withdrawn; data-only fix until the seed strategy
+  is settled.)
+
+- Net suite: **46 pass / 1 fail**. Remaining deterministic failure
+  is `tables/test_column_add.py::test_column_add` — the
+  `kanban-card-fields-btn` doesn't show after creating a kanban
+  view (real UI bug, not flake).
+
 ## v0.46 — 2026-05-17 (pytest migration + E2E fixes + Hide Fields removed)
 
 ### E2E Tests — pytest migration

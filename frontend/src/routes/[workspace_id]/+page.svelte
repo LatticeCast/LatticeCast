@@ -13,7 +13,7 @@
 		createPmTemplate
 	} from '$lib/backend/tables';
 	import { fetchWorkspaces, updateWorkspace, deleteWorkspace } from '$lib/backend/workspaces';
-	import { currentTableId } from '$lib/stores/menu.store';
+	import { currentTableId } from '$lib/stores/table_schemas.store';
 	import type { Table, Workspace } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';

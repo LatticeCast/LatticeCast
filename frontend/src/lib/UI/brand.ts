@@ -1,2 +1,2 @@
-export const BRAND = 'LatticeCast';
-export const BRAND_DISPLAY = 'Lattice Cast';
+export const BRAND = 'AscendNexus';
+export const BRAND_DISPLAY = 'Ascend Nexus';

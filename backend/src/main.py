@@ -21,6 +21,7 @@ from router.api.auth import router as api_auth_router
 from router.api.dashboard import router as api_dashboard_router
 from router.api.rows import router as api_rows_router
 from router.api.storage import router as api_storage_router
+from router.api.table_schemas import router as api_table_schemas_router
 from router.api.tables import router as api_tables_router
 from router.api.workspaces import router as api_workspaces_router
 
@@ -145,6 +146,7 @@ api_router.include_router(api_storage_router)
 api_router.include_router(admin_users_router)
 api_router.include_router(api_workspaces_router)
 api_router.include_router(api_tables_router)
+api_router.include_router(api_table_schemas_router)
 api_router.include_router(api_dashboard_router)
 api_router.include_router(api_rows_router)
 

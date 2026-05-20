@@ -7,11 +7,10 @@
 	import { authStore, logout } from '$lib/stores/auth.store';
 	import { isDark } from '$lib/UI/theme.svelte';
 	import { browser } from '$app/environment';
-	import { currentTable } from '$lib/stores/menu.store';
+	import { currentTable } from '$lib/stores/table_schemas.store';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { hydrateFromServer } from '$lib/stores/settings.store';
-	import { fetchWorkspaces } from '$lib/backend/workspaces';
-	import { fetchTables } from '$lib/backend/tables';
+	import { fetchSidebar } from '$lib/backend/table_schemas';
 	import { fetchMe } from '$lib/backend/auth';
 	import type { Workspace, Table } from '$lib/types/table';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
@@ -75,17 +74,30 @@
 
 	async function loadSidebarData() {
 		try {
-			const [wsList, tableList] = await Promise.all([fetchWorkspaces(), fetchTables()]);
-			workspaces = wsList;
+			const { workspaces: wsList, tables: tableList } = await fetchSidebar();
+			workspaces = wsList.map((w) => ({
+				workspace_id: w.workspace_id,
+				workspace_name: w.workspace_name,
+				created_at: '',
+				updated_at: ''
+			}));
 			const grouped: Record<string, Table[]> = {};
 			for (const t of tableList) {
 				if (!grouped[t.workspace_id]) grouped[t.workspace_id] = [];
-				grouped[t.workspace_id].push(t);
+				grouped[t.workspace_id].push({
+					table_id: t.table_id,
+					workspace_id: t.workspace_id,
+					columns: t.config.columns ?? [],
+					view_order: t.config.view_order ?? [],
+					default_view: t.config.default_view ?? null,
+					views: [],
+					created_at: '',
+					updated_at: ''
+				});
 			}
 			tablesByWorkspace = grouped;
-			// Auto-expand workspaces that have tables
 			expandedWorkspaces.clear();
-			for (const ws of wsList) {
+			for (const ws of workspaces) {
 				if (grouped[ws.workspace_id]?.length) expandedWorkspaces.add(ws.workspace_id);
 			}
 		} catch {
@@ -158,29 +170,37 @@
 							{@const wsTables = tablesByWorkspace[ws.workspace_id] ?? []}
 							{@const isExpanded = expandedWorkspaces.has(ws.workspace_id)}
 							<div>
-								<button
-									data-testid="sidebar-workspace-{ws.workspace_name}"
-									onclick={() => toggleWorkspace(ws.workspace_id)}
-									class="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-sm text-gray-700 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-200 dark:hover:bg-gray-800 dark:hover:text-blue-400"
-								>
-									<svg
-										class="h-3.5 w-3.5 shrink-0 transition-transform {isExpanded
-											? 'rotate-90'
-											: ''}"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
+								<div class="flex w-full items-center rounded-lg text-sm text-gray-700 dark:text-gray-200">
+									<button
+										data-testid="sidebar-workspace-toggle-{ws.workspace_name}"
+										onclick={() => toggleWorkspace(ws.workspace_id)}
+										class="flex shrink-0 items-center justify-center rounded-l-lg px-1.5 py-1.5 transition hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400"
 									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M9 5l7 7-7 7"
-										/>
-									</svg>
-									<span class="truncate font-medium">{ws.workspace_name}</span>
-									<span class="ml-auto shrink-0 text-xs text-gray-400">{wsTables.length}</span>
-								</button>
+										<svg
+											class="h-3.5 w-3.5 transition-transform {isExpanded
+												? 'rotate-90'
+												: ''}"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M9 5l7 7-7 7"
+											/>
+										</svg>
+									</button>
+									<button
+										data-testid="sidebar-workspace-{ws.workspace_name}"
+										onclick={() => navigate(`/${encodeURIComponent(ws.workspace_name)}/`)}
+										class="flex min-w-0 flex-1 items-center gap-2 rounded-r-lg px-1.5 py-1.5 text-left transition hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400"
+									>
+										<span class="truncate font-medium">{ws.workspace_name}</span>
+										<span class="ml-auto shrink-0 text-xs text-gray-400">{wsTables.length}</span>
+									</button>
+								</div>
 								{#if isExpanded}
 									<div
 										class="mt-0.5 ml-3 space-y-0.5 border-l border-gray-200 pl-2 dark:border-gray-700"
