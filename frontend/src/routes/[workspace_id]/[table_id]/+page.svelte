@@ -15,7 +15,7 @@
 	// Controller
 	import { fetchTable, fetchRows, patchSchema } from '$lib/backend/tables';
 	import { fetchWorkspaces } from '$lib/backend/workspaces';
-	import { currentWorkspaceId } from '$lib/stores/table_schemas.store';
+	import { currentWorkspaceId, resolveWorkspaceParam } from '$lib/stores/table_schemas.store';
 	import { error, IMPLICIT_TABLE_VIEW } from '$lib/stores/tables.store';
 	import { s } from '$lib/components/table/table-page.svelte';
 
@@ -77,6 +77,7 @@
 
 	$effect(() => {
 		const tableId = $page.params.table_id!;
+		const wsParam = $page.params.workspace_id!;
 		tableLoaded = false;
 		s.reset();
 		error.set('');
@@ -87,12 +88,8 @@
 			}
 			try {
 				const wsList = await fetchWorkspaces();
-				let wsId: string | undefined = $page.params.workspace_id;
-				if (wsId && !/^[0-9a-f]{8}-/.test(wsId)) {
-					const ws = wsList.find((w) => w.workspace_name === wsId);
-					if (ws) wsId = ws.workspace_id;
-				}
-				const table = await fetchTable(tableId, wsId);
+				const wsId = resolveWorkspaceParam(wsParam, wsList);
+				const table = await fetchTable(tableId, wsId ?? undefined);
 				await fetchRows(table.table_id);
 				tableLoaded = true;
 				s.loadDocFlags(table.table_id).catch(() => {});

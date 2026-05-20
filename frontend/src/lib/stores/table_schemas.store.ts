@@ -77,6 +77,14 @@ export function toggleMenu(): void {
 	menuOpen.update((v) => !v);
 }
 
+export function resolveWorkspaceParam(param: string, wsList: Workspace[]): string | null {
+	if (/^[0-9a-f]{8}-/.test(param)) {
+		return wsList.some((w) => w.workspace_id === param) ? param : null;
+	}
+	const decoded = decodeURIComponent(param);
+	return wsList.find((w) => w.workspace_name === decoded)?.workspace_id ?? null;
+}
+
 export function resetMenu(): void {
 	workspaces.set([]);
 	tables.set([]);

@@ -2,7 +2,7 @@
 
 <script lang="ts">
 	import '../app.css';
-	import { goto, afterNavigate, replaceState } from '$app/navigation';
+	import { goto, afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { authStore, logout } from '$lib/stores/auth.store';
 	import { isDark } from '$lib/UI/theme.svelte';
@@ -51,7 +51,7 @@
 			if (!ws) return;
 			const newPathname = prettifyWorkspacePathname($page.url.pathname, wsId, ws.workspace_name);
 			if (newPathname !== $page.url.pathname) {
-				replaceState(newPathname + $page.url.search, $page.state);
+				history.replaceState(history.state, '', newPathname + $page.url.search);
 			}
 		} else {
 			// Resolve: name URL → UUID URL so SvelteKit routing receives UUID
