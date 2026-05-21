@@ -1,5 +1,69 @@
 # Changelog
 
+## v0.48 — 2026-05-21 (reduce $effect + default view fix)
+
+### Frontend — reduce `$effect`, use `$derived` from SSOT stores
+
+- **task-303 — setter-based persist in TablePageStore.** Eliminated
+  the `$effect` that JSON-stringified 8 fields every tick to detect
+  changes. View config now persists via explicit setter calls in
+  `handleViewChange` / `applyViewConfig`. Removes effect #6.
+
+- **task-304 — dark mode DOM toggle moved to `theme.svelte.ts`.**
+  The `+layout.svelte` `$effect` that toggled `document.documentElement
+  .classList` is replaced by a self-contained reactive block in the
+  theme manager. Components import `T` — no layout effect needed.
+  Removes effect #1.
+
+- **task-305 — layout sidebar state uses SSOT store.** Eliminated
+  the duplicate `$effect` in `+layout.svelte` that synced auth →
+  sidebar visibility. Sidebar open/close now reads directly from
+  `table_schemas.store.ts`. Removes effect #2.
+
+- **task-307 — table view group-first then sort within each group.**
+  `buildGroupedRows` in `table.utils.ts` now groups first, then
+  applies sort config within each group — matching kanban behavior.
+  Previously sorted globally then grouped, losing sort order at
+  group boundaries.
+
+### Bug fixes — `default_view` persistence
+
+- **task-306 — FE: allow implicit Schema view as default.** When
+  clicking Schema view (view_id=0, the implicit table view),
+  `handleViewChange` now sends `default_view: null` to clear the
+  stored default. On reload, null falls through to `candidates[0]`
+  which is IMPLICIT_TABLE_VIEW.
+
+- **task-309 — BE: `model_fields_set` for null clearing.** Changed
+  `SchemaPatch` handler from `if data.default_view is not None:` to
+  `if "default_view" in data.model_fields_set:`. Pydantic v2's
+  field tracking distinguishes "not provided" from "explicitly null".
+
+- **task-310 — V25 migration: `update_default_view` allows
+  view_id=0.** PG function skips the `table_views` existence check
+  when `p_view_id = 0` (the implicit Schema view sentinel is not
+  stored in DB).
+
+- **bug-312 — `fetchTable` writes `defaultView` to SSOT store.**
+  `fetchTable` set `columns`, `views`, `viewOrder` but not
+  `defaultView` — the store stayed stale after page load. Added
+  `defaultView.set(table.default_view ?? null)`.
+
+### Infrastructure
+
+- **claude-bot v0.35.3 — dead worker window detection.** Orchestrator
+  `wait_finish()` checks every 30s if tmux worker windows still exist.
+  If all workers died (watchdog kill, crash), resets stuck
+  `in_progress`/`testing` tickets to `todo` immediately instead of
+  burning the full 900s timeout.
+
+- **developing-svelte v0.8.0** — added e2e testing guidance, snapshot
+  verification rules.
+
+- **e2e directory renamed** from `test-e2e/` to `e2e/`.
+
+- **Backend Dockerfile** — `UV_LINK_MODE=copy` for IPv6 compatibility.
+
 ## v0.47 — 2026-05-20 (sidebar preload + data recovery)
 
 ### Performance — first-table-click latency removed
