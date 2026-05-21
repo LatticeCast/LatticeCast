@@ -66,7 +66,7 @@ def test_workspace_create(authed_page, admin_token, snapshot):
 
         # ── Step 3: UI — verify navigation to new workspace ──────────────────
         print("[3] Verify URL navigated to new workspace")
-        page.wait_for_url(f"**/{ws_name}/**", timeout=10000)
+        page.wait_for_url(f"**/{ws_name}*", timeout=10000)
         assert ws_name in page.url, f"Expected '{ws_name}' in URL, got {page.url}"
         snap(page, "t45_03_navigated", snapshot)
 

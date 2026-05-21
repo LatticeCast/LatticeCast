@@ -1,11 +1,8 @@
 <!-- routes/[workspace_id]/[table_id]/+page.svelte -->
 
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { get } from 'svelte/store';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
-	import { authStore } from '$lib/stores/auth.store';
 
 	// Model (SSOT stores)
 	import { columns } from '$lib/stores/table_schema.store';
@@ -13,12 +10,10 @@
 	import { rows } from '$lib/stores/table_rows.store';
 
 	// Controller
-	import { fetchTable, fetchRows, patchSchema } from '$lib/backend/tables';
-	import { fetchWorkspaces } from '$lib/backend/workspaces';
+	import { fetchRows, patchSchema } from '$lib/backend/tables';
 	import {
 		currentWorkspaceId,
-		currentTableId,
-		resolveWorkspaceParam
+		currentTableId
 	} from '$lib/stores/table_schemas.store';
 	import { error, IMPLICIT_TABLE_VIEW } from '$lib/stores/tables.store';
 	import { s } from '$lib/components/table/table-page.svelte';
@@ -49,9 +44,11 @@
 	import DashboardView from '$lib/components/dashboard/DashboardView.svelte';
 	import type { DashboardView as DashboardViewType } from '$lib/types/dashboard';
 
-	// ─── Derived (from SSOT stores + view state) ──���──────────────────────────────
+	// --- Page data from +page.ts load (stores already populated) ---
 
-	let tableLoaded = $state(false);
+	let { data } = $props();
+
+	// --- Derived (from SSOT stores + view state) ---
 
 	const sortedColumns = $derived(buildSortedColumns($columns, s.viewColOrder));
 
@@ -78,56 +75,46 @@
 
 	const renderItems = $derived(buildRenderItems(sortedRows, groupedRows, s.collapsedGroups));
 
-	// Derived from SSOT stores — used in template instead of $page.params
 	const tableId = $derived($currentTableId ?? '');
 	const wsId = $derived($currentWorkspaceId ?? '');
 
-	// ─── Lifecycle ───────���───────────────────────────────────────────────────────
+	// --- Init view selection from load data (runs once per navigation) ---
 
 	$effect(() => {
-		const _tableId = $page.params.table_id!;
-		const _wsParam = $page.params.workspace_id!;
-		tableLoaded = false;
-		s.reset();
-		error.set('');
-		(async () => {
-			if (!$authStore?.role) {
-				goto('/login');
-				return;
+		const table = data.table;
+		const urlViewId = data.urlViewId;
+
+		untrack(() => {
+			s.reset();
+			error.set('');
+
+			const loadedViews = get(viewsStore);
+			const hasUserTable = loadedViews.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id);
+			const candidates = hasUserTable ? loadedViews : [IMPLICIT_TABLE_VIEW, ...loadedViews];
+			const dv = table.default_view ?? null;
+
+			let targetViewId: number;
+			if (!isNaN(urlViewId) && candidates.some((v) => v.view_id === urlViewId)) {
+				targetViewId = urlViewId;
+			} else if (dv !== null && candidates.some((v) => v.view_id === dv)) {
+				targetViewId = dv;
+			} else if (candidates.length > 0) {
+				targetViewId = candidates[0].view_id;
+			} else {
+				targetViewId = 0;
 			}
-			try {
-				const wsList = await fetchWorkspaces();
-				const resolvedWsId = resolveWorkspaceParam(_wsParam, wsList);
-				const table = await fetchTable(_tableId, resolvedWsId ?? undefined);
-				await fetchRows(table.table_id);
-				currentTableId.set(table.table_id);
-				tableLoaded = true;
-				s.loadDocFlags(table.table_id).catch(() => {});
-				currentWorkspaceId.set(table.workspace_id);
-				const urlViewRaw = new URL(window.location.href).searchParams.get('view');
-				const urlViewId = urlViewRaw !== null ? Number(urlViewRaw) : NaN;
-				const loadedViews = get(viewsStore);
-				const hasUserTable = loadedViews.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id);
-				const candidates = hasUserTable ? loadedViews : [IMPLICIT_TABLE_VIEW, ...loadedViews];
-				const defaultView = table.default_view ?? null;
-				if (!isNaN(urlViewId) && candidates.some((v) => v.view_id === urlViewId)) {
-					s.activeViewId = urlViewId;
-				} else if (defaultView !== null && candidates.some((v) => v.view_id === defaultView)) {
-					s.activeViewId = defaultView;
-				} else if (candidates.length > 0) {
-					s.activeViewId = candidates[0].view_id;
-				}
-				const initView = candidates.find((v) => v.view_id === s.activeViewId);
-				if (initView) s.applyViewConfig(initView);
-			} catch (e) {
-				error.set(e instanceof Error ? e.message : 'Failed to load table');
-			}
-		})();
+
+			s.activeViewId = targetViewId;
+			const initView = candidates.find((v) => v.view_id === targetViewId);
+			if (initView) s.applyViewConfig(initView);
+
+			s.loadDocFlags(table.table_id).catch(() => {});
+		});
 	});
 
 	onMount(() => s.setupMouseListeners());
 
-	// ─── Page-specific handlers (not yet in store class) ─────────────────────────
+	// --- Page-specific handlers (not yet in store class) ---
 
 	async function handleDragReorderColumns(fromId: string, toId: string) {
 		const ordered = [...$columns]
@@ -174,7 +161,7 @@
 
 <div
 	class="flex h-full flex-col bg-white {s.resizingColId ? 'cursor-col-resize select-none' : ''}"
-	data-table-loaded={tableLoaded ? 'true' : undefined}
+	data-table-loaded="true"
 >
 	{#if $error}
 		<div class="mx-4 mt-2 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{$error}</div>
@@ -216,7 +203,7 @@
 		<TableGrid
 			{sortedColumns}
 			{renderItems}
-			loading={!tableLoaded}
+			loading={false}
 			{tableMinWidth}
 			addingRow={s.addingRow}
 			addingColumn={s.addingColumn}

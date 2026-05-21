@@ -114,6 +114,7 @@
 			closeWsSettings();
 			return;
 		}
+		const isActive = wsSettingsTarget.workspace_id === activeWorkspace?.workspace_id;
 		wsSaving = true;
 		wsSettingsError = '';
 		try {
@@ -121,7 +122,7 @@
 				workspace_name: name
 			});
 			closeWsSettings();
-			if (updated.workspace_id === activeWorkspace?.workspace_id) {
+			if (isActive) {
 				goto(`/${encodeURIComponent(updated.workspace_name)}/`, { replaceState: true });
 			}
 		} catch (e) {
