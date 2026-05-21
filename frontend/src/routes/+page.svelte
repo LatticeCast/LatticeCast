@@ -4,14 +4,16 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth.store';
-	import { fetchSidebar } from '$lib/backend/table_schemas';
-	import { currentTableId, workspaces as workspacesStore } from '$lib/stores/table_schemas.store';
+	import {
+		currentTableId,
+		workspaces as workspacesStore,
+		initSidebar
+	} from '$lib/stores/table_schemas.store';
 	import { get } from 'svelte/store';
 	import { T } from '$lib/UI/theme.svelte';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
 	import type { Workspace } from '$lib/types/table';
 
-	let workspaces = $state<Workspace[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 	let showCreateWorkspace = $state(false);
@@ -23,9 +25,8 @@
 		}
 		currentTableId.set(null);
 		try {
-			await fetchSidebar();
+			await initSidebar();
 			const ws = get(workspacesStore);
-			workspaces = ws;
 			if (ws.length > 0) {
 				const lastName =
 					typeof localStorage !== 'undefined' ? localStorage.getItem('lastWorkspace') : null;
@@ -50,7 +51,7 @@
 		{/if}
 		{#if loading}
 			<div class="text-center {T.muted}">Loading...</div>
-		{:else if workspaces.length === 0}
+		{:else if $workspacesStore.length === 0}
 			<div class="rounded-3xl {T.cardBg} p-8 text-center {T.muted} shadow-sm">
 				<p class="mb-4">No workspaces yet.</p>
 				<button

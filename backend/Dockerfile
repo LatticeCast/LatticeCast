@@ -7,11 +7,11 @@ WORKDIR /app
 
 ENV UV_HTTP_TIMEOUT=180 
 ENV UV_CONCURRENT_DOWNLOADS=4
-ENV UV_LINK_MODE=copy
 
 COPY pyproject.toml uv.lock ./
 RUN echo "precedence ::ffff:0:0/96 100" >> /etc/gai.conf
-RUN uv sync --no-dev --frozen --verbose
+ENV UV_HTTP_TIMEOUT=180
+RUN uv sync --no-dev
 
 ENV PATH="/app/.venv/bin:$PATH"
 

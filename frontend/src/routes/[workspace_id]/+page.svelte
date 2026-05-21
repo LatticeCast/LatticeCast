@@ -6,37 +6,40 @@
 	import { page } from '$app/stores';
 	import { authStore } from '$lib/stores/auth.store';
 	import {
-		fetchTables,
 		createTable,
 		updateTable,
 		deleteTable,
 		createPmTemplate
 	} from '$lib/backend/tables';
-	import { fetchWorkspaces, updateWorkspace, deleteWorkspace } from '$lib/backend/workspaces';
-	import { currentTableId } from '$lib/stores/table_schemas.store';
+	import { updateWorkspace, deleteWorkspace } from '$lib/backend/workspaces';
+	import {
+		currentTableId,
+		workspaces as workspacesStore,
+		tables as tablesStore,
+		initSidebar
+	} from '$lib/stores/table_schemas.store';
 	import type { Table, Workspace } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
 	import { isUuid } from '$lib/utils/url';
-
-	let tables = $state<Table[]>([]);
-	let workspaces = $state<Workspace[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 	let showCreateWorkspace = $state(false);
 
-	// Derive active workspace from URL params + loaded workspaces
+	// Derive active workspace from URL params + store
 	const activeWorkspace = $derived.by<Workspace | null>(() => {
-		if (!workspaces.length) return null;
+		if (!$workspacesStore.length) return null;
 		const wsParam = $page.params.workspace_id;
 		if (!wsParam) return null;
 		return isUuid(wsParam)
-			? (workspaces.find((w) => w.workspace_id === wsParam) ?? null)
-			: (workspaces.find((w) => w.workspace_name === wsParam) ?? null);
+			? ($workspacesStore.find((w) => w.workspace_id === wsParam) ?? null)
+			: ($workspacesStore.find((w) => w.workspace_name === wsParam) ?? null);
 	});
 
 	const activeTables = $derived(
-		activeWorkspace ? tables.filter((t) => t.workspace_id === activeWorkspace.workspace_id) : []
+		activeWorkspace
+			? $tablesStore.filter((t) => t.workspace_id === activeWorkspace.workspace_id)
+			: []
 	);
 
 	// Per-workspace create state
@@ -83,9 +86,7 @@
 		loading = true;
 		error = '';
 		try {
-			const [ws, tbls] = await Promise.all([fetchWorkspaces(), fetchTables()]);
-			workspaces = ws;
-			tables = tbls;
+			await initSidebar();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load data';
 		} finally {
@@ -119,7 +120,6 @@
 			const updated = await updateWorkspace(wsSettingsTarget.workspace_id, {
 				workspace_name: name
 			});
-			workspaces = workspaces.map((w) => (w.workspace_id === updated.workspace_id ? updated : w));
 			closeWsSettings();
 			if (updated.workspace_id === activeWorkspace?.workspace_id) {
 				goto(`/${encodeURIComponent(updated.workspace_name)}/`, { replaceState: true });
@@ -139,11 +139,8 @@
 		wsSettingsError = '';
 		try {
 			await deleteWorkspace(wsSettingsTarget.workspace_id);
-			const deletedId = wsSettingsTarget.workspace_id;
-			workspaces = workspaces.filter((w) => w.workspace_id !== deletedId);
-			tables = tables.filter((t) => t.workspace_id !== deletedId);
 			closeWsSettings();
-			const next = workspaces[0];
+			const next = $workspacesStore[0];
 			if (next) {
 				goto(`/${encodeURIComponent(next.workspace_name)}/`, { replaceState: true });
 			} else {
@@ -162,8 +159,7 @@
 		creating = { ...creating, [wsId]: true };
 		error = '';
 		try {
-			const table = await createTable({ table_id: name, workspace_id: wsId });
-			tables = [...tables, table];
+			await createTable({ table_id: name, workspace_id: wsId });
 			newTableNames = { ...newTableNames, [wsId]: '' };
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create table';
@@ -193,7 +189,7 @@
 			return;
 		}
 		const wsId = tableSettingsTarget.workspace_id;
-		const duplicate = tables.some(
+		const duplicate = $tablesStore.some(
 			(t) =>
 				t.workspace_id === wsId &&
 				t.table_id === name &&
@@ -206,8 +202,7 @@
 		tableSaving = true;
 		tableSettingsError = '';
 		try {
-			const updated = await updateTable(tableSettingsTarget.table_id, { table_id: name });
-			tables = tables.map((t) => (t.table_id === updated.table_id ? updated : t));
+			await updateTable(tableSettingsTarget.table_id, { table_id: name });
 			closeTableSettings();
 		} catch (e) {
 			tableSettingsError = e instanceof Error ? e.message : 'Failed to rename table';
@@ -223,7 +218,6 @@
 		tableSettingsError = '';
 		try {
 			await deleteTable(tableSettingsTarget.table_id);
-			tables = tables.filter((t) => t.table_id !== tableSettingsTarget!.table_id);
 			closeTableSettings();
 		} catch (e) {
 			tableSettingsError = e instanceof Error ? e.message : 'Failed to delete table';
@@ -239,11 +233,10 @@
 		error = '';
 		try {
 			const table = await createPmTemplate(name, templateWorkspaceId);
-			tables = [...tables, table];
 			showTemplateModal = false;
 			templateName = '';
 			templateWorkspaceId = '';
-			const wsForTable = workspaces.find((w) => w.workspace_id === table.workspace_id);
+			const wsForTable = $workspacesStore.find((w) => w.workspace_id === table.workspace_id);
 			const wsPath = wsForTable
 				? encodeURIComponent(wsForTable.workspace_name)
 				: table.workspace_id;
@@ -277,10 +270,10 @@
 				<p class="mb-4 text-sm {T.muted}">
 					"{$page.params.workspace_id}" may have been renamed or deleted.
 				</p>
-				{#if workspaces.length > 0}
+				{#if $workspacesStore.length > 0}
 					<p class="mb-3 text-sm {T.muted}">Available workspaces:</p>
 					<div class="flex flex-wrap justify-center gap-2">
-						{#each workspaces as ws (ws.workspace_id)}
+						{#each $workspacesStore as ws (ws.workspace_id)}
 							<a
 								href="/{encodeURIComponent(ws.workspace_name)}/"
 								class="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
@@ -297,7 +290,7 @@
 				data-testid="workspace-tab-strip"
 				class="mb-6 flex items-center gap-1 overflow-x-auto pb-1"
 			>
-				{#each workspaces as ws (ws.workspace_id)}
+				{#each $workspacesStore as ws (ws.workspace_id)}
 					<a
 						data-testid="workspace-tab-{ws.workspace_id}"
 						href="/{encodeURIComponent(ws.workspace_name)}/"
@@ -449,7 +442,6 @@
 	show={showCreateWorkspace}
 	onClose={() => (showCreateWorkspace = false)}
 	onCreated={(ws) => {
-		workspaces = [...workspaces, ws];
 		showCreateWorkspace = false;
 		goto(`/${encodeURIComponent(ws.workspace_name)}/`);
 	}}
