@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.49 — 2026-05-21 (table page load + e2e fixes)
+
+### Frontend — table page `+page.ts` load function
+
+- **Table page data loading moved to `+page.ts`.** Replaced the async
+  IIFE inside `$effect` with a SvelteKit `+page.ts` load function.
+  Data (table schema, rows, views) is now fetched before the component
+  mounts — eliminates the race condition where Playwright found stale
+  DOM before the async effect completed. `loading` state and
+  `tableLoaded` flag removed; `data-table-loaded="true"` is always set.
+
+- **`untrack()` guard on view init effect.** The `$effect` that
+  selects the initial active view now wraps its body in `untrack()`.
+  Previously, reading `s.activeViewId` inside the effect made it a
+  tracked dependency — any view switch via `handleViewChange` re-ran
+  the effect, calling `s.reset()` and reverting `activeViewId` back to
+  the Schema view. Only `data.table` and `data.urlViewId` (from props)
+  are tracked now.
+
+- **Workspace page uses SSOT store directly.** `+page.svelte` and
+  `[workspace_id]/+page.svelte` now read `$workspacesStore` /
+  `$tablesStore` instead of local `let workspaces` / `let tables`
+  copies. Mutations (create, rename, delete) no longer manually splice
+  the local array — the store is updated by the API call, and the
+  derived UI re-renders automatically.
+
+### Bug fixes — workspace rename navigation
+
+- **Capture `isActive` before async `updateWorkspace`.** In
+  `handleWsRename`, `activeWorkspace` is derived from the URL param
+  matched against `workspace_name` in the store. After
+  `updateWorkspace` mutated the store (changing the name), the derived
+  value resolved to `null` and the `goto()` never fired. Fix: snapshot
+  `isActive` before the async call.
+
+### E2E test fixes
+
+- **`test_create.py`** — URL pattern `**/{ws_name}/**` didn't match
+  `/{ws_name}` (no trailing slash). Changed to `**/{ws_name}*`.
+
+- **`test_rename.py`** — `wait_for_url` doesn't detect
+  `history.replaceState` navigation. Replaced with Playwright's
+  `expect(page).to_have_url(re.compile(...))` which polls the URL.
+
 ## v0.48 — 2026-05-21 (reduce $effect + default view fix)
 
 ### Frontend — reduce `$effect`, use `$derived` from SSOT stores
