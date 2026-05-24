@@ -1,7 +1,6 @@
 services:
   lattice-cast:
     image: nginx:alpine
-    restart: always
     ports:
       - "${NGX_PORT}:${NGX_PORT}"
     volumes:
@@ -22,7 +21,6 @@ services:
         - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
         - AUTHENTIK_URL=${AUTHENTIK_URL}
         - AUTHENTIK_CLIENT_ID=${AUTHENTIK_CLIENT_ID}
-    restart: always
     env_file:
       - .env
     networks:
@@ -37,7 +35,6 @@ services:
   backend:
     build:
       context: ./backend
-    restart: always
     volumes:
       - ./backend/:/app/
       - /app/.venv
@@ -64,7 +61,6 @@ services:
 
   db:
     image: postgres:18
-    restart: always
     command: >
       postgres
       -c logging_collector=on
@@ -110,7 +106,6 @@ services:
 
   valkey:
     image: valkey/valkey:8-alpine
-    restart: always
     volumes:
       - valkey_data:/data
     command: valkey-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
@@ -124,7 +119,6 @@ services:
 
   minio:
     image: minio/minio:latest
-    restart: always
     volumes:
       - .minio_data:/data
     env_file:
