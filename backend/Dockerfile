@@ -10,10 +10,12 @@ ENV UV_HTTP_TIMEOUT=180
 ENV UV_CONCURRENT_DOWNLOADS=4
 RUN echo "precedence ::ffff:0:0/96 100" >> /etc/gai.conf
 
-COPY pyproject.toml .
-RUN uv pip install --system  --verbose -r pyproject.toml
+COPY pyproject.toml uv.lock .
+RUN uv sync --no-dev --verbose
 
-# Copy source
+ENV PATH="/app/.venv/bin:$PATH"
+
+# Copy source and migrations
 COPY ./src/ ./src/
 RUN mkdir -p /app/src/workspace /app/src/log
 
