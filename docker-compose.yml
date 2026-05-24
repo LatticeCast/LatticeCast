@@ -17,6 +17,7 @@ services:
   frontend:
     build:
       context: ./frontend
+      network: host
       args:
         - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
         - AUTHENTIK_URL=${AUTHENTIK_URL}
@@ -35,6 +36,7 @@ services:
   backend:
     build:
       context: ./backend
+      network: host
     volumes:
       - ./backend/:/app/
       - /app/.venv
@@ -91,6 +93,7 @@ services:
       - migration
     build:
       context: ./migration
+      network: host
     environment:
       DATABASE_URL: postgresql://dba_user:dba_pws@db:5432/${POSTGRES_DB}
       TEST_NETWORK: latticecast_app-network
@@ -140,6 +143,7 @@ services:
       - test
     build:
       context: ./e2e
+      network: host
     volumes:
       - ./e2e:/scripts
     env_file:
@@ -181,6 +185,7 @@ services:
     build:
       context: ./e2e
       dockerfile: Dockerfile.browser
+      network: host
     volumes:
       - ./.browser:/output
     environment:

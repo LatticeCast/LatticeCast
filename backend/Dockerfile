@@ -1,8 +1,6 @@
-FROM python:3.12-slim
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates supervisor && \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates supervisor git && \
     update-ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
