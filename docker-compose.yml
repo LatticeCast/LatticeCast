@@ -39,7 +39,6 @@ services:
       network: host
     volumes:
       - ./backend/:/app/
-      - /app/.venv
     env_file:
       - .env
     environment:
