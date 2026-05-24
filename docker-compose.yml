@@ -46,6 +46,11 @@ services:
     environment:
       POSTGRES_URL: db:5432
       REDIS_URL: redis://valkey:6379/0
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "50"
     depends_on:
       db:
         condition: service_healthy

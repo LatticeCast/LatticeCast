@@ -1,11 +1,9 @@
 # src/main.py
 
 import asyncio
-import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
-from datetime import datetime
 
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,20 +22,6 @@ from router.api.storage import router as api_storage_router
 from router.api.table_schemas import router as api_table_schemas_router
 from router.api.tables import router as api_tables_router
 from router.api.workspaces import router as api_workspaces_router
-
-# Local imports
-from ServerTee import ServerTee
-
-# --------------------------------------------------
-# Logging setup
-# --------------------------------------------------
-
-today_date = datetime.now().strftime("%Y-%m-%d")
-os.makedirs("log", exist_ok=True)
-log_file_path = f"log/{today_date}.log"
-
-tee = ServerTee(log_file_path)
-print(f"📝 Logging to: {log_file_path}")
 
 
 # --------------------------------------------------

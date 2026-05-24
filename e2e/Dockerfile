@@ -5,6 +5,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates
 
 WORKDIR /scripts
+ENV PATH="/scripts/.venv/bin:$PATH"
 
 ENV UV_HTTP_TIMEOUT=180 
 ENV UV_CONCURRENT_DOWNLOADS=4
