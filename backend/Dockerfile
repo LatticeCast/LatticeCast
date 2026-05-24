@@ -1,5 +1,6 @@
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
+RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates
 RUN apt-get update && apt-get install -y --no-install-recommends cron supervisor git && \
     rm -rf /var/lib/apt/lists/*
 
@@ -7,15 +8,12 @@ WORKDIR /app
 
 ENV UV_HTTP_TIMEOUT=180 
 ENV UV_CONCURRENT_DOWNLOADS=4
-
-COPY pyproject.toml uv.lock ./
 RUN echo "precedence ::ffff:0:0/96 100" >> /etc/gai.conf
-ENV UV_HTTP_TIMEOUT=180
-RUN uv sync --no-dev
 
-ENV PATH="/app/.venv/bin:$PATH"
+COPY pyproject.toml .
+RUN uv pip install --system  --verbose -r pyproject.toml
 
-# Copy source and migrations
+# Copy source
 COPY ./src/ ./src/
 RUN mkdir -p /app/src/workspace /app/src/log
 

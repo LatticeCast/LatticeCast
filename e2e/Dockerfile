@@ -1,16 +1,14 @@
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
+RUN apt-get update && apt-get install -y ca-certificates && update-ca-certificates
+
 WORKDIR /scripts
 
 ENV UV_HTTP_TIMEOUT=180 
 ENV UV_CONCURRENT_DOWNLOADS=4
-
-# Test runner deps only — playwright client lib + requests. No browsers,
-# no direct DB. e2e remote-drives Chromium in the `browser` service
-# via BROWSER_WS, and hits the BE through BASE_URL.
-COPY pyproject.toml ./
 RUN echo "precedence ::ffff:0:0/96 100" >> /etc/gai.conf
-ENV UV_HTTP_TIMEOUT=180
-RUN uv pip install --system --no-cache -r pyproject.toml
+
+COPY pyproject.toml .
+RUN uv pip install --system  --verbose -r pyproject.toml
 
 CMD ["tail", "-f", "/dev/null"]
