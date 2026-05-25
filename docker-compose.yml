@@ -182,8 +182,7 @@ services:
     profiles:
       - test
     build:
-      context: ./e2e
-      dockerfile: Dockerfile.browser
+      context: ./browser
       network: host
     volumes:
       - ./.browser:/output
