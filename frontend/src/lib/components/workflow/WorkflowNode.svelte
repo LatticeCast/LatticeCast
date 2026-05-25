@@ -11,7 +11,11 @@
 	const isTool = $derived(data.nodeType === 'TOOL');
 </script>
 
-<div class="workflow-node" data-testid="workflow-node-{data.label}" style="border-color: {color}; border-left: 4px solid {color};">
+<div
+	class="workflow-node"
+	data-testid="workflow-node-{data.label}"
+	style="border-color: {color}; border-left: 4px solid {color};"
+>
 	<div class="node-header" style="background-color: {color}20;">
 		<span class="node-type" style="color: {color};">{data.nodeType}</span>
 		<span class="node-label">{data.label}</span>
@@ -26,7 +30,9 @@
 		type="target"
 		position={Position.Left}
 		isConnectable={!isStart && !isTool}
-		style="visibility: {!isStart && !isTool ? 'visible' : 'hidden'}; width: 10px; height: 10px; background: #6b7280;"
+		style="visibility: {!isStart && !isTool
+			? 'visible'
+			: 'hidden'}; width: 10px; height: 10px; background: #6b7280;"
 	/>
 
 	<!-- Source handle (right) — not on CONDITION or TOOL -->

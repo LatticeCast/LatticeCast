@@ -421,6 +421,14 @@ class TablePageStore {
 		];
 	}
 
+	// Filter fields are edited in place via `bind:value` on the condition
+	// objects, which mutates the array elements without re-assigning the
+	// array — so the `filterConditions` setter never runs. Call this on
+	// every field edit (colId/operator/value) to persist the change.
+	onFilterConditionEdited() {
+		this.schedulePersist();
+	}
+
 	removeFilterCondition(id: string) {
 		this.filterConditions = this.filterConditions.filter((c) => c.id !== id);
 	}

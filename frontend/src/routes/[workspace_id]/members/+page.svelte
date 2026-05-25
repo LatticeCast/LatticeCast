@@ -37,18 +37,12 @@
 		if (!wsId) return;
 
 		const token = $authStore?.accessToken;
-		if (!token) {
-			goto('/login');
-			return;
-		}
+		if (!token) return;
 
 		(async () => {
 			if (!initialized) {
 				const me = await fetchMe(token);
-				if (!me) {
-					goto('/login');
-					return;
-				}
+				if (!me) return;
 				currentUserId = me.user_id;
 				initialized = true;
 			}

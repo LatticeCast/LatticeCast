@@ -95,7 +95,9 @@
 		{edges}
 		{nodeTypes}
 		onconnect={handleConnect}
-		onnodedragstop={(e) => { if (e.targetNode) handleNodeDragStop(e.targetNode); }}
+		onnodedragstop={(e) => {
+			if (e.targetNode) handleNodeDragStop(e.targetNode);
+		}}
 		fitView
 	>
 		<Controls />

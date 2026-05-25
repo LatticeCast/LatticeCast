@@ -10,10 +10,12 @@
 	import { rows } from '$lib/stores/table_rows.store';
 
 	// Controller
-	import { fetchRows, patchSchema } from '$lib/backend/tables';
+	import { fetchRows, fetchTable, patchSchema } from '$lib/backend/tables';
+	import { fetchWorkspaces } from '$lib/backend/workspaces';
 	import {
 		currentWorkspaceId,
-		currentTableId
+		currentTableId,
+		resolveWorkspaceParam
 	} from '$lib/stores/table_schemas.store';
 	import { error, IMPLICIT_TABLE_VIEW } from '$lib/stores/tables.store';
 	import { s } from '$lib/components/table/table-page.svelte';
@@ -79,38 +81,71 @@
 	const tableId = $derived($currentTableId ?? '');
 	const wsId = $derived($currentWorkspaceId ?? '');
 
-	// --- Init view selection from load data (runs once per navigation) ---
+	// --- Load on navigation. The URL/shell is already showing (the +page.ts
+	//     load does no network), so we fetch table + rows here and show a
+	//     loading state until they arrive. Runs once per navigation. ---
+
+	let loading = $state(true);
 
 	$effect(() => {
-		const table = data.table;
+		const wsParam = data.workspaceParam;
+		const tableParam = data.tableParam;
 		const urlViewId = data.urlViewId;
 
 		untrack(() => {
 			s.reset();
 			error.set('');
-
-			const loadedViews = get(viewsStore);
-			const hasUserTable = loadedViews.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id);
-			const candidates = hasUserTable ? loadedViews : [IMPLICIT_TABLE_VIEW, ...loadedViews];
-			const dv = table.default_view ?? null;
-
-			let targetViewId: number;
-			if (!isNaN(urlViewId) && candidates.some((v) => v.view_id === urlViewId)) {
-				targetViewId = urlViewId;
-			} else if (dv !== null && candidates.some((v) => v.view_id === dv)) {
-				targetViewId = dv;
-			} else if (candidates.length > 0) {
-				targetViewId = candidates[0].view_id;
-			} else {
-				targetViewId = 0;
-			}
-
-			s.activeViewId = targetViewId;
-			const initView = candidates.find((v) => v.view_id === targetViewId);
-			if (initView) s.applyViewConfig(initView);
-
-			s.loadDocFlags(table.table_id).catch(() => {});
+			loading = true;
 		});
+
+		let cancelled = false;
+		(async () => {
+			try {
+				const wsList = await fetchWorkspaces();
+				const resolvedWsId = resolveWorkspaceParam(wsParam, wsList);
+				const table = await fetchTable(tableParam, resolvedWsId ?? undefined);
+				await fetchRows(table.table_id);
+				if (cancelled) return;
+
+				currentTableId.set(table.table_id);
+				currentWorkspaceId.set(table.workspace_id);
+
+				untrack(() => {
+					const loadedViews = get(viewsStore);
+					const hasUserTable = loadedViews.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id);
+					const candidates = hasUserTable ? loadedViews : [IMPLICIT_TABLE_VIEW, ...loadedViews];
+					const dv = table.default_view ?? null;
+
+					let targetViewId: number;
+					if (!isNaN(urlViewId) && candidates.some((v) => v.view_id === urlViewId)) {
+						targetViewId = urlViewId;
+					} else if (dv !== null && candidates.some((v) => v.view_id === dv)) {
+						targetViewId = dv;
+					} else if (candidates.length > 0) {
+						targetViewId = candidates[0].view_id;
+					} else {
+						targetViewId = 0;
+					}
+
+					s.activeViewId = targetViewId;
+					const initView = candidates.find((v) => v.view_id === targetViewId);
+					if (initView) s.applyViewConfig(initView);
+
+					s.loadDocFlags(table.table_id).catch(() => {});
+					loading = false;
+				});
+			} catch (e) {
+				if (cancelled) return;
+				untrack(() => {
+					error.set(e instanceof Error ? e.message : 'Failed to load table');
+					loading = false;
+				});
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
 	});
 
 	onMount(() => s.setupMouseListeners());
@@ -162,128 +197,143 @@
 
 <div
 	class="flex h-full flex-col bg-white {s.resizingColId ? 'cursor-col-resize select-none' : ''}"
-	data-table-loaded="true"
+	data-table-loaded={!loading}
 >
 	{#if $error}
 		<div class="mx-4 mt-2 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-600">{$error}</div>
 	{/if}
 
-	<ViewSwitcher
-		views={allViews}
-		activeViewId={activeView.view_id}
-		onViewChange={(v) => s.handleViewChange(v)}
-		onAddView={(type, name) => s.handleAddView(type, name)}
-		onDeleteView={(v) => s.handleDeleteView(v)}
-		onRenameView={(id, name) => s.handleRenameView(id, name)}
-		isRenameable={(v) => $viewsStore.some((uv) => uv.view_id === v.view_id)}
-		onReorderViews={handleReorderViews}
-	/>
-
-	{#if activeView.type === 'table'}
-		<TableToolbar
-			columns={$columns}
-			sortConfig={s.sortConfig}
-			groupConfig={s.groupConfig}
-			filterConditions={s.filterConditions}
-			showFilterPanel={s.showFilterPanel}
-			searchQuery={s.searchQuery}
-			onSortChange={(c) => (s.sortConfig = c)}
-			onGroupChange={(c) => (s.groupConfig = c)}
-			onShowFilterPanelChange={(v) => (s.showFilterPanel = v)}
-			onSearchQueryChange={(q) => (s.searchQuery = q)}
-			onExportTemplate={() => s.handleExportTemplate()}
-			onShowImportTemplate={() => (s.showImportTemplateModal = true)}
-			onExportCSV={() => s.exportCSV()}
-			onExportJSON={() => s.exportJSON()}
-			onImportFile={(e) => s.handleImportFile(e)}
-			onAddFilterCondition={() => s.addFilterCondition()}
-			onRemoveFilterCondition={(id) => s.removeFilterCondition(id)}
-			onClearAllFilters={() => (s.filterConditions = [])}
+	{#if loading}
+		<div
+			class="flex flex-1 items-center justify-center gap-2 text-sm text-gray-400"
+			data-testid="table-loading"
+		>
+			<svg class="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+				<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+				></circle>
+				<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+			</svg>
+			Loading…
+		</div>
+	{:else}
+		<ViewSwitcher
+			views={allViews}
+			activeViewId={activeView.view_id}
+			onViewChange={(v) => s.handleViewChange(v)}
+			onAddView={(type, name) => s.handleAddView(type, name)}
+			onDeleteView={(v) => s.handleDeleteView(v)}
+			onRenameView={(id, name) => s.handleRenameView(id, name)}
+			isRenameable={(v) => $viewsStore.some((uv) => uv.view_id === v.view_id)}
+			onReorderViews={handleReorderViews}
 		/>
 
-		<TableGrid
-			{sortedColumns}
-			{renderItems}
-			loading={false}
-			{tableMinWidth}
-			addingRow={s.addingRow}
-			addingColumn={s.addingColumn}
-			scrollToRowId={s.scrollToRowId}
-			scrollToColTrigger={s.scrollToColTrigger}
-			deletingRowId={s.deletingRowId}
-			rowsWithDocs={s.rowsWithDocs}
-			editingCell={s.editingCell}
-			editValue={s.editValue}
-			renamingColId={s.renamingColId}
-			renameValue={s.renameValue}
-			colMenuId={s.colMenuId}
-			tagsPopupCell={s.tagsPopupCell}
-			sortConfig={s.sortConfig}
-			collapsedGroups={s.collapsedGroups}
-			localWidths={s.localWidths}
-			onStartEdit={(rowId, col, val) => s.startEdit(rowId, col, val)}
-			onCommitEdit={(rowId, col) => s.commitEdit(rowId, col)}
-			onEditValueChange={(v) => (s.editValue = v)}
-			onEditingCellChange={(c) => (s.editingCell = c)}
-			onToggleCheckbox={(rowId, col) => s.toggleCheckbox(rowId, col)}
-			onRemoveTag={(rowId, col, tag) => s.removeTag(rowId, col, tag)}
-			onAddTag={(rowId, col, tag) => s.addTag(rowId, col, tag)}
-			onTagsPopupChange={(c) => (s.tagsPopupCell = c)}
-			onDeleteRow={(id) => s.handleDeleteRow(id)}
-			onOpenExpand={(row) => s.openExpand(row)}
-			onOpenContextMenu={(e, type, id) => s.openContextMenu(e, type, id)}
-			onStartRename={(id, name) => s.startRename(id, name)}
-			onCommitRename={(id) => s.commitRename(id)}
-			onRenameValueChange={(v) => (s.renameValue = v)}
-			onRenamingColIdChange={(id) => (s.renamingColId = id)}
-			onColMenuChange={(id) => (s.colMenuId = id)}
-			onSortChange={(c) => (s.sortConfig = c)}
-			onFilterAdd={(id) => s.addFilterForColumn(id)}
-			onShowFilterPanel={() => (s.showFilterPanel = true)}
-			onDeleteColumn={(id) => s.handleDeleteColumn(id)}
-			onDragReorderColumns={handleDragReorderColumns}
-			onResizeStart={(e, col) => s.handleResizeStart(e, col)}
-			onShowAddColumn={() => (s.showAddColumn = true)}
-			onAddRow={() => s.handleAddRow()}
-			onAddRowAndEdit={(colId) => s.handleAddRow(colId)}
-			onAddRowInGroup={(key, col) => s.handleAddRowInGroup(key, col)}
-			onToggleCollapseGroup={(key) => s.toggleCollapseGroup(key)}
-			onManageOptions={(col) => (s.managingOptionsCol = col)}
-			onOpenDocCell={(row, col) => (s.docCellState = { row, col })}
-		/>
-	{:else if activeView.type === 'kanban'}
-		<KanbanBoard
-			{tableId}
-			columns={$columns}
-			rows={$rows}
-			viewConfig={activeView}
-			onOpenExpand={(row) => s.openExpand(row)}
-			onRowsRefresh={() => fetchRows(tableId)}
-			onAddRow={(data) => s.openCreateTicket(data)}
-		/>
-	{:else if activeView.type === 'timeline'}
-		<TimelineView
-			{tableId}
-			columns={$columns}
-			rows={$rows}
-			viewConfig={activeView}
-			onOpenExpand={(row) => s.openExpand(row)}
-			onRowsRefresh={() => fetchRows(tableId)}
-			onAddRow={(data) => s.openCreateTicket(data)}
-		/>
-	{:else if activeView.type === 'dashboard'}
-		<DashboardView
-			view={activeView as unknown as DashboardViewType & { view_id: number }}
-			{tableId}
-		/>
-	{:else if activeView.type === 'workflow'}
-		<WorkflowView
-			{tableId}
-			columns={$columns}
-			rows={$rows}
-			viewConfig={activeView}
-			onOpenExpand={(row) => s.openExpand(row)}
-		/>
+		{#if activeView.type === 'table'}
+			<TableToolbar
+				columns={$columns}
+				sortConfig={s.sortConfig}
+				groupConfig={s.groupConfig}
+				filterConditions={s.filterConditions}
+				showFilterPanel={s.showFilterPanel}
+				searchQuery={s.searchQuery}
+				onSortChange={(c) => (s.sortConfig = c)}
+				onGroupChange={(c) => (s.groupConfig = c)}
+				onShowFilterPanelChange={(v) => (s.showFilterPanel = v)}
+				onSearchQueryChange={(q) => (s.searchQuery = q)}
+				onExportTemplate={() => s.handleExportTemplate()}
+				onShowImportTemplate={() => (s.showImportTemplateModal = true)}
+				onExportCSV={() => s.exportCSV()}
+				onExportJSON={() => s.exportJSON()}
+				onImportFile={(e) => s.handleImportFile(e)}
+				onAddFilterCondition={() => s.addFilterCondition()}
+				onRemoveFilterCondition={(id) => s.removeFilterCondition(id)}
+				onClearAllFilters={() => (s.filterConditions = [])}
+				onFilterChange={() => s.onFilterConditionEdited()}
+			/>
+
+			<TableGrid
+				{sortedColumns}
+				{renderItems}
+				loading={false}
+				{tableMinWidth}
+				addingRow={s.addingRow}
+				addingColumn={s.addingColumn}
+				scrollToRowId={s.scrollToRowId}
+				scrollToColTrigger={s.scrollToColTrigger}
+				deletingRowId={s.deletingRowId}
+				rowsWithDocs={s.rowsWithDocs}
+				editingCell={s.editingCell}
+				editValue={s.editValue}
+				renamingColId={s.renamingColId}
+				renameValue={s.renameValue}
+				colMenuId={s.colMenuId}
+				tagsPopupCell={s.tagsPopupCell}
+				sortConfig={s.sortConfig}
+				collapsedGroups={s.collapsedGroups}
+				localWidths={s.localWidths}
+				onStartEdit={(rowId, col, val) => s.startEdit(rowId, col, val)}
+				onCommitEdit={(rowId, col) => s.commitEdit(rowId, col)}
+				onEditValueChange={(v) => (s.editValue = v)}
+				onEditingCellChange={(c) => (s.editingCell = c)}
+				onToggleCheckbox={(rowId, col) => s.toggleCheckbox(rowId, col)}
+				onRemoveTag={(rowId, col, tag) => s.removeTag(rowId, col, tag)}
+				onAddTag={(rowId, col, tag) => s.addTag(rowId, col, tag)}
+				onTagsPopupChange={(c) => (s.tagsPopupCell = c)}
+				onDeleteRow={(id) => s.handleDeleteRow(id)}
+				onOpenExpand={(row) => s.openExpand(row)}
+				onOpenContextMenu={(e, type, id) => s.openContextMenu(e, type, id)}
+				onStartRename={(id, name) => s.startRename(id, name)}
+				onCommitRename={(id) => s.commitRename(id)}
+				onRenameValueChange={(v) => (s.renameValue = v)}
+				onRenamingColIdChange={(id) => (s.renamingColId = id)}
+				onColMenuChange={(id) => (s.colMenuId = id)}
+				onSortChange={(c) => (s.sortConfig = c)}
+				onFilterAdd={(id) => s.addFilterForColumn(id)}
+				onShowFilterPanel={() => (s.showFilterPanel = true)}
+				onDeleteColumn={(id) => s.handleDeleteColumn(id)}
+				onDragReorderColumns={handleDragReorderColumns}
+				onResizeStart={(e, col) => s.handleResizeStart(e, col)}
+				onShowAddColumn={() => (s.showAddColumn = true)}
+				onAddRow={() => s.handleAddRow()}
+				onAddRowAndEdit={(colId) => s.handleAddRow(colId)}
+				onAddRowInGroup={(key, col) => s.handleAddRowInGroup(key, col)}
+				onToggleCollapseGroup={(key) => s.toggleCollapseGroup(key)}
+				onManageOptions={(col) => (s.managingOptionsCol = col)}
+				onOpenDocCell={(row, col) => (s.docCellState = { row, col })}
+			/>
+		{:else if activeView.type === 'kanban'}
+			<KanbanBoard
+				{tableId}
+				columns={$columns}
+				rows={$rows}
+				viewConfig={activeView}
+				onOpenExpand={(row) => s.openExpand(row)}
+				onRowsRefresh={() => fetchRows(tableId)}
+				onAddRow={(data) => s.openCreateTicket(data)}
+			/>
+		{:else if activeView.type === 'timeline'}
+			<TimelineView
+				{tableId}
+				columns={$columns}
+				rows={$rows}
+				viewConfig={activeView}
+				onOpenExpand={(row) => s.openExpand(row)}
+				onRowsRefresh={() => fetchRows(tableId)}
+				onAddRow={(data) => s.openCreateTicket(data)}
+			/>
+		{:else if activeView.type === 'dashboard'}
+			<DashboardView
+				view={activeView as unknown as DashboardViewType & { view_id: number }}
+				{tableId}
+			/>
+		{:else if activeView.type === 'workflow'}
+			<WorkflowView
+				{tableId}
+				columns={$columns}
+				rows={$rows}
+				viewConfig={activeView}
+				onOpenExpand={(row) => s.openExpand(row)}
+			/>
+		{/if}
 	{/if}
 </div>
 

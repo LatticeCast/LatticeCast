@@ -3,7 +3,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { authStore } from '$lib/stores/auth.store';
 	import {
 		currentTableId,
 		workspaces as workspacesStore,
@@ -12,17 +11,12 @@
 	import { get } from 'svelte/store';
 	import { T } from '$lib/UI/theme.svelte';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
-	import type { Workspace } from '$lib/types/table';
 
 	let loading = $state(true);
 	let error = $state('');
 	let showCreateWorkspace = $state(false);
 
 	onMount(async () => {
-		if (!$authStore?.role) {
-			goto('/login');
-			return;
-		}
 		currentTableId.set(null);
 		try {
 			await initSidebar();

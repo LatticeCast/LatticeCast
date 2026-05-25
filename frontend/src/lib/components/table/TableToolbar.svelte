@@ -21,7 +21,8 @@
 		onImportFile,
 		onAddFilterCondition,
 		onRemoveFilterCondition,
-		onClearAllFilters
+		onClearAllFilters,
+		onFilterChange
 	}: {
 		columns: Column[];
 		sortConfig: { colId: string; dir: 'asc' | 'desc' } | null;
@@ -41,6 +42,7 @@
 		onAddFilterCondition: () => void;
 		onRemoveFilterCondition: (id: string) => void;
 		onClearAllFilters: () => void;
+		onFilterChange: () => void;
 	} = $props();
 
 	let showSortMenu = $state(false);
@@ -317,6 +319,7 @@
 			<div class="mb-2 flex items-center gap-2">
 				<select
 					bind:value={cond.colId}
+					onchange={onFilterChange}
 					class="rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-700 outline-none focus:border-blue-400"
 				>
 					{#each columns as col (col.column_id)}
@@ -325,6 +328,7 @@
 				</select>
 				<select
 					bind:value={cond.operator}
+					onchange={onFilterChange}
 					class="rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-700 outline-none focus:border-blue-400"
 				>
 					<option value="contains">contains</option>
@@ -336,6 +340,7 @@
 					<input
 						class="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-sm text-gray-700 placeholder-gray-400 outline-none focus:border-blue-400"
 						bind:value={cond.value}
+						oninput={onFilterChange}
 						placeholder="Value…"
 					/>
 				{:else}

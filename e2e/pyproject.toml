@@ -1,6 +1,6 @@
 [project]
 name = "e2e"
-version = "0.51.0"
+version = "0.52.0"
 description = "LatticeCast e2e — Playwright drives UI (browsers in separate `browser` container, connected via WS); requests for BE API + DB content."
 requires-python = ">=3.12"
 dependencies = [

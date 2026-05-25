@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.52 — 2026-05-25 (Root auth gate, navigate-first tables, layout split)
+
+- Auth centralized in root `+layout.ts` (`ssr=false` + redirect to
+  `/login` unless authed or on a public route). Removed the scattered
+  per-page auth guards from root `+page`, workspace home, row + doc
+  pages, settings, and members.
+- Navigate-first table loading: `[table_id]/+page.ts` carries only
+  route params (zero network), so the URL changes instantly; the
+  component fetches table + rows behind a `data-testid="table-loading"`
+  spinner (`data-table-loaded`).
+- Filter conditions persist on every field edit — `bind:value`
+  mutates array elements in place, so `onFilterConditionEdited()`
+  schedules the debounced view-config persist.
+- `+layout.svelte` split: sidebar tree → `components/sidebar/Sidebar.svelte`,
+  top bar + breadcrumb → `components/layout/TopBar.svelte`. Layout keeps
+  only orchestration (auth effect, sidebar refresh, navigation).
+- Shared `tablePath(workspaceId, tableId)` builder used by both sidebar
+  and workspace-home table clicks for identical navigation behavior.
+
 ## v0.51 — 2026-05-25 (Workflow view + BE view-type simplification)
 
 - Workflow view: table rows render as SvelteFlow nodes, edges derived

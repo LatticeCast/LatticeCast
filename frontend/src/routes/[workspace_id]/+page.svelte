@@ -4,13 +4,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { authStore } from '$lib/stores/auth.store';
-	import {
-		createTable,
-		updateTable,
-		deleteTable,
-		createPmTemplate
-	} from '$lib/backend/tables';
+	import { createTable, updateTable, deleteTable, createPmTemplate } from '$lib/backend/tables';
 	import { updateWorkspace, deleteWorkspace } from '$lib/backend/workspaces';
 	import {
 		currentTableId,
@@ -21,7 +15,7 @@
 	import type { Table, Workspace } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
-	import { isUuid } from '$lib/utils/url';
+	import { isUuid, tablePath } from '$lib/utils/url';
 	let loading = $state(true);
 	let error = $state('');
 	let showCreateWorkspace = $state(false);
@@ -72,10 +66,6 @@
 	});
 
 	onMount(async () => {
-		if (!$authStore?.role) {
-			goto('/login');
-			return;
-		}
 		currentTableId.set(null);
 		await loadData();
 	});
@@ -400,10 +390,7 @@
 							>
 								<button
 									data-testid="table-card-{table.table_id}"
-									onclick={() =>
-										goto(
-											`/${encodeURIComponent(activeWorkspace.workspace_name)}/${table.table_id}`
-										)}
+									onclick={() => goto(tablePath(activeWorkspace.workspace_id, table.table_id))}
 									class="flex-1 text-left font-medium {T.body}"
 								>
 									{table.table_id}

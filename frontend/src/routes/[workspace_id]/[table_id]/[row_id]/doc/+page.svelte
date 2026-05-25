@@ -1,9 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
-	import { authStore } from '$lib/stores/auth.store';
-	import { get } from 'svelte/store';
 	import { fetchDoc, saveDoc, fetchTable, fetchRows } from '$lib/backend/tables';
 	import { T } from '$lib/UI/theme.svelte';
 	import { BRAND } from '$lib/UI/brand';
@@ -37,11 +34,6 @@
 	);
 
 	onMount(async () => {
-		const auth = get(authStore);
-		if (!auth?.accessToken) {
-			goto('/login');
-			return;
-		}
 		try {
 			const [t, rows] = await Promise.all([
 				fetchTable(tableId, $page.params.workspace_id),

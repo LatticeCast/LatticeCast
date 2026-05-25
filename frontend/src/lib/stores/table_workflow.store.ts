@@ -27,11 +27,7 @@ export function deriveGraphNames(rows: Row[], columns: Column[]): string[] {
 	return names.size ? [...names] : ['root'];
 }
 
-export function filterGraphRows(
-	rows: Row[],
-	columns: Column[],
-	graphName: string
-): Row[] {
+export function filterGraphRows(rows: Row[], columns: Column[], graphName: string): Row[] {
 	const graphCol = findColId(columns, 'graph_name');
 	return rows.filter((r) => {
 		const gn = graphCol ? (r.row_data[graphCol] as string) : null;
@@ -54,9 +50,7 @@ export function deriveNodes(rows: Row[], columns: Column[]): Node[] {
 			y: posYCol ? Number(row.row_data[posYCol] ?? 0) : 0
 		},
 		data: {
-			label: nameCol
-				? String(row.row_data[nameCol] ?? `Node ${row.row_id}`)
-				: `Node ${row.row_id}`,
+			label: nameCol ? String(row.row_data[nameCol] ?? `Node ${row.row_id}`) : `Node ${row.row_id}`,
 			nodeType: typeCol ? String(row.row_data[typeCol] ?? 'STEP') : 'STEP',
 			description: descCol ? String(row.row_data[descCol] ?? '') : '',
 			row

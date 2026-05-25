@@ -16,15 +16,9 @@
 
 	onMount(async () => {
 		const token = $authStore?.accessToken;
-		if (!token) {
-			goto('/login');
-			return;
-		}
+		if (!token) return;
 		const me = await fetchMe(token);
-		if (!me) {
-			goto('/login');
-			return;
-		}
+		if (!me) return;
 		userInfo = { user_id: me.user_id, user_name: me.user_name, email: me.email };
 		emailInput = me.email;
 	});
