@@ -31,12 +31,13 @@ async def _resolve_template_workspace(data: dict[str, Any], user: User, ws_repo:
     return workspace.workspace_id
 
 
-async def _create_from_template(
+@router.post("/template/{kind}", response_model=TableResponse, status_code=status.HTTP_201_CREATED)
+async def create_from_template(
     kind: str,
     data: dict[str, Any],
-    user: User,
-    session: AsyncSession,
-) -> dict[str, Any]:
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+):
     table_id = data.get("table_id", "") or data.get("table_name", "") or data.get("name", "")
     if not table_id:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="table_id is required")
@@ -50,27 +51,3 @@ async def _create_from_template(
         created_by=user.user_id,
     )
     return await _build_table_response(table, session)
-
-
-@router.post("/template/pm", response_model=TableResponse, status_code=status.HTTP_201_CREATED)
-async def create_pm_template(
-    data: dict[str, Any],
-    user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_rls_session),
-):
-    """V38: one PG function call replaces the multi-step orchestration —
-    columns, indexes, Sprint Board + Roadmap views, default-view flag, all
-    in one transaction."""
-    return await _create_from_template("pm", data, user, session)
-
-
-@router.post("/template/crm", response_model=TableResponse, status_code=status.HTTP_201_CREATED)
-async def create_crm_template(
-    data: dict[str, Any],
-    user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_rls_session),
-):
-    """V38: one PG function call replaces the multi-step orchestration —
-    columns, indexes, Pipeline + Sales Dashboard views, default-view flag,
-    all in one transaction."""
-    return await _create_from_template("crm", data, user, session)

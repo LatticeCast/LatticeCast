@@ -104,7 +104,7 @@ export interface WorkspaceMemberFull {
 
 // ─── Request types (FE → BE → PG) ────────────────────────────────────────────
 
-export type ViewType = 'table' | 'kanban' | 'timeline' | 'dashboard';
+export type ViewType = 'table' | 'kanban' | 'timeline' | 'dashboard' | 'workflow';
 
 export interface CreateTable {
 	table_id: string;

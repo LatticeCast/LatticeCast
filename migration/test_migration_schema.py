@@ -52,7 +52,7 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "table_views", "updated_at", "timestamp"),
 ]
 
-# Columns that must NOT exist after the v40 squash.
+# Columns that must NOT exist after the squash.
 FORBIDDEN_COLUMNS: list[tuple[str, str, str]] = [
     ("public", "users", "user_id"),          # moved to auth.users
     ("public", "user_info", "user_id"),      # moved to gdpr.user_info
@@ -198,7 +198,39 @@ def verify(psql_fn) -> list[str]:
             "(expected ON DELETE CASCADE)"
         )
 
-    # V23 dropped trg_create_table_schema_fn (no longer needed).
+    # V26: CHECK constraint on table_views.config->>'type'
+    result = psql_fn(
+        "SELECT 1 FROM pg_constraint "
+        "WHERE conrelid = 'public.table_views'::regclass "
+        "  AND conname = 'table_views_valid_type' "
+        "  AND contype = 'c';"
+    )
+    if not result:
+        errors.append(
+            "MISSING CHECK: table_views_valid_type (V26)"
+        )
+
+    # V27: _seed_workflow function exists
+    result = psql_fn(
+        "SELECT 1 FROM pg_proc "
+        "WHERE proname='_seed_workflow';"
+    )
+    if not result:
+        errors.append(
+            "MISSING FUNCTION: _seed_workflow (V27)"
+        )
+
+    # V27: create_table_from_template handles 'workflow' kind
+    result = psql_fn(
+        "SELECT pg_get_functiondef(oid) "
+        "FROM pg_proc "
+        "WHERE proname='create_table_from_template';"
+    )
+    if result and 'workflow' not in result:
+        errors.append(
+            "MISSING CASE: create_table_from_template "
+            "does not handle 'workflow' (V27)"
+        )
 
     # V18: immutable_iso_to_ts must exist so create_row_data_index() can
     # build btree indexes on date columns (::NUMERIC cast fails on ISO strings).

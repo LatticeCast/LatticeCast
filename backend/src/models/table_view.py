@@ -21,10 +21,6 @@ from sqlmodel import Field, SQLModel
 # the FE from public.table_schemas.config.columns; no DB row).
 SCHEMA_VIEW_DISPLAY_NAME = "Schema"
 
-# Allowed view types for user-created views (stored in config.type).
-USER_VIEW_TYPES = ("table", "kanban", "timeline", "dashboard")
-
-
 class TableView(SQLModel, table=True):
     """Row in public.table_views — user views only.
 

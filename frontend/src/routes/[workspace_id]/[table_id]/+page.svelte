@@ -43,6 +43,7 @@
 	import DocCellEditor from '$lib/components/table/DocCellEditor.svelte';
 	import DashboardView from '$lib/components/dashboard/DashboardView.svelte';
 	import type { DashboardView as DashboardViewType } from '$lib/types/dashboard';
+	import WorkflowView from '$lib/components/workflow/WorkflowView.svelte';
 
 	// --- Page data from +page.ts load (stores already populated) ---
 
@@ -274,6 +275,14 @@
 		<DashboardView
 			view={activeView as unknown as DashboardViewType & { view_id: number }}
 			{tableId}
+		/>
+	{:else if activeView.type === 'workflow'}
+		<WorkflowView
+			{tableId}
+			columns={$columns}
+			rows={$rows}
+			viewConfig={activeView}
+			onOpenExpand={(row) => s.openExpand(row)}
 		/>
 	{/if}
 </div>

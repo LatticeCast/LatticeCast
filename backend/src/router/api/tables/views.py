@@ -4,9 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from middleware.auth import get_current_user, get_rls_session
-from models.table_view import USER_VIEW_TYPES
 from models.user import User
-from models.view import validate_view_config
 from repository.table_view import TableViewRepository
 
 from ._shared import _get_table_for_member
@@ -21,14 +19,6 @@ def _view_dict(view: Any) -> dict[str, Any]:
         "type": view.type,
         "config": view.config,
     }
-
-
-def _ensure_user_view_type(view_type: str) -> None:
-    if view_type not in USER_VIEW_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"View type must be one of {USER_VIEW_TYPES}",
-        )
 
 
 # ── Reads ────────────────────────────────────────────────────────────────
@@ -80,13 +70,7 @@ async def create_view(
     view_type = data.get("type") or ""
     if not name:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="View name is required")
-    _ensure_user_view_type(view_type)
     extra_config = data.get("config") or {}
-    try:
-        validate_view_config(view_type, extra_config)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
-
     full_config = {"name": name, "type": view_type, **extra_config}
     view_repo = TableViewRepository(session)
     return await view_repo.create_view(
@@ -117,7 +101,6 @@ async def update_view(
     if "name" in data:
         patch["name"] = data["name"]
     if "type" in data:
-        _ensure_user_view_type(data["type"])
         patch["type"] = data["type"]
     if "config" in data:
         patch.update(data["config"] or {})

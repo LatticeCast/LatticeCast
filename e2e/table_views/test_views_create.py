@@ -1,7 +1,8 @@
 """E2E test: + Add View of each type creates the correct tab and persists.
 
-Covers all three user-creatable view types (table, kanban, timeline) by
-clicking the "Add view" panel in the UI, then verifying:
+Covers all five user-creatable view types (table, kanban, timeline,
+dashboard, workflow) by clicking the "Add view" panel in the UI, then
+verifying:
   1. New tab appears in the ViewSwitcher immediately.
   2. GET /tables/{table_id} returns the new view in the API response.
   3. A second view of the same type gets an auto-numbered name.
@@ -134,20 +135,35 @@ def test_views_create(authed_page, admin_token, snapshot) -> None:
         snap(page, "vc_04_timeline_created", snapshot)
         assert_api_has_view(token, TABLE_ID, TIMELINE_VIEW_NAME, "timeline")
 
-        # ── Step 4: Second Kanban → auto-numbered "Kanban 2" ───────────────────
+        # ── Step 4: Add a Dashboard view ──────────────────────────────────────
+        click_add_view_type(page, "dashboard")
+        DASHBOARD_VIEW_NAME = "Dashboard"
+        assert_tab_visible(page, DASHBOARD_VIEW_NAME)
+        snap(page, "vc_05_dashboard_created", snapshot)
+        assert_api_has_view(token, TABLE_ID, DASHBOARD_VIEW_NAME, "dashboard")
+
+        # ── Step 5: Add a Workflow view ───────────────────────────────────────
+        click_add_view_type(page, "workflow")
+        WORKFLOW_VIEW_NAME = "Workflow"
+        assert_tab_visible(page, WORKFLOW_VIEW_NAME)
+        snap(page, "vc_06_workflow_created", snapshot)
+        assert_api_has_view(token, TABLE_ID, WORKFLOW_VIEW_NAME, "workflow")
+
+        # ── Step 6: Second Kanban → auto-numbered "Kanban 2" ─────────────────
         click_add_view_type(page, "kanban")
         KANBAN2_VIEW_NAME = "Kanban 2"
         assert_tab_visible(page, KANBAN2_VIEW_NAME)
-        snap(page, "vc_05_kanban2_created", snapshot)
+        snap(page, "vc_07_kanban2_created", snapshot)
         assert_api_has_view(token, TABLE_ID, KANBAN2_VIEW_NAME, "kanban")
 
-        # ── Step 5: navigate away + back → all views persist ──────────────────
+        # ── Step 7: navigate away + back → all views persist ─────────────────
         page.goto(f"{BASE}/{ws_name}", wait_until="domcontentloaded", timeout=15000)
         wait_table_page(page, ws_name, TABLE_ID)
         print("[ok] navigated back to table page")
-        snap(page, "vc_06_after_nav", snapshot)
+        snap(page, "vc_08_after_nav", snapshot)
 
-        for tab_name in [TABLE_VIEW_NAME, KANBAN_VIEW_NAME, TIMELINE_VIEW_NAME, KANBAN2_VIEW_NAME]:
+        for tab_name in [TABLE_VIEW_NAME, KANBAN_VIEW_NAME, TIMELINE_VIEW_NAME,
+                         DASHBOARD_VIEW_NAME, WORKFLOW_VIEW_NAME, KANBAN2_VIEW_NAME]:
             try:
                 page.locator(f'[data-testid="view-tab-{tab_name}"]').wait_for(
                     state="visible", timeout=8000

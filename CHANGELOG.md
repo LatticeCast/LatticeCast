@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.51 — 2026-05-25 (Workflow view + BE view-type simplification)
+
+- Workflow view: table rows render as SvelteFlow nodes, edges derived
+  from `nexts`/`true_next`/`false_next` columns, graph selector filters
+  by `graph_name`.
+- `table_workflow.store.ts`: all node/edge/graph derivation as pure
+  functions — no store, no `$state`, nodes are `$derived` from rows.
+- BE view config simplified: removed per-type Pydantic discriminated
+  union (`TableConfig`/`KanbanConfig`/etc), `validate_view_config`,
+  `USER_VIEW_TYPES`. BE is a thin passthrough to PG.
+- V26 migration: PG CHECK constraint on `table_views.config->>'type'`
+  enforces allowed view types at the DB level.
+- V27 migration: `_seed_workflow` PG template (11 columns + Workflow
+  view); `create_table_from_template` handles `'workflow'` kind.
+- `POST /tables/template/{kind}` replaces per-template endpoints
+  (`/template/pm`, `/template/crm`) — single route, PG dispatches.
+- E2E: `test_views_create` covers all 5 view types (added dashboard +
+  workflow); new `test_workflow_nodes` for node rendering + graph
+  selector; new `test_workflow` template structure test.
+
 ## v0.50 — 2026-05-25 (UV images + docker log rotation + ws-id testids)
 
 - Backend & e2e Dockerfiles rebased on the official
