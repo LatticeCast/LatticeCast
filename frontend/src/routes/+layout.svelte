@@ -132,7 +132,7 @@
 									class="flex w-full items-center rounded-lg text-sm text-gray-700 dark:text-gray-200"
 								>
 									<button
-										data-testid="sidebar-workspace-toggle-{ws.workspace_name}"
+										data-testid="sidebar-workspace-toggle-{ws.workspace_id}"
 										onclick={() => toggleWorkspace(ws.workspace_id)}
 										class="flex shrink-0 items-center justify-center rounded-l-lg px-1.5 py-1.5 transition hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400"
 									>
@@ -151,7 +151,7 @@
 										</svg>
 									</button>
 									<button
-										data-testid="sidebar-workspace-{ws.workspace_name}"
+										data-testid="sidebar-workspace-{ws.workspace_id}"
 										onclick={() => navigate(`/${encodeURIComponent(ws.workspace_name)}/`)}
 										class="flex min-w-0 flex-1 items-center gap-2 rounded-r-lg px-1.5 py-1.5 text-left transition hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400"
 									>

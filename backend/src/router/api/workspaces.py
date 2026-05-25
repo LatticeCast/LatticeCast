@@ -268,7 +268,7 @@ async def update_workspace(
             Workspace.workspace_id != workspace.workspace_id,
         )
     )
-    if conflict.scalar_one_or_none() is not None:
+    if conflict.scalars().first() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A workspace with that name already exists")
 
     workspace.workspace_name = data.workspace_name

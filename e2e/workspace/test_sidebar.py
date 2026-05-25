@@ -42,6 +42,13 @@ def test_sidebar_toggle_and_navigate(authed_page, admin_token, snapshot):
     ws_id = None
 
     try:
+        # ── Cleanup stale test workspaces from previous runs ────────────────
+        r_cleanup = api("GET", "/api/v1/workspaces", admin_token)
+        if r_cleanup.status_code == 200:
+            for stale in r_cleanup.json():
+                if stale["workspace_name"].startswith("ws-sidebar-"):
+                    api("DELETE", f"/api/v1/workspaces/{stale['workspace_id']}", admin_token)
+
         # ── Setup: create workspace + table via API ─────────────────────────
         print("[0] Setup: create workspace + table via API")
         r = api("POST", "/api/v1/workspaces", admin_token, json={"workspace_name": ws_name})
@@ -82,7 +89,7 @@ def test_sidebar_toggle_and_navigate(authed_page, admin_token, snapshot):
 
         # ── Step 3: Verify chevron toggle collapses ─────────────────────────
         print("[3] Chevron toggle: collapse workspace")
-        ws_toggle = page.get_by_test_id(f"sidebar-workspace-toggle-{ws_name}")
+        ws_toggle = page.get_by_test_id(f"sidebar-workspace-toggle-{ws_id}")
         ws_toggle.wait_for(state="visible", timeout=5000)
 
         table_link = page.get_by_test_id(f"sidebar-table-{table_id}")
@@ -122,7 +129,7 @@ def test_sidebar_toggle_and_navigate(authed_page, admin_token, snapshot):
 
         # ── Step 5: Click workspace name → navigate to /{ws_name}/ ──────────
         print(f"[5] Click workspace name → navigate to /{ws_name}/")
-        ws_link = page.get_by_test_id(f"sidebar-workspace-{ws_name}")
+        ws_link = page.get_by_test_id(f"sidebar-workspace-{ws_id}")
         ws_link.wait_for(state="visible", timeout=3000)
         ws_link.click()
 
@@ -146,7 +153,7 @@ def test_sidebar_toggle_and_navigate(authed_page, admin_token, snapshot):
                 toggle2.click()
                 page.get_by_test_id("menu-nav").wait_for(state="visible", timeout=5000)
 
-            other_link = page.get_by_test_id(f"sidebar-workspace-{other_name}")
+            other_link = page.get_by_test_id(f"sidebar-workspace-{other_ws['workspace_id']}")
             try:
                 other_link.wait_for(state="visible", timeout=5000)
             except PlaywrightTimeout:

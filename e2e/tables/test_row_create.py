@@ -44,7 +44,7 @@ def snap(page, name: str, snapshot: bool) -> None:
 
 
 def goto_table(page, ws_id: str, table_id: str) -> None:
-    page.goto(f"{BASE}/{ws_id}/{table_id}", wait_until="domcontentloaded")
+    page.goto(f"{BASE}/{ws_id}/{table_id}", wait_until="networkidle")
     try:
         page.wait_for_selector(
             '[data-table-loaded="true"]', state="attached", timeout=15000

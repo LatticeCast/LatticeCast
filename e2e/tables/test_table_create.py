@@ -64,12 +64,17 @@ def test_workspace_table_create(authed_page, admin_token, snapshot):
     """Workspace + table create (blank + PM template) + sidebar/grid verify."""
     page = authed_page
 
-    # ── Step 0: Pre-flight — get workspace via API ────────────────────────────
+    # ── Step 0: Pre-flight — clean up stale test workspaces, get list ──────────
     print("[0] Get workspace list via API")
     r = api("GET", "/api/v1/workspaces", admin_token)
     assert r.status_code == 200, f"preflight: GET workspaces failed {r.status_code}"
     workspaces = r.json()
     assert len(workspaces) > 0, "preflight: no workspaces found"
+
+    for stale in workspaces:
+        if stale["workspace_name"].startswith("ws-e2e-"):
+            api("DELETE", f"/api/v1/workspaces/{stale['workspace_id']}", admin_token)
+    workspaces = [w for w in workspaces if not w["workspace_name"].startswith("ws-e2e-")]
     ws_id = workspaces[0]["workspace_id"]
     ws_name = workspaces[0]["workspace_name"]
     print(f"    user=lattice ws_name={ws_name} ws_id={ws_id[:8]}...")
@@ -131,6 +136,11 @@ def test_workspace_table_create(authed_page, admin_token, snapshot):
     _snap(page, "t15_03_new_workspace_page", snapshot)
 
     ws_url = page.url  # Remember for later
+
+    # Resolve workspace_id for sidebar testid lookups
+    r_ws = api("GET", "/api/v1/workspaces", admin_token)
+    new_ws = next((w for w in r_ws.json() if w["workspace_name"] == NEW_WS_NAME), None)
+    new_ws_id = new_ws["workspace_id"] if new_ws else NEW_WS_NAME
 
     # ── Step 3: Create blank table ───────────────────────────────────────────
     print(f"[3] Create blank table '{BLANK_TABLE_NAME}'")
@@ -261,7 +271,7 @@ def test_workspace_table_create(authed_page, admin_token, snapshot):
 
     # Click the new workspace's sidebar entry to expand it. Idempotent —
     # if already expanded, click toggles; we re-check visibility either way.
-    ws_btn = page.get_by_test_id(f"sidebar-workspace-{NEW_WS_NAME}")
+    ws_btn = page.get_by_test_id(f"sidebar-workspace-{new_ws_id}")
     ws_btn.wait_for(state="visible", timeout=5000)
     # Expand if not already (table testids only render under expanded ws)
     if not page.get_by_test_id(f"sidebar-table-{BLANK_TABLE_NAME}").count():
@@ -277,5 +287,10 @@ def test_workspace_table_create(authed_page, admin_token, snapshot):
     print("    sidebar OK: both tables listed")
 
     _snap(page, "t15_10_sidebar_both_tables", snapshot)
+
+    # ── Teardown: delete the workspace we created ─────────────────────────────
+    if new_ws_id and new_ws_id != NEW_WS_NAME:
+        api("DELETE", f"/api/v1/workspaces/{new_ws_id}", admin_token)
+        print(f"[teardown] deleted workspace {new_ws_id[:8]}...")
 
     print("[PASS] All checks passed")

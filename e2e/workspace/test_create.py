@@ -36,12 +36,17 @@ def test_workspace_create(authed_page, admin_token, snapshot):
     ws_id = None
 
     try:
-        # ── Step 0: Get existing workspace to navigate to ────────────────────
-        print("[0] Login")
+        # ── Step 0: Clean up stale test workspaces, get list ─────────────────
+        print("[0] Login + cleanup stale ws-create-* workspaces")
         r = api("GET", "/api/v1/workspaces", admin_token)
         assert r.status_code == 200 and r.json(), (
             f"Cannot list workspaces: {r.status_code} {r.text[:200]}"
         )
+        for stale in r.json():
+            if stale["workspace_name"].startswith("ws-create-"):
+                api("DELETE", f"/api/v1/workspaces/{stale['workspace_id']}", admin_token)
+
+        r = api("GET", "/api/v1/workspaces", admin_token)
         existing_ws = r.json()[0]["workspace_name"]
 
         # ── Step 1: Navigate to existing workspace ───────────────────────────
