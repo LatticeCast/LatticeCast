@@ -5,17 +5,15 @@
 	import { get } from 'svelte/store';
 
 	// Model (SSOT stores)
-	import { columns } from '$lib/stores/table_schema.store';
+	import { columns, viewOrder, defaultView } from '$lib/stores/table_schema.store';
 	import { views as viewsStore } from '$lib/stores/table_views.store';
 	import { rows } from '$lib/stores/table_rows.store';
 
 	// Controller
-	import { fetchRows, fetchTable, patchSchema } from '$lib/backend/tables';
-	import { fetchWorkspaces } from '$lib/backend/workspaces';
+	import { patchSchema } from '$lib/backend/tables';
 	import {
 		currentWorkspaceId,
-		currentTableId,
-		resolveWorkspaceParam
+		currentTableId
 	} from '$lib/stores/table_schemas.store';
 	import { error, IMPLICIT_TABLE_VIEW } from '$lib/stores/tables.store';
 	import { s } from '$lib/components/table/table-page.svelte';
@@ -81,16 +79,10 @@
 	const tableId = $derived($currentTableId ?? '');
 	const wsId = $derived($currentWorkspaceId ?? '');
 
-	// --- Load on navigation. The URL/shell is already showing (the +page.ts
-	//     load does no network), so we fetch table + rows here and show a
-	//     loading state until they arrive. Runs once per navigation. ---
-
 	let loading = $state(true);
 
 	$effect(() => {
-		const wsParam = data.workspaceParam;
-		const tableParam = data.tableParam;
-		const urlViewId = data.urlViewId;
+		const { tableParam, urlViewId, cached, resolvedWsId, viewsP, rowsP, tableP } = data;
 
 		untrack(() => {
 			s.reset();
@@ -98,23 +90,55 @@
 			loading = true;
 		});
 
+		if (cached) {
+			untrack(() => {
+				currentTableId.set(cached.table_id);
+				currentWorkspaceId.set(cached.workspace_id);
+				columns.set(cached.columns ?? []);
+				viewOrder.set(cached.view_order ?? []);
+				defaultView.set(cached.default_view ?? null);
+
+				const dv = cached.default_view ?? null;
+				let targetViewId: number;
+				if (!isNaN(urlViewId)) {
+					targetViewId = urlViewId;
+				} else if (dv !== null) {
+					targetViewId = dv;
+				} else {
+					targetViewId = 0;
+				}
+				s.activeViewId = targetViewId;
+				loading = false;
+			});
+		}
+
 		let cancelled = false;
 		(async () => {
 			try {
-				const wsList = await fetchWorkspaces();
-				const resolvedWsId = resolveWorkspaceParam(wsParam, wsList);
-				const table = await fetchTable(tableParam, resolvedWsId ?? undefined);
-				await fetchRows(table.table_id);
+				if (!viewsP || !rowsP) return;
+				const [viewsList] = await Promise.all([
+					viewsP,
+					rowsP,
+					...(tableP ? [tableP] : [])
+				]);
 				if (cancelled) return;
 
-				currentTableId.set(table.table_id);
-				currentWorkspaceId.set(table.workspace_id);
-
 				untrack(() => {
+					viewsStore.set(viewsList);
+
+					if (!cached) {
+						if (resolvedWsId) currentWorkspaceId.set(resolvedWsId);
+						currentTableId.set(tableParam);
+					}
+
 					const loadedViews = get(viewsStore);
-					const hasUserTable = loadedViews.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id);
-					const candidates = hasUserTable ? loadedViews : [IMPLICIT_TABLE_VIEW, ...loadedViews];
-					const dv = table.default_view ?? null;
+					const hasUserTable = loadedViews.some(
+						(v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id
+					);
+					const candidates = hasUserTable
+						? loadedViews
+						: [IMPLICIT_TABLE_VIEW, ...loadedViews];
+					const dv = cached?.default_view ?? null;
 
 					let targetViewId: number;
 					if (!isNaN(urlViewId) && candidates.some((v) => v.view_id === urlViewId)) {
@@ -131,7 +155,7 @@
 					const initView = candidates.find((v) => v.view_id === targetViewId);
 					if (initView) s.applyViewConfig(initView);
 
-					s.loadDocFlags(table.table_id).catch(() => {});
+					s.loadDocFlags(tableParam).catch(() => {});
 					loading = false;
 				});
 			} catch (e) {
