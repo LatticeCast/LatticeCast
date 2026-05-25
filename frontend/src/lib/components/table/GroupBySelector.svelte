@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Column } from '$lib/types/table';
-	import { isDark } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 
 	let {
 		columns,
@@ -16,14 +16,10 @@
 </script>
 
 <div class="flex items-center gap-2">
-	<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}"
-		>Group by</span
-	>
+	<span class="text-xs font-medium {T.muted}">Group by</span>
 	<select
 		data-testid="group-by-selector"
-		class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
-			? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
-			: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+		class="rounded-md border px-2 py-1 text-xs focus:outline-none {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder}"
 		value={value ?? ''}
 		onchange={(e) => onchange((e.target as HTMLSelectElement).value || null)}
 	>

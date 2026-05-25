@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.50 — 2026-05-25 (UV images + docker log rotation + ws-id testids)
+
+- Backend & e2e Dockerfiles rebased on the official
+  `ghcr.io/astral-sh/uv` image; reproducible installs from `uv.lock`,
+  no in-image `.venv`.
+- Custom log rotation (`ServerTee.py`, cron, `daily.sh`) replaced by
+  docker's `json-file` driver (100 MB × 50).
+- Fix: `PUT /workspaces` 500 on rename (name-conflict query used
+  `scalar_one_or_none`).
+- Sidebar workspace `data-testid` keyed on `workspace_id` so renames
+  don't break selectors.
+- `developing-svelte` skill → v0.10.0 (BE-SSOT / FE-cache framing,
+  e2e-first testing).
+
 ## v0.49 — 2026-05-21 (table page load + e2e fixes)
 
 ### Frontend — table page `+page.ts` load function

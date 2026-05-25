@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { DashboardView as DashboardViewType } from '$lib/types/dashboard';
 	import Block from './blocks/Block.svelte';
-	import { T, isDark } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 	import { updateView } from '$lib/backend/views';
 
 	let { view, tableId }: { view: DashboardViewType & { view_id: number }; tableId: string } =
@@ -48,18 +48,14 @@
 			</button>
 			<button
 				onclick={() => (editing = false)}
-				class="rounded px-3 py-1 text-sm {isDark.value
-					? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-					: 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+				class="rounded px-3 py-1 text-sm {T.inputBg} {T.body} {T.menuItemHover}"
 			>
 				Cancel
 			</button>
 		{:else}
 			<button
 				onclick={startEdit}
-				class="rounded px-3 py-1 text-sm {isDark.value
-					? 'bg-gray-700 text-gray-200 hover:bg-gray-600'
-					: 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+				class="rounded px-3 py-1 text-sm {T.inputBg} {T.body} {T.menuItemHover}"
 			>
 				Edit JSON
 			</button>
@@ -73,9 +69,7 @@
 			{/if}
 			<textarea
 				bind:value={jsonText}
-				class="h-[70vh] w-full rounded border font-mono text-sm {isDark.value
-					? 'border-gray-600 bg-gray-900 text-gray-100'
-					: 'border-gray-300 bg-white text-gray-900'}"
+				class="h-[70vh] w-full rounded border font-mono text-sm {T.inputBorder} {T.editorBg} {T.heading}"
 				spellcheck="false"
 			></textarea>
 		</div>

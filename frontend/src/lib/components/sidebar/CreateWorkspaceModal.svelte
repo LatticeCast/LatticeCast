@@ -1,7 +1,7 @@
 <!--lib/components/sidebar/CreateWorkspaceModal.svelte-->
 
 <script lang="ts">
-	import { isDark } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 	import { createWorkspace } from '$lib/backend/workspaces';
 	import type { Workspace } from '$lib/types/table';
 
@@ -60,11 +60,7 @@
 		aria-label="Create workspace"
 		tabindex="-1"
 	>
-		<div
-			class="w-full max-w-sm rounded-3xl p-6 shadow-2xl {isDark.value
-				? 'bg-gray-800 text-gray-100'
-				: 'bg-white text-gray-900'}"
-		>
+		<div class="w-full max-w-sm rounded-3xl p-6 shadow-2xl {T.cardBg} {T.heading}">
 			<h2 class="mb-4 text-base font-semibold">New Workspace</h2>
 
 			<input
@@ -74,9 +70,7 @@
 				type="text"
 				placeholder="Workspace name"
 				onkeydown={onKeydown}
-				class="mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 {isDark.value
-					? 'border-gray-600 bg-gray-700 text-gray-100 placeholder-gray-400'
-					: 'border-gray-300 bg-white text-gray-900 placeholder-gray-400'}"
+				class="mb-3 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 {T.inputBorder} {T.inputBg} {T.heading} {T.placeholder}"
 			/>
 
 			{#if errorMsg}
@@ -87,9 +81,7 @@
 				<button
 					data-testid="create-workspace-cancel"
 					onclick={onClose}
-					class="rounded-lg px-4 py-2 text-sm transition {isDark.value
-						? 'text-gray-300 hover:bg-gray-700'
-						: 'text-gray-600 hover:bg-gray-100'}"
+					class="rounded-lg px-4 py-2 text-sm transition {T.secondary} {T.menuItemHover}"
 				>
 					Cancel
 				</button>

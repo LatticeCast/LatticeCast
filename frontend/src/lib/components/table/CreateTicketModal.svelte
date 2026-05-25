@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Column } from '$lib/types/table';
 	import { getChoices } from './table.utils';
-	import { isDark } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 
 	let {
 		show,
@@ -75,27 +75,18 @@
 		aria-modal="true"
 		aria-label="Create ticket"
 	>
-		<div
-			class="w-full max-w-sm rounded-3xl p-8 shadow-2xl {isDark.value ? 'bg-gray-800' : 'bg-white'}"
-		>
-			<h2 class="mb-6 text-xl font-bold {isDark.value ? 'text-gray-100' : 'text-gray-800'}">
-				New Ticket
-			</h2>
+		<div class="w-full max-w-sm rounded-3xl p-8 shadow-2xl {T.cardBg}">
+			<h2 class="mb-6 text-xl font-bold {T.heading}">New Ticket</h2>
 
 			{#if titleCol}
 				<div class="mb-4">
-					<label
-						class="mb-1 block text-sm font-medium {isDark.value
-							? 'text-gray-300'
-							: 'text-gray-600'}"
-						for="ticket-title">{titleCol.name}</label
+					<label class="mb-1 block text-sm font-medium {T.secondary}" for="ticket-title"
+						>{titleCol.name}</label
 					>
 					<input
 						id="ticket-title"
 						data-testid="create-ticket-title-input"
-						class="w-full rounded-xl border px-4 py-2 outline-none focus:ring-1 focus:ring-blue-500 {isDark.value
-							? 'border-gray-600 bg-gray-700 text-gray-100 focus:border-blue-400'
-							: 'border-gray-200 bg-white text-gray-800 focus:border-blue-500'}"
+						class="w-full rounded-xl border px-4 py-2 outline-none focus:ring-1 focus:ring-blue-500 {T.inputBorder} {T.inputBg} {T.heading} {T.inputFocusBorder}"
 						bind:value={titleValue}
 						placeholder="Ticket title…"
 						onkeydown={(e) => {
@@ -110,18 +101,13 @@
 			{#each selectCols as col (col.column_id)}
 				{@const choices = getChoices(col)}
 				<div class="mb-4">
-					<label
-						class="mb-1 block text-sm font-medium {isDark.value
-							? 'text-gray-300'
-							: 'text-gray-600'}"
-						for="ticket-{col.column_id}">{col.name}</label
+					<label class="mb-1 block text-sm font-medium {T.secondary}" for="ticket-{col.column_id}"
+						>{col.name}</label
 					>
 					<select
 						id="ticket-{col.column_id}"
 						data-testid="create-ticket-select-{col.column_id}"
-						class="w-full rounded-xl border px-4 py-2 outline-none focus:ring-1 focus:ring-blue-500 {isDark.value
-							? 'border-gray-600 bg-gray-700 text-gray-100 focus:border-blue-400'
-							: 'border-gray-200 bg-white text-gray-800 focus:border-blue-500'}"
+						class="w-full rounded-xl border px-4 py-2 outline-none focus:ring-1 focus:ring-blue-500 {T.inputBorder} {T.inputBg} {T.heading} {T.inputFocusBorder}"
 						value={selectValues[col.column_id] ?? ''}
 						onchange={(e) => {
 							selectValues = {
@@ -141,9 +127,7 @@
 			<div class="flex gap-3">
 				<button
 					onclick={handleClose}
-					class="flex-1 rounded-2xl border px-4 py-2 font-semibold transition {isDark.value
-						? 'border-gray-600 text-gray-300 hover:bg-gray-700'
-						: 'border-gray-200 text-gray-600 hover:bg-gray-50'}"
+					class="flex-1 rounded-2xl border px-4 py-2 font-semibold transition {T.inputBorder} {T.secondary} {T.menuItemHover}"
 				>
 					Cancel
 				</button>

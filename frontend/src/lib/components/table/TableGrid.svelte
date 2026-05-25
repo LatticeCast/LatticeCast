@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Column, Row } from '$lib/types/table';
-	import { isDark, T } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 	import {
 		type RenderItem,
 		getItemKey,
@@ -152,11 +152,7 @@
 	{#if loading}
 		<div class="pt-16 text-center {T.muted}">Loading...</div>
 	{:else if sortedColumns.length === 0}
-		<div
-			class="mx-4 my-4 rounded-xl border p-8 text-center {isDark.value
-				? 'border-gray-700 bg-gray-800 text-gray-400'
-				: 'border-gray-200 bg-gray-50 text-gray-400'}"
-		>
+		<div class="mx-4 my-4 rounded-xl border p-8 text-center {T.border} {T.tableHeaderBg} {T.muted}">
 			No columns defined yet. Click "+ Column" to start.
 		</div>
 	{:else}
@@ -168,9 +164,7 @@
 				<tr>
 					<!-- Row number header -->
 					<th
-						class="sticky left-0 z-20 border-r border-b px-2 py-2 text-center text-xs font-semibold {isDark.value
-							? 'border-gray-700 bg-gray-800 text-gray-500'
-							: 'border-gray-200 bg-gray-50 text-gray-400'}"
+						class="sticky left-0 z-20 border-r border-b px-2 py-2 text-center text-xs font-semibold {T.border} {T.tableHeaderBg} {T.muted}"
 						style="width: 48px;"
 					>
 						#
@@ -179,16 +173,8 @@
 						<th
 							{...colDrag.handlers(col)}
 							data-testid="col-header-{col.column_id}"
-							class="relative border-b px-3 py-2 text-left text-xs font-semibold tracking-wide uppercase {isDark.value
-								? 'border-gray-700 text-gray-400'
-								: 'border-gray-200 text-gray-500'}
-								{i === 0
-								? isDark.value
-									? 'sticky left-12 border-r border-gray-700 bg-gray-800'
-									: 'sticky left-12 border-r border-gray-200 bg-gray-50'
-								: isDark.value
-									? 'bg-gray-800'
-									: 'bg-gray-50'}
+							class="relative border-b px-3 py-2 text-left text-xs font-semibold tracking-wide uppercase {T.border} {T.muted}
+								{i === 0 ? `sticky left-12 border-r ${T.border} ${T.tableHeaderBg}` : T.tableHeaderBg}
 								{colMenuId === col.column_id ? 'z-30' : i === 0 ? 'z-10' : ''}"
 							style="width: {getColWidth(col)}px;"
 							oncontextmenu={(e) => onOpenContextMenu(e, 'col', col.column_id)}
@@ -263,17 +249,13 @@
 							{#if colMenuId === col.column_id}
 								{@const sl = sortLabels(col.type)}
 								<div
-									class="absolute top-full left-0 z-30 mt-1 min-w-[168px] rounded-xl border py-1 shadow-xl {isDark.value
-										? 'border-gray-700 bg-gray-800'
-										: 'border-gray-200 bg-white'}"
+									class="absolute top-full left-0 z-30 mt-1 min-w-[168px] rounded-xl border py-1 shadow-xl {T.border} {T.cardBg}"
 									onclick={(e) => e.stopPropagation()}
 									role="menu"
 								>
 									<button
 										data-testid="col-rename-btn-{col.column_id}"
-										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value
-											? 'text-gray-300 hover:bg-gray-700'
-											: 'text-gray-700 hover:bg-gray-50'}"
+										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {T.secondary} {T.menuItemHover}"
 										onclick={() => {
 											onStartRename(col.column_id, col.name);
 											onColMenuChange(null);
@@ -297,9 +279,7 @@
 									{#if col.type === 'select' || col.type === 'tags'}
 										<button
 											data-testid="col-manage-options-{col.column_id}"
-											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value
-												? 'text-gray-300 hover:bg-gray-700'
-												: 'text-gray-700 hover:bg-gray-50'}"
+											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {T.secondary} {T.menuItemHover}"
 											onclick={() => {
 												onManageOptions(col);
 												onColMenuChange(null);
@@ -321,9 +301,9 @@
 											Manage Options
 										</button>
 									{/if}
-									<hr class={isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'} />
+									<hr class="my-1 {T.cardBorder}" />
 									<button
-										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
+										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {T.secondary} {T.menuItemHover} {sortConfig?.colId ===
 											col.column_id && sortConfig?.dir === 'asc'
 											? 'font-semibold text-blue-600'
 											: ''}"
@@ -348,7 +328,7 @@
 										Sort {sl.asc}
 									</button>
 									<button
-										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
+										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {T.secondary} {T.menuItemHover} {sortConfig?.colId ===
 											col.column_id && sortConfig?.dir === 'desc'
 											? 'font-semibold text-blue-600'
 											: ''}"
@@ -373,9 +353,7 @@
 										Sort {sl.desc}
 									</button>
 									<button
-										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value
-											? 'text-gray-300 hover:bg-gray-700'
-											: 'text-gray-700 hover:bg-gray-50'}"
+										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {T.secondary} {T.menuItemHover}"
 										onclick={() => {
 											onFilterAdd(col.column_id);
 											onShowFilterPanel();
@@ -397,7 +375,7 @@
 										>
 										Filter
 									</button>
-									<hr class={isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'} />
+									<hr class="my-1 {T.cardBorder}" />
 									<button
 										data-testid="col-delete-{col.column_id}"
 										class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
@@ -435,19 +413,9 @@
 						</th>
 					{/each}
 					<!-- Actions col header -->
-					<th
-						class="border-b {isDark.value
-							? 'border-gray-700 bg-gray-800'
-							: 'border-gray-200 bg-gray-50'}"
-						style="width: 40px;"
-					></th>
+					<th class="border-b {T.border} {T.tableHeaderBg}" style="width: 40px;"></th>
 					<!-- "+" add column -->
-					<th
-						class="border-b {isDark.value
-							? 'border-gray-700 bg-gray-800'
-							: 'border-gray-200 bg-gray-50'}"
-						style="width: 40px;"
-					>
+					<th class="border-b {T.border} {T.tableHeaderBg}" style="width: 40px;">
 						<button
 							data-testid="grid-add-column-btn"
 							onclick={onShowAddColumn}
@@ -490,10 +458,7 @@
 				{#each renderItems as item (getItemKey(item))}
 					{#if item.type === 'group-header'}
 						<tr class="border-b border-gray-200">
-							<td
-								colspan={sortedColumns.length + 3}
-								class="{isDark.value ? 'bg-gray-800' : 'bg-gray-50'} py-0.5"
-							>
+							<td colspan={sortedColumns.length + 3} class="{T.tableHeaderBg} py-0.5">
 								<div class="flex items-center gap-2 px-3 py-1">
 									<button
 										onclick={() => onToggleCollapseGroup(item.key)}
@@ -521,10 +486,7 @@
 											style={color.style}>{item.key}</span
 										>
 									{:else}
-										<span
-											class="text-sm font-medium {isDark.value ? 'text-gray-300' : 'text-gray-700'}"
-											>{item.key}</span
-										>
+										<span class="text-sm font-medium {T.secondary}">{item.key}</span>
 									{/if}
 									<span class="text-xs text-gray-400"
 										>{item.count} {item.count === 1 ? 'row' : 'rows'}</span
@@ -533,14 +495,12 @@
 							</td>
 						</tr>
 					{:else if item.type === 'group-add'}
-						<tr class="border-b {isDark.value ? 'border-gray-700' : 'border-gray-100'}">
+						<tr class="border-b {T.cardBorder}">
 							<td colspan={sortedColumns.length + 3} class="px-4 py-1">
 								<button
 									onclick={() => onAddRowInGroup(item.key, item.col)}
 									disabled={addingRow}
-									class="rounded px-2 py-0.5 text-xs {isDark.value
-										? 'text-gray-500 hover:bg-gray-700 hover:text-gray-300'
-										: 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'} disabled:opacity-50"
+									class="rounded px-2 py-0.5 text-xs {T.muted} {T.menuItemHover} disabled:opacity-50"
 								>
 									+ Add row
 								</button>
@@ -550,18 +510,14 @@
 						{@const row = item.row}
 						<tr
 							data-testid="grid-row-{row.row_id}"
-							class="border-b transition {isDark.value
-								? 'border-gray-700 hover:bg-blue-900/20'
-								: 'border-gray-100 hover:bg-blue-50/50'} {deletingRowId === row.row_id
+							class="border-b transition {T.cardBorder} {T.rowHoverBg} {deletingRowId === row.row_id
 								? 'opacity-50'
 								: ''}"
 							oncontextmenu={(e) => onOpenContextMenu(e, 'row', String(row.row_id))}
 						>
 							<!-- Row number -->
 							<td
-								class="sticky left-0 z-20 border-r px-1 py-1 text-center {isDark.value
-									? 'border-gray-700 bg-gray-800'
-									: 'border-gray-100 bg-gray-50'}"
+								class="sticky left-0 z-20 border-r px-1 py-1 text-center {T.cardBorder} {T.tableHeaderBg}"
 								style="width: 48px;"
 							>
 								<button
@@ -606,11 +562,7 @@
 							{#each sortedColumns as col, i (col.column_id)}
 								<td
 									class="overflow-hidden py-1 text-sm {T.body}
-									{i === 0
-										? isDark.value
-											? 'sticky left-12 z-10 border-r border-gray-700 bg-gray-800 px-2'
-											: 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2'
-										: 'px-2'}"
+									{i === 0 ? `sticky left-12 z-10 border-r ${T.cardBorder} ${T.cardBg} px-2` : 'px-2'}"
 									style="width: {getColWidth(col)}px;"
 									onclick={() => {
 										if (col.type === 'doc') {
@@ -818,9 +770,7 @@
 													>
 													{#if tagsPopupCell?.rowId === row.row_id && tagsPopupCell?.colId === col.column_id}
 														<div
-															class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border py-1 shadow-xl {isDark.value
-																? 'border-gray-700 bg-gray-800'
-																: 'border-gray-100 bg-white'}"
+															class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border py-1 shadow-xl {T.cardBorder} {T.cardBg}"
 															data-testid="tags-popup-{row.row_id}-{col.column_id}"
 														>
 															{#each available as choice (choice.value)}
@@ -892,15 +842,9 @@
 					<!-- empty -->
 				{/each}
 				<!-- "+" row at bottom — click any cell to add new row -->
-				<tr
-					class="border-b transition {isDark.value
-						? 'border-gray-700 hover:bg-blue-900/10'
-						: 'border-gray-100 hover:bg-blue-50/30'}"
-				>
+				<tr class="border-b transition {T.cardBorder} {T.rowHoverBg}">
 					<td
-						class="sticky left-0 z-20 border-r px-1 py-1 text-center {isDark.value
-							? 'border-gray-700 bg-gray-800'
-							: 'border-gray-100 bg-gray-50'}"
+						class="sticky left-0 z-20 border-r px-1 py-1 text-center {T.cardBorder} {T.tableHeaderBg}"
 						style="width: 48px;"
 					>
 						<button
@@ -933,12 +877,8 @@
 					</td>
 					{#each sortedColumns as col, i (col.column_id)}
 						<td
-							class="cursor-pointer py-1 text-sm {isDark.value ? 'text-gray-600' : 'text-gray-300'}
-							{i === 0
-								? isDark.value
-									? 'sticky left-12 z-10 border-r border-gray-700 bg-gray-800 px-2'
-									: 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2'
-								: 'px-2'}"
+							class="cursor-pointer py-1 text-sm {T.faint}
+							{i === 0 ? `sticky left-12 z-10 border-r ${T.cardBorder} ${T.cardBg} px-2` : 'px-2'}"
 							style="width: {getColWidth(col)}px;"
 							onclick={() => (onAddRowAndEdit ? onAddRowAndEdit(col.column_id) : onAddRow())}
 						>

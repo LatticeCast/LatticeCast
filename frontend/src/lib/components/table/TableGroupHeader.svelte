@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Column } from '$lib/types/table';
-	import { isDark } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 	import { getChoiceColor } from './table.utils';
 
 	let {
@@ -21,7 +21,7 @@
 </script>
 
 <tr class="border-b border-gray-200">
-	<td {colspan} class="{isDark.value ? 'bg-gray-800' : 'bg-gray-50'} py-0.5">
+	<td {colspan} class="{T.tableHeaderBg} py-0.5">
 		<div class="flex items-center gap-2 px-3 py-1">
 			<button
 				onclick={onToggleCollapse}
@@ -49,9 +49,7 @@
 					style={color.style}>{groupKey}</span
 				>
 			{:else}
-				<span class="text-sm font-medium {isDark.value ? 'text-gray-300' : 'text-gray-700'}"
-					>{groupKey}</span
-				>
+				<span class="text-sm font-medium {T.secondary}">{groupKey}</span>
 			{/if}
 			<span class="text-xs text-gray-400">{count} {count === 1 ? 'row' : 'rows'}</span>
 		</div>

@@ -5,7 +5,7 @@
 	import { authStore } from '$lib/stores/auth.store';
 	import { get } from 'svelte/store';
 	import { fetchDoc, saveDoc, fetchTable, fetchRows } from '$lib/backend/tables';
-	import { isDark } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 	import { BRAND } from '$lib/UI/brand';
 	import { marked } from 'marked';
 	import type { Table, Row } from '$lib/types/table';
@@ -88,16 +88,10 @@
 	<title>{rowTitle} · Doc — {BRAND}</title>
 </svelte:head>
 
-<div
-	class="flex h-screen flex-col {isDark.value
-		? 'bg-gray-900 text-gray-100'
-		: 'bg-white text-gray-900'}"
->
+<div class="flex h-screen flex-col {T.editorBg} {T.heading}">
 	<!-- Top bar -->
 	<div
-		class="flex shrink-0 items-center justify-between border-b px-5 py-3 {isDark.value
-			? 'border-gray-700 bg-gray-800'
-			: 'border-gray-200 bg-gray-50'}"
+		class="flex shrink-0 items-center justify-between border-b px-5 py-3 {T.border} {T.tableHeaderBg}"
 	>
 		<!-- Breadcrumb -->
 		<nav
@@ -123,14 +117,14 @@
 				data-testid="doc-breadcrumb-row">{rowTitle}</a
 			>
 			<span class="text-gray-400">/</span>
-			<span class={isDark.value ? 'text-gray-300' : 'text-gray-600'}>Doc</span>
+			<span class={T.secondary}>Doc</span>
 		</nav>
 
 		<!-- Actions -->
 		<div class="flex items-center gap-3">
 			{#if unsaved}
 				<span
-					class="text-xs {isDark.value ? 'text-yellow-400' : 'text-yellow-600'}"
+					class="text-xs text-yellow-600 dark:text-yellow-400"
 					data-testid="doc-unsaved-indicator"
 				>
 					Unsaved changes
@@ -167,18 +161,11 @@
 		</div>
 	{:else}
 		<!-- Split pane -->
-		<div
-			class="flex flex-1 divide-x overflow-hidden {isDark.value
-				? 'divide-gray-700'
-				: 'divide-gray-200'}"
-			data-testid="doc-split-pane"
-		>
+		<div class="flex flex-1 divide-x overflow-hidden {T.divide}" data-testid="doc-split-pane">
 			<!-- Editor pane -->
 			<textarea
 				data-testid="doc-editor-textarea"
-				class="flex-1 resize-none border-none px-6 py-5 font-mono text-sm outline-none {isDark.value
-					? 'bg-gray-900 text-gray-200'
-					: 'bg-white text-gray-800'}"
+				class="flex-1 resize-none border-none px-6 py-5 font-mono text-sm outline-none {T.editorBg} {T.body}"
 				placeholder="Write markdown here…"
 				bind:value={docContent}
 				oninput={handleInput}
@@ -188,9 +175,7 @@
 			<!-- Preview pane -->
 			<div
 				data-testid="doc-preview-pane"
-				class="prose prose-sm max-w-none flex-1 overflow-y-auto px-6 py-5 text-sm {isDark.value
-					? 'bg-gray-900 text-gray-200 prose-invert'
-					: 'bg-white text-gray-800'}"
+				class="prose prose-sm max-w-none flex-1 overflow-y-auto px-6 py-5 text-sm {T.editorBg} {T.body} {T.proseDark}"
 			>
 				{#if docContent}
 					<!-- eslint-disable-next-line svelte/no-at-html-tags -->

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Column } from '$lib/types/table';
-	import { isDark } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 	import { sortLabels } from './table.utils';
 
 	let {
@@ -56,9 +56,7 @@
 	<tr>
 		<!-- Row number header -->
 		<th
-			class="sticky left-0 z-20 border-r border-b px-2 py-2 text-center text-xs font-semibold {isDark.value
-				? 'border-gray-700 bg-gray-800 text-gray-500'
-				: 'border-gray-200 bg-gray-50 text-gray-400'}"
+			class="sticky left-0 z-20 border-r border-b px-2 py-2 text-center text-xs font-semibold {T.border} {T.tableHeaderBg} {T.muted}"
 			style="width: 48px;"
 		>
 			#
@@ -66,16 +64,8 @@
 		{#each sortedColumns as col, i (col.column_id)}
 			<th
 				data-testid="col-header-{col.column_id}"
-				class="relative border-b px-3 py-2 text-left text-xs font-semibold tracking-wide uppercase {isDark.value
-					? 'border-gray-700 text-gray-400'
-					: 'border-gray-200 text-gray-500'}
-					{i === 0
-					? isDark.value
-						? 'sticky left-12 border-r border-gray-700 bg-gray-800'
-						: 'sticky left-12 border-r border-gray-200 bg-gray-50'
-					: isDark.value
-						? 'bg-gray-800'
-						: 'bg-gray-50'}
+				class="relative border-b px-3 py-2 text-left text-xs font-semibold tracking-wide uppercase {T.border} {T.muted}
+					{i === 0 ? `sticky left-12 border-r ${T.border} ${T.tableHeaderBg}` : T.tableHeaderBg}
 					{colMenuId === col.column_id ? 'z-30' : i === 0 ? 'z-10' : ''}"
 				style="width: {getColWidth(col)}px;"
 				oncontextmenu={(e) => onOpenContextMenu(e, 'col', col.column_id)}
@@ -128,16 +118,12 @@
 				{#if colMenuId === col.column_id}
 					{@const sl = sortLabels(col.type)}
 					<div
-						class="absolute top-full left-0 z-30 mt-1 min-w-[168px] rounded-xl border py-1 shadow-xl {isDark.value
-							? 'border-gray-700 bg-gray-800'
-							: 'border-gray-200 bg-white'}"
+						class="absolute top-full left-0 z-30 mt-1 min-w-[168px] rounded-xl border py-1 shadow-xl {T.border} {T.cardBg}"
 						onclick={(e) => e.stopPropagation()}
 						role="menu"
 					>
 						<button
-							class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value
-								? 'text-gray-300 hover:bg-gray-700'
-								: 'text-gray-700 hover:bg-gray-50'}"
+							class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {T.secondary} {T.menuItemHover}"
 							onclick={() => {
 								onStartRename(col.column_id, col.name);
 								onColMenuChange(null);
@@ -160,9 +146,7 @@
 						</button>
 						{#if col.type === 'select' || col.type === 'tags'}
 							<button
-								class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value
-									? 'text-gray-300 hover:bg-gray-700'
-									: 'text-gray-700 hover:bg-gray-50'}"
+								class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {T.secondary} {T.menuItemHover}"
 								onclick={() => {
 									onManageOptions(col);
 									onColMenuChange(null);
@@ -184,7 +168,7 @@
 								Manage Options
 							</button>
 						{/if}
-						<hr class={isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'} />
+						<hr class="my-1 {T.cardBorder}" />
 						<button
 							class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
 								col.column_id && sortConfig?.dir === 'asc'
@@ -236,9 +220,7 @@
 							Sort {sl.desc}
 						</button>
 						<button
-							class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {isDark.value
-								? 'text-gray-300 hover:bg-gray-700'
-								: 'text-gray-700 hover:bg-gray-50'}"
+							class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {T.secondary} {T.menuItemHover}"
 							onclick={() => {
 								onFilterAdd(col.column_id);
 								onShowFilterPanel();
@@ -260,7 +242,7 @@
 							>
 							Filter
 						</button>
-						<hr class={isDark.value ? 'my-1 border-gray-700' : 'my-1 border-gray-100'} />
+						<hr class="my-1 {T.cardBorder}" />
 						<button
 							class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
 							onclick={() => {
@@ -296,15 +278,9 @@
 			</th>
 		{/each}
 		<!-- Actions col header -->
-		<th
-			class="border-b {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}"
-			style="width: 40px;"
-		></th>
+		<th class="border-b {T.border} {T.tableHeaderBg}" style="width: 40px;"></th>
 		<!-- "+" add column -->
-		<th
-			class="border-b {isDark.value ? 'border-gray-700 bg-gray-800' : 'border-gray-200 bg-gray-50'}"
-			style="width: 40px;"
-		>
+		<th class="border-b {T.border} {T.tableHeaderBg}" style="width: 40px;">
 			<button
 				data-testid="grid-add-column-btn"
 				onclick={onShowAddColumn}

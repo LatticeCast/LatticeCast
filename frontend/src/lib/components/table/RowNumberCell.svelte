@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Row } from '$lib/types/table';
-	import { isDark } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 
 	let {
 		row,
@@ -14,9 +14,7 @@
 </script>
 
 <td
-	class="sticky left-0 z-20 border-r px-1 py-1 text-center {isDark.value
-		? 'border-gray-700 bg-gray-800'
-		: 'border-gray-100 bg-gray-50'}"
+	class="sticky left-0 z-20 border-r px-1 py-1 text-center {T.cardBorder} {T.tableHeaderBg}"
 	style="width: 48px;"
 >
 	<button

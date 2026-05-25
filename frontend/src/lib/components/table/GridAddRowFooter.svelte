@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Column } from '$lib/types/table';
-	import { isDark } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 
 	let {
 		sortedColumns,
@@ -21,15 +21,9 @@
 	}
 </script>
 
-<tr
-	class="border-b transition {isDark.value
-		? 'border-gray-700 hover:bg-blue-900/10'
-		: 'border-gray-100 hover:bg-blue-50/30'}"
->
+<tr class="border-b transition {T.cardBorder} {T.rowHoverBg}">
 	<td
-		class="sticky left-0 z-20 border-r px-1 py-1 text-center {isDark.value
-			? 'border-gray-700 bg-gray-800'
-			: 'border-gray-100 bg-gray-50'}"
+		class="sticky left-0 z-20 border-r px-1 py-1 text-center {T.cardBorder} {T.tableHeaderBg}"
 		style="width: 48px;"
 	>
 		<button
@@ -56,12 +50,8 @@
 	</td>
 	{#each sortedColumns as col, i (col.column_id)}
 		<td
-			class="cursor-pointer py-1 text-sm {isDark.value ? 'text-gray-600' : 'text-gray-300'}
-			{i === 0
-				? isDark.value
-					? 'sticky left-12 z-10 border-r border-gray-700 bg-gray-800 px-2'
-					: 'sticky left-12 z-10 border-r border-gray-100 bg-white px-2'
-				: 'px-2'}"
+			class="cursor-pointer py-1 text-sm {T.faint}
+			{i === 0 ? `sticky left-12 z-10 border-r ${T.cardBorder} ${T.tableHeaderBg} px-2` : 'px-2'}"
 			style="width: {getColWidth(col)}px;"
 			onclick={() => (onAddRowAndEdit ? onAddRowAndEdit(col.column_id) : onAddRow())}
 		>

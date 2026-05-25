@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Column, Row } from '$lib/types/table';
-	import { isDark } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 	import { getChoices, getChoiceColor, getTagValues, colorToStyle } from '../table.utils';
 
 	let {
@@ -52,9 +52,7 @@
 			>
 			{#if isPopupOpen}
 				<div
-					class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border py-1 shadow-xl {isDark.value
-						? 'border-gray-700 bg-gray-800'
-						: 'border-gray-100 bg-white'}"
+					class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border py-1 shadow-xl {T.cardBorder} {T.cardBg}"
 				>
 					{#each available as choice (choice.value)}
 						{@const cs = colorToStyle(choice.color)}

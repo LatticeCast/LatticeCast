@@ -33,12 +33,17 @@ export interface ThemeTokens {
 	selectedBg: string;
 	badgeBg: string;
 	toggleTrackBg: string;
+	tableHeaderBg: string;
+	rowHoverBg: string;
+	menuBg: string;
+	editorBg: string;
 
 	// Borders
 	inputBorder: string;
 	inputFocusBorder: string;
 	selectedBorder: string;
 	cardBorder: string;
+	border: string;
 
 	// Text
 	heading: string;
@@ -46,10 +51,19 @@ export interface ThemeTokens {
 	muted: string;
 	placeholder: string;
 	link: string;
+	secondary: string;
+	faint: string;
 
 	// Badges
 	badgeText: string;
 	badgeBorder: string;
+
+	// Dropdown / Menu
+	menuItemHover: string;
+
+	// Utilities
+	divide: string;
+	proseDark: string;
 }
 
 export const theme = {
@@ -67,12 +81,17 @@ export const theme = {
 		selectedBg: 'bg-blue-50',
 		badgeBg: 'bg-blue-100',
 		toggleTrackBg: 'bg-gray-200',
+		tableHeaderBg: 'bg-gray-50',
+		rowHoverBg: 'hover:bg-blue-50/60',
+		menuBg: 'bg-white',
+		editorBg: 'bg-white',
 
 		// Borders
 		inputBorder: 'border-gray-200',
 		inputFocusBorder: 'focus:border-blue-500',
 		selectedBorder: 'border-blue-500',
 		cardBorder: 'border-gray-100',
+		border: 'border-gray-200',
 
 		// Text
 		heading: 'text-gray-900',
@@ -80,10 +99,19 @@ export const theme = {
 		muted: 'text-gray-500',
 		placeholder: 'placeholder-gray-400',
 		link: 'text-blue-600 hover:text-blue-700',
+		secondary: 'text-gray-700',
+		faint: 'text-gray-300',
 
 		// Badges
 		badgeText: 'text-blue-700',
-		badgeBorder: 'border-blue-200'
+		badgeBorder: 'border-blue-200',
+
+		// Dropdown / Menu
+		menuItemHover: 'hover:bg-gray-50',
+
+		// Utilities
+		divide: 'divide-gray-200',
+		proseDark: ''
 	} satisfies Record<string, string>,
 
 	dark: {
@@ -100,12 +128,17 @@ export const theme = {
 		selectedBg: 'bg-blue-900',
 		badgeBg: 'bg-blue-900',
 		toggleTrackBg: 'bg-gray-600',
+		tableHeaderBg: 'bg-gray-800',
+		rowHoverBg: 'hover:bg-gray-800',
+		menuBg: 'bg-gray-800/95',
+		editorBg: 'bg-gray-900',
 
 		// Borders
 		inputBorder: 'border-gray-600',
 		inputFocusBorder: 'focus:border-blue-400',
 		selectedBorder: 'border-blue-400',
 		cardBorder: 'border-gray-700',
+		border: 'border-gray-700',
 
 		// Text
 		heading: 'text-gray-100',
@@ -113,10 +146,19 @@ export const theme = {
 		muted: 'text-gray-400',
 		placeholder: 'placeholder-gray-500',
 		link: 'text-blue-400 hover:text-blue-300',
+		secondary: 'text-gray-300',
+		faint: 'text-gray-600',
 
 		// Badges
 		badgeText: 'text-blue-300',
-		badgeBorder: 'border-blue-700'
+		badgeBorder: 'border-blue-700',
+
+		// Dropdown / Menu
+		menuItemHover: 'hover:bg-gray-700',
+
+		// Utilities
+		divide: 'divide-gray-700',
+		proseDark: 'prose-invert'
 	} satisfies Record<string, string>
 } as const;
 

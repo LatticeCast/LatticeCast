@@ -14,7 +14,7 @@
 	} from './timeline.utils';
 	import { updateRow } from '$lib/backend/tables';
 	import { updateView } from '$lib/backend/views';
-	import { isDark } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 
 	let {
 		tableId,
@@ -207,20 +207,13 @@
 </script>
 
 <!-- Config bar -->
-<div
-	class="flex flex-wrap items-center gap-3 border-b px-4 py-2 {isDark.value
-		? 'border-gray-700 bg-gray-800'
-		: 'border-gray-200 bg-white'}"
->
+<div class="flex flex-wrap items-center gap-3 border-b px-4 py-2 {T.border} {T.cardBg}">
 	<!-- Start date -->
 	<div class="flex items-center gap-2">
-		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}">Start</span
-		>
+		<span class="text-xs font-medium {T.muted}">Start</span>
 		<select
 			data-testid="timeline-start-col-select"
-			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
-				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
-				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+			class="rounded-md border px-2 py-1 text-xs focus:outline-none {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder}"
 			value={startColId ?? ''}
 			onchange={(e) =>
 				saveConfig({ start_col: (e.target as HTMLSelectElement).value || undefined })}
@@ -234,12 +227,10 @@
 
 	<!-- End date -->
 	<div class="flex items-center gap-2">
-		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}">End</span>
+		<span class="text-xs font-medium {T.muted}">End</span>
 		<select
 			data-testid="timeline-end-col-select"
-			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
-				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
-				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+			class="rounded-md border px-2 py-1 text-xs focus:outline-none {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder}"
 			value={endColId ?? ''}
 			onchange={(e) => saveConfig({ end_col: (e.target as HTMLSelectElement).value || undefined })}
 		>
@@ -252,14 +243,10 @@
 
 	<!-- Color by -->
 	<div class="flex items-center gap-2">
-		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}"
-			>Color by</span
-		>
+		<span class="text-xs font-medium {T.muted}">Color by</span>
 		<select
 			data-testid="timeline-color-by-select"
-			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
-				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
-				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+			class="rounded-md border px-2 py-1 text-xs focus:outline-none {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder}"
 			value={colorByColId ?? ''}
 			onchange={(e) => saveConfig({ color_by: (e.target as HTMLSelectElement).value || undefined })}
 		>
@@ -272,14 +259,10 @@
 
 	<!-- Group by -->
 	<div class="flex items-center gap-2">
-		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}"
-			>Group by</span
-		>
+		<span class="text-xs font-medium {T.muted}">Group by</span>
 		<select
 			data-testid="timeline-group-by-select"
-			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
-				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
-				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+			class="rounded-md border px-2 py-1 text-xs focus:outline-none {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder}"
 			value={groupByColId ?? ''}
 			onchange={(e) => saveConfig({ group_by: (e.target as HTMLSelectElement).value || undefined })}
 		>
@@ -294,29 +277,21 @@
 	<button
 		data-testid="timeline-add-row-btn"
 		onclick={() => onAddRow({})}
-		class="flex items-center gap-1 rounded-lg border px-3 py-1 text-xs font-medium transition {isDark.value
-			? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600'
-			: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}"
+		class="flex items-center gap-1 rounded-lg border px-3 py-1 text-xs font-medium transition {T.inputBorder} {T.inputBg} {T.body} {T.menuItemHover}"
 	>
 		+ {isTicketTable ? 'New ticket' : 'Add row'}
 	</button>
 
 	<!-- Granularity toggle -->
 	<div
-		class="ml-auto flex items-center gap-0.5 rounded-lg border p-0.5 {isDark.value
-			? 'border-gray-600 bg-gray-700'
-			: 'border-gray-200 bg-gray-50'}"
+		class="ml-auto flex items-center gap-0.5 rounded-lg border p-0.5 {T.inputBorder} {T.tableHeaderBg}"
 	>
 		{#each GRANULARITIES as g (g)}
 			<button
 				data-testid="timeline-granularity-{g}-btn"
 				class="rounded-md px-2.5 py-1 text-xs font-medium capitalize transition {granularity === g
-					? isDark.value
-						? 'bg-gray-600 text-blue-300 shadow-sm'
-						: 'bg-white text-blue-600 shadow-sm'
-					: isDark.value
-						? 'text-gray-400 hover:text-gray-200'
-						: 'text-gray-500 hover:text-gray-700'}"
+					? `${T.cardBg} text-blue-600 shadow-sm dark:text-blue-300`
+					: `${T.muted} hover:text-gray-700 dark:hover:text-gray-200`}"
 				onclick={() => saveConfig({ granularity: g })}
 			>
 				{g}
@@ -326,45 +301,35 @@
 </div>
 
 {#if !startColId}
-	<div
-		class="flex h-64 items-center justify-center {isDark.value ? 'text-gray-500' : 'text-gray-400'}"
-	>
+	<div class="flex h-64 items-center justify-center {T.muted}">
 		<div class="text-center">
 			<p class="text-sm">Select a "Start" date column above to activate the Timeline view.</p>
 		</div>
 	</div>
 {:else}
 	<!-- Timeline grid -->
-	<div class="relative flex-1 overflow-auto {isDark.value ? 'bg-gray-900' : 'bg-white'}">
+	<div class="relative flex-1 overflow-auto {T.editorBg}">
 		<div style="min-width: {SIDEBAR_WIDTH + totalGridWidth}px">
 			<!-- Header row -->
 			<div
-				class="sticky top-0 z-20 flex border-b {isDark.value
-					? 'border-gray-700 bg-gray-800'
-					: 'border-gray-200 bg-white'}"
+				class="sticky top-0 z-20 flex border-b {T.border} {T.cardBg}"
 				style="height: {HEADER_HEIGHT}px"
 			>
 				<!-- Sidebar corner -->
 				<div
-					class="sticky left-0 z-30 flex-shrink-0 border-r {isDark.value
-						? 'border-gray-700 bg-gray-800'
-						: 'border-gray-200 bg-white'}"
+					class="sticky left-0 z-30 flex-shrink-0 border-r {T.border} {T.cardBg}"
 					style="width: {SIDEBAR_WIDTH}px"
 				></div>
 				<!-- Time header cells -->
 				{#each timeColumns as col, i (i)}
 					<div
-						class="flex-shrink-0 border-r px-1 text-center text-xs leading-none font-medium {isToday(
+						class="flex-shrink-0 border-r px-1 text-center text-xs leading-none font-medium {T.cardBorder} {isToday(
 							col,
 							granularity,
 							today
 						)
-							? isDark.value
-								? 'border-gray-700 bg-blue-900/40 text-blue-400'
-								: 'border-gray-100 bg-blue-50 text-blue-600'
-							: isDark.value
-								? 'border-gray-700 text-gray-400'
-								: 'border-gray-100 text-gray-500'}"
+							? 'bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
+							: T.muted}"
 						style="width: {cellWidth}px; line-height: {HEADER_HEIGHT}px"
 					>
 						{formatColHeader(col, granularity)}
@@ -377,9 +342,7 @@
 				<!-- Group header (only when grouped) -->
 				{#if groupByColId && groupByCol}
 					<div
-						class="sticky left-0 z-10 flex items-center gap-2 border-b px-3 {isDark.value
-							? 'border-gray-700 bg-gray-800'
-							: 'border-gray-200 bg-gray-50'}"
+						class="sticky left-0 z-10 flex items-center gap-2 border-b px-3 {T.border} {T.tableHeaderBg}"
 						style="height: {ROW_HEIGHT - 4}px; width: {SIDEBAR_WIDTH + totalGridWidth}px"
 					>
 						{#if groupByCol.type === 'select' && group.key}
@@ -391,9 +354,7 @@
 								{group.label}
 							</span>
 						{:else}
-							<span class="text-xs font-semibold {isDark.value ? 'text-gray-300' : 'text-gray-600'}"
-								>{group.label}</span
-							>
+							<span class="text-xs font-semibold {T.secondary}">{group.label}</span>
 						{/if}
 						<span class="text-xs text-gray-400">{group.rows.length}</span>
 					</div>
@@ -403,19 +364,15 @@
 				{#each group.rows as { row, startDate: rawStart, endDate: rawEnd } (row.row_id)}
 					{@const { startDate, endDate } = getEffectiveDates(row, rawStart, rawEnd)}
 					<div
-						class="flex border-b {isDark.value
-							? 'border-gray-700 hover:bg-gray-800/80'
-							: 'border-gray-100 hover:bg-gray-50'}"
+						class="flex border-b {T.cardBorder} {T.menuItemHover}"
 						style="height: {ROW_HEIGHT}px"
 					>
 						<!-- Sidebar label -->
 						<div
-							class="sticky left-0 z-10 flex flex-shrink-0 items-center border-r px-2 {isDark.value
-								? 'border-gray-700 bg-gray-900 hover:bg-gray-800'
-								: 'border-gray-200 bg-white hover:bg-gray-50'}"
+							class="sticky left-0 z-10 flex flex-shrink-0 items-center border-r px-2 {T.border} {T.editorBg} {T.menuItemHover}"
 							style="width: {SIDEBAR_WIDTH}px"
 						>
-							<span class="truncate text-xs {isDark.value ? 'text-gray-300' : 'text-gray-700'}">
+							<span class="truncate text-xs {T.secondary}">
 								{labelCol ? String(row.row_data[labelCol.column_id] ?? '') || '—' : '—'}
 							</span>
 						</div>
@@ -429,12 +386,8 @@
 							{#each timeColumns as col, i (i)}
 								<div
 									class="absolute top-0 bottom-0 border-r {isToday(col, granularity, today)
-										? isDark.value
-											? 'border-blue-700 bg-blue-900/20'
-											: 'border-blue-200 bg-blue-50/40'
-										: isDark.value
-											? 'border-gray-700'
-											: 'border-gray-100'}"
+										? 'border-blue-200 bg-blue-50/40 dark:border-blue-700 dark:bg-blue-900/20'
+										: T.cardBorder}"
 									style="left: {i * cellWidth}px; width: {cellWidth}px"
 								></div>
 							{/each}

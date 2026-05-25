@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Column, Row } from '$lib/types/table';
-	import { isDark } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 	import {
 		getChoices,
 		getChoiceColor,
@@ -127,19 +127,16 @@
 
 <!-- Slide-out panel -->
 <div
-	class="fixed top-0 right-0 z-50 flex h-full w-full flex-col shadow-2xl {isDark.value
-		? 'bg-gray-800'
-		: 'bg-white'} {activeTab === 'doc' ? 'max-w-4xl' : 'max-w-md'}"
+	class="fixed top-0 right-0 z-50 flex h-full w-full flex-col shadow-2xl {T.cardBg} {activeTab ===
+	'doc'
+		? 'max-w-4xl'
+		: 'max-w-md'}"
 	role="dialog"
 	aria-modal="true"
 	aria-label="Row details"
 >
 	<!-- Panel header -->
-	<div
-		class="flex items-center justify-between border-b bg-blue-600 px-6 py-3 {isDark.value
-			? 'border-gray-700'
-			: 'border-gray-200'}"
-	>
+	<div class="flex items-center justify-between border-b bg-blue-600 px-6 py-3 {T.border}">
 		<h2 class="text-lg font-semibold text-white">Row Details</h2>
 		<div class="flex items-center gap-2">
 			<a
@@ -167,14 +164,12 @@
 	</div>
 
 	<!-- Tabs -->
-	<div class="flex border-b {isDark.value ? 'border-gray-700' : 'border-gray-200'}">
+	<div class="flex border-b {T.border}">
 		<button
 			data-testid="row-panel-tab-fields"
 			class="px-5 py-2.5 text-sm font-medium transition {activeTab === 'fields'
 				? 'border-b-2 border-blue-600 text-blue-600'
-				: isDark.value
-					? 'text-gray-400 hover:text-gray-200'
-					: 'text-gray-500 hover:text-gray-800'}"
+				: `${T.muted} hover:${T.body}`}"
 			onclick={() => (activeTab = 'fields')}
 		>
 			Fields
@@ -183,9 +178,7 @@
 			data-testid="row-panel-tab-doc"
 			class="px-5 py-2.5 text-sm font-medium transition {activeTab === 'doc'
 				? 'border-b-2 border-blue-600 text-blue-600'
-				: isDark.value
-					? 'text-gray-400 hover:text-gray-200'
-					: 'text-gray-500 hover:text-gray-800'}"
+				: `${T.muted} hover:${T.body}`}"
 			onclick={() => (activeTab = 'doc')}
 		>
 			Doc
@@ -195,14 +188,8 @@
 	{#if activeTab === 'doc'}
 		<!-- Doc tab — split view -->
 		<div class="flex flex-1 flex-col overflow-hidden">
-			<div
-				class="flex items-center justify-between border-b px-4 py-2 {isDark.value
-					? 'border-gray-700'
-					: 'border-gray-100'}"
-			>
-				<span class="text-xs {isDark.value ? 'text-gray-500' : 'text-gray-400'}"
-					>Markdown {docSaving ? '· saving…' : ''}</span
-				>
+			<div class="flex items-center justify-between border-b px-4 py-2 {T.cardBorder}">
+				<span class="text-xs {T.muted}">Markdown {docSaving ? '· saving…' : ''}</span>
 				<a
 					data-testid="row-panel-doc-full-editor-link"
 					href="/{workspaceId}/{tableId}/{row.row_id}/doc"
@@ -210,22 +197,11 @@
 				>
 			</div>
 			{#if docLoading || !docLoaded}
-				<div
-					class="flex flex-1 items-center justify-center text-sm {isDark.value
-						? 'text-gray-500'
-						: 'text-gray-400'}"
-				>
-					Loading…
-				</div>
+				<div class="flex flex-1 items-center justify-center text-sm {T.muted}">Loading…</div>
 			{:else if !docContent && !docEditing}
 				<!-- Empty state -->
 				<div class="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-12">
-					<svg
-						class="h-12 w-12 {isDark.value ? 'text-gray-600' : 'text-gray-300'}"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
+					<svg class="h-12 w-12 {T.faint}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path
 							stroke-linecap="round"
 							stroke-linejoin="round"
@@ -233,40 +209,28 @@
 							d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
 						/>
 					</svg>
-					<p class="text-sm {isDark.value ? 'text-gray-400' : 'text-gray-500'}">
-						No doc yet for this row.
-					</p>
+					<p class="text-sm {T.muted}">No doc yet for this row.</p>
 					<button
 						data-testid="row-panel-doc-start-btn"
 						onclick={() => (docEditing = true)}
-						class="rounded-lg px-4 py-2 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 {isDark.value
-							? 'hover:bg-blue-900/20'
-							: ''}"
+						class="rounded-lg px-4 py-2 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-900/20"
 					>
 						Start writing →
 					</button>
 				</div>
 			{:else}
-				<div
-					class="flex flex-1 divide-x overflow-hidden {isDark.value
-						? 'divide-gray-700'
-						: 'divide-gray-200'}"
-				>
+				<div class="flex flex-1 divide-x overflow-hidden {T.divide}">
 					<!-- Editor pane -->
 					<textarea
 						data-testid="row-panel-doc-textarea"
-						class="flex-1 resize-none border-none px-5 py-4 font-mono text-sm outline-none {isDark.value
-							? 'bg-gray-800 text-gray-200'
-							: 'text-gray-800'}"
+						class="flex-1 resize-none border-none px-5 py-4 font-mono text-sm outline-none {T.cardBg} {T.body}"
 						placeholder="Write markdown here…"
 						bind:value={docContent}
 						onblur={handleDocBlur}
 					></textarea>
 					<!-- Preview pane -->
 					<div
-						class="prose prose-sm max-w-none flex-1 overflow-y-auto px-5 py-4 text-sm {isDark.value
-							? 'text-gray-200 prose-invert'
-							: 'text-gray-800'}"
+						class="prose prose-sm max-w-none flex-1 overflow-y-auto px-5 py-4 text-sm {T.body} {T.proseDark}"
 					>
 						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 						{@html docPreview}
@@ -279,11 +243,7 @@
 		<div class="flex-1 overflow-y-auto px-6 py-4">
 			{#each sortedCols as col (col.column_id)}
 				<div class="mb-5">
-					<label
-						class="mb-1 block text-xs font-semibold tracking-wide uppercase {isDark.value
-							? 'text-gray-500'
-							: 'text-gray-400'}"
-					>
+					<label class="mb-1 block text-xs font-semibold tracking-wide uppercase {T.muted}">
 						{col.name}
 						<span class="ml-1 font-normal text-gray-300 normal-case">({col.type})</span>
 					</label>
@@ -310,9 +270,7 @@
 						{@const choices = getChoices(col)}
 						{#if editField === col.column_id}
 							<select
-								class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {isDark.value
-									? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400 focus:ring-blue-400'
-									: 'border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500'}"
+								class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder} focus:ring-blue-500"
 								bind:value={editVal}
 								onblur={() => commitEdit(col)}
 								onchange={() => commitEdit(col)}
@@ -327,9 +285,7 @@
 							{@const selVal = (localRow.row_data[col.column_id] as string) ?? ''}
 							<button
 								data-testid="row-panel-field-{col.column_id}-select-btn"
-								class="flex min-h-[2.25rem] w-full items-center rounded-xl border px-3 py-2 text-left text-sm {isDark.value
-									? 'border-gray-600 hover:border-blue-500'
-									: 'border-gray-200 hover:border-blue-300'}"
+								class="flex min-h-[2.25rem] w-full items-center rounded-xl border px-3 py-2 text-left text-sm {T.inputBorder} hover:border-blue-400"
 								onclick={() => startEdit(col)}
 							>
 								{#if selVal}
@@ -348,9 +304,7 @@
 						{@const choices = getChoices(col)}
 						{@const available = choices.filter((c) => !tagVals.includes(c.value))}
 						<div
-							class="flex min-h-[2.25rem] flex-wrap items-center gap-1 rounded-xl border px-3 py-2 {isDark.value
-								? 'border-gray-600'
-								: 'border-gray-200'}"
+							class="flex min-h-[2.25rem] flex-wrap items-center gap-1 rounded-xl border px-3 py-2 {T.inputBorder}"
 						>
 							{#each tagVals as tag (tag)}
 								{@const color = getChoiceColor(col, tag)}
@@ -376,16 +330,12 @@
 									>
 									{#if tagsPopup === col.column_id}
 										<div
-											class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border py-1 shadow-xl {isDark.value
-												? 'border-gray-700 bg-gray-800'
-												: 'border-gray-100 bg-white'}"
+											class="absolute top-full left-0 z-20 mt-1 min-w-[120px] rounded-xl border py-1 shadow-xl {T.cardBorder} {T.cardBg}"
 										>
 											{#each available as choice (choice.value)}
 												{@const cs = colorToStyle(choice.color)}
 												<button
-													class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs {isDark.value
-														? 'hover:bg-gray-700'
-														: 'hover:bg-gray-50'}"
+													class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs {T.menuItemHover}"
 													onclick={() => addTag(col, choice.value)}
 												>
 													<span
@@ -403,9 +353,7 @@
 						{#if editField === col.column_id}
 							<input
 								type="url"
-								class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {isDark.value
-									? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400 focus:ring-blue-400'
-									: 'border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500'}"
+								class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder} focus:ring-blue-500"
 								bind:value={editVal}
 								onblur={() => commitEdit(col)}
 								onkeydown={(e) => {
@@ -417,9 +365,7 @@
 						{:else}
 							{@const urlVal = (localRow.row_data[col.column_id] as string) ?? ''}
 							<button
-								class="flex min-h-[2.25rem] w-full items-center rounded-xl border px-3 py-2 text-left text-sm {isDark.value
-									? 'border-gray-600 hover:border-blue-500'
-									: 'border-gray-200 hover:border-blue-300'}"
+								class="flex min-h-[2.25rem] w-full items-center rounded-xl border px-3 py-2 text-left text-sm {T.inputBorder} hover:border-blue-400"
 								onclick={() => startEdit(col)}
 							>
 								{#if urlVal}
@@ -440,9 +386,7 @@
 						{#if editField === col.column_id}
 							<input
 								type="date"
-								class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {isDark.value
-									? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400 focus:ring-blue-400'
-									: 'border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500'}"
+								class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder} focus:ring-blue-500"
 								bind:value={editVal}
 								onblur={() => commitEdit(col)}
 								onkeydown={(e) => {
@@ -456,9 +400,7 @@
 								? formatDate(String(localRow.row_data[col.column_id]))
 								: ''}
 							<button
-								class="flex min-h-[2.25rem] w-full items-center rounded-xl border px-3 py-2 text-left font-mono text-sm {isDark.value
-									? 'border-gray-600 hover:border-blue-500'
-									: 'border-gray-200 hover:border-blue-300'}"
+								class="flex min-h-[2.25rem] w-full items-center rounded-xl border px-3 py-2 text-left font-mono text-sm {T.inputBorder} hover:border-blue-400"
 								onclick={() => startEdit(col)}
 							>
 								{#if dateVal}{dateVal}{:else}<span class="font-sans text-gray-400">—</span>{/if}
@@ -468,9 +410,7 @@
 						{#if editField === col.column_id}
 							<input
 								type="number"
-								class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {isDark.value
-									? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400 focus:ring-blue-400'
-									: 'border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500'}"
+								class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder} focus:ring-blue-500"
 								bind:value={editVal}
 								onblur={() => commitEdit(col)}
 								onkeydown={(e) => {
@@ -481,15 +421,11 @@
 							/>
 						{:else}
 							<button
-								class="flex min-h-[2.25rem] w-full items-center rounded-xl border px-3 py-2 text-left text-sm {isDark.value
-									? 'border-gray-600 hover:border-blue-500'
-									: 'border-gray-200 hover:border-blue-300'}"
+								class="flex min-h-[2.25rem] w-full items-center rounded-xl border px-3 py-2 text-left text-sm {T.inputBorder} hover:border-blue-400"
 								onclick={() => startEdit(col)}
 							>
 								{#if localRow.row_data[col.column_id] !== null && localRow.row_data[col.column_id] !== undefined}
-									<span class={isDark.value ? 'text-gray-200' : 'text-gray-800'}
-										>{String(localRow.row_data[col.column_id])}</span
-									>
+									<span class={T.body}>{String(localRow.row_data[col.column_id])}</span>
 								{:else}
 									<span class="text-gray-400">—</span>
 								{/if}
@@ -497,9 +433,7 @@
 						{/if}
 					{:else if col.type === 'doc'}
 						<button
-							class="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition {isDark.value
-								? 'border-gray-600 text-blue-400 hover:border-blue-500 hover:bg-blue-900/20'
-								: 'border-gray-200 text-blue-600 hover:border-blue-300 hover:bg-blue-50'}"
+							class="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition {T.inputBorder} {T.link} hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
 							onclick={() => onOpenDocCell?.(localRow, col)}
 						>
 							<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
@@ -513,9 +447,7 @@
 						</button>
 					{:else if editField === col.column_id}
 						<textarea
-							class="w-full resize-none rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {isDark.value
-								? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400 focus:ring-blue-400'
-								: 'border-gray-200 text-gray-800 focus:border-blue-500 focus:ring-blue-500'}"
+							class="w-full resize-none rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder} focus:ring-blue-500"
 							rows="3"
 							bind:value={editVal}
 							onblur={() => commitEdit(col)}
@@ -527,16 +459,12 @@
 						></textarea>
 					{:else}
 						<button
-							class="flex min-h-[2.25rem] w-full items-start rounded-xl border px-3 py-2 text-left text-sm {isDark.value
-								? 'border-gray-600 hover:border-blue-500'
-								: 'border-gray-200 hover:border-blue-300'}"
+							class="flex min-h-[2.25rem] w-full items-start rounded-xl border px-3 py-2 text-left text-sm {T.inputBorder} hover:border-blue-400"
 							onclick={() => startEdit(col)}
 						>
 							{#if localRow.row_data[col.column_id] !== null && localRow.row_data[col.column_id] !== undefined && String(localRow.row_data[col.column_id]) !== ''}
-								<span
-									class="break-words whitespace-pre-wrap {isDark.value
-										? 'text-gray-200'
-										: 'text-gray-800'}">{String(localRow.row_data[col.column_id])}</span
+								<span class="break-words whitespace-pre-wrap {T.body}"
+									>{String(localRow.row_data[col.column_id])}</span
 								>
 							{:else}
 								<span class="text-gray-400">—</span>

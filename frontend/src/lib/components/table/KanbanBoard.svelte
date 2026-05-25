@@ -3,7 +3,7 @@
 	import { getChoices, getChoiceColor, getTagValues, formatDate } from './table.utils';
 	import { updateRow } from '$lib/backend/tables';
 	import { updateView } from '$lib/backend/views';
-	import { isDark } from '$lib/UI/theme.svelte';
+	import { T } from '$lib/UI/theme.svelte.ts';
 	import GroupBySelector from './GroupBySelector.svelte';
 
 	let {
@@ -191,9 +191,7 @@
 
 <!-- Config bar -->
 <div
-	class="flex items-center gap-4 border-b px-4 py-2 {isDark.value
-		? 'border-gray-700 bg-gray-800'
-		: 'border-gray-200 bg-white'}"
+	class="flex items-center gap-4 border-b px-4 py-2 {T.border} {T.cardBg}"
 	onclick={(e) => {
 		if (!(e.target as HTMLElement).closest('.card-fields-panel')) showCardFields = false;
 	}}
@@ -203,14 +201,10 @@
 
 	<!-- Sort -->
 	<div class="flex items-center gap-2">
-		<span class="text-xs font-medium {isDark.value ? 'text-gray-400' : 'text-gray-500'}"
-			>Sort by</span
-		>
+		<span class="text-xs font-medium {T.muted}">Sort by</span>
 		<select
 			data-testid="kanban-sort-col-select"
-			class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
-				? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
-				: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+			class="rounded-md border px-2 py-1 text-xs focus:outline-none {T.inputBorder} {T.inputBg} {T.secondary} {T.inputFocusBorder}"
 			value={sortColId ?? ''}
 			onchange={handleSortColChange}
 		>
@@ -222,9 +216,7 @@
 		{#if sortColId}
 			<select
 				data-testid="kanban-sort-dir-select"
-				class="rounded-md border px-2 py-1 text-xs focus:outline-none {isDark.value
-					? 'border-gray-600 bg-gray-700 text-gray-200 focus:border-blue-400'
-					: 'border-gray-200 bg-white text-gray-700 focus:border-blue-500'}"
+				class="rounded-md border px-2 py-1 text-xs focus:outline-none {T.inputBorder} {T.inputBg} {T.secondary} {T.inputFocusBorder}"
 				value={sortDir}
 				onchange={handleSortDirChange}
 			>
@@ -238,9 +230,7 @@
 	<div class="card-fields-panel relative">
 		<button
 			data-testid="kanban-card-fields-btn"
-			class="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs {isDark.value
-				? 'border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600'
-				: 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'}"
+			class="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs {T.inputBorder} {T.inputBg} {T.secondary} {T.menuItemHover}"
 			onclick={(e) => {
 				e.stopPropagation();
 				showCardFields = !showCardFields;
@@ -262,9 +252,7 @@
 		</button>
 		{#if showCardFields}
 			<div
-				class="card-fields-panel absolute top-full left-0 z-30 mt-1 min-w-[200px] rounded-xl border py-1 shadow-xl {isDark.value
-					? 'border-gray-700 bg-gray-800'
-					: 'border-gray-200 bg-white'}"
+				class="card-fields-panel absolute top-full left-0 z-30 mt-1 min-w-[200px] rounded-xl border py-1 shadow-xl {T.border} {T.cardBg}"
 				onclick={(e) => e.stopPropagation()}
 				role="menu"
 			>
@@ -272,11 +260,7 @@
 					Show on cards
 				</div>
 				{#each columns as col (col.column_id)}
-					<label
-						class="flex cursor-pointer items-center gap-2 px-3 py-1.5 {isDark.value
-							? 'hover:bg-gray-700'
-							: 'hover:bg-gray-50'}"
-					>
+					<label class="flex cursor-pointer items-center gap-2 px-3 py-1.5 {T.menuItemHover}">
 						<input
 							data-testid="kanban-card-field-{col.column_id}-checkbox"
 							type="checkbox"
@@ -284,9 +268,7 @@
 							checked={cardFields.includes(col.column_id)}
 							onchange={() => toggleCardField(col.column_id)}
 						/>
-						<span class="text-sm {isDark.value ? 'text-gray-300' : 'text-gray-700'}"
-							>{col.name}</span
-						>
+						<span class="text-sm {T.secondary}">{col.name}</span>
 						<span class="ml-auto text-xs text-gray-400">{col.type}</span>
 					</label>
 				{/each}
@@ -296,24 +278,21 @@
 </div>
 
 {#if !groupByColId || !groupCol}
-	<div
-		class="flex h-64 items-center justify-center {isDark.value ? 'text-gray-500' : 'text-gray-400'}"
-	>
+	<div class="flex h-64 items-center justify-center {T.muted}">
 		<div class="text-center">
 			<p class="text-sm">Select a "Group by" column above to activate the Kanban view.</p>
 		</div>
 	</div>
 {:else}
-	<div class="flex h-full gap-4 overflow-x-auto p-4 {isDark.value ? 'bg-gray-900' : ''}">
+	<div class="flex h-full gap-4 overflow-x-auto p-4 {T.pageBg}">
 		{#each lanes as lane (lane.value)}
 			{@const color = getLaneColor(lane.value)}
 			<div
 				data-testid="kanban-lane-{lane.value || 'empty'}"
 				role="group"
 				aria-label="{lane.value || 'Uncategorized'} lane"
-				class="flex w-72 shrink-0 flex-col rounded-xl border transition-shadow {isDark.value
-					? 'border-gray-700 bg-gray-800'
-					: 'border-gray-200 bg-gray-50'} {dragOverLane === lane.value
+				class="flex w-72 shrink-0 flex-col rounded-xl border transition-shadow {T.border} {T.tableHeaderBg} {dragOverLane ===
+				lane.value
 					? 'ring-2 ring-blue-400 ring-offset-1'
 					: ''}"
 				ondragover={(e) => onDragOver(e, lane.value)}
@@ -321,11 +300,7 @@
 				ondrop={(e) => onDrop(e, lane.value)}
 			>
 				<!-- Lane header -->
-				<div
-					class="flex items-center gap-2 border-b px-3 py-2.5 {isDark.value
-						? 'border-gray-700'
-						: 'border-gray-200'}"
-				>
+				<div class="flex items-center gap-2 border-b px-3 py-2.5 {T.border}">
 					<span
 						data-testid="kanban-lane-header-{lane.value || 'empty'}"
 						class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.cls}"
@@ -339,12 +314,8 @@
 				<!-- Cards -->
 				<div class="flex flex-col gap-2 overflow-y-auto p-2">
 					{#if lane.rows.length === 0}
-						<div
-							class="rounded-lg border border-dashed px-3 py-4 text-center {isDark.value
-								? 'border-gray-700'
-								: 'border-gray-200'}"
-						>
-							<p class="text-xs {isDark.value ? 'text-gray-500' : 'text-gray-400'}">No items</p>
+						<div class="rounded-lg border border-dashed px-3 py-4 text-center {T.border}">
+							<p class="text-xs {T.muted}">No items</p>
 						</div>
 					{:else}
 						{#each sortRows(lane.rows) as row (row.row_id)}
@@ -353,9 +324,10 @@
 								draggable="true"
 								ondragstart={(e) => onDragStart(e, row)}
 								ondragend={onDragEnd}
-								class="w-full rounded-lg border px-3 py-2.5 text-left shadow-sm transition hover:shadow-md {isDark.value
-									? 'border-gray-700 bg-gray-700'
-									: 'border-gray-200 bg-white'} {dragRowId === row.row_id ? 'opacity-40' : ''}"
+								class="w-full rounded-lg border px-3 py-2.5 text-left shadow-sm transition hover:shadow-md {T.border} {T.inputBg} {dragRowId ===
+								row.row_id
+									? 'opacity-40'
+									: ''}"
 								style={getCardBorderStyle(row)}
 								onclick={() => onOpenExpand(row)}
 							>
@@ -397,11 +369,7 @@
 												{val}
 											</a>
 										{:else if val !== null && val !== undefined && val !== ''}
-											<span
-												class="block truncate text-sm {isDark.value
-													? 'text-gray-200'
-													: 'text-gray-700'}"
-											>
+											<span class="block truncate text-sm {T.secondary}">
 												{col!.type === 'date' ? formatDate(String(val)) : String(val)}
 											</span>
 										{/if}
@@ -416,9 +384,7 @@
 						data-testid="kanban-add-row-{lane.value || 'empty'}-btn"
 						onclick={() =>
 							onAddRow(groupByColId && lane.value ? { [groupByColId]: lane.value } : {})}
-						class="mt-1 w-full rounded-lg px-3 py-1.5 text-left text-xs transition {isDark.value
-							? 'text-gray-500 hover:bg-gray-700 hover:text-gray-300'
-							: 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}"
+						class="mt-1 w-full rounded-lg px-3 py-1.5 text-left text-xs transition {T.muted} {T.menuItemHover}"
 					>
 						+ {isTicketTable ? 'New ticket' : 'Add row'}
 					</button>
