@@ -1,43 +1,41 @@
 # Changelog
 
-## v0.52 — 2026-05-25 (Root auth gate, navigate-first tables, layout split)
+## v0.53 — 2026-05-27 (default_view restore + FK cascade)
 
-- Auth centralized in root `+layout.ts` (`ssr=false` + redirect to
-  `/login` unless authed or on a public route). Removed the scattered
-  per-page auth guards from root `+page`, workspace home, row + doc
-  pages, settings, and members.
-- Navigate-first table loading: `[table_id]/+page.ts` carries only
-  route params (zero network), so the URL changes instantly; the
-  component fetches table + rows behind a `data-testid="table-loading"`
-  spinner (`data-table-loaded`).
-- Filter conditions persist on every field edit — `bind:value`
-  mutates array elements in place, so `onFilterConditionEdited()`
-  schedules the debounced view-config persist.
-- `+layout.svelte` split: sidebar tree → `components/sidebar/Sidebar.svelte`,
-  top bar + breadcrumb → `components/layout/TopBar.svelte`. Layout keeps
-  only orchestration (auth effect, sidebar refresh, navigation).
-- Shared `tablePath(workspaceId, tableId)` builder used by both sidebar
-  and workspace-home table clicks for identical navigation behavior.
+- Fix: `default_view` not restoring after navigation — async path now
+  reads `get(defaultView)` store instead of stale cached object.
+- `fetchTable` upserts into sidebar `tables` store so `+page.ts` cache
+  always has fresh `default_view`.
+- V29: `default_view` uses 0 (implicit Schema) instead of NULL;
+  backfills existing tables.
+- V30: `ON UPDATE CASCADE` on `rows` + `table_views` FKs — fixes
+  table rename crashing with ForeignKeyViolationError.
+- V28: workflow template drops `Title` column, first column is `name`.
+- Workflow graph panel with subgraph filtering + flow capture.
+- Store cleanup: `applySchema` single write path, `patchSchema` route
+  simplified to `PATCH /tables/{tid}`.
 
-## v0.51 — 2026-05-25 (Workflow view + BE view-type simplification)
+## v0.52 — 2026-05-25 (Root auth gate + layout split)
 
-- Workflow view: table rows render as SvelteFlow nodes, edges derived
-  from `nexts`/`true_next`/`false_next` columns, graph selector filters
-  by `graph_name`.
-- `table_workflow.store.ts`: all node/edge/graph derivation as pure
-  functions — no store, no `$state`, nodes are `$derived` from rows.
-- BE view config simplified: removed per-type Pydantic discriminated
-  union (`TableConfig`/`KanbanConfig`/etc), `validate_view_config`,
-  `USER_VIEW_TYPES`. BE is a thin passthrough to PG.
-- V26 migration: PG CHECK constraint on `table_views.config->>'type'`
-  enforces allowed view types at the DB level.
-- V27 migration: `_seed_workflow` PG template (11 columns + Workflow
-  view); `create_table_from_template` handles `'workflow'` kind.
-- `POST /tables/template/{kind}` replaces per-template endpoints
-  (`/template/pm`, `/template/crm`) — single route, PG dispatches.
-- E2E: `test_views_create` covers all 5 view types (added dashboard +
-  workflow); new `test_workflow_nodes` for node rendering + graph
-  selector; new `test_workflow` template structure test.
+- Auth centralized in root `+layout.ts` — removed scattered per-page
+  guards.
+- Navigate-first table loading: URL changes instantly, data fetches
+  behind a loading spinner.
+- `+layout.svelte` split into `Sidebar.svelte` + `TopBar.svelte`.
+- Filter conditions persist on every field edit via
+  `onFilterConditionEdited()`.
+- Pretty workspace URLs via `history.replaceState`.
+
+## v0.51 — 2026-05-25 (Workflow view)
+
+- Workflow view: rows render as SvelteFlow nodes, edges from
+  `nexts`/`true_next`/`false_next`, graph selector filters by
+  `graph_name`.
+- BE view config simplified: removed Pydantic discriminated union,
+  BE is thin passthrough to PG.
+- V26: PG CHECK constraint enforces allowed view types at DB level.
+- V27: `_seed_workflow` template (9 columns + Workflow view).
+- `POST /tables/template/{kind}` replaces per-template endpoints.
 
 ## v0.50 — 2026-05-25 (UV images + docker log rotation + ws-id testids)
 
