@@ -2,7 +2,7 @@
 
 Verifies that dragging a column header to a new position in the Table view:
   1. Updates the UI immediately (columns appear in new order).
-  2. Persists to the backend via PATCH /tables/{id}/schema col_order.
+  2. Persists to the backend via PATCH /tables/{id} col_order.
   3. Survives navigation away and back.
 
 Drag: Title column (first) → Col C position (last).
@@ -153,12 +153,9 @@ def test_col_drag_reorder(authed_page, admin_token, snapshot):
         src_sel = f'th[draggable="true"]:has([data-testid="col-drag-handle-{title_id}"])'
         tgt_sel = f'th[draggable="true"]:has([data-testid="col-drag-handle-{col_c_id}"])'
 
-        # Wait for the PATCH /schema to land BEFORE moving on. Replaces a
-        # 1500ms hard wait — see developing-e2e skill banned-pattern
-        # rule. The FE issues PATCH after drag; we must observe it.
         with page.expect_response(
             lambda r: r.request.method == "PATCH"
-                      and r.url.rstrip("/").endswith(f"/api/v1/tables/{TABLE_ID}/schema")
+                      and r.url.rstrip("/").endswith(f"/api/v1/tables/{TABLE_ID}")
                       and r.ok,
             timeout=10000,
         ):

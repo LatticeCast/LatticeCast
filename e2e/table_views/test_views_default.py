@@ -5,10 +5,10 @@ Topic: switching to a view sets it as the default so that navigating away
 
 Flow:
   Setup — login, create fresh workspace + test table + Kanban + Timeline views.
-  Step 1 — load table page; verify Schema tab is active (default_view=null).
-  Step 2 — click Kanban tab; wait for PATCH /schema; API + UI assert.
+  Step 1 — load table page; verify Schema tab is active (default_view=0).
+  Step 2 — click Kanban tab; wait for PATCH /tables/{id}; API + UI assert.
   Step 3 — navigate away (workspace root); navigate back (no ?view=); assert Kanban still active.
-  Step 4 — click Timeline tab; wait for PATCH /schema; API + UI assert.
+  Step 4 — click Timeline tab; wait for PATCH /tables/{id}; API + UI assert.
   Step 5 — navigate away; navigate back; assert Timeline still active.
   Teardown — DELETE workspace (cascades to table).
 
@@ -111,11 +111,11 @@ def test_views_default(browser, admin_token, snapshot) -> None:
 
     print(f"[setup] table={TABLE_ID!r} kanban={kanban_view_id} timeline={timeline_view_id}")
 
-    # Verify initial default_view is null (fresh table)
+    # Verify initial default_view is 0 (fresh table)
     tbl = _get_table(TABLE_ID, token)
-    assert tbl.get("default_view") is None, \
-        f"initial default_view={tbl['default_view']!r}, expected null"
-    print("[ok] initial default_view is null")
+    assert tbl.get("default_view") == 0, \
+        f"initial default_view={tbl['default_view']!r}, expected 0"
+    print("[ok] initial default_view is 0")
 
     try:
         page = browser.new_page(viewport={"width": 1400, "height": 900})
@@ -131,15 +131,15 @@ def test_views_default(browser, admin_token, snapshot) -> None:
         print("[ok] step1: Schema active, Kanban inactive")
 
         # ── Step 2: Click Kanban tab; verify default_view persisted ──────────
-        print("[2] Click Kanban tab; wait for PATCH /schema")
+        print("[2] Click Kanban tab; wait for PATCH /tables/{id}")
         with page.expect_response(
-            lambda r: f"/tables/{TABLE_ID}/schema" in r.url and r.request.method == "PATCH",
+            lambda r: r.url.rstrip("/").endswith(f"/api/v1/tables/{TABLE_ID}") and r.request.method == "PATCH",
             timeout=8000,
         ) as resp_info:
             page.locator('[data-testid="view-tab-Kanban"]').click()
         patch_resp = resp_info.value
-        assert patch_resp.status == 200, f"PATCH /schema returned {patch_resp.status}"
-        print("[ok] step2: PATCH /schema returned 200")
+        assert patch_resp.status == 200, f"PATCH /tables returned {patch_resp.status}"
+        print("[ok] step2: PATCH /tables returned 200")
 
         snap(page, "vd_02_kanban_clicked", snapshot)
 
@@ -171,15 +171,15 @@ def test_views_default(browser, admin_token, snapshot) -> None:
         print("[ok] step3: API default_view unchanged")
 
         # ── Step 4: Click Timeline tab; verify default_view persisted ─────────
-        print("[4] Click Timeline tab; wait for PATCH /schema")
+        print("[4] Click Timeline tab; wait for PATCH /tables/{id}")
         with page.expect_response(
-            lambda r: f"/tables/{TABLE_ID}/schema" in r.url and r.request.method == "PATCH",
+            lambda r: r.url.rstrip("/").endswith(f"/api/v1/tables/{TABLE_ID}") and r.request.method == "PATCH",
             timeout=8000,
         ) as resp_info:
             page.locator('[data-testid="view-tab-Timeline"]').click()
         patch_resp = resp_info.value
-        assert patch_resp.status == 200, f"PATCH /schema returned {patch_resp.status}"
-        print("[ok] step4: PATCH /schema returned 200")
+        assert patch_resp.status == 200, f"PATCH /tables returned {patch_resp.status}"
+        print("[ok] step4: PATCH /tables returned 200")
 
         snap(page, "vd_04_timeline_clicked", snapshot)
 

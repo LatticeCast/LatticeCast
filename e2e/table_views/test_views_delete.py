@@ -4,7 +4,7 @@ Covers three delete scenarios:
   1. Delete a non-active, non-default view (Timeline View) →
        tab disappears; view_order no longer contains its ID.
   2. Delete the default_view (Kanban View) →
-       tab disappears; API returns default_view=null.
+       tab disappears; API returns default_view=0.
   3. Delete the currently active view (Table View) →
        tab disappears; FE falls back to the implicit Schema view
        (data-active-view-id=0).
@@ -154,7 +154,7 @@ def test_views_delete(browser, admin_token, snapshot) -> None:
     print(f"[setup] {TIMELINE_VIEW_NAME!r} id={timeline_view_id}")
 
     # ── Setup: set Kanban View as default_view ─────────────────────────────────
-    r = api("PATCH", f"/api/v1/tables/{TABLE_ID}/schema", token,
+    r = api("PATCH", f"/api/v1/tables/{TABLE_ID}", token,
             json={"default_view": kanban_view_id})
     assert r.status_code == 200, f"set default_view: {r.status_code} {r.text[:200]}"
     print(f"[setup] default_view={kanban_view_id} ({KANBAN_VIEW_NAME!r})")
@@ -208,9 +208,9 @@ def test_views_delete(browser, admin_token, snapshot) -> None:
             f"API: {KANBAN_VIEW_NAME!r} still in views after deletion: {view_names3}"
         assert kanban_view_id not in schema3.get("view_order", []), \
             f"API: kanban_view_id={kanban_view_id} still in view_order={schema3['view_order']}"
-        assert schema3.get("default_view") is None, \
-            f"API: expected default_view=null after deleting default view; got {schema3.get('default_view')}"
-        print(f"[ok] API: {KANBAN_VIEW_NAME!r} gone — default_view cleared to null")
+        assert schema3.get("default_view") == 0, \
+            f"API: expected default_view=0 after deleting default view; got {schema3.get('default_view')}"
+        print(f"[ok] API: {KANBAN_VIEW_NAME!r} gone — default_view reset to 0")
 
         # ── Step 4: click Table View to make it active, then delete ───────────
         tab_btn = page.locator(f'[data-testid="view-tab-{TABLE_VIEW_NAME}"]')

@@ -1,8 +1,8 @@
 """
-E2E test: Workflow template structure (11 columns, 1 view).
+E2E test: Workflow template structure (9 columns, 1 view).
 
 Verifies:
-  1. POST /api/v1/tables/template/workflow → 11 columns with correct
+  1. POST /api/v1/tables/template/workflow → 9 columns with correct
      names+types
   2. Response includes 1 view: Workflow (workflow)
   3. default_view points to the Workflow view
@@ -23,7 +23,6 @@ import pytest
 from e2e_base import BASE, api
 
 WF_COLUMNS = [
-    ("Title",       "text"),
     ("name",        "text"),
     ("type",        "select"),
     ("description", "text"),
