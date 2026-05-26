@@ -3,7 +3,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { goto, afterNavigate } from '$app/navigation';
-	import { page } from '$app/stores';
+	import { page, navigating } from '$app/stores';
 	import { authStore, logout } from '$lib/stores/auth.store';
 	import { browser } from '$app/environment';
 	import {
@@ -19,7 +19,7 @@
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
 	import Sidebar from '$lib/components/sidebar/Sidebar.svelte';
 	import TopBar from '$lib/components/layout/TopBar.svelte';
-	import { isUuid, prettifyWorkspacePathname } from '$lib/utils/url';
+	import { isUuid, prettifyWorkspacePathname, navigate } from '$lib/utils/url';
 
 	let { children } = $props();
 	let menuOpen = $state(false);
@@ -100,20 +100,15 @@
 		menuOpen = false;
 		goto('/login');
 	};
-
-	const navigate = (path: string) => {
-		goto(path);
-	};
 </script>
 
 <svelte:head></svelte:head>
 
-<div class="flex h-screen overflow-hidden">
+<div class="flex h-screen overflow-hidden" class:navigating-wait={!!$navigating}>
 	<!-- Sidebar: full height, beside top bar (VS Code/Notion style) -->
 	<Sidebar
 		{menuOpen}
 		{expandedWorkspaces}
-		{navigate}
 		onToggleWorkspace={toggleWorkspace}
 		onCreateWorkspace={() => (showCreateWorkspace = true)}
 		onLogout={handleLogout}
@@ -121,7 +116,7 @@
 
 	<!-- Right column: top bar + content -->
 	<div class="flex min-w-0 flex-1 flex-col">
-		<TopBar bind:menuOpen {navigate} />
+		<TopBar bind:menuOpen />
 
 		<!-- Main content -->
 		<main class="flex-1 overflow-auto dark:bg-gray-950">

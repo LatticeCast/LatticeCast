@@ -4,12 +4,13 @@
 	import { goto } from '$app/navigation';
 	import { authStore } from '$lib/stores/auth.store';
 	import { startLogin } from '$lib/auth/auth.service';
-	import { loginState, validationError, submit } from '$lib/auth/login.svelte';
+	import { loginState, validationError, submit, resetLoginState } from '$lib/auth/login.svelte';
 	import { BRAND_DISPLAY } from '$lib/UI/brand';
 
 	let error = $derived(validationError());
 
 	onMount(() => {
+		resetLoginState();
 		if ($authStore?.role) {
 			goto('/');
 		}

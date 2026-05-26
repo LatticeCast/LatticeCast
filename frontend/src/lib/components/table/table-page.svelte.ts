@@ -5,8 +5,8 @@
 import { SvelteSet } from 'svelte/reactivity';
 import { get } from 'svelte/store';
 import { page } from '$app/stores';
-import { columns } from '$lib/stores/table_schema.store';
-import { views as viewsStore } from '$lib/stores/table_views.store';
+import { columns, views as viewsStore } from '$lib/stores/table_schema.store';
+import { currentTableId, patchTableCache } from '$lib/stores/table_schemas.store';
 import { rows } from '$lib/stores/table_rows.store';
 import { error, IMPLICIT_TABLE_VIEW } from '$lib/stores/tables.store';
 import {
@@ -534,10 +534,7 @@ class TablePageStore {
 		url.searchParams.set('view', String(view.view_id));
 		history.replaceState(history.state, '', url.toString());
 		this.applyViewConfig(view);
-		const isImplicitTable = view.view_id === IMPLICIT_TABLE_VIEW.view_id;
-		patchSchema(this.tableId, { default_view: isImplicitTable ? null : view.view_id }).catch(
-			() => {}
-		);
+		patchSchema(this.tableId, { default_view: view.view_id }).catch(() => {});
 	}
 
 	async handleAddView(type: string, name: string) {
@@ -575,7 +572,11 @@ class TablePageStore {
 	}
 
 	handleViewUpdate(updated: ViewConfig) {
-		viewsStore.update((arr) => arr.map((v) => (v.view_id === updated.view_id ? updated : v)));
+		const tid = get(currentTableId);
+		if (!tid) return;
+		patchTableCache(tid, {
+			views: get(viewsStore).map((v) => (v.view_id === updated.view_id ? updated : v))
+		});
 	}
 
 	// ─── Export / Import ───────────────────────────────────────────────────────

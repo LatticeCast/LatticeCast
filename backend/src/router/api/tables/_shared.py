@@ -62,7 +62,7 @@ async def _build_table_response(table: Table, session: AsyncSession) -> dict[str
         "table_id": table.table_id,
         "columns": schema.get("columns", []),
         "view_order": schema.get("view_order", []),
-        "default_view": schema.get("default_view"),
+        "default_view": schema.get("default_view", 0) or 0,
         "views": schema.get("views", []),
         "created_at": table.created_at,
         "updated_at": table.updated_at,

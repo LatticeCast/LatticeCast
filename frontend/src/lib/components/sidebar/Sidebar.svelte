@@ -2,20 +2,18 @@
 <script lang="ts">
 	import { authStore } from '$lib/stores/auth.store';
 	import { currentTable, workspaces, tablesByWorkspace } from '$lib/stores/table_schemas.store';
-	import { tablePath } from '$lib/utils/url';
+	import { navigate, navigateToTable } from '$lib/utils/url';
 	import type { SvelteSet } from 'svelte/reactivity';
 
 	let {
 		menuOpen,
 		expandedWorkspaces,
-		navigate,
 		onToggleWorkspace,
 		onCreateWorkspace,
 		onLogout
 	}: {
 		menuOpen: boolean;
 		expandedWorkspaces: SvelteSet<string>;
-		navigate: (path: string) => void;
 		onToggleWorkspace: (wsId: string) => void;
 		onCreateWorkspace: () => void;
 		onLogout: () => void;
@@ -100,9 +98,7 @@
 									{#each wsTables as table (table.table_id)}
 										<button
 											data-testid="sidebar-table-{table.table_id}"
-											onclick={() => {
-												navigate(tablePath(ws.workspace_id, table.table_id));
-											}}
+											onclick={() => navigateToTable(ws.workspace_id, table.table_id)}
 											class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs text-gray-600 transition hover:bg-blue-50 hover:text-blue-600 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-blue-400 {$currentTable?.table_id ===
 											table.table_id
 												? 'bg-blue-50 font-semibold text-blue-600 dark:bg-gray-800 dark:text-blue-400'

@@ -134,5 +134,5 @@ async def delete_view(
     )
 
 
-# view-order / default-view are sub-fields of PATCH /tables/{tid}/schema
+# view-order / default-view are sub-fields of PATCH /tables/{tid}
 # in crud.py — see _shared.py / crud.py.

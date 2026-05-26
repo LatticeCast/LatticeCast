@@ -42,9 +42,9 @@ class TableResponse(SQLModel):
         default_factory=list,
         description="Display order of user views — list of view_id BIGINTs.",
     )
-    default_view: int | None = Field(
-        default=None,
-        description="Default view_id (BIGINT); null means the implicit Schema tab.",
+    default_view: int = Field(
+        default=0,
+        description="Default view_id (BIGINT); 0 means the implicit Schema tab.",
     )
     views: list[dict[str, Any]] = Field(
         default_factory=list,

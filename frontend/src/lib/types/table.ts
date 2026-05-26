@@ -53,7 +53,7 @@ export interface ViewConfig {
 export interface TableSchema {
 	columns: Column[];
 	view_order: number[];
-	default_view: number | null;
+	default_view: number;
 	views: ViewConfig[];
 }
 
@@ -74,7 +74,7 @@ export interface Table {
 	workspace_id: UUID;
 	columns: Column[];
 	view_order: number[];
-	default_view?: number | null;
+	default_view?: number;
 	views?: ViewConfig[];
 	created_at: string;
 	updated_at: string;

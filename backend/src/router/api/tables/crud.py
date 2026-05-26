@@ -5,7 +5,7 @@
 - GET   /tables/{table_id}            — single table (full schema snapshot)
 - PUT   /tables/{table_id}            — rename table_id
 - DELETE /tables/{table_id}           — drop table
-- PATCH /tables/{table_id}/schema     — update {view_order, default_view, col_order};
+- PATCH /tables/{table_id}            — update {view_order, default_view, col_order};
                                         returns the new full TableSchema
 """
 
@@ -122,7 +122,7 @@ async def delete_table(
     await table_repo.delete(table)
 
 
-# ── PATCH /tables/{table_id}/schema ────────────────────────────────────
+# ── PATCH /tables/{table_id} ───────────────────────────────────────────
 # One endpoint covers FE drag-reorder-views, click-set-default-view, and
 # drag-reorder-columns. Body is a partial — any subset of the three keys.
 # Returns the new full TableSchema so the FE replaces its local cache
@@ -135,7 +135,7 @@ class SchemaPatch(BaseModel):
     col_order: list[str] | None = None
 
 
-@router.patch("/{table_id}/schema")
+@router.patch("/{table_id}")
 async def patch_schema(
     table_id: str,
     data: SchemaPatch,

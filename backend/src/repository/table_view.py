@@ -187,7 +187,7 @@ class TableViewRepository:
         return {
             "columns": cfg.get("columns", []) or [],
             "view_order": view_order,
-            "default_view": cfg.get("default_view"),
+            "default_view": cfg.get("default_view", 0) or 0,
             "views": ordered_views + leftover,
         }
 

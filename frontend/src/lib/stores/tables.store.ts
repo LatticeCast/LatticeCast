@@ -9,10 +9,9 @@ import { writable, get } from 'svelte/store';
 import type { Table, TableSchema, UpdateView, ViewConfig, Workspace } from '$lib/types/table';
 
 // Local imports for use in orchestrator functions
-import { columns, viewOrder, applySchema } from './table_schema.store';
-import { views } from './table_views.store';
+import { columns, viewOrder, applySchema, views } from './table_schema.store';
 import { rows } from './table_rows.store';
-import { workspaces, tables } from './table_schemas.store';
+import { workspaces, tables, currentTableId } from './table_schemas.store';
 import {
 	fetchTable as _fetchTable,
 	fetchRows as _fetchRows,
@@ -76,7 +75,7 @@ export async function loadWorkspaces(): Promise<void> {
 export async function switchWorkspace(workspace: Workspace): Promise<void> {
 	currentWorkspace.set(workspace);
 	currentTable.set(null);
-	columns.set([]);
+	currentTableId.set(null);
 	rows.set([]);
 	loading.set(true);
 	error.set(null);
@@ -105,13 +104,11 @@ export async function loadTables(): Promise<void> {
 
 export async function loadTable(table: Table): Promise<void> {
 	currentTable.set(table);
+	currentTableId.set(table.table_id);
 	loading.set(true);
 	error.set(null);
 	try {
 		await _fetchRows(table.table_id);
-		columns.set(table.columns ?? []);
-		views.set(table.views ?? []);
-		viewOrder.set(table.view_order ?? []);
 	} catch (e) {
 		error.set(e instanceof Error ? e.message : 'Failed to load table data');
 	} finally {
@@ -143,7 +140,7 @@ export async function reorderColumns(tableId: string, colOrder: string[]): Promi
 	return _patchSchema(tableId, { col_order: colOrder });
 }
 
-export async function setDefaultView(tableId: string, viewId: number | null): Promise<TableSchema> {
+export async function setDefaultView(tableId: string, viewId: number): Promise<TableSchema> {
 	return _patchSchema(tableId, { default_view: viewId });
 }
 

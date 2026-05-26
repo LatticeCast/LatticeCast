@@ -4,7 +4,13 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { createTable, updateTable, deleteTable, createPmTemplate } from '$lib/backend/tables';
+	import {
+		createTable,
+		updateTable,
+		deleteTable,
+		createFromTemplate,
+		createPmTemplate
+	} from '$lib/backend/tables';
 	import { updateWorkspace, deleteWorkspace } from '$lib/backend/workspaces';
 	import {
 		currentTableId,
@@ -15,7 +21,7 @@
 	import type { Table, Workspace } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
-	import { isUuid, tablePath } from '$lib/utils/url';
+	import { isUuid, tablePath, navigate, navigateToTable } from '$lib/utils/url';
 	let loading = $state(true);
 	let error = $state('');
 	let showCreateWorkspace = $state(false);
@@ -43,6 +49,7 @@
 	// Template modal
 	let showTemplateModal = $state(false);
 	let templateName = $state('');
+	let workflowName = $state('');
 	let templateWorkspaceId = $state('');
 	let creatingTemplate = $state(false);
 
@@ -226,12 +233,24 @@
 			const table = await createPmTemplate(name, templateWorkspaceId);
 			showTemplateModal = false;
 			templateName = '';
-			templateWorkspaceId = '';
-			const wsForTable = $workspacesStore.find((w) => w.workspace_id === table.workspace_id);
-			const wsPath = wsForTable
-				? encodeURIComponent(wsForTable.workspace_name)
-				: table.workspace_id;
-			goto(`/${wsPath}/${table.table_id}`);
+			navigateToTable(table.workspace_id, table.table_id);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to create template';
+		} finally {
+			creatingTemplate = false;
+		}
+	}
+
+	async function handleWorkflowTemplate() {
+		const name = workflowName.trim();
+		if (!name || !templateWorkspaceId) return;
+		creatingTemplate = true;
+		error = '';
+		try {
+			const table = await createFromTemplate('workflow', name, templateWorkspaceId);
+			showTemplateModal = false;
+			workflowName = '';
+			navigateToTable(table.workspace_id, table.table_id);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create template';
 		} finally {
@@ -242,6 +261,7 @@
 	function openTemplateModal(wsId: string) {
 		templateWorkspaceId = wsId;
 		templateName = '';
+		workflowName = '';
 		showTemplateModal = true;
 	}
 </script>
@@ -309,7 +329,8 @@
 					<h2 class="text-lg font-bold {T.body}">{activeWorkspace.workspace_name}</h2>
 					<button
 						data-testid="home-workspace-members-{activeWorkspace.workspace_id}"
-						onclick={() => goto(`/${encodeURIComponent(activeWorkspace.workspace_name)}/members`)}
+						onclick={() =>
+							navigate(`/${encodeURIComponent(activeWorkspace.workspace_name)}/members`)}
 						class="rounded-lg p-1 {T.muted} transition {T.hoverBg}"
 						aria-label="Workspace members"
 						title="Workspace members"
@@ -386,15 +407,19 @@
 					<div class="space-y-2">
 						{#each activeTables as table (table.table_id)}
 							<div
-								class="flex items-center gap-3 rounded-2xl {T.cardBg} px-4 py-4 shadow-sm transition {T.hoverBg}"
+								data-testid="table-card-{table.table_id}"
+								onclick={() => navigateToTable(activeWorkspace.workspace_id, table.table_id)}
+								role="button"
+								tabindex="0"
+								onkeydown={(e) => {
+									if (e.key === 'Enter')
+										navigateToTable(activeWorkspace.workspace_id, table.table_id);
+								}}
+								class="flex cursor-pointer items-center gap-3 rounded-2xl {T.cardBg} px-4 py-4 shadow-sm transition {T.hoverBg}"
 							>
-								<button
-									data-testid="table-card-{table.table_id}"
-									onclick={() => goto(tablePath(activeWorkspace.workspace_id, table.table_id))}
-									class="flex-1 text-left font-medium {T.body}"
-								>
+								<span class="flex-1 text-left font-medium {T.body}">
 									{table.table_id}
-								</button>
+								</span>
 								<button
 									onclick={(e) => openTableSettings(table, e)}
 									class="rounded-xl p-2 {T.muted} transition {T.hoverBg}"
@@ -589,29 +614,60 @@
 					Project management with Key, Title, Status, Priority, Assignee, dates, and Sprint Board +
 					Roadmap views.
 				</p>
-				<input
-					type="text"
-					bind:value={templateName}
-					data-testid="pm-template-name-input"
-					placeholder="Project name..."
-					class="w-full rounded-xl border-2 {T.inputBorder} {T.inputBg} px-3 py-2 {T.body} {T.placeholder} {T.inputFocusBorder} focus:outline-none"
-				/>
+				<div class="flex gap-2">
+					<input
+						type="text"
+						bind:value={templateName}
+						data-testid="pm-template-name-input"
+						placeholder="Project name..."
+						class="flex-1 rounded-xl border-2 {T.inputBorder} {T.inputBg} px-3 py-2 {T.body} {T.placeholder} {T.inputFocusBorder} focus:outline-none"
+					/>
+					<button
+						data-testid="pm-template-submit"
+						onclick={handlePmTemplate}
+						disabled={creatingTemplate || !templateName.trim()}
+						class="rounded-xl {T.buttonGradient} px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+					>
+						{creatingTemplate ? '...' : 'Create'}
+					</button>
+				</div>
 			</div>
 
-			<div class="flex justify-end gap-2">
+			<!-- Workflow Option -->
+			<div class="mb-5 rounded-2xl border-2 {T.badgeBorder} {T.badgeBg} p-4">
+				<div class="mb-1 flex items-center gap-2">
+					<span class="text-lg">🔀</span>
+					<span class="font-semibold {T.badgeText}">Workflow</span>
+				</div>
+				<p class="mb-3 text-sm {T.badgeText}">
+					Workflow graph with nodes (START, STEP, TOOL, CONDITION), edges, subgraphs, and a visual
+					Workflow view.
+				</p>
+				<div class="flex gap-2">
+					<input
+						type="text"
+						bind:value={workflowName}
+						data-testid="workflow-template-name-input"
+						placeholder="Workflow name..."
+						class="flex-1 rounded-xl border-2 {T.inputBorder} {T.inputBg} px-3 py-2 {T.body} {T.placeholder} {T.inputFocusBorder} focus:outline-none"
+					/>
+					<button
+						data-testid="workflow-template-submit"
+						onclick={handleWorkflowTemplate}
+						disabled={creatingTemplate || !workflowName.trim()}
+						class="rounded-xl {T.buttonGradient} px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+					>
+						{creatingTemplate ? '...' : 'Create'}
+					</button>
+				</div>
+			</div>
+
+			<div class="flex justify-end">
 				<button
 					onclick={() => (showTemplateModal = false)}
 					class="rounded-2xl px-4 py-2 {T.muted} {T.hoverBg}"
 				>
 					Cancel
-				</button>
-				<button
-					data-testid="pm-template-submit"
-					onclick={handlePmTemplate}
-					disabled={creatingTemplate || !templateName.trim()}
-					class="rounded-2xl {T.buttonGradient} px-5 py-2 font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
-				>
-					{creatingTemplate ? 'Creating...' : 'Create PM Project'}
 				</button>
 			</div>
 		</div>

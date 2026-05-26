@@ -8,8 +8,7 @@ import { get } from 'svelte/store';
 import { authStore } from '$lib/stores/auth.store';
 import { BACKEND_URL } from './config';
 import { getAuthHeaders, getBearerHeader } from './http';
-import { columns, viewOrder, defaultView, applySchema } from '$lib/stores/table_schema.store';
-import { views } from '$lib/stores/table_views.store';
+import { applySchema } from '$lib/stores/table_schema.store';
 import { rows } from '$lib/stores/table_rows.store';
 import { tables, currentTableId } from '$lib/stores/table_schemas.store';
 import type {
@@ -42,10 +41,11 @@ export async function fetchTable(tableId: string, workspaceId?: string): Promise
 	if (!response.ok) throw new Error(`Failed to fetch table: ${response.statusText}`);
 	const table: Table = await response.json();
 	currentTableId.set(table.table_id);
-	columns.set(table.columns ?? []);
-	views.set(table.views ?? []);
-	viewOrder.set(table.view_order ?? []);
-	defaultView.set(table.default_view ?? null);
+	tables.update((list) => {
+		const idx = list.findIndex((t) => t.table_id === table.table_id);
+		if (idx >= 0) return list.map((t) => (t.table_id === table.table_id ? table : t));
+		return [...list, table];
+	});
 	return table;
 }
 
@@ -135,10 +135,10 @@ export async function deleteColumn(tableId: string, columnId: string): Promise<T
 
 export async function patchSchema(
 	tableId: string,
-	data: { view_order?: number[]; default_view?: number | null; col_order?: string[] }
+	data: { view_order?: number[]; default_view?: number; col_order?: string[] }
 ): Promise<TableSchema> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/schema`, {
+	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}`, {
 		method: 'PATCH',
 		headers,
 		body: JSON.stringify(data)
@@ -258,15 +258,26 @@ export async function batchDocsExist(tableId: string): Promise<Set<number>> {
 
 // ─── Templates ────────────────────────────────────────────────────────────────
 
-export async function createPmTemplate(table_id: string, workspaceId: string): Promise<Table> {
+export async function createFromTemplate(
+	kind: string,
+	table_id: string,
+	workspaceId: string
+): Promise<Table> {
 	const headers = await getAuthHeaders();
-	const response = await fetch(`${BACKEND_URL}/api/v1/tables/template/pm`, {
-		method: 'POST',
-		headers,
-		body: JSON.stringify({ table_id: table_id, workspace_id: workspaceId })
-	});
-	if (!response.ok) throw new Error(`Failed to create PM template: ${response.statusText}`);
+	const response = await fetch(
+		`${BACKEND_URL}/api/v1/tables/template/${encodeURIComponent(kind)}`,
+		{
+			method: 'POST',
+			headers,
+			body: JSON.stringify({ table_id, workspace_id: workspaceId })
+		}
+	);
+	if (!response.ok) throw new Error(`Failed to create ${kind} template: ${response.statusText}`);
 	const table: Table = await response.json();
 	tables.update((list) => [...list, table]);
 	return table;
+}
+
+export async function createPmTemplate(table_id: string, workspaceId: string): Promise<Table> {
+	return createFromTemplate('pm', table_id, workspaceId);
 }

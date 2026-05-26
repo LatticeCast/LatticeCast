@@ -2,13 +2,12 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { currentTable, workspaces, tablesByWorkspace } from '$lib/stores/table_schemas.store';
+	import { navigate } from '$lib/utils/url';
 
 	let {
-		menuOpen = $bindable(),
-		navigate
+		menuOpen = $bindable()
 	}: {
 		menuOpen: boolean;
-		navigate: (path: string) => void;
 	} = $props();
 </script>
 

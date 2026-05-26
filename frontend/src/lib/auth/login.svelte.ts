@@ -17,6 +17,11 @@ export function validationError(): string {
 	return validateUserName(loginState.userId);
 }
 
+export function resetLoginState(): void {
+	loginState.loggingIn = false;
+	loginState.error = '';
+}
+
 export async function submit(): Promise<void> {
 	const id = loginState.userId.trim();
 	if (!id || validationError() || loginState.loggingIn) return;
@@ -34,6 +39,7 @@ export async function submit(): Promise<void> {
 			},
 			role: 'user'
 		});
+		loginState.loggingIn = false;
 		await goto('/');
 	} catch (err) {
 		loginState.error = err instanceof Error ? err.message : 'Login failed';

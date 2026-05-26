@@ -5,15 +5,15 @@
 	import { get } from 'svelte/store';
 
 	// Model (SSOT stores)
-	import { columns, viewOrder, defaultView } from '$lib/stores/table_schema.store';
-	import { views as viewsStore } from '$lib/stores/table_views.store';
+	import { columns, defaultView, views as viewsStore } from '$lib/stores/table_schema.store';
 	import { rows } from '$lib/stores/table_rows.store';
 
 	// Controller
-	import { patchSchema } from '$lib/backend/tables';
+	import { patchSchema, fetchRows } from '$lib/backend/tables';
 	import {
 		currentWorkspaceId,
-		currentTableId
+		currentTableId,
+		patchTableCache
 	} from '$lib/stores/table_schemas.store';
 	import { error, IMPLICIT_TABLE_VIEW } from '$lib/stores/tables.store';
 	import { s } from '$lib/components/table/table-page.svelte';
@@ -94,21 +94,6 @@
 			untrack(() => {
 				currentTableId.set(cached.table_id);
 				currentWorkspaceId.set(cached.workspace_id);
-				columns.set(cached.columns ?? []);
-				viewOrder.set(cached.view_order ?? []);
-				defaultView.set(cached.default_view ?? null);
-
-				const dv = cached.default_view ?? null;
-				let targetViewId: number;
-				if (!isNaN(urlViewId)) {
-					targetViewId = urlViewId;
-				} else if (dv !== null) {
-					targetViewId = dv;
-				} else {
-					targetViewId = 0;
-				}
-				s.activeViewId = targetViewId;
-				loading = false;
 			});
 		}
 
@@ -116,29 +101,21 @@
 		(async () => {
 			try {
 				if (!viewsP || !rowsP) return;
-				const [viewsList] = await Promise.all([
-					viewsP,
-					rowsP,
-					...(tableP ? [tableP] : [])
-				]);
+				const [viewsList] = await Promise.all([viewsP, rowsP, ...(tableP ? [tableP] : [])]);
 				if (cancelled) return;
 
 				untrack(() => {
-					viewsStore.set(viewsList);
-
 					if (!cached) {
 						if (resolvedWsId) currentWorkspaceId.set(resolvedWsId);
 						currentTableId.set(tableParam);
 					}
 
-					const loadedViews = get(viewsStore);
-					const hasUserTable = loadedViews.some(
-						(v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id
-					);
-					const candidates = hasUserTable
-						? loadedViews
-						: [IMPLICIT_TABLE_VIEW, ...loadedViews];
-					const dv = cached?.default_view ?? null;
+					patchTableCache(tableParam, { views: viewsList });
+
+					const loadedViews = viewsList;
+					const hasUserTable = loadedViews.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id);
+					const candidates = hasUserTable ? loadedViews : [IMPLICIT_TABLE_VIEW, ...loadedViews];
+					const dv = get(defaultView);
 
 					let targetViewId: number;
 					if (!isNaN(urlViewId) && candidates.some((v) => v.view_id === urlViewId)) {

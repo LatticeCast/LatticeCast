@@ -7,8 +7,8 @@
 //
 // Replaces the old `menu.store.ts` (one path → one file).
 
-import { writable, derived } from 'svelte/store';
-import type { Column, Table, ViewConfig, Workspace } from '$lib/types/table';
+import { writable, derived, get } from 'svelte/store';
+import type { Column, Table, TableSchema, ViewConfig, Workspace } from '$lib/types/table';
 
 export interface SidebarTable {
 	workspace_id: string;
@@ -16,7 +16,7 @@ export interface SidebarTable {
 	config: {
 		columns: Column[];
 		view_order: number[];
-		default_view: number | null;
+		default_view: number;
 	};
 }
 
@@ -58,6 +58,23 @@ export const currentTable = derived(
 	([$tables, $id]) => $tables.find((t) => t.table_id === $id) ?? null
 );
 
+// ── Per-table derived (all from tables + currentTableId) ─────────────────
+export const columns = derived(currentTable, ($t) => $t?.columns ?? []);
+export const viewOrder = derived(currentTable, ($t) => $t?.view_order ?? []);
+export const defaultView = derived(currentTable, ($t) => $t?.default_view ?? 0);
+export const views = derived(currentTable, ($t) => $t?.views ?? []);
+
+export function applySchema(schema: TableSchema): void {
+	const tid = get(currentTableId);
+	if (!tid) return;
+	patchTableCache(tid, {
+		columns: schema.columns,
+		view_order: schema.view_order,
+		default_view: schema.default_view,
+		views: schema.views
+	});
+}
+
 export function applySidebar(payload: SidebarPayload): void {
 	workspaces.set(
 		payload.workspaces.map((w) => ({
@@ -67,18 +84,30 @@ export function applySidebar(payload: SidebarPayload): void {
 			updated_at: ''
 		}))
 	);
-	tables.set(
-		payload.tables.map((t) => ({
-			table_id: t.table_id,
-			workspace_id: t.workspace_id,
-			columns: t.config.columns ?? [],
-			view_order: t.config.view_order ?? [],
-			default_view: t.config.default_view ?? null,
-			views: [] as ViewConfig[],
-			created_at: '',
-			updated_at: ''
-		}))
-	);
+	tables.update((existing) => {
+		const byKey = new Map(existing.map((t) => [`${t.workspace_id}:${t.table_id}`, t]));
+		return payload.tables.map((t) => {
+			const prev = byKey.get(`${t.workspace_id}:${t.table_id}`);
+			return {
+				table_id: t.table_id,
+				workspace_id: t.workspace_id,
+				columns: t.config.columns ?? [],
+				view_order: t.config.view_order ?? [],
+				default_view: t.config.default_view ?? 0,
+				views: prev?.views ?? [],
+				created_at: prev?.created_at ?? '',
+				updated_at: prev?.updated_at ?? ''
+			};
+		});
+	});
+}
+
+export function patchTableCache(tableId: string, patch: Partial<Table>): void {
+	tables.update((list) => {
+		const idx = list.findIndex((t) => t.table_id === tableId);
+		if (idx >= 0) return list.map((t) => (t.table_id === tableId ? { ...t, ...patch } : t));
+		return list;
+	});
 }
 
 export function toggleMenu(): void {
