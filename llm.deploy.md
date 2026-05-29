@@ -1,169 +1,120 @@
 # LLM Context - Deployment
 
-> **Note:** For general project context, see `llm.md`.
+> For general project context, see `llm.md`.
 
-## Quick Start (Development)
+## Quick Start
 
 ```bash
-# All services
-docker compose up
-
-# Frontend only
-cd frontend && npm run dev
-
-# Backend only
-cd backend && uvicorn src.main:app --reload --port 5000
-
-# Run tests
-docker compose --profile test run --rm backend-test
+docker compose up                                     # all services (nginx + fe + be + db + valkey + minio)
+docker compose --profile migration run --rm migration  # run DB migrations
+docker compose --profile test up -d e2e browser        # e2e + headless Chromium
 ```
 
-## Ports
+Single entry point: `http://localhost:${NGX_PORT}` (default **13491**). Nginx (`lattice-cast` service) proxies `/api/*` → backend, `/*` → frontend.
 
-| Service | Port | Description |
-|---------|------|-------------|
-| Frontend | 3000 | SvelteKit dev server |
-| Backend | 5000 | FastAPI server |
-| PostgreSQL | 5432 (15432 external) | Database |
-| Valkey | 6379 | Cache |
-| MinIO | 9000, 9001 | S3 storage + console |
+## Architecture
 
-## Docker Compose
-
-### Services
-
-```yaml
-frontend   # SvelteKit + Vite dev server
-backend    # FastAPI + Uvicorn
-db         # PostgreSQL 18
-valkey     # Valkey 8 (alpine)
-minio      # MinIO S3 storage
 ```
+browser → :13491 nginx (lattice-cast)
+              ├─ /api/*  → backend:13491  (uvicorn × 4 via supervisord)
+              └─ /*      → frontend:13491 (vite dev server)
+         backend → db:5432, valkey:6379, minio:9000
+```
+
+## Services (docker-compose.yml)
+
+| Service | Image / Build | Network | Notes |
+|---------|---------------|---------|-------|
+| `lattice-cast` | nginx:alpine | shared-network | Reverse proxy, single exposed port `NGX_PORT` |
+| `frontend` | `./frontend` (node:24) | shared-network | Vite dev server, source-mounted |
+| `backend` | `./backend` (uv/python3.12-bookworm-slim) | shared + app | Supervisord → uvicorn --workers 4 |
+| `db` | postgres:18 | app-network | Port 15432 exposed to host |
+| `valkey` | valkey/valkey:8-alpine | app-network | appendonly, 256mb maxmemory |
+| `minio` | minio/minio:latest | app-network | Console on :9001 (internal) |
 
 ### Profiles
 
-```bash
-# Browser testing (Playwright)
-docker compose --profile browser up -d browser
-docker compose exec browser python browse.py status
-docker compose exec browser python browse.py screenshot test
-```
+| Profile | Services | Purpose |
+|---------|----------|---------|
+| `migration` | `migration` | DB migrations (Python migrate.py, mounts docker.sock) |
+| `test` | `e2e`, `browser` | E2E: uv + Playwright client; Browser: Chromium run-server :4444. Both use `network_mode: host` |
 
 ### Networks
 
-- `app-network` - Internal services (backend, db, valkey, minio)
-- `shared-network` - External network for cross-compose communication
+- `app-network` (bridge) — internal: backend, db, valkey, minio, migration
+- `shared-network` (external) — nginx ↔ frontend ↔ backend; cross-compose communication
 
-### Volumes
+### Volumes / Mounts
 
-- `db_data` - PostgreSQL data
-- `valkey_data` - Valkey persistence
-- `minio_data` - MinIO object storage
+| Mount | Type | Target |
+|-------|------|--------|
+| `db_data` | named volume | PostgreSQL data |
+| `valkey_data` | named volume | Valkey AOF persistence |
+| `.minio_data/` | bind mount | MinIO object storage |
+| `./frontend` | bind mount | FE source (hot reload) |
+| `./backend/` | bind mount | BE source (hot reload) |
+| `.browser/` | bind mount | E2E screenshot output |
+
+## Dockerfiles
+
+| Path | Base | Purpose |
+|------|------|---------|
+| `frontend/Dockerfile` | node:24 | Dev + build; `npm run preview` in prod |
+| `frontend/Dockerfile.build` | node:24 → scratch | Multi-stage export of `build/` dir only |
+| `backend/Dockerfile` | uv:python3.12-bookworm-slim | Supervisord entry; installs from pyproject.toml |
+| `migration/Dockerfile` | uv:python3.12-bookworm-slim | Docker CLI + psycopg2 + sqlfluff |
+| `e2e/Dockerfile` | uv:python3.12-bookworm-slim | Playwright client (no browsers) |
+| `browser/Dockerfile` | playwright/python:v1.50.0-noble | Chromium host, run-server :4444; mem_limit 2g |
 
 ## Kubernetes (Production)
 
-### Directory Structure
-
 ```
 k8s/
-├── namespace/
-│   └── lattice-cast.yaml
-├── secrets/
-│   ├── postgres-secret.yaml
-│   ├── minio-secret.yaml
-│   └── oauth-secret.yaml
-├── configmaps/
-│   └── backend-config.yaml
-├── *-deployment.yaml
-├── *-service.yaml
-└── *-ingress.yaml
+├── namespace/lattice-cast.yaml
+├── configmaps/backend-config.yaml
+├── {frontend,backend,db,valkey,minio}-deployment.yaml
+├── {frontend,backend,db,valkey,minio}-service.yaml
+└── {frontend,backend}-ingress.yaml
 ```
 
-### Deployment Order
-
 ```bash
-# 1. Create namespace
-kubectl apply -f namespace/lattice-cast.yaml
-
-# 2. Apply secrets and configmaps
-kubectl apply -f secrets/
-kubectl apply -f configmaps/
-
-# 3. Create TLS secret for HTTPS
-kubectl create secret tls lattice-cast-tls-secret \
-  --key yourdomain.com.key \
-  --cert yourdomain.com.pem \
-  -n lattice-cast
-
-# 4. Deploy all services
-kubectl apply -f .
+kubectl apply -f k8s/namespace/
+kubectl apply -f k8s/configmaps/
+kubectl create secret tls lattice-cast-tls-secret --key domain.key --cert domain.pem -n lattice-cast
+kubectl apply -f k8s/
 ```
 
-### Build & Push to Registry
+### Build & Push
 
 ```bash
-# Build images (source .env for build args)
 set -a && source .env && set +a && docker compose build
-
-# Tag and push frontend
 docker tag lattice-cast-frontend:latest 127.0.0.1:7000/lattice-cast-frontend:latest
+docker tag lattice-cast-backend:latest  127.0.0.1:7000/lattice-cast-backend:latest
 docker push 127.0.0.1:7000/lattice-cast-frontend:latest
-
-# Tag and push backend
-docker tag lattice-cast-backend:latest 127.0.0.1:7000/lattice-cast-backend:latest
 docker push 127.0.0.1:7000/lattice-cast-backend:latest
 ```
 
-> **Note:** Frontend build requires env vars (GOOGLE_CLIENT_ID, AUTHENTIK_*) to be exported before `docker compose build` because Vite bakes them into static files at build time.
+Frontend build requires `GOOGLE_CLIENT_ID`, `AUTHENTIK_URL`, `AUTHENTIK_CLIENT_ID` exported — Vite bakes them at build time via docker-compose build args.
 
-### Debug & Restart
+### Ingress
 
-```bash
-# Restart deployments
-kubectl rollout restart deployment/frontend-deployment -n lattice-cast
-kubectl rollout restart deployment/backend-deployment -n lattice-cast
+| Path | Service |
+|------|---------|
+| `/` | frontend-service |
+| `/api/*` | backend-service |
 
-# Port forward for local testing
-kubectl port-forward service/frontend-service 3000:3000 -n lattice-cast
-kubectl port-forward service/backend-service 5000:5000 -n lattice-cast
-
-# View logs
-kubectl logs -f deployment/frontend-deployment -n lattice-cast
-kubectl logs -f deployment/backend-deployment -n lattice-cast
-```
-
-### Ingress Routing
-
-| Path | Service | Notes |
-|------|---------|-------|
-| `/` | frontend | Static files (SvelteKit) |
-| `/api/*` | backend | API endpoints |
-
-### HTTPS Setup
-
-Add domain to `vite.config.ts`:
-```javascript
-allowedHosts: [
-    'localhost',
-    '127.0.0.1',
-    'lattice-cast.posetmage.com',
-],
-```
-
-## Environment Variables
-
-Copy from example:
-```bash
-cp .env.example .env
-```
-
-Key variables:
+## Environment Variables (.env.example)
 
 | Variable | Description |
 |----------|-------------|
-| `POSTGRES_USER/PASSWORD/DB` | Database credentials |
-| `MINIO_*` | MinIO storage config |
-| `GOOGLE_CLIENT_ID/SECRET` | Google OAuth (build-time for frontend) |
-| `AUTHENTIK_*` | Authentik OAuth (build-time for frontend) |
+| `NGX_PORT` | Single exposed port (default 13491) |
+| `POSTGRES_DB` | Database name |
+| `POSTGRES_APP_PASSWORD` | app_user (RLS-enforced CRUD) |
+| `POSTGRES_MGR_PASSWORD` | mgr_user (BYPASSRLS, login/admin) |
+| `GOOGLE_CLIENT_ID/SECRET` | Google OAuth (build-time for FE) |
+| `AUTHENTIK_URL/CLIENT_ID` | Authentik OAuth (build-time for FE) |
+| `MINIO_*` | MinIO S3 storage (root user, endpoint, bucket) |
+| `SAMPLE_USER/PASSWORD` | Dev seed user |
+| `E2E_BASE_URL` | Override e2e target (default: local stack) |
 
-> **Important:** OAuth variables must be available at build time for frontend. The `docker-compose.yml` passes them as build args to `frontend/Dockerfile`.
+DB DBA creds (`dba_user`/`dba_pws`) are hardcoded in `docker-compose.yml`, not in `.env`.

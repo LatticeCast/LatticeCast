@@ -1,75 +1,92 @@
-# LLM Context - Dashboard View
+# LLM Context — Dashboard View
 
 ## Overview
 
-Dashboard is a fourth view type (alongside Table/Kanban/Timeline). It renders **aggregates** over rows via LatticeQL widget queries — counts, sums, group-bys — not raw rows.
+Dashboard is a fourth view type (alongside Table/Kanban/Timeline). It renders **aggregates** over rows via LatticeQL block queries — counts, sums, group-bys — not raw rows. Chart library: **ECharts** (replaced chart.js). Terminology: **blocks** (not widgets).
 
-## View Config Shape (stored in the dashboard view's row in `public.table_views`)
+## View Config Shape (`table_views.config` for type=dashboard)
 
 ```jsonc
 {
-  "name": "Sales Dashboard",
-  "type": "dashboard",
-  "config": {
-    "layout": [
-      { "widget_id": "w1", "x": 0, "y": 0, "w": 6, "h": 4 },
-      { "widget_id": "w2", "x": 6, "y": 0, "w": 6, "h": 4 }
-    ],
-    "widgets": {
-      "w1": {
-        "title": "Pipeline by stage",
-        "chart": "bar",          // number | bar | pie | line | list
-        "lql": "table(\"Deals\") | group_by((r)->{r.status}) | aggregate(@{\"value\": sum(r.amount)})",
-        "binding": { "x": "dim_0", "y": "value" }
-      }
-    }
+  "layout": [
+    { "id": "b1", "x": 0, "y": 0, "w": 6, "h": 4 },
+    { "id": "b2", "x": 6, "y": 0, "w": 6, "h": 4 }
+  ],
+  "blocks": {
+    "b1": {
+      "kind": "chart",
+      "title": "Pipeline by stage",
+      "lql": "table(\"Deals\") | group_by(...) | aggregate(...)",
+      "echarts": { "xAxis": {"type":"category"}, "series": [{"type":"bar","encode":{"x":"stage","y":"value"}}], "dataset": [{"$inject":"rows"}] }
+    },
+    "b2": { "kind": "number", "title": "Total Deals", "lql": "...", "field": "total", "format": null }
   }
 }
 ```
 
-Dashboard configs are stored/updated via existing view CRUD endpoints — no new view API needed.
+## Block Kinds
 
-## Widget Query Endpoint
+| Kind | Model (BE) | Fields | FE Component |
+|------|-----------|--------|--------------|
+| `chart` | `ChartBlock` | `title`, `lql`, `echarts` (ECharts option JSON; use `{"$inject":"rows"}` for data) | `ChartBlock.svelte` → `EChart.svelte` |
+| `number` | `NumberBlock` | `title`, `lql`, `field`, `format?` | `NumberBlock.svelte` |
+| `list` | `ListBlock` | `title`, `lql`, `columns: [{key,label}]` (empty = auto-detect from rows) | `ListBlock.svelte` |
+
+Discriminated union on `kind` field — BE: `models/view.py` (`Block = ChartBlock | NumberBlock | ListBlock`), FE: `lib/types/dashboard.ts`.
+
+## Block Query Endpoint
 
 ```
-POST /api/v1/tables/{tid}/views/{view_id}/blocks/{block_id}/query
-Authorization: Bearer <token>
-→ [ { dim_0: "qualified", value: 42000 }, ... ]
+POST /api/v1/tables/{table_id}/views/{view_name}/blocks/{block_id}/query
+Body: { "params": {} }
+→ { "rows": [ { dim_0: "qualified", value: 42000 }, ... ] }
 ```
+
+**Note:** path uses `view_name` (string), not `view_id` (int). Resolved via `TableViewRepository.get_by_name()`.
 
 Flow:
-1. Load view row from `table_views` → read `config.widgets[block_id].lql`
-2. Build workspace schema dict (table column map) → cache in Valkey 60s
-3. `lattice_ql.compile(lql, schema)` → SQL string with `$1` for workspace_id
-4. Adapter inlines `$1` as `'<workspace_uuid>'` and rewrites the
-   `table_id = (SELECT … FROM tables WHERE table_name = …)` subquery to a
-   direct `table_id = '…' AND workspace_id = '…'` filter (LatticeCast uses
-   the table name as the table_id PK)
-5. `await session.execute(text(sql))` via `get_rls_session` — RLS handles
-   the workspace-membership check
-6. Return rows as JSON array
+1. `_get_table_for_member()` — resolve table, verify workspace membership
+2. Load view by name → check `type == "dashboard"` → read `config.blocks[block_id].lql`
+3. `compile_lql(lql, workspace_id, session)` — build schema (Valkey cache 60s), compile to SQL, inline `$1` as workspace UUID, rewrite `table_name` subquery to direct `table_id` filter
+4. `DashboardRepository.execute(session, sql, params)` — `text(sql)` via RLS session
+5. Return `{"rows": [...]}`
 
-Files: `router/api/dashboard.py` (endpoint), `repository/dashboard.py` (execute), `config/lattice_ql.py` (compile + schema cache + adapter).
+Files: `router/api/dashboard.py`, `repository/dashboard.py`, `config/lattice_ql.py`.
 
 ## LatticeQL Integration
 
-```python
-# config/lattice_ql.py
-from lattice_ql import compile as _compile
-from lattice_ql.error import LatticeQLError
-# installed via: lattice-ql @ git+https://github.com/latticeCast/LatticeQL@v0.2.0
+```
+lattice-ql @ git+https://github.com/latticeCast/LatticeQL@v0.2.0
 ```
 
-**Adding new primitives to LatticeQL:** work in the upstream repo
-(https://github.com/latticeCast/LatticeQL), tag a new version, bump the
-git ref in `backend/pyproject.toml`. Upstream is pure Python (hatchling
-build) — no Rust toolchain involved.
+`config/lattice_ql.py`: `compile(lql, schema)` → SQL. Schema built from `__schema__` rows per table, cached in Valkey 60s (`lql:schema:{workspace_id}`). `invalidate_schema_cache()` exported for column changes.
 
-## Adding a New Chart Kind
+Adapter rewrites: `_inline_workspace()` (replace `$1`), `_fix_table_name()` (subquery → direct filter). Upstream is pure Python (hatchling) — bump git ref in `backend/pyproject.toml` to upgrade.
 
-1. **TS type** — add `"scatter"` to `ChartKind` union in `lib/types/dashboard.ts`
-2. **Component** — create `lib/components/dashboard/widgets/ScatterWidget.svelte`; accepts `data: Row[]` + `binding: WidgetBinding` props
-3. **Registry** — add to `DashboardView.svelte` chart selector (`chart === "scatter" → ScatterWidget`)
-4. **Backend binding** — no change needed; `binding` is passed through as-is; component maps columns
+## Frontend Architecture
 
-Chart library: ECharts 5.6. Keep all data-transform logic in TS modules; `.svelte` files configure and render only.
+```
+lib/charts/
+  EChart.svelte        — generic echarts wrapper (init, resize, theme-aware, $effect re-render)
+  inject.ts            — applyInjects(): walk echarts option JSON, replace {"$inject":"rows"} with {source: rows}
+  index.ts             — re-exports EChart + applyInjects
+
+lib/components/dashboard/
+  DashboardView.svelte — grid layout (CSS grid 12-col), inline grid-column/grid-row styles, JSON editor for config
+  blocks/
+    Block.svelte       — dispatcher: routes block.kind → ChartBlock | NumberBlock | ListBlock
+    ChartBlock.svelte  — fetches rows, applies injects, renders EChart
+    NumberBlock.svelte  — fetches rows, extracts rows[0][field], renders big number
+    ListBlock.svelte   — fetches rows, renders <table>; auto-derives columns if block.columns is empty
+
+lib/api/dashboard.ts   — fetchBlockRows(tableId, viewName, blockId) → POST to query endpoint
+lib/types/dashboard.ts — TS types mirroring BE models (BlockKind, LayoutEntry, *Block, DashboardConfig, DashboardView, BlockRow)
+```
+
+## Adding a New Block Kind
+
+1. **BE model** — add `FooBlock(BaseModel)` in `models/view.py`, add to `Block` union
+2. **FE type** — add `FooBlock` interface in `lib/types/dashboard.ts`, add to `Block` union + `BlockKind`
+3. **FE component** — create `blocks/FooBlock.svelte`, call `fetchBlockRows()`, render
+4. **Dispatcher** — add `{:else if block.kind === 'foo'}` branch in `Block.svelte`
+5. **No backend route change** — same query endpoint, new kind is config-only

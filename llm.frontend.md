@@ -1,100 +1,97 @@
-# LLM Context - Frontend (v0.45)
+# LLM Context - Frontend
 
 > For general project context, see `llm.root.md`. For deployment, see `llm.deploy.md`.
 
 ## MVC Architecture
 
-Frontend follows a strict MVC separation:
+| Layer | Location | Purpose |
+|-------|----------|---------|
+| **Model** | `lib/stores/*.store.ts` | Writable stores — FE cache of BE SSOT |
+| **View** | `routes/**/*.svelte`, `components/**/*.svelte` | UI rendering via `$derived` |
+| **Controller** | `lib/backend/*.ts` | API calls → update stores |
 
-| Layer | Location | Extension | Purpose |
-|-------|----------|-----------|---------|
-| **Model** | `lib/stores/*.store.ts` | `.store.ts` only | Writable stores (`writable()`) — Read only FE SSOT data (cache of BE DB) |
-| **View** | `routes/**/*.svelte`, `lib/components/**/*.svelte` | `.svelte` | UI rendering, `$derived` for display logic |
-| **Controller** | `lib/backend/*.ts` | `.ts` | API calls, fetch/mutate, update stores |
+Rules: stores = plain `.store.ts` only (no runes). `.svelte.ts` rune files go in `components/`. All colors hex from BE.
 
-**Rules:**
-- `lib/stores/` contains ONLY plain `.store.ts` files — no `.svelte.ts`, no runes, no handlers
-- `.svelte.ts` files (runes, `$state()`) go in `lib/components/` not in `stores/`
-- All colors come from BE as hex — FE never stores color palettes
+## Directory Tree (`frontend/src/`)
 
-## Stores (Model layer — `lib/stores/`)
+```
+lib/
+  api/dashboard.ts                  # dashboard block query client
+  auth/{auth.service,login.svelte,pkce}.ts, providers/{google,authentik,index}.ts
+  backend/{auth,config,http,storage,tables,table_schemas,views,workspaces}.ts
+  charts/{EChart.svelte,ChartSanity.svelte,index,inject}.ts
+  components/
+    dashboard/{DashboardView.svelte, blocks/{Block,ChartBlock,ListBlock,NumberBlock}.svelte}
+    layout/TopBar.svelte
+    sidebar/{Sidebar,CreateWorkspaceModal}.svelte
+    table/{TableGrid,TableHeader,TableGroupHeader,TableToolbar,ViewSwitcher,
+           KanbanBoard,TimelineView,ContextMenu,RowExpandPanel,DocCellEditor,
+           AddColumnModal,ManageOptionsModal,CreateTicketModal,ImportPreviewModal,
+           ImportTemplateModal,GroupBySelector,GridAddRowFooter,GridDeleteCell,
+           RowNumberCell}.svelte
+    table/cells/{Checkbox,Date,Doc,Number,Select,Tags,Text,Url}Cell.svelte
+    table/{table-page.svelte.ts, table.utils.ts, timeline.utils.ts,
+           tableGrid.types.ts, dragReorder.svelte.ts}
+    workflow/{WorkflowView,WorkflowNode,WorkflowGraphPanel,WorkflowFlowCapture}.svelte
+    Portal.svelte
+  icons/view.ts                     # SVG path constants per view type
+  stores/{auth,settings,table_schema,table_schemas,table_views,table_rows,
+          table_workflow,tables}.store.ts
+  types/{auth,dashboard,json,table}.ts
+  UI/{brand.ts, theme.svelte.ts, Button,Input,Label}.svelte
+  utils/{date_time,url}.ts
+routes/
+  +layout.{svelte,ts}  login/  callback/{google,authentik}/  settings/  config/  debug/
+  [workspace_id]/  [workspace_id]/members/  [workspace_id]/[table_id]/
+  [workspace_id]/[table_id]/[row_id]/  [workspace_id]/[table_id]/[row_id]/doc/
+```
 
-| Store | Exports |
-|-------|---------|
-| `auth.store.ts` | `authStore` — `{accessToken, provider, user}` |
-| `menu.store.ts` | `workspaces`, `tables`, `currentWorkspaceId`, `currentTableId`, `currentWorkspace` (derived), `currentTable` (derived) |
-| `table_schema.store.ts` | `columns`, `viewOrder`, `applySchema` |
-| `table_views.store.ts` | `views` |
-| `table_rows.store.ts` | `rows` |
-| `tables.store.ts` | Re-exports from above + orchestrator functions (`loadTable`, `refreshRows`, etc.) + `IMPLICIT_TABLE_VIEW` constant + `error` writable |
-| `settings.store.ts` | `darkMode` (server-backed via PATCH), `speechLang`, notifications (localStorage) |
+## Stores (Model)
 
-## Controllers (API layer — `lib/backend/`)
+| Store | Key exports |
+|-------|-------------|
+| `auth.store.ts` | `authStore` — `{accessToken, provider, user, role}` |
+| `table_schemas.store.ts` | **Sidebar SSOT** — `workspaces`, `tables`, `currentTableId`, `tablesByWorkspace`, `columns`, `viewOrder`, `defaultView`, `views`, `applySchema`, `applySidebar`, `initSidebar`, `resetSidebar` |
+| `table_schema.store.ts` | Re-exports `columns, viewOrder, defaultView, views, applySchema` from `table_schemas` |
+| `table_views.store.ts` | Re-exports `views` from `table_schemas` |
+| `table_rows.store.ts` | `rows`, `resetRows` |
+| `table_workflow.store.ts` | `screenToFlowStore`, `NODE_TYPES`, `NODE_COLORS`, `findColId`, `deriveGraphNames` |
+| `tables.store.ts` | Backward-compat shim — re-exports stores + orchestrator fns (`loadTable`, `refreshRows`) |
+| `settings.store.ts` | `darkMode` (server-backed), `speechLang`, notifications (localStorage), `hydrateFromServer` |
 
-Thin fetch wrappers. Each mutator updates the SSOT store directly after API success — no full refetch.
+## Controllers (`lib/backend/`)
 
-- `auth.ts` — `fetchMe`, login flows
-- `tables.ts` — `fetchTable`, `fetchRows`, `createRow`, `updateRow`, `deleteRow`, `createColumn`, `updateColumn`, `deleteColumn`, `patchSchema`, `batchDocsExist`
-- `views.ts` — `createView`, `updateView`, `deleteView`
-- `workspaces.ts` — workspace + member CRUD, `fetchWorkspaces`
-- `storage.ts` — MinIO file upload/download
-- `http.ts` — shared `getAuthHeaders`, `getBearerHeader`
+| File | Functions |
+|------|-----------|
+| `http.ts` | `getAuthHeaders`, `getBearerHeader` — shared auth header helpers |
+| `auth.ts` | `fetchMe`, login flows |
+| `tables.ts` | `fetchTable`, `fetchRows`, `createRow`, `updateRow`, `deleteRow`, `createColumn`, `updateColumn`, `deleteColumn`, `patchSchema`, `batchDocsExist` |
+| `table_schemas.ts` | `fetchSidebar` — bulk `GET /api/v1/sidebar` → `applySidebar()` |
+| `views.ts` | `createView`, `updateView`, `deleteView` |
+| `workspaces.ts` | workspace + member CRUD, `fetchWorkspaces` |
+| `storage.ts` | MinIO file upload/download |
 
-## Table Page (the god-page)
+## Key Pages
 
-`routes/[workspace_id]/[table_id]/+page.svelte` — coordinates all table interactions.
-
-Reactive state + handlers live in `lib/components/table/table-page.svelte.ts` (NOT in stores):
-- `TablePageStore` class with `$state()` fields (~40 UI state vars)
-- Handler methods: row CRUD, cell editing, column ops, view config, import/export, mouse events
-- Exports singleton `s` — templates use `s.addingRow`, `s.handleAddRow()`, etc.
-- Uses `_suppressPersist` counter to prevent view-switch race condition
-
-## Components (`lib/components/table/`)
-
-- `TableGrid.svelte` — spreadsheet grid (heaviest component)
-- `KanbanBoard.svelte` / `TimelineView.svelte` / `dashboard/DashboardView.svelte`
-- `TableToolbar.svelte`, `ViewSwitcher.svelte`, `GroupBySelector.svelte`
-- `ContextMenu.svelte`, `RowExpandPanel.svelte`, `DocCellEditor.svelte`
-- `AddColumnModal.svelte`, `ManageOptionsModal.svelte`, `CreateTicketModal.svelte`
-- `ImportPreviewModal.svelte`, `ImportTemplateModal.svelte`
-- `table.utils.ts` — pure helpers (parseCSV, applyFilters, sortRows, colorToStyle)
-- `table-page.svelte.ts` — reactive UI state class (see above)
+**Table god-page** (`routes/[workspace_id]/[table_id]/+page.svelte`): reactive state in `table-page.svelte.ts` — `TablePageStore` class, `$state()` fields (~40 UI vars), singleton `s`.
+**Layout** (`+layout.svelte`): `Sidebar.svelte` + `TopBar.svelte`. `+layout.ts` = single auth gate. No per-page auth checks.
 
 ## Routing
 
 | Route | Purpose |
 |-------|---------|
-| `/` | Home — redirect to last workspace or show empty state |
-| `/login`, `/callback` | OAuth + password login |
-| `/settings` | Per-user settings |
-| `/[workspace_id]` | Workspace overview (table list, create table) |
-| `/[workspace_id]/members` | Workspace member admin |
-| `/[workspace_id]/[table_id]` | Table god-page (all views) |
-| `/[workspace_id]/[table_id]/[row_number]` | Row detail / doc editor |
+| `/` | Home — redirect to last workspace |
+| `/login`, `/callback/{google,authentik}` | OAuth + password login |
+| `/settings`, `/config`, `/debug` | Per-user settings, app config, debug |
+| `/[workspace_id]` | Workspace overview |
+| `/[workspace_id]/members` | Member admin |
+| `/[workspace_id]/[table_id]` | Table god-page (Table/Kanban/Timeline/Dashboard/Workflow) |
+| `/[workspace_id]/[table_id]/[row_id]` | Row detail (`[row_id]/doc` = doc editor) |
 
-## Theme & Colors
+## Charts
 
-`lib/UI/theme.svelte.ts` — light/dark theme tokens only (reactive `T` proxy).
-No color palettes — all option colors (select/tags) are hex from BE.
-`colorToStyle(hex)` in `table.utils.ts` renders as `background-color: ${hex}20; color: ${hex}`.
+ECharts 5.6 via `lib/charts/`. `EChart.svelte` wrapper + `inject.ts` (`applyInjects` for `$inject: rows`). Dashboard blocks in `components/dashboard/blocks/`.
 
 ## Tech Stack
 
-| Technology | Version | Purpose |
-|------------|---------|---------|
-| SvelteKit | 2.x | Full-stack framework |
-| Svelte | 5.x | Reactive UI (runes: `$state`, `$derived`, `$effect`) |
-| Tailwind CSS | 4.x | Utility-first styling |
-| TypeScript | 5.x | Type safety |
-| Vite | 7.x | Build tool |
-| ECharts | 5.6 | Dashboard charts |
-| Playwright | 1.55.x | Browser testing |
-
-## Build / Dev
-
-- `npm run dev` — Vite dev server (in container)
-- `npm run check` — svelte-check
-- `npm run lint` — prettier + eslint
-- `npm test` — vitest
-- Adapter: `@sveltejs/adapter-static` (SPA)
+SvelteKit 2, Svelte 5, Tailwind CSS 4, TypeScript 5, Vite 7, ECharts 5.6, @xyflow/svelte (workflow), Playwright 1.55. Adapter: `@sveltejs/adapter-static` (SPA). Dev: `npm run dev`, check: `npm run check`, lint: `npm run lint`, test: `npm test`.

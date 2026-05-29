@@ -421,6 +421,7 @@
 									{table.table_id}
 								</span>
 								<button
+									data-testid="table-settings-btn-{table.table_id}"
 									onclick={(e) => openTableSettings(table, e)}
 									class="rounded-xl p-2 {T.muted} transition {T.hoverBg}"
 									aria-label="Table settings"
@@ -478,6 +479,7 @@
 				<label class="mb-1 block text-sm font-medium {T.body}" for="table-rename-input">Name</label>
 				<input
 					id="table-rename-input"
+					data-testid="table-rename-input"
 					type="text"
 					bind:value={tableRenameValue}
 					onkeydown={(e) => {
@@ -489,13 +491,14 @@
 			</div>
 
 			{#if tableSettingsError}
-				<div class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
+				<div data-testid="table-settings-error" class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
 					{tableSettingsError}
 				</div>
 			{/if}
 
 			<div class="flex items-center justify-between gap-2">
 				<button
+					data-testid="table-delete-btn"
 					onclick={handleTableDelete}
 					disabled={tableSaving}
 					class="rounded-xl px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
@@ -510,6 +513,7 @@
 						Cancel
 					</button>
 					<button
+						data-testid="table-rename-save-btn"
 						onclick={handleTableRename}
 						disabled={tableSaving || !tableRenameValue.trim()}
 						class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"

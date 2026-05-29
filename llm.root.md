@@ -1,152 +1,96 @@
-# LLM Context - Lattice Cast
+# LLM Context — Lattice Cast
 
-## Project Overview
+Self-hosted Airtable + Jira/CRM. JSONB tables, views (Table/Kanban/Timeline/Workflow/Dashboard), PM/CRM templates, ticket docs in MinIO.
+- **Layer-1** — generic JSONB table engine with sort/filter/group, auto indexes, RLS.
+- **Layer-2** — template seeders only: `POST /api/v1/tables/template/{kind}` (pm/crm/workflow).
 
-Self-hosted Airtable + Jira/CRM. Flexible tables with JSONB, customizable
-views (Table, Kanban, Timeline, **Dashboard**), built-in PM and CRM
-templates with ticket docs in MinIO. Two conceptual layers:
-
-- **Layer-1 (Airtable core)** — generic JSONB table engine. Sort, filter,
-  group, per-column auto-managed indexes, RLS by workspace.
-- **Layer-2 (PM / CRM)** — template seeders only (no special code paths):
-  `POST /api/v1/tables/template/{pm,crm}`.
-
-**Domain:** `lattice-cast.posetmage.com`
-
-> **Documentation:**
-> - `llm.dev.md` - Local dev workflow
-> - `llm.frontend.md` - Frontend (Svelte 5 + Tailwind 4)
-> - `llm.arch.airtable.md` - Layer-1 generic table engine
-> - `llm.arch.pm.md` - Layer-2 PM template
-> - `llm.arch.dashboard.md` - Dashboard view + LatticeQL widget queries
-> - `llm.arch.db.md` - DB schemas, roles, migrations, RLS
-> - `llm.arch.auth.md` - OAuth flow
-> - `llm.endpoint.md` - API endpoints
-> - `llm.storage.md` - MinIO storage (aioboto3 async)
-> - `llm.e2e.md` - E2E tests (Playwright + Python)
-> - `llm.snapshot.md` - Browser snapshot guide (Playwright)
-> - `llm.user.md` - User management
-> - `llm.deploy.md` - Docker / k8s deployment
+**Docs:** `llm.dev.md` `llm.frontend.md` `llm.arch.{airtable,pm,dashboard,db,auth}.md` `llm.endpoint.md` `llm.storage.md` `llm.e2e.md` `llm.snapshot.md` `llm.user.md` `llm.deploy.md`
 
 ## Tech Stack
 
 | Layer | Tech |
 |-------|------|
-| Frontend | SvelteKit 2, Svelte 5 (Runes), Tailwind 4, Vite 7, TS 5.9, ECharts 5 |
-| Backend | FastAPI, Python 3.12, SQLModel, asyncpg, **aioboto3** (native async) |
-| DSL | `lattice-ql` (pure-Python, hatchling) — wheel `v0.3.3` from GitHub releases; compiles dashboard block queries to PG SQL |
-| DB | PostgreSQL 18 — JSONB, GIN/B-tree indexes, RLS policies |
-| Cache | Valkey 8 (redis-compat) |
-| Storage | MinIO (S3-compat) — ticket markdown docs |
-| Auth | Google OAuth, Authentik (PKCE) |
-| Infra | Docker Compose (dev), Kubernetes (prod) |
+| FE | SvelteKit 2, Svelte 5 Runes, Tailwind 4, Vite 7, TS 5.9, ECharts 5 |
+| BE | FastAPI, Python 3.12, SQLModel, asyncpg, aioboto3 (async S3) |
+| DB | PostgreSQL 18 — JSONB, GIN/B-tree, RLS | Cache: Valkey 8 |
+| Storage | MinIO (ticket markdown docs) | Auth: Google OAuth, Authentik PKCE |
+| Infra | Docker Compose (dev, UV-based images), Kubernetes (prod) |
+| DSL | `lattice-ql` — compiles dashboard block queries to PG SQL |
 
 ## Architecture
 
 ```
-Browser → Nginx :13491
-           ├── /api/*  → Backend (FastAPI)
-           └── /*      → Frontend (Vite)
-
-Backend → PG (asyncpg, app/mgr roles)
-        → Valkey (JWKS + shared cache)
-        → MinIO (aioboto3 — never blocks event loop)
+Browser → Nginx :13491 → /api/* FastAPI | /* Vite
+BE → PG (app_engine + login_engine) → Valkey (JWKS cache) → MinIO (aioboto3)
 ```
 
-## Connection Roles
+**Roles:** `dba_user` (migrations, ALL) · `app_user` (CRUD + RLS) · `mgr_user` (BYPASSRLS, login/admin)
 
-| Role | Use case | Schema access |
-|---|---|---|
-| `dba_user` | Migrations only (DBA pwd in docker-compose, NOT .env) | ALL |
-| `app_user` | General API (CRUD + RLS-filtered reads) | `public` CRUD + `auth` SELECT + `gdpr` SELECT/UPDATE (own row via RLS) |
-| `mgr_user` | Login/admin backend — **BYPASSRLS**, sees all rows | `public`/`auth`/`gdpr` full CRUD; no DDL |
-
-## Directory Structure
+## Directory
 
 ```
-lattice-cast/
-├── backend/                FastAPI + Python 3.12 (submodule)
-│   └── src/
-│       ├── main.py         app entry (lifespan = connection pool init only)
-│       ├── config/         settings, database, redis, storage (aioboto3)
-│       ├── core/db.py      app_engine + login_engine
-│       ├── middleware/     auth (get_current_user, get_rls_session)
-│       ├── models/         SQLModel definitions
-│       ├── repository/     CRUD layer
-│       └── router/api/     FastAPI routers
-├── frontend/               SvelteKit + Tailwind (submodule)
-│   └── src/
-│       ├── routes/         +page.svelte per route
-│       └── lib/            stores, components, API clients
-├── migration/              V*.sql + migrate.py runner
-│   ├── .sqlfluff           strict lint (80 char, align CREATE TABLE)
-│   ├── checksums.txt       committed SHA-256 integrity
-│   └── migrate.py          lint → verify → test → apply pipeline
-├── k8s/                    production manifests
-├── nginx/                  reverse proxy config
-├── browser/                Playwright automation
-└── docker-compose.yml      DBA creds hardcoded here (not .env)
+backend/src/
+  main.py              lifespan: pool + valkey + JWKS + MinIO
+  config/              settings, redis, storage, lattice_ql
+  core/db.py           app_engine + login_engine
+  middleware/           auth, jwks, token
+  models/ repository/  SQLModel + CRUD layer
+  router/api/
+    tables/            crud, columns, views, templates, _shared
+    table_schemas.py   GET /sidebar
+    rows, dashboard, storage, auth, workspaces, admin/users
+frontend/src/
+  routes/              +layout.ts (auth gate), [workspace_id]/[table_id]/
+  lib/backend/         http, tables, views, table_schemas, workspaces, storage
+  lib/stores/          table_schema, table_schemas, table_rows, table_views, table_workflow, tables, auth, settings
+  lib/components/      sidebar/, layout/ (TopBar), table/ (cells/), workflow/, dashboard/
+  lib/charts/          EChart.svelte (ECharts 5)
+migration/             V1..V30 SQL + migrate.py (lint→verify→test→apply)
+e2e/                   Playwright + pytest
 ```
 
-## Database Schema (v0.45 — see `llm.arch.db.md` for full details)
+## DB Schema
+
+4 schemas: `public`, `auth`, `gdpr`, `private` (migrations only). See `llm.arch.db.md`.
 
 ```
-auth.users          (user_id UUID PK, role, timestamps)
-gdpr.user_info      (user_id FK, email UNIQUE, user_name UNIQUE, config JSONB)
-public.workspaces   (workspace_id UUID PK, workspace_name)
-public.workspace_members  ((workspace_id, user_id) PK, role)
-public.tables       ((workspace_id, table_id) PK, config JSONB, audit cols)
-public.table_views  ((workspace_id, table_id, view_id BIGINT) PK, config JSONB)
-public.rows         ((workspace_id, table_id, row_id BIGINT) PK, row_data JSONB)
-private.schema_migrations  (filename, checksum, applied_at)
+auth.users · gdpr.user_info · public.workspaces · public.workspace_members
+public.tables       (config={columns, view_order, default_view})
+public.table_views  (config={name, type, ...}, view_id BIGINT auto-inc)
+public.rows         (row_data JSONB, row_id BIGINT)
+private.schema_migrations
 ```
 
-- `tables.config` = `{columns, view_order, default_view}` (V23 merged table_schemas)
-- `table_views.config` = `{name, type, view-specific...}` — view_id is auto-increment BIGINT
-- PG functions own all schema/view mutations — BE repos are thin wrappers
-- RLS on all public tables + gdpr.user_info (workspace member / self-only)
+- V23 merged table_schemas → tables.config · V26 CHECK on view type · V29 default_view=0 · V30 ON UPDATE CASCADE on FKs
+- PG functions own schema/view mutations — BE repos are thin wrappers. RLS on all public + gdpr tables.
 
 ## Key Patterns
 
-### Backend
-- **Async-native I/O everywhere** — sync DB/S3/HTTP call freezes event loop for ALL users. See `Skill(developing-fastapi)`.
-- **aioboto3 for S3** — `async with s3_client() as s3: await s3.put_object(...)`
-- **RLS session** — `get_rls_session` sets `app.current_user_id`; PG policies enforce workspace isolation
-- **Repository pattern** — all DB ops in `repository/` layer
-- **OpenAPI** — auto-generated at `/api/v1/docs`
+- **Async-native I/O** — sync calls freeze the event loop. See `Skill(developing-fastapi)`.
+- **RLS session** — `get_rls_session` → `app.current_user_id` → PG policies enforce isolation
+- **Migrations** — V1–V14 squashed baseline (v0.40), head **V30**. Flyway format, checksum-tracked. See `Skill(developing-db-sql)`.
+- **FE stores** split by concern; layout = Sidebar + TopBar; cells in `table/cells/`
 
-### Migrations
-- **Flyway format** — `V<N>__name.sql`, tracked in `private.schema_migrations`
-- **Never modify applied file** — checksum mismatch aborts
-- **Add new V<N+1>.sql** → `python migrate.py --hash` → commit both
-- See `Skill(developing-db-sql)` for workflow
-
-### Frontend
-See `llm.frontend.md` for Svelte 5 + Tailwind 4 patterns.
-
-## API Prefix
-
-All routes live under `/api/v1/*`:
+## API Routes (`/api/v1/*`)
 
 | Route | Purpose |
 |---|---|
-| `/api/v1/status` | Health check |
-| `/api/v1/login/*` | OAuth + password token exchange |
-| `/api/v1/workspaces/*` | Workspace + members CRUD |
-| `/api/v1/tables/*` | Tables + columns + views |
-| `/api/v1/tables/template/{pm,crm}` | Template seeders (Layer-2) |
-| `/api/v1/tables/{id}/rows/*` | Row CRUD + doc endpoints |
-| `/api/v1/tables/{id}/views/{view_id}/blocks/{block_id}/query` | Dashboard block LatticeQL execution |
-| `/api/v1/storage/*` | User file upload/download |
-| `/api/v1/admin/*` | Admin-only endpoints |
+| `/status` `/settings` | Health, config |
+| `/login/*` | OAuth token exchange |
+| `/workspaces/*` | Workspace + members CRUD |
+| `/sidebar` | Sidebar table-schema tree |
+| `/tables/*` | Tables CRUD, columns, views |
+| `/tables/template/{kind}` | Seeders: pm, crm, workflow |
+| `/tables/{tid}` PATCH | Schema patches |
+| `/tables/{id}/rows/*` | Row CRUD + docs |
+| `/tables/{id}/views/{vid}/blocks/{bid}/query` | Dashboard LatticeQL |
+| `/storage/*` | File upload/download |
+| `/admin/*` | Admin endpoints |
 
 ## Dev Bootstrap
 
 ```bash
-docker compose up -d db
-docker compose --profile migration run --rm migration    # lint→test→apply
-docker compose up -d                                     # full stack
+docker compose up -d db && docker compose --profile migration run --rm migration && docker compose up -d
 ```
 
-Default dev user `lattice` must be seeded via DBA (auto-create currently
-fails due to app_user lacking INSERT on auth). See `llm.dev.md`.
+Dev user `lattice` seeded via DBA. See `llm.dev.md`.
