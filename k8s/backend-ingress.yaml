@@ -5,6 +5,8 @@ metadata:
   name: ingress-backend
   namespace: lattice-cast
   annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    cert-manager.io/renew-before: 720h
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/limit-rps: "1"
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
