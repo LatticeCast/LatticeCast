@@ -34,10 +34,10 @@ END $$;
 
 DO $$ BEGIN
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'mgr_user') THEN
-        CREATE USER mgr_user WITH PASSWORD 'mgr_pws' IN ROLE mgr;
+        CREATE USER mgr_user IN ROLE mgr;
     END IF;
     IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_user') THEN
-        CREATE USER app_user WITH PASSWORD 'app_pws' IN ROLE app;
+        CREATE USER app_user IN ROLE app;
     END IF;
 END $$;
 

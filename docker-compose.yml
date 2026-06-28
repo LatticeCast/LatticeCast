@@ -95,6 +95,9 @@ services:
       network: host
     environment:
       DATABASE_URL: postgresql://dba_user:dba_pws@db:5432/${POSTGRES_DB}
+      POSTGRES_PASSWORD: dba_pws
+      POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD}
+      POSTGRES_MGR_PASSWORD: ${POSTGRES_MGR_PASSWORD}
       TEST_NETWORK: latticecast_app-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
