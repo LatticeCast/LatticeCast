@@ -2,7 +2,7 @@
 
 ## Token saving
 use anthropic prompt caching.
-claude-bot need design caching prompt
+agentic-hive need design caching prompt
 
 ## Performance Tuning
 

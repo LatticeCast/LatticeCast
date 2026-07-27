@@ -2,7 +2,7 @@
 
 load Skill(developing*)
 
-dont use `/plan`. Use Skill(agent-claude-bot)
+dont use `/plan`. Use Skill(agentic-hive)
 
 ## working
 
