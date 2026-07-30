@@ -5,6 +5,8 @@ metadata:
   name: ingress-frontend
   namespace: lattice-cast
   annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    cert-manager.io/renew-before: 720h
     nginx.ingress.kubernetes.io/ssl-redirect: "true" # Optional: Redirect HTTP to HTTPS
     nginx.ingress.kubernetes.io/limit-rps: "30"  # Rate limit: 30 requests per second
     nginx.ingress.kubernetes.io/proxy-buffering: "off"

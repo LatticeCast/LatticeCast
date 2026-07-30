@@ -32,13 +32,13 @@ async def create_column(
 ) -> dict[str, Any]:
     table = await _get_table_for_member(table_id, user, session)
     view_repo = TableViewRepository(session)
-    await view_repo.add_column(
+    schema = await view_repo.add_column(
         table.workspace_id, table.table_id,
         data.get("name", ""), data.get("type", "text"),
         data.get("options", {}), user.user_id,
     )
     await invalidate_schema_cache(str(table.workspace_id))
-    return await view_repo.get_tables_schema(table.workspace_id, table.table_id)
+    return schema
 
 
 @router.patch("/{table_id}/columns/{column_id}")

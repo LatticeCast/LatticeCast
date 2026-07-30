@@ -42,7 +42,9 @@ CHECKSUMS_FILE = MIGRATION_DIR / "checksums.txt"
 PG_IMAGE = "postgres:18"
 TEST_CONTAINER = "latticecast-migration-test"
 DBA_USER = "dba_user"
-DBA_PASSWORD = "dba_pws"
+DBA_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "dba_pws")
+APP_PASSWORD = os.environ.get("POSTGRES_APP_PASSWORD", "")
+MGR_PASSWORD = os.environ.get("POSTGRES_MGR_PASSWORD", "")
 TEST_DB = "testdb"
 
 
@@ -309,6 +311,37 @@ def apply_migrations(dsn: str) -> None:
     conn.close()
 
 
+def set_user_passwords(dsn: str) -> None:
+    """Set login-user passwords from env vars (idempotent).
+
+    V1 creates users without passwords. This step sets them
+    from POSTGRES_APP_PASSWORD / POSTGRES_MGR_PASSWORD.
+    Runs after every apply — ALTER USER is a no-op if unchanged.
+    """
+    if not APP_PASSWORD and not MGR_PASSWORD:
+        return
+
+    conn = psycopg2.connect(dsn)
+    conn.autocommit = True
+    cur = conn.cursor()
+
+    if APP_PASSWORD:
+        cur.execute(
+            "ALTER USER app_user WITH PASSWORD %s",
+            (APP_PASSWORD,),
+        )
+        print("  ✓ app_user password set from env")
+    if MGR_PASSWORD:
+        cur.execute(
+            "ALTER USER mgr_user WITH PASSWORD %s",
+            (MGR_PASSWORD,),
+        )
+        print("  ✓ mgr_user password set from env")
+
+    cur.close()
+    conn.close()
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def run(cmd: list[str], check: bool = True, capture: bool = False) -> subprocess.CompletedProcess:
@@ -418,6 +451,7 @@ def step_test() -> bool:
         # Apply to temp DB
         print("  Applying migrations…")
         apply_migrations(test_dsn)
+        set_user_passwords(test_dsn)
         print("  ✓ Migrations applied")
 
         # Verify
@@ -447,8 +481,14 @@ def step_test() -> bool:
 def step_apply() -> bool:
     """Apply migrations to real DB."""
     print("\n[3/3] Apply to real DB")
-    dsn = os.environ.get("DATABASE_URL", "postgresql://dba_user:dba_pws@db:5432/db")
+    dsn = os.environ.get("DATABASE_URL")
+    if not dsn:
+        raise RuntimeError(
+            "DATABASE_URL not set. Pass it via docker-compose "
+            "environment or export it."
+        )
     apply_migrations(dsn)
+    set_user_passwords(dsn)
     print("  ✓ Real DB migrated")
     return True
 
@@ -471,7 +511,13 @@ def step_dump() -> bool:
     """
     print("\n[dump] clone live DB → sibling db_<ts>")
 
-    dsn = os.environ.get("DATABASE_URL", "postgresql://dba_user:dba_pws@db:5432/db")
+    dsn = os.environ.get("DATABASE_URL")
+    if not dsn:
+        raise RuntimeError(
+            "DATABASE_URL not set. Pass it via docker-compose "
+            "environment or export it."
+        )
+
     src = _dbname_from_dsn(dsn)
     ts = time.strftime("%Y%m%d_%H%M%S")
     backup = f"{src}_{ts}"

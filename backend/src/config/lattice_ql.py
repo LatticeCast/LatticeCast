@@ -38,19 +38,29 @@ async def _build_schema(workspace_id: str, session: Any) -> dict[str, Any]:
 
 
 async def get_schema(workspace_id: str, session: Any) -> dict[str, Any]:
-    redis = await get_redis()
-    key = f"lql:schema:{workspace_id}"
-    cached = await redis.get(key)
-    if cached:
-        return json.loads(cached)
+    try:
+        redis = await get_redis()
+        key = f"lql:schema:{workspace_id}"
+        cached = await redis.get(key)
+        if cached:
+            return json.loads(cached)
+    except Exception:
+        redis = None
     schema = await _build_schema(workspace_id, session)
-    await redis.setex(key, _SCHEMA_TTL, json.dumps(schema))
+    try:
+        if redis:
+            await redis.setex(f"lql:schema:{workspace_id}", _SCHEMA_TTL, json.dumps(schema))
+    except Exception:
+        pass
     return schema
 
 
 async def invalidate_schema_cache(workspace_id: str) -> None:
-    redis = await get_redis()
-    await redis.delete(f"lql:schema:{workspace_id}")
+    try:
+        redis = await get_redis()
+        await redis.delete(f"lql:schema:{workspace_id}")
+    except Exception:
+        pass
 
 
 _TABLE_SUBQ = re.compile(
