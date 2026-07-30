@@ -2,8 +2,7 @@
 	import { Handle, Position } from '@xyflow/svelte';
 	import { NODE_COLORS } from '$lib/stores/table_workflow.store';
 
-	let { data }: { id: string; data: { label: string; nodeType: string; description: string } } =
-		$props();
+	let { data }: { data: { label: string; nodeType: string; description: string } } = $props();
 
 	const color = $derived(NODE_COLORS[data.nodeType] ?? '#60a5fa');
 	const isCondition = $derived(data.nodeType === 'CONDITION');

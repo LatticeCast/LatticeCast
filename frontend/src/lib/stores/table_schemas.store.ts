@@ -8,7 +8,7 @@
 // Replaces the old `menu.store.ts` (one path → one file).
 
 import { writable, derived, get } from 'svelte/store';
-import type { Column, Table, TableSchema, ViewConfig, Workspace } from '$lib/types/table';
+import type { Column, Table, TableSchema, Workspace } from '$lib/types/table';
 
 export interface SidebarTable {
 	workspace_id: string;

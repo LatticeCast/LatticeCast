@@ -33,7 +33,7 @@
 		googleRedirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI
 	};
 
-	$: roleBadge = getRoleBadge($authStore?.role);
+	const roleBadge = $derived(getRoleBadge($authStore?.role));
 </script>
 
 <div class="min-h-screen bg-gray-50 p-8">

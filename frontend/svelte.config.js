@@ -7,6 +7,10 @@ import { projectBase } from './myconfig.js';
 const config = {
 	preprocess: vitePreprocess(),
 
+	compilerOptions: {
+		runes: true
+	},
+
 	kit: {
 		adapter: adapter({
 			// default options are shown. On some platforms

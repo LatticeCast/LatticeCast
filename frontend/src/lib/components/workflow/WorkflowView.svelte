@@ -2,7 +2,7 @@
 	import { get } from 'svelte/store';
 	import { SvelteFlow, Controls, Background, MiniMap, type OnConnect } from '@xyflow/svelte';
 	import '@xyflow/svelte/dist/style.css';
-	import type { Row, Column, ViewConfig } from '$lib/types/table';
+	import type { Row, Column } from '$lib/types/table';
 	import { updateRow } from '$lib/backend/tables';
 	import WorkflowNode from './WorkflowNode.svelte';
 	import WorkflowGraphPanel from './WorkflowGraphPanel.svelte';
@@ -24,13 +24,11 @@
 		tableId,
 		columns,
 		rows,
-		viewConfig,
 		onOpenExpand
 	}: {
 		tableId: string;
 		columns: Column[];
 		rows: Row[];
-		viewConfig: ViewConfig;
 		onOpenExpand: (row: Row) => void;
 	} = $props();
 
@@ -63,7 +61,9 @@
 			let arr: string[] = [];
 			try {
 				arr = JSON.parse((newData[nextsColId] as string) || '[]');
-			} catch {}
+			} catch {
+				// ignore invalid JSON, fall back to empty array
+			}
 			if (!arr.includes(conn.target!)) arr.push(conn.target!);
 			newData[nextsColId] = JSON.stringify(arr);
 		}

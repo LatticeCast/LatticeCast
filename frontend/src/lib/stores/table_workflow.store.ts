@@ -79,7 +79,9 @@ export function deriveEdges(rows: Row[], columns: Column[]): Edge[] {
 			try {
 				const raw = row.row_data[nextsCol];
 				if (typeof raw === 'string') arr = JSON.parse(raw);
-			} catch {}
+			} catch {
+				// ignore invalid JSON, fall back to empty array
+			}
 			for (const targetId of arr) {
 				if (rowIds.has(targetId)) {
 					edges.push({
@@ -170,7 +172,9 @@ export async function deleteNode(
 			try {
 				const raw = row.row_data[nextsCol];
 				if (typeof raw === 'string') arr = JSON.parse(raw);
-			} catch {}
+			} catch {
+				// ignore invalid JSON, fall back to empty array
+			}
 			if (arr.includes(targetId)) {
 				patch[nextsCol] = JSON.stringify(arr.filter((id) => id !== targetId));
 				dirty = true;
@@ -221,7 +225,9 @@ export async function removeEdgeByParts(
 		try {
 			const raw = newData[nextsCol];
 			if (typeof raw === 'string') arr = JSON.parse(raw);
-		} catch {}
+		} catch {
+			// ignore invalid JSON, fall back to empty array
+		}
 		newData[nextsCol] = JSON.stringify(arr.filter((id) => id !== targetRowId));
 	}
 

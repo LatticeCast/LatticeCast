@@ -21,7 +21,7 @@
 	import type { Table, Workspace } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
-	import { isUuid, tablePath, navigate, navigateToTable } from '$lib/utils/url';
+	import { isUuid, navigate, navigateToTable } from '$lib/utils/url';
 	let loading = $state(true);
 	let error = $state('');
 	let showCreateWorkspace = $state(false);
@@ -491,7 +491,10 @@
 			</div>
 
 			{#if tableSettingsError}
-				<div data-testid="table-settings-error" class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
+				<div
+					data-testid="table-settings-error"
+					class="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600"
+				>
 					{tableSettingsError}
 				</div>
 			{/if}
