@@ -13,7 +13,6 @@ dependencies = [
     "asyncpg",
     "python-jose",
     "passlib",
-    "redis[hiredis]",
     "aioboto3",
     "lattice-ql @ git+https://github.com/latticeCast/LatticeQL@v0.2.0",
 ]

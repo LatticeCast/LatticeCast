@@ -5,7 +5,7 @@
 ## Quick Start
 
 ```bash
-docker compose up                                     # all services (nginx + fe + be + db + valkey + minio)
+docker compose up                                     # all services (nginx + fe + be + db + minio)
 docker compose --profile migration run --rm migration  # run DB migrations
 docker compose --profile test up -d e2e browser        # e2e + headless Chromium
 ```
@@ -18,7 +18,7 @@ Single entry point: `http://localhost:${NGX_PORT}` (default **13491**). Nginx (`
 browser → :13491 nginx (lattice-cast)
               ├─ /api/*  → backend:13491  (uvicorn × 4 via supervisord)
               └─ /*      → frontend:13491 (vite dev server)
-         backend → db:5432, valkey:6379, minio:9000
+         backend → db:5432 (cache: private.cache table), minio:9000
 ```
 
 ## Services (docker-compose.yml)
@@ -28,8 +28,7 @@ browser → :13491 nginx (lattice-cast)
 | `lattice-cast` | nginx:alpine | shared-network | Reverse proxy, single exposed port `NGX_PORT` |
 | `frontend` | `./frontend` (node:24) | shared-network | Vite dev server, source-mounted |
 | `backend` | `./backend` (uv/python3.12-bookworm-slim) | shared + app | Supervisord → uvicorn --workers 4 |
-| `db` | postgres:18 | app-network | Port 15432 exposed to host |
-| `valkey` | valkey/valkey:8-alpine | app-network | appendonly, 256mb maxmemory |
+| `db` | postgres:18 | app-network | Port 15432 exposed to host. Also serves the cache (`private.cache` UNLOGGED table) |
 | `minio` | minio/minio:latest | app-network | Console on :9001 (internal) |
 
 ### Profiles
@@ -41,7 +40,7 @@ browser → :13491 nginx (lattice-cast)
 
 ### Networks
 
-- `app-network` (bridge) — internal: backend, db, valkey, minio, migration
+- `app-network` (bridge) — internal: backend, db, minio, migration
 - `shared-network` (external) — nginx ↔ frontend ↔ backend; cross-compose communication
 
 ### Volumes / Mounts
@@ -49,7 +48,6 @@ browser → :13491 nginx (lattice-cast)
 | Mount | Type | Target |
 |-------|------|--------|
 | `db_data` | named volume | PostgreSQL data |
-| `valkey_data` | named volume | Valkey AOF persistence |
 | `.minio_data/` | bind mount | MinIO object storage |
 | `./frontend` | bind mount | FE source (hot reload) |
 | `./backend/` | bind mount | BE source (hot reload) |
@@ -72,8 +70,8 @@ browser → :13491 nginx (lattice-cast)
 k8s/
 ├── namespace/lattice-cast.yaml
 ├── configmaps/backend-config.yaml
-├── {frontend,backend,db,valkey,minio}-deployment.yaml
-├── {frontend,backend,db,valkey,minio}-service.yaml
+├── {frontend,backend,db,minio}-deployment.yaml
+├── {frontend,backend,db,minio}-service.yaml
 └── {frontend,backend}-ingress.yaml
 ```
 

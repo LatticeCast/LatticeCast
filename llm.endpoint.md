@@ -8,7 +8,7 @@ All routes under `/api/v1`. Rows keyed by `row_id` (int). Views keyed by `view_i
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/status` | None | Valkey & DB health |
+| GET | `/status` | None | DB health |
 | GET | `/settings` | None | Non-sensitive settings |
 | GET | `/run-task/{seconds}` | None | Blocking task (debug) |
 | GET | `/openapi-export` | None | Export OpenAPI spec |

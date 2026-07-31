@@ -9,7 +9,6 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from config.redis import close_redis, get_redis
 from config.settings import settings
 from config.storage import ensure_bucket_exists
 from core.db import close_db, init_db
@@ -40,18 +39,10 @@ async def lifespan(app: FastAPI):
     await init_db()
     print("✓ Database initialized")
 
-    # Initialize Valkey
-    try:
-        redis = await get_redis()
-        await redis.ping()
-        print("✓ Valkey connected")
-    except Exception as e:
-        print(f"⚠ Valkey connection failed: {e}")
-
     # Pre-warm JWKS cache
     try:
         await get_jwks()
-        print("✓ JWKS pre-cached in Valkey")
+        print("✓ JWKS pre-cached")
     except Exception as e:
         print(f"⚠ JWKS pre-cache failed: {e}")
 
@@ -67,7 +58,6 @@ async def lifespan(app: FastAPI):
     # Shutdown
     print("🛑 Shutting down services...")
     executor.shutdown(wait=True)
-    await close_redis()
     await close_db()
     print("✓ Shutdown complete")
 
@@ -161,23 +151,13 @@ async def run_task(seconds: int):
 
 class StatusResponse(BaseModel):
     status: str
-    valkey: str
     db: str
 
 
 @api_router.get("/status", response_model=StatusResponse, tags=["health"])
 async def status() -> StatusResponse:
-    # Check Valkey
-    valkey_status = "ok"
-    try:
-        valkey = await get_redis()
-        await valkey.ping()
-    except Exception as e:
-        valkey_status = f"error: {str(e)}"
-
     return StatusResponse(
         status="ok",
-        valkey=valkey_status,
         db="ok",  # DB is checked via healthcheck
     )
 
@@ -209,7 +189,6 @@ class SettingsInfoResponse(BaseModel):
 
     debug_mode: bool
     database_host: str
-    valkey_url: str
     minio_endpoint: str
     minio_bucket: str
     cors_origins: list[str]
@@ -222,7 +201,6 @@ async def get_settings_info() -> SettingsInfoResponse:
     return SettingsInfoResponse(
         debug_mode=settings.debug_mode,
         database_host=db_host,
-        valkey_url=settings.redis.url.split("@")[-1] if "@" in settings.redis.url else settings.redis.url,
         minio_endpoint=settings.minio.endpoint,
         minio_bucket=settings.minio.bucket,
         cors_origins=settings.cors_origins,

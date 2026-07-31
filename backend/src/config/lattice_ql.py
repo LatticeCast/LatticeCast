@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from typing import Any
 from uuid import UUID
@@ -8,7 +7,7 @@ from uuid import UUID
 from lattice_ql import compile as _compile
 from lattice_ql.error import LatticeQLError
 
-from config.redis import get_redis
+from config.pg_cache import cache_delete, cache_get, cache_set
 from repository.table import TableRepository
 from repository.table_view import TableViewRepository
 
@@ -38,18 +37,16 @@ async def _build_schema(workspace_id: str, session: Any) -> dict[str, Any]:
 
 
 async def get_schema(workspace_id: str, session: Any) -> dict[str, Any]:
+    key = f"lql:schema:{workspace_id}"
     try:
-        redis = await get_redis()
-        key = f"lql:schema:{workspace_id}"
-        cached = await redis.get(key)
+        cached = await cache_get(key)
         if cached:
-            return json.loads(cached)
+            return cached
     except Exception:
-        redis = None
+        pass
     schema = await _build_schema(workspace_id, session)
     try:
-        if redis:
-            await redis.setex(f"lql:schema:{workspace_id}", _SCHEMA_TTL, json.dumps(schema))
+        await cache_set(key, schema, _SCHEMA_TTL)
     except Exception:
         pass
     return schema
@@ -57,8 +54,7 @@ async def get_schema(workspace_id: str, session: Any) -> dict[str, Any]:
 
 async def invalidate_schema_cache(workspace_id: str) -> None:
     try:
-        redis = await get_redis()
-        await redis.delete(f"lql:schema:{workspace_id}")
+        await cache_delete(f"lql:schema:{workspace_id}")
     except Exception:
         pass
 

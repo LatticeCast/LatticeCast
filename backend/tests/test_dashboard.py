@@ -93,7 +93,7 @@ class TestExecute:
 
 
 # ---------------------------------------------------------------------------
-# Integration tests — require live backend stack (DB + Redis)
+# Integration tests — require live backend stack (DB)
 # ---------------------------------------------------------------------------
 
 BACKEND_URL = os.environ.get("BASE_URL", "http://localhost:13491")

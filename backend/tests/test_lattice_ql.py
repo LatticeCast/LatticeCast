@@ -1,7 +1,8 @@
 """
 Tests for config/lattice_ql.py — schema cache + compile helper.
 
-Unit test:    mock Redis + TableRepository; assert compile_lql returns (sql, params).
+Unit test:    mock the PG cache (config.pg_cache) + TableRepository;
+              assert compile_lql returns (sql, params).
 Integration:  real workspace + table; verify schema shape and compile output.
               Execution via asyncpg is marked xfail: the SQL LatticeQL generates
               references `tables.table_name` which was dropped in migration V21.
@@ -14,7 +15,6 @@ Run inside Docker:
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import sys
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -44,27 +44,26 @@ class TestCompileLql:
         """compile_lql(lql, workspace_id, session) returns (sql: str, params: list)."""
 
         async def _run_test():
-            # Arrange: Redis returns cache-miss, TableRepository returns one table
-            redis_mock = AsyncMock()
-            redis_mock.get = AsyncMock(return_value=None)
-            redis_mock.setex = AsyncMock()
-
+            # Arrange: cache returns a miss, TableRepository returns one table
             fake_table = self._make_table("Tasks")
 
             session_mock = MagicMock()
 
-            with patch("config.lattice_ql.get_redis", AsyncMock(return_value=redis_mock)):
-                with patch("config.lattice_ql.TableRepository") as MockRepo:
-                    instance = MockRepo.return_value
-                    instance.list_by_workspace = AsyncMock(return_value=[fake_table])
+            with (
+                patch("config.lattice_ql.cache_get", AsyncMock(return_value=None)),
+                patch("config.lattice_ql.cache_set", AsyncMock()),
+                patch("config.lattice_ql.TableRepository") as MockRepo,
+            ):
+                instance = MockRepo.return_value
+                instance.list_by_workspace = AsyncMock(return_value=[fake_table])
 
-                    from config.lattice_ql import compile_lql
+                from config.lattice_ql import compile_lql
 
-                    result = await compile_lql(
-                        'table("Tasks") | aggregate(count())',
-                        "00000000-0000-0000-0000-000000000001",
-                        session_mock,
-                    )
+                result = await compile_lql(
+                    'table("Tasks") | aggregate(count())',
+                    "00000000-0000-0000-0000-000000000001",
+                    session_mock,
+                )
 
             # Assert
             assert isinstance(result, tuple), "compile_lql must return a tuple"
@@ -76,35 +75,33 @@ class TestCompileLql:
         _run(_run_test())
 
     def test_compile_lql_uses_cache(self):
-        """If Redis has a cached schema, TableRepository is never called."""
+        """If the PG cache has a cached schema, TableRepository is never called."""
 
         async def _run_test():
-            cached_schema = json.dumps(
-                {
-                    "Tasks": {
-                        "table_id": "tasks-tbl",
-                        "columns": {"status": {"id": "col-001", "type": "select"}},
-                    }
+            cached_schema = {
+                "Tasks": {
+                    "table_id": "tasks-tbl",
+                    "columns": {"status": {"id": "col-001", "type": "select"}},
                 }
-            )
-            redis_mock = AsyncMock()
-            redis_mock.get = AsyncMock(return_value=cached_schema)
-            redis_mock.setex = AsyncMock()
+            }
 
             session_mock = MagicMock()
 
-            with patch("config.lattice_ql.get_redis", AsyncMock(return_value=redis_mock)):
-                with patch("config.lattice_ql.TableRepository") as MockRepo:
-                    instance = MockRepo.return_value
-                    instance.list_by_workspace = AsyncMock(return_value=[])
+            with (
+                patch("config.lattice_ql.cache_get", AsyncMock(return_value=cached_schema)),
+                patch("config.lattice_ql.cache_set", AsyncMock()),
+                patch("config.lattice_ql.TableRepository") as MockRepo,
+            ):
+                instance = MockRepo.return_value
+                instance.list_by_workspace = AsyncMock(return_value=[])
 
-                    from config.lattice_ql import compile_lql
+                from config.lattice_ql import compile_lql
 
-                    result = await compile_lql(
-                        'table("Tasks") | aggregate(count())',
-                        "00000000-0000-0000-0000-000000000001",
-                        session_mock,
-                    )
+                result = await compile_lql(
+                    'table("Tasks") | aggregate(count())',
+                    "00000000-0000-0000-0000-000000000001",
+                    session_mock,
+                )
 
             # TableRepository should NOT have been queried (schema from cache)
             instance.list_by_workspace.assert_not_called()
@@ -117,13 +114,11 @@ class TestCompileLql:
         """LatticeQLError is converted to ValueError with kind:message."""
 
         async def _run_test():
-            cached_schema = json.dumps({"Tasks": {"table_id": "t", "columns": {}}})
-            redis_mock = AsyncMock()
-            redis_mock.get = AsyncMock(return_value=cached_schema)
+            cached_schema = {"Tasks": {"table_id": "t", "columns": {}}}
 
             session_mock = MagicMock()
 
-            with patch("config.lattice_ql.get_redis", AsyncMock(return_value=redis_mock)):
+            with patch("config.lattice_ql.cache_get", AsyncMock(return_value=cached_schema)):
                 from config.lattice_ql import compile_lql
 
                 with pytest.raises(ValueError):
@@ -132,24 +127,21 @@ class TestCompileLql:
         _run(_run_test())
 
     def test_invalidate_schema_cache_deletes_key(self):
-        """invalidate_schema_cache deletes the correct Valkey key."""
+        """invalidate_schema_cache deletes the correct cache key."""
 
         async def _run_test():
-            redis_mock = AsyncMock()
-            redis_mock.delete = AsyncMock()
-
-            with patch("config.lattice_ql.get_redis", AsyncMock(return_value=redis_mock)):
+            with patch("config.lattice_ql.cache_delete", AsyncMock()) as cache_delete_mock:
                 from config.lattice_ql import invalidate_schema_cache
 
                 await invalidate_schema_cache("my-workspace-id")
 
-            redis_mock.delete.assert_called_once_with("lql:schema:my-workspace-id")
+            cache_delete_mock.assert_called_once_with("lql:schema:my-workspace-id")
 
         _run(_run_test())
 
 
 # ---------------------------------------------------------------------------
-# Integration tests (require live backend stack: DB + Redis)
+# Integration tests (require live backend stack: DB)
 # ---------------------------------------------------------------------------
 
 BACKEND_URL = os.environ.get("BASE_URL", "http://localhost:13491")

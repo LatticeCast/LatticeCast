@@ -47,7 +47,7 @@ Body: { "params": {} }
 Flow:
 1. `_get_table_for_member()` — resolve table, verify workspace membership
 2. Load view by name → check `type == "dashboard"` → read `config.blocks[block_id].lql`
-3. `compile_lql(lql, workspace_id, session)` — build schema (Valkey cache 60s), compile to SQL, inline `$1` as workspace UUID, rewrite `table_name` subquery to direct `table_id` filter
+3. `compile_lql(lql, workspace_id, session)` — build schema (PG cache 60s), compile to SQL, inline `$1` as workspace UUID, rewrite `table_name` subquery to direct `table_id` filter
 4. `DashboardRepository.execute(session, sql, params)` — `text(sql)` via RLS session
 5. Return `{"rows": [...]}`
 
@@ -59,7 +59,7 @@ Files: `router/api/dashboard.py`, `repository/dashboard.py`, `config/lattice_ql.
 lattice-ql @ git+https://github.com/latticeCast/LatticeQL@v0.2.0
 ```
 
-`config/lattice_ql.py`: `compile(lql, schema)` → SQL. Schema built from `__schema__` rows per table, cached in Valkey 60s (`lql:schema:{workspace_id}`). `invalidate_schema_cache()` exported for column changes.
+`config/lattice_ql.py`: `compile(lql, schema)` → SQL. Schema built from `__schema__` rows per table, cached in Postgres 60s via `config/pg_cache.py` (`private.cache`, key `lql:schema:{workspace_id}`). `invalidate_schema_cache()` exported for column changes.
 
 Adapter rewrites: `_inline_workspace()` (replace `$1`), `_fix_table_name()` (subquery → direct filter). Upstream is pure Python (hatchling) — bump git ref in `backend/pyproject.toml` to upgrade.
 

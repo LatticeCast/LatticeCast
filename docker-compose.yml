@@ -43,7 +43,6 @@ services:
       - .env
     environment:
       POSTGRES_URL: db:5432
-      REDIS_URL: redis://valkey:6379/0
     logging:
       driver: json-file
       options:
@@ -51,8 +50,6 @@ services:
         max-file: "50"
     depends_on:
       db:
-        condition: service_healthy
-      valkey:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -106,19 +103,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    networks:
-      - app-network
-
-  valkey:
-    image: valkey/valkey:8-alpine
-    volumes:
-      - valkey_data:/data
-    command: valkey-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
-    healthcheck:
-      test: ["CMD", "valkey-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
     networks:
       - app-network
 
@@ -204,4 +188,3 @@ networks:
 
 volumes:
   db_data:
-  valkey_data:

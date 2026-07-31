@@ -42,7 +42,7 @@ MinIO            → ticket docs as {user}/{workspace}/{table}/{row}.md
 | Frontend | SvelteKit 2, Svelte 5, Tailwind CSS 4, TypeScript, Vite 7 |
 | Backend | FastAPI, Python 3.12, Uvicorn |
 | Database | PostgreSQL 18, JSONB + auto-managed indexes |
-| Cache | Valkey 8 |
+| Cache | PostgreSQL UNLOGGED table (`private.cache`) |
 | Storage | MinIO (S3-compatible) — ticket docs |
 | Auth | Google OAuth, Authentik |
 

@@ -49,7 +49,6 @@ class TestHealthCheck:
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "ok"
-        assert "valkey" in data
         assert "db" in data
 
 

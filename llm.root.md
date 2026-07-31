@@ -12,7 +12,7 @@ Self-hosted Airtable + Jira/CRM. JSONB tables, views (Table/Kanban/Timeline/Work
 |-------|------|
 | FE | SvelteKit 2, Svelte 5 Runes, Tailwind 4, Vite 7, TS 5.9, ECharts 5 |
 | BE | FastAPI, Python 3.12, SQLModel, asyncpg, aioboto3 (async S3) |
-| DB | PostgreSQL 18 — JSONB, GIN/B-tree, RLS | Cache: Valkey 8 |
+| DB | PostgreSQL 18 — JSONB, GIN/B-tree, RLS | Cache: PG UNLOGGED table |
 | Storage | MinIO (ticket markdown docs) | Auth: Google OAuth, Authentik PKCE |
 | Infra | Docker Compose (dev, UV-based images), Kubernetes (prod) |
 | DSL | `lattice-ql` — compiles dashboard block queries to PG SQL |
@@ -21,7 +21,7 @@ Self-hosted Airtable + Jira/CRM. JSONB tables, views (Table/Kanban/Timeline/Work
 
 ```
 Browser → Nginx :13491 → /api/* FastAPI | /* Vite
-BE → PG (app_engine + login_engine) → Valkey (JWKS cache) → MinIO (aioboto3)
+BE → PG (app_engine + login_engine, cache: private.cache) → MinIO (aioboto3)
 ```
 
 **Roles:** `dba_user` (migrations, ALL) · `app_user` (CRUD + RLS) · `mgr_user` (BYPASSRLS, login/admin)
@@ -30,8 +30,8 @@ BE → PG (app_engine + login_engine) → Valkey (JWKS cache) → MinIO (aioboto
 
 ```
 backend/src/
-  main.py              lifespan: pool + valkey + JWKS + MinIO
-  config/              settings, redis, storage, lattice_ql
+  main.py              lifespan: pool + JWKS + MinIO
+  config/              settings, pg_cache, storage, lattice_ql
   core/db.py           app_engine + login_engine
   middleware/           auth, jwks, token
   models/ repository/  SQLModel + CRUD layer

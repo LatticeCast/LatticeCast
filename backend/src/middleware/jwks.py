@@ -3,13 +3,12 @@
 JWKS fetching and caching for OAuth providers.
 """
 
-import json
 import time
 
 import httpx
 from fastapi import HTTPException
 
-from config.redis import get_redis
+from config.pg_cache import cache_get, cache_set
 from config.settings import settings
 from util import logger
 
@@ -19,23 +18,20 @@ JWKS_CACHE_TTL = 3600
 
 
 async def get_jwks(provider: str = "authentik") -> dict:
-    """Fetch JWKS from Valkey cache or provider"""
+    """Fetch JWKS from the PG cache or provider"""
     start = time.time()
-    redis = await get_redis()
-    logger.debug(f"Valkey connection: {time.time() - start:.3f}s")
-
     cache_key = GOOGLE_JWKS_CACHE_KEY if provider == "google" else AUTHENTIK_JWKS_CACHE_KEY
 
     # Try cache first
     cache_start = time.time()
     try:
-        cached = await redis.get(cache_key)
-        logger.debug(f"Valkey GET ({provider}): {time.time() - cache_start:.3f}s")
+        cached = await cache_get(cache_key)
+        logger.debug(f"Cache GET ({provider}): {time.time() - cache_start:.3f}s")
         if cached:
             logger.debug(f"JWKS from cache ({provider}, total: {time.time() - start:.3f}s)")
-            return json.loads(cached)
+            return cached
     except Exception as e:
-        logger.warn(f"Valkey error: {e}")
+        logger.warn(f"Cache error: {e}")
 
     # Fetch from provider
     logger.info(f"Fetching JWKS from {provider}...")
@@ -58,14 +54,14 @@ async def get_jwks(provider: str = "authentik") -> dict:
                 if resp.status_code == 200:
                     jwks = resp.json()
 
-                    # Cache in Valkey
+                    # Cache it
                     cache_write_start = time.time()
                     try:
-                        await redis.setex(cache_key, JWKS_CACHE_TTL, json.dumps(jwks))
-                        logger.debug(f"Valkey SET: {time.time() - cache_write_start:.3f}s")
+                        await cache_set(cache_key, jwks, JWKS_CACHE_TTL)
+                        logger.debug(f"Cache SET: {time.time() - cache_write_start:.3f}s")
                         logger.info(f"JWKS fetched and cached ({provider}, total: {time.time() - start:.3f}s)")
                     except Exception as e:
-                        logger.warn(f"Valkey cache write failed: {e}")
+                        logger.warn(f"Cache write failed: {e}")
 
                     return jwks
             except httpx.TimeoutException:

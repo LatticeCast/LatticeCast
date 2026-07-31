@@ -10,7 +10,7 @@ Dual OAuth (Google + Authentik) with PKCE. `AUTH_REQUIRED=false` dev mode bypass
 |------|---------|
 | `middleware/token.py` | `verify_bearer_token()` — Authentik JWT → Google userinfo → 401 |
 | `middleware/auth.py` | `get_current_user`, `get_rls_session`, `require_admin`, `require_user` |
-| `middleware/jwks.py` | JWKS fetch + Valkey cache (`jwks:{provider}`, TTL 3600s) |
+| `middleware/jwks.py` | JWKS fetch + PG cache (`{provider}:jwks`, TTL 3600s) |
 | `router/api/auth.py` | `/login/*` endpoints (OAuth exchange, password, me, config, email) |
 | `config/settings.py` | `DatabaseSettings.app_async_url` / `login_async_url`, OAuth config |
 

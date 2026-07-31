@@ -59,16 +59,6 @@ class DatabaseSettings(BaseSettings):
         return f"postgresql+asyncpg://mgr_user:{self.mgr_password}@{host}:{port}/{self.db}"
 
 
-class RedisSettings(BaseSettings):
-    """Valkey cache configuration (redis-py compatible)"""
-
-    model_config = SettingsConfigDict(env_prefix="REDIS_")
-
-    url: str = Field(default="redis://localhost:6379/0")
-    socket_timeout: int = Field(default=5)
-    socket_connect_timeout: int = Field(default=5)
-
-
 class GoogleOAuthSettings(BaseSettings):
     """Google OAuth configuration"""
 
@@ -131,7 +121,6 @@ class AppSettings(BaseSettings):
 
     # Nested settings
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
-    redis: RedisSettings = Field(default_factory=RedisSettings)
     google: GoogleOAuthSettings = Field(default_factory=GoogleOAuthSettings)
     authentik: AuthentikSettings = Field(default_factory=AuthentikSettings)
     minio: MinioSettings = Field(default_factory=MinioSettings)
