@@ -153,6 +153,16 @@ _skip_integration = pytest.mark.skipif(
 )
 
 
+async def _lattice_auth_headers(client) -> dict:
+    """Password login as the dev seed user, return Bearer headers with a signed JWT."""
+    resp = await client.post(
+        "/api/v1/login/password",
+        json={"user_name": "lattice", "password": ""},
+    )
+    assert resp.status_code == 200, resp.text
+    return {"Authorization": f"Bearer {resp.json()['access_token']}"}
+
+
 @_skip_integration
 class TestCompileLqlIntegration:
     """Integration tests — require `docker compose up` with dev stack running."""
@@ -162,9 +172,9 @@ class TestCompileLqlIntegration:
         import httpx
 
         async def _run_test():
-            # Create a workspace + table via API (AUTH_REQUIRED=false, bearer = user_name)
+            # Create a workspace + table via API (password login → signed JWT)
             async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
-                headers = {"Authorization": "Bearer lattice"}
+                headers = await _lattice_auth_headers(client)
 
                 # Get existing workspace
                 r = await client.get("/api/v1/workspaces", headers=headers)
@@ -206,7 +216,7 @@ class TestCompileLqlIntegration:
 
         async def _run_test():
             async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
-                headers = {"Authorization": "Bearer lattice"}
+                headers = await _lattice_auth_headers(client)
                 r = await client.get("/api/v1/workspaces", headers=headers)
                 ws_id = r.json()[0]["workspace_id"]
 
@@ -242,7 +252,7 @@ class TestCompileLqlIntegration:
             import asyncpg
 
             async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
-                headers = {"Authorization": "Bearer lattice"}
+                headers = await _lattice_auth_headers(client)
                 ws_r = await client.get("/api/v1/workspaces", headers=headers)
                 ws_id = ws_r.json()[0]["workspace_id"]
 

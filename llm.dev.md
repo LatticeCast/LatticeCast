@@ -22,12 +22,19 @@ docker compose exec db psql -U dba_user -d db -c "
 # 3. Start + verify
 docker compose up -d
 curl http://localhost:13491/api/v1/status
-curl http://localhost:13491/api/v1/workspaces -H "Authorization: Bearer lattice"
+TOKEN=$(curl -s -X POST http://localhost:13491/api/v1/login/password \
+  -H "Content-Type: application/json" \
+  -d '{"user_name":"lattice","password":""}' | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+curl http://localhost:13491/api/v1/workspaces -H "Authorization: Bearer $TOKEN"
 ```
 
-## Auth (dev mode)
+## Auth
 
-`AUTH_REQUIRED=false` in `.env`. Bearer token resolves: UUID → `user_name` → email.
+`POST /login/password` resolves the user by `user_name`/email and returns a
+self-signed JWT (`JWT_SECRET_KEY` in `.env`). Accounts with no
+`password_hash` set skip password verification; set one via
+`PUT /login/me/password`. OAuth (Google, Authentik) remains available as
+an alternative — see `llm.arch.auth.md`.
 
 ## Frontend
 

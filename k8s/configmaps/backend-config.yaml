@@ -11,3 +11,4 @@ data:
   MINIO_BUCKET: "lattice-cast"
   MINIO_SECURE: "false"
   NGX_PORT: "5000"
+  JWT_EXPIRE_MINUTES: "1440"

@@ -116,14 +116,25 @@ class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="")
 
     debug_mode: bool = Field(default=False, alias="DEBUG_MODE")
-    auth_required: bool = Field(default=True, alias="AUTH_REQUIRED")
     NGX_PORT: int = Field(default=8000, alias="NGX_PORT")
+
+    # Self-issued JWT (password-login flow — see middleware/token.py)
+    jwt_secret_key: str = Field(default="", alias="JWT_SECRET_KEY", description="Signs self-issued JWTs")
+    jwt_expire_minutes: int = Field(default=1440, alias="JWT_EXPIRE_MINUTES")
 
     # Nested settings
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     google: GoogleOAuthSettings = Field(default_factory=GoogleOAuthSettings)
     authentik: AuthentikSettings = Field(default_factory=AuthentikSettings)
     minio: MinioSettings = Field(default_factory=MinioSettings)
+
+    @model_validator(mode="after")
+    def validate_jwt_secret(self) -> "AppSettings":
+        if not self.jwt_secret_key:
+            raise ValueError("❌ Missing required JWT_SECRET_KEY. Check .env file.")
+        if len(self.jwt_secret_key) <= 10:
+            raise ValueError("❌ JWT_SECRET_KEY too short (must be > 10 chars). Check .env file.")
+        return self
 
     # CORS origins
     @property

@@ -15,28 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.settings import settings
 from core.db import get_login_session, get_session
 from middleware.auth import get_current_user, get_rls_session
+from middleware.token import create_access_token
 from models.user import User
 from models.user import UserInfo as UserInfoModel
+from models.user import UserPassword
 from repository.user import UserRepository, resolve_user_by_email
+from util.security import hash_password, verify_password
 
 router = APIRouter(prefix="/login", tags=["auth"])
-
-
-# --------------------------------------------------
-# Public config endpoint (no auth required)
-# --------------------------------------------------
-
-
-class AppConfigResponse(BaseModel):
-    """Public app configuration"""
-
-    auth_required: bool = Field(..., description="Whether OAuth login is required")
-
-
-@router.get("/config", response_model=AppConfigResponse)
-async def get_config() -> AppConfigResponse:
-    """Get public app configuration (no auth required)."""
-    return AppConfigResponse(auth_required=settings.auth_required)
 
 
 # --------------------------------------------------
@@ -62,7 +48,7 @@ class PasswordLoginRequest(BaseModel):
     """Request body for password login (sole FE-visible flow)."""
 
     user_name: str = Field(..., min_length=1, max_length=64, description="User handle or email")
-    password: str = Field(..., description="User password (ignored in AUTH_REQUIRED=false mode)")
+    password: str = Field(..., description="User password")
 
 
 class UserInfo(BaseModel):
@@ -112,28 +98,28 @@ class MeResponse(BaseModel):
     "/password",
     response_model=TokenResponse,
     responses={
+        401: {"model": HTTPErrorResponse, "description": "Wrong password"},
         404: {"model": HTTPErrorResponse, "description": "User not registered"},
-        501: {"model": HTTPErrorResponse, "description": "Password login disabled — use OAuth"},
     },
 )
 async def password_login(
     request: PasswordLoginRequest,
     login_session: AsyncSession = Depends(get_login_session),
 ) -> TokenResponse:
-    """Username+password login. In AUTH_REQUIRED=false mode, the password is
-    ignored and the resolved user_id UUID is returned as the access token.
-    In AUTH_REQUIRED=true mode, returns 501 — clients must use OAuth.
+    """Username+password login. Resolves the user by user_name or email and
+    returns a self-signed JWT (see `middleware.token.create_access_token`)
+    as the access token.
+
+    If the account has no row in gdpr.user_password, the supplied
+    password is not checked — the JWT is issued directly. If a row
+    exists, the password must match the stored bcrypt hash. This
+    replaces the old global AUTH_REQUIRED=true/false split with a
+    per-account setting (see `PUT /login/me/password`).
 
     Uses the login_session (mgr_user, BYPASSRLS) because at login time no
     user is authenticated yet — the app_session's RLS filter would return
     zero rows for any lookup.
     """
-    if settings.auth_required:
-        raise HTTPException(
-            status_code=501,
-            detail="Password login disabled in AUTH_REQUIRED=true mode — use OAuth",
-        )
-
     ident = request.user_name.strip()
     user = await UserRepository(login_session).resolve_user(ident)
     if not user:
@@ -144,14 +130,22 @@ async def password_login(
     info_result = await login_session.execute(select(UserInfoModel).where(UserInfoModel.user_id == user.user_id))
     info = info_result.scalar_one_or_none()
 
+    pwd_result = await login_session.execute(select(UserPassword).where(UserPassword.user_id == user.user_id))
+    stored_pwd = pwd_result.scalar_one_or_none()
+
+    if stored_pwd and not verify_password(request.password, stored_pwd.password_hash):
+        raise HTTPException(status_code=401, detail="Wrong password")
+
     email = info.email if info else ident
     name = info.user_name if info else ident
 
+    access_token, expires_in = create_access_token(str(user.user_id))
+
     return TokenResponse(
-        access_token=str(user.user_id),
+        access_token=access_token,
         refresh_token=None,
         id_token=None,
-        expires_in=None,
+        expires_in=expires_in,
         userinfo=UserInfo(
             sub=str(user.user_id),
             email=email,
@@ -296,6 +290,50 @@ async def update_me_email(
         user_name=info.user_name,
         config=info.config or {},
     )
+
+
+class SetPasswordRequest(BaseModel):
+    """Request body for setting/changing the current user's password."""
+
+    new_password: str = Field(..., min_length=1, description="New password")
+    current_password: str | None = Field(
+        default=None, description="Required only if the account already has a password set"
+    )
+
+
+@router.put(
+    "/me/password",
+    response_model=dict[str, Any],
+    responses={
+        401: {"model": HTTPErrorResponse, "description": "Invalid or missing token, or wrong current_password"},
+        403: {"model": HTTPErrorResponse, "description": "User not registered"},
+    },
+)
+async def set_me_password(
+    request: SetPasswordRequest,
+    user: User = Depends(get_current_user),
+    login_session: AsyncSession = Depends(get_login_session),
+) -> dict[str, Any]:
+    """Set or change the caller's password_login password (gdpr.user_password).
+
+    First time (no row yet): `current_password` is not required. Once a
+    row exists, changing it requires the correct `current_password`.
+    Setting a password moves the account off the "no password → JWT
+    issued directly" path in `password_login`.
+    """
+    pwd_result = await login_session.execute(select(UserPassword).where(UserPassword.user_id == user.user_id))
+    stored_pwd = pwd_result.scalar_one_or_none()
+
+    if stored_pwd:
+        if not request.current_password or not verify_password(request.current_password, stored_pwd.password_hash):
+            raise HTTPException(status_code=401, detail="Wrong current_password")
+        stored_pwd.password_hash = hash_password(request.new_password)
+        login_session.add(stored_pwd)
+    else:
+        login_session.add(UserPassword(user_id=user.user_id, password_hash=hash_password(request.new_password)))
+
+    await login_session.commit()
+    return {"detail": "password updated"}
 
 
 @router.post(

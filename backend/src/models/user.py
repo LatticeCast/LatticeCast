@@ -42,6 +42,26 @@ class UserInfo(SQLModel, table=True):
     )
 
 
+class UserPassword(SQLModel, table=True):
+    """Optional password-login credential — gdpr.user_password.
+
+    Kept out of gdpr.user_info: that table has a broad app_user SELECT
+    policy (V20, needed to resolve other users by email/user_name for
+    workspace invites) which would expose password_hash to every one of
+    those reads. This table has no grants to app at all — only
+    mgr_user (login_session, BYPASSRLS) touches it, and only via
+    password_login / set_me_password, both scoped to the caller's own
+    user_id. No row for a user = no password set.
+    """
+
+    __tablename__ = "user_password"
+    __table_args__ = {"schema": "gdpr"}
+
+    user_id: UUID = Field(primary_key=True, foreign_key="gdpr.user_info.user_id", description="UUID FK → user_info")
+    password_hash: str = Field(description="Bcrypt hash")
+    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
+
+
 class UserResponse(SQLModel):
     """User response model for API"""
 

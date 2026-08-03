@@ -24,8 +24,8 @@ async def get_current_user(
     - `user_id` token (UUID or user_name) → resolved via app session.
     - `email` token → resolved via gdpr.user_info (app session).
 
-    Auto-creation in AUTH_REQUIRED=false mode is disabled: it races across
-    multi-worker setups. Admins must bootstrap users via the admin API.
+    Auto-creation is disabled: it races across multi-worker setups.
+    Admins must bootstrap users via the admin API.
     TODO: consider an idempotent INSERT ON CONFLICT DO NOTHING path.
     """
     user_id_str = token_payload.get("user_id")

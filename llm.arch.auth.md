@@ -2,17 +2,24 @@
 
 ## Overview
 
-Dual OAuth (Google + Authentik) with PKCE. `AUTH_REQUIRED=false` dev mode bypasses OAuth — Bearer token treated as user_id directly. Two PG engines: `app_engine` (RLS) and `login_engine` (`mgr_user`, BYPASSRLS).
+Dual OAuth (Google + Authentik) with PKCE, plus a password-login flow that
+issues a self-signed JWT. Per-account `gdpr.user_password` (1:1 with
+`user_info`, no grants to `app` — see Database Schema) decides whether
+`POST /login/password` checks the password: no row skips verification
+and issues a JWT directly, a row → password must match (bcrypt,
+`util/security.py`). Two PG engines: `app_engine` (RLS) and `login_engine`
+(`mgr_user`, BYPASSRLS).
 
 ## Backend Auth Files
 
 | File | Purpose |
 |------|---------|
-| `middleware/token.py` | `verify_bearer_token()` — Authentik JWT → Google userinfo → 401 |
+| `middleware/token.py` | `verify_bearer_token()` — local JWT → Authentik JWT → Google userinfo → 401 |
 | `middleware/auth.py` | `get_current_user`, `get_rls_session`, `require_admin`, `require_user` |
 | `middleware/jwks.py` | JWKS fetch + PG cache (`{provider}:jwks`, TTL 3600s) |
-| `router/api/auth.py` | `/login/*` endpoints (OAuth exchange, password, me, config, email) |
-| `config/settings.py` | `DatabaseSettings.app_async_url` / `login_async_url`, OAuth config |
+| `router/api/auth.py` | `/login/*` endpoints (OAuth exchange, password, me, email) |
+| `util/security.py` | `hash_password` / `verify_password` (bcrypt via passlib) |
+| `config/settings.py` | `DatabaseSettings.app_async_url` / `login_async_url`, `jwt_secret_key`, OAuth config |
 
 ## Frontend Auth Files
 
@@ -29,10 +36,10 @@ Dual OAuth (Google + Authentik) with PKCE. `AUTH_REQUIRED=false` dev mode bypass
 ## Token Verification (`middleware/token.py`)
 
 1. Extract Bearer token from `Authorization` header
-2. `AUTH_REQUIRED=false`: return `{"user_id": token, "_provider": "none"}`
-3. Try Authentik JWT (RS256 via JWKS, validate audience + issuer)
-4. Fallback: Google userinfo endpoint (opaque token)
-5. Attach `_provider` field; raise 401 if all fail
+2. Try our own JWT (HS256, `JWT_SECRET_KEY`, issued by `password_login`) → `_provider: "none"`
+3. Try Authentik JWT (RS256 via JWKS, validate audience + issuer) → `_provider: "authentik"`
+4. Fallback: Google userinfo endpoint (opaque token) → `_provider: "google"`
+5. Raise 401 `"Token expired"` if any step's JWT was expired, else `"Invalid token"`
 
 ## User Resolution (`middleware/auth.py`)
 
@@ -60,12 +67,12 @@ Env: `POSTGRES_MGR_PASSWORD` configures `mgr_user` password.
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/config` | No | `{ auth_required: bool }` |
-| POST | `/password` | No | Dev-mode login (501 when `AUTH_REQUIRED=true`) |
+| POST | `/password` | No | Password login → self-signed JWT (no row in `user_password` = unchecked) |
 | POST | `/{provider}/token` | No | OAuth code exchange (google, authentik) |
 | GET | `/me` | Yes | Current user info + config (uses RLS session) |
 | PATCH | `/me/config` | Yes | Shallow-merge keys into `user_info.config` (null removes key) |
 | PUT | `/me/email` | Yes | Update email (uniqueness enforced, uses login_session) |
+| PUT | `/me/password` | Yes | Set/change password (`current_password` required once one is set) |
 
 ## Database Schema
 
@@ -76,14 +83,24 @@ auth.users (user_id UUID PK, role VARCHAR DEFAULT 'user', created_at, updated_at
 -- V3: gdpr.user_info (PII + handle + config)
 gdpr.user_info (user_id UUID PK FK→auth.users CASCADE, email UNIQUE, user_name VARCHAR(32) UNIQUE, config JSONB)
 -- user_name CHECK: ^[a-z0-9][a-z0-9_-]{2,31}$
+
+-- V32: gdpr.user_password (optional password-login credential)
+gdpr.user_password (user_id UUID PK FK→user_info CASCADE, password_hash VARCHAR, updated_at TIMESTAMP)
+-- No grants to app at all — only mgr_user (login_session) touches it.
+-- Kept off user_info because V20 grants app_user broad SELECT there
+-- (needed to resolve other users by email/user_name for workspace
+-- invites); a password_hash column on that table would leak through
+-- every one of those reads. Self-only RLS too, as a second layer.
 ```
 
-GDPR purge: drop `gdpr.user_info` row — `auth.users` and audit trails remain.
+GDPR purge: drop `gdpr.user_info` row — cascades `gdpr.user_password`.
+`auth.users` and audit trails remain.
 
 ## Environment Variables
 
 ```bash
-AUTH_REQUIRED=true             # false = dev mode (token = user_id, password login enabled)
+JWT_SECRET_KEY=xxx             # signs self-issued JWTs (password-login flow)
+JWT_EXPIRE_MINUTES=1440        # self-issued JWT lifetime (default 24h)
 GOOGLE_CLIENT_ID=xxx           # Google OAuth
 GOOGLE_CLIENT_SECRET=xxx
 AUTHENTIK_URL=https://...      # Authentik OAuth

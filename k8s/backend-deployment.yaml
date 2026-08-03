@@ -44,6 +44,13 @@ spec:
                   name: postgres-secret
                   key: POSTGRES_DB
 
+            # JWT signing secret (password-login flow)
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret
+                  key: JWT_SECRET_KEY
+
             # MinIO from secret
             - name: MINIO_ACCESS_KEY
               valueFrom:

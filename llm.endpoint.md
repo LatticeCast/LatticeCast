@@ -17,12 +17,12 @@ All routes under `/api/v1`. Rows keyed by `row_id` (int). Views keyed by `view_i
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/login/config` | None | App config (auth_required) |
-| POST | `/login/password` | None | Username+password (dev mode) |
+| POST | `/login/password` | None | Username+password → self-signed JWT |
 | POST | `/login/{provider}/token` | None | OAuth code→tokens (google\|authentik) |
 | GET | `/login/me` | Bearer | Current user info + config |
 | PATCH | `/login/me/config` | Bearer | Shallow-merge user UI config |
 | PUT | `/login/me/email` | Bearer | Update email |
+| PUT | `/login/me/password` | Bearer | Set/change password |
 | GET | `/sidebar` | Bearer | Workspace/table tree (PG function) |
 
 ## Workspaces (`/workspaces`)

@@ -6,20 +6,22 @@
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/api/v1/login/config` | None | App config (`auth_required` flag) |
 | POST | `/api/v1/login/{provider}/token` | None | Exchange OAuth code for tokens (provider: google \| authentik) |
-| POST | `/api/v1/login/password` | None | `{user_name, password}` — dev mode returns user UUID as access_token; AUTH_REQUIRED=true returns 501 |
+| POST | `/api/v1/login/password` | None | `{user_name, password}` — self-signed JWT; password only checked if `gdpr.user_password` has a row |
 | GET | `/api/v1/login/me` | Bearer | Current user info (user_id, user_name, config, role) |
 | PATCH | `/api/v1/login/me/config` | Bearer | Shallow-merge patch into `gdpr.user_info.config`; null removes key |
 | PUT | `/api/v1/login/me/email` | Bearer | Update caller's email (enforces uniqueness) |
+| PUT | `/api/v1/login/me/password` | Bearer | `{new_password, current_password?}` — set/change password |
 
 ### Password Login
 
 ```bash
 POST /api/v1/login/password
-{"user_name": "handle-or-email", "password": "ignored-in-dev"}
-# Resolves by user_name first, then email. AUTH_REQUIRED=true → 501.
-# Response: TokenResponse with access_token = user UUID
+{"user_name": "handle-or-email", "password": "unchecked-unless-a-password-is-set"}
+# Resolves by user_name first, then email.
+# No row in gdpr.user_password → password ignored, JWT issued directly.
+# Row exists → password must match the bcrypt hash, else 401.
+# Response: TokenResponse with access_token = self-signed JWT (see llm.arch.auth.md)
 ```
 
 ### Token Exchange

@@ -105,6 +105,16 @@ _skip_integration = pytest.mark.skipif(
 )
 
 
+async def _lattice_auth_headers(client) -> dict:
+    """Password login as the dev seed user, return Bearer headers with a signed JWT."""
+    resp = await client.post(
+        "/api/v1/login/password",
+        json={"user_name": "lattice", "password": ""},
+    )
+    assert resp.status_code == 200, resp.text
+    return {"Authorization": f"Bearer {resp.json()['access_token']}"}
+
+
 @_skip_integration
 class TestWidgetQueryEndpoint:
     """Integration tests against the HTTP endpoint."""
@@ -132,7 +142,7 @@ class TestWidgetQueryEndpoint:
 
         async def _run_test():
             async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
-                headers = {"Authorization": "Bearer lattice"}
+                headers = await _lattice_auth_headers(client)
                 ws_r = await client.get("/api/v1/workspaces", headers=headers)
                 assert ws_r.status_code == 200
                 ws_id = ws_r.json()[0]["workspace_id"]
@@ -159,7 +169,7 @@ class TestWidgetQueryEndpoint:
 
         async def _run_test():
             async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
-                headers = {"Authorization": "Bearer lattice"}
+                headers = await _lattice_auth_headers(client)
                 ws_r = await client.get("/api/v1/workspaces", headers=headers)
                 ws_id = ws_r.json()[0]["workspace_id"]
 
@@ -198,7 +208,7 @@ class TestWidgetQueryEndpoint:
 
         async def _run_test():
             async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
-                headers = {"Authorization": "Bearer lattice"}
+                headers = await _lattice_auth_headers(client)
                 ws_r = await client.get("/api/v1/workspaces", headers=headers)
                 assert ws_r.status_code == 200
                 ws_id = ws_r.json()[0]["workspace_id"]
@@ -253,7 +263,7 @@ class TestDashboardRepositoryIntegration:
 
         async def _run_test():
             async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
-                headers = {"Authorization": "Bearer lattice"}
+                headers = await _lattice_auth_headers(client)
                 r = await client.get("/api/v1/workspaces", headers=headers)
                 assert r.status_code == 200
                 ws_id = r.json()[0]["workspace_id"]
