@@ -8,8 +8,8 @@ Built ON the Airtable core. PM is just a template + conventions — no special c
 
 | Position | Column | Type |
 |----------|--------|------|
-| 0 | Doc | doc (read-only, auto-creates MinIO .md on row insert) |
-| 1 | Title | text (short summary) |
+| 0 | Title | text (short summary) |
+| 1 | Doc | doc (read-only, auto-creates MinIO .md on row insert) |
 | 2 | Type | select (epic/story/task/bug) |
 | 3 | Status | select (todo/in_progress/testing/debugging/review/done/merged) |
 | 4 | Priority | select (critical/high/medium/low) |
@@ -21,7 +21,10 @@ Built ON the Airtable core. PM is just a template + conventions — no special c
 | 10 | Description | text |
 | 11 | Parent | text (row_id of parent) |
 
-Default views: implicit Table (rendered from the schema row) + Sprint Board (Kanban by Status) + Roadmap (Timeline). The seeder no longer inserts a "Table" view explicitly — the schema row serves as the default Table rendering.
+Available views: implicit Table (rendered from `tables.config`) + Sprint Board
+(Kanban by Status) + Roadmap (Timeline). The seeder inserts only the Kanban
+and Timeline rows, sets Sprint Board as `default_view`, and leaves the
+implicit Table without a `table_views` row.
 
 ## Hierarchy
 
@@ -32,8 +35,8 @@ Epic (type=epic, parent=null)
 ```
 
 - Workers only implement tasks/bugs
-- Stories auto-merge when all children done
-- Epics auto-merge when all stories done
+- The core API stores hierarchy values but does not cascade statuses.
+- Agentic-hive/project automation may advance parents after checking children.
 
 ## Ticket ID
 
@@ -54,7 +57,7 @@ todo → in_progress → testing → review → done
                        ↓
                     debugging → testing (loop)
 
-Auto-cascade: all children done → parent auto-done
+Parent status changes are performed by automation, not by a PM-specific backend route.
 ```
 
 ## What's NOT PM-specific

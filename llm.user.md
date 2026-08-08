@@ -95,8 +95,20 @@ gdpr.user_info (
 
 ## Auto-created Workspace
 
-`bootstrap_user` (first login or admin create) creates:
+`bootstrap_user` (admin create/bootstrap path) creates:
 
 - `workspace_id` = fresh UUID (`default_factory=uuid4`)
 - `workspace_name` = user's **email** (not user_name)
-- `workspace_members` row with `role = 'owner'`
+- three `workspace_members` rows: `read`, `write`, and `owner`
+
+## Workspace Access Levels
+
+The API presents one `level`, but V33 stores one row per granted action:
+
+| Level | Stored actions | Effective access |
+|-------|----------------|------------------|
+| `read` | read | View workspace/table/row/view data |
+| `write` | read + write | Read plus mutate tables, rows, and views |
+| `owner` | read + write + owner | Write plus workspace/member administration |
+
+Member list responses aggregate action rows back to the highest level.

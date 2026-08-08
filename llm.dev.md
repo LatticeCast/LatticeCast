@@ -19,12 +19,15 @@ docker compose exec db psql -U dba_user -d db -c "
   INSERT INTO gdpr.user_info (user_id, email, user_name)
   VALUES ('$USER_ID', 'lattice@latticecast.local', 'lattice');"
 
-# 3. Start + verify
+# 3. Start, log in, create the first workspace, verify
 docker compose up -d
 curl http://localhost:13491/api/v1/status
 TOKEN=$(curl -s -X POST http://localhost:13491/api/v1/login/password \
   -H "Content-Type: application/json" \
   -d '{"user_name":"lattice","password":""}' | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+curl -X POST http://localhost:13491/api/v1/workspaces \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"workspace_name":"lattice"}'
 curl http://localhost:13491/api/v1/workspaces -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -43,10 +46,10 @@ docker compose up frontend -d       # Vite dev, HMR auto
 docker compose exec frontend npm run lint && docker compose exec frontend npm run build
 ```
 
-Playwright snapshot (MUST after FE changes) — see `Skill(developing/debug-frontend)`:
+Playwright snapshot (MUST after FE changes) — see `llm.snapshot.md` and `Skill(developing/debug-frontend)`:
 ```bash
-docker compose --profile test up -d browser
-docker compose exec browser python3 browser/snapshot_page.py <path>
+docker compose --profile test up -d browser e2e
+docker compose exec -T e2e python3 -c '<connect to BROWSER_WS and save to /output/...>'
 ```
 
 ## Backend
@@ -65,6 +68,10 @@ Host `./backend/` bind-mounted to `/app/`. Log rotation: `json-file`, 100m × 50
 **Async rule**: all I/O must be awaitable — sync calls freeze the event loop. See `Skill(developing/fastapi)`.
 
 ## Migrations
+
+Current head is V33. V31 adds the PostgreSQL cache, V32 adds optional
+password credentials, and V33 replaces workspace roles with materialized
+read/write/owner action grants and corresponding RLS policies.
 
 ```bash
 # Add V<N>__name.sql — never modify existing files

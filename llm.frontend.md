@@ -92,6 +92,20 @@ routes/
 
 ECharts 5.6 via `lib/charts/`. `EChart.svelte` wrapper + `inject.ts` (`applyInjects` for `$inject: rows`). Dashboard blocks in `components/dashboard/blocks/`.
 
+## Current Workspace-Member Contract Gap
+
+The V33 backend request/response field is `level` with values
+`read|write|owner`. The current frontend member client, types, and page still
+send/read `role` with `member|owner`:
+
+- `lib/backend/workspaces.ts`
+- `lib/types/table.ts`
+- `routes/[workspace_id]/members/+page.svelte`
+
+Those member add/update UI paths are not yet compatible with the current
+backend contract; workspace list/create and non-member-management pages use
+the current API normally.
+
 ## Tech Stack
 
 SvelteKit 2, Svelte 5, Tailwind CSS 4, TypeScript 5, Vite 7, ECharts 5.6, @xyflow/svelte (workflow), Playwright 1.55. Adapter: `@sveltejs/adapter-static` (SPA). Dev: `npm run dev`, check: `npm run check`, lint: `npm run lint`, test: `npm test`.

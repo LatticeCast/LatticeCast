@@ -29,27 +29,27 @@ All routes under `/api/v1`. Rows keyed by `row_id` (int). Views keyed by `view_i
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/workspaces` | User | Create (creator=owner) |
-| GET | `/workspaces` | User | List user's workspaces |
-| GET | `/workspaces/{wid}` | Member | Get workspace |
+| POST | `/workspaces` | User | Create (creator receives read+write+owner) |
+| GET | `/workspaces` | User | List workspaces with a read grant |
+| GET | `/workspaces/{wid}` | Read | Get workspace |
 | PUT | `/workspaces/{wid}` | Owner | Rename |
 | DELETE | `/workspaces/{wid}` | Owner | Delete |
-| GET | `/workspaces/{wid}/members` | Member | List members |
-| POST | `/workspaces/{wid}/members` | Owner | Add member |
-| PUT | `/workspaces/{wid}/members/{uid}` | Owner | Update member role |
+| GET | `/workspaces/{wid}/members` | Owner | List members, aggregated to highest level |
+| POST | `/workspaces/{wid}/members` | Owner | Add member with `level=read|write|owner` |
+| PUT | `/workspaces/{wid}/members/{uid}` | Owner | Replace member access level |
 | DELETE | `/workspaces/{wid}/members/{uid}` | Owner | Remove member |
 
 ## Tables (`/tables`)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/tables` | User | Create blank table |
+| POST | `/tables` | Write | Create blank table |
 | GET | `/tables` | User | List all tables (all workspaces) |
-| GET | `/tables/{tid}` | Member | Full schema snapshot |
-| PUT | `/tables/{tid}` | Member | Rename table |
-| DELETE | `/tables/{tid}` | Member | Delete table |
-| PATCH | `/tables/{tid}` | Member | Patch {view_order, default_view, col_order} |
-| POST | `/tables/template/{kind}` | User | Create from template (pm\|crm\|blank) |
+| GET | `/tables/{tid}` | Read | Full schema snapshot (`workspace_id` query param disambiguates names) |
+| PUT | `/tables/{tid}` | Write | Rename table |
+| DELETE | `/tables/{tid}` | Write | Delete table |
+| PATCH | `/tables/{tid}` | Write | Patch {view_order, default_view, col_order} |
+| POST | `/tables/template/{kind}` | Write | Create from template (pm\|crm\|workflow\|blank) |
 
 ## Columns · Views · Dashboard
 
@@ -57,30 +57,30 @@ Per-aspect GETs removed — `GET /tables/{tid}` returns full schema. Column muta
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/tables/{tid}/columns` | Member | Add column |
-| PATCH | `/tables/{tid}/columns/{cid}` | Member | Update column |
-| DELETE | `/tables/{tid}/columns/{cid}` | Member | Delete column |
-| GET | `/tables/{tid}/views` | Member | List views (ordered) |
-| GET | `/tables/{tid}/views/{vid}` | Member | Get single view |
-| POST | `/tables/{tid}/views` | Member | Create view {name, type, config?} |
-| PUT | `/tables/{tid}/views/{vid}` | Member | Update view |
-| DELETE | `/tables/{tid}/views/{vid}` | Member | Delete view |
-| POST | `/tables/{tid}/views/{vname}/blocks/{bid}/query` | Member | Dashboard LatticeQL query |
+| POST | `/tables/{tid}/columns` | Write | Add column |
+| PATCH | `/tables/{tid}/columns/{cid}` | Write | Update column |
+| DELETE | `/tables/{tid}/columns/{cid}` | Write | Delete column |
+| GET | `/tables/{tid}/views` | Read | List views (ordered) |
+| GET | `/tables/{tid}/views/{vid}` | Read | Get single view |
+| POST | `/tables/{tid}/views` | Write | Create view {name, type, config?} |
+| PUT | `/tables/{tid}/views/{vid}` | Write | Update view |
+| DELETE | `/tables/{tid}/views/{vid}` | Write | Delete view |
+| POST | `/tables/{tid}/views/{vname}/blocks/{bid}/query` | Read | Dashboard LatticeQL query |
 
 ## Rows (`/tables/{tid}/rows`)
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| POST | `/tables/{tid}/rows` | Member | Create row (auto-doc for doc cols) |
-| GET | `/tables/{tid}/rows` | Member | List (offset, limit, sort, filter_json) |
-| GET | `/tables/{tid}/rows/{row_id}` | Member | Get single row |
-| PUT | `/tables/{tid}/rows/{row_id}` | Member | Update row data |
-| DELETE | `/tables/{tid}/rows/{row_id}` | Member | Delete row (+ MinIO cleanup) |
-| GET | `/tables/{tid}/rows/{row_id}/doc` | Member | Get ticket doc (MinIO markdown) |
-| PUT | `/tables/{tid}/rows/{row_id}/doc` | Member | Save ticket doc |
-| GET | `/tables/{tid}/docs-exist` | Member | List row_ids with non-empty docs |
-| GET | `/tables/{tid}/rows/{row_id}/col-doc/{cid}` | Member | Get per-column doc |
-| PUT | `/tables/{tid}/rows/{row_id}/col-doc/{cid}` | Member | Save per-column doc |
+| POST | `/tables/{tid}/rows` | Write | Create row (auto-doc for doc cols) |
+| GET | `/tables/{tid}/rows` | Read | List (offset, limit, sort, filter_json) |
+| GET | `/tables/{tid}/rows/{row_id}` | Read | Get single row |
+| PUT | `/tables/{tid}/rows/{row_id}` | Write | Update row data |
+| DELETE | `/tables/{tid}/rows/{row_id}` | Write | Delete row (+ MinIO cleanup) |
+| GET | `/tables/{tid}/rows/{row_id}/doc` | Read | Get ticket doc (MinIO markdown) |
+| PUT | `/tables/{tid}/rows/{row_id}/doc` | Read | Save ticket doc (route currently checks readability only) |
+| GET | `/tables/{tid}/docs-exist` | Read | List row_ids with non-empty docs |
+| GET | `/tables/{tid}/rows/{row_id}/col-doc/{cid}` | Read | Get per-column doc |
+| PUT | `/tables/{tid}/rows/{row_id}/col-doc/{cid}` | Read | Save per-column doc (route currently checks readability only) |
 
 ## Storage (`/storage`) · Admin (`/admin/users`)
 

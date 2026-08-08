@@ -45,31 +45,34 @@ frontend/src/
   lib/stores/          table_schema, table_schemas, table_rows, table_views, table_workflow, tables, auth, settings
   lib/components/      sidebar/, layout/ (TopBar), table/ (cells/), workflow/, dashboard/
   lib/charts/          EChart.svelte (ECharts 5)
-migration/             V1..V30 SQL + migrate.py (lint→verify→test→apply)
+migration/             V1..V33 SQL + migrate.py (lint→verify→test→apply)
 e2e/                   Playwright + pytest
 ```
 
 ## DB Schema
 
-4 schemas: `public`, `auth`, `gdpr`, `private` (migrations only). See `llm.arch.db.md`.
+4 schemas: `public`, `auth`, `gdpr`, `private` (migration metadata + cache). See `llm.arch.db.md`.
 
 ```
-auth.users · gdpr.user_info · public.workspaces · public.workspace_members
+auth.users · gdpr.user_info · gdpr.user_password
+public.workspaces · public.workspace_members (one row per read/write/owner grant)
 public.tables       (config={columns, view_order, default_view})
 public.table_views  (config={name, type, ...}, view_id BIGINT auto-inc)
 public.rows         (row_data JSONB, row_id BIGINT)
-private.schema_migrations
+private.schema_migrations · private.cache (UNLOGGED)
 ```
 
-- V23 merged table_schemas → tables.config · V26 CHECK on view type · V29 default_view=0 · V30 ON UPDATE CASCADE on FKs
+- V23 merged table_schemas → tables.config · V29 normalizes default_view reads/updates to 0 · V31 PG cache · V32 password table · V33 action-grant RLS
 - PG functions own schema/view mutations — BE repos are thin wrappers. RLS on all public + gdpr tables.
 
 ## Key Patterns
 
 - **Async-native I/O** — sync calls freeze the event loop. See `Skill(developing/fastapi)`.
 - **RLS session** — `get_rls_session` → `app.current_user_id` → PG policies enforce isolation
-- **Migrations** — V1–V14 squashed baseline (v0.40), head **V30**. Flyway format, checksum-tracked. See `Skill(developing/db-sql)`.
+- **Workspace access** — materialized `read`/`write`/`owner` grants; reads and mutations are separated by V33 policies
+- **Migrations** — head **V33**. Flyway format, checksum-tracked. See `Skill(developing/db-sql)`.
 - **FE stores** split by concern; layout = Sidebar + TopBar; cells in `table/cells/`
+- **Known V33 boundary** — backend member APIs use `level=read|write|owner`; the current member-management UI/tests still use the old `role=member|owner` contract (see `llm.frontend.md`)
 
 ## API Routes (`/api/v1/*`)
 

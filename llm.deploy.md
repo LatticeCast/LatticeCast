@@ -1,6 +1,6 @@
 # LLM Context - Deployment
 
-> For general project context, see `llm.md`.
+> For general project context, see `llm.root.md`.
 
 ## Quick Start
 

@@ -12,7 +12,7 @@ Three PG tables. See `migration/test_migration_schema.py` for exact columns.
 | `public.table_views` | `(workspace_id, table_id, view_id BIGINT)` | `config JSONB`, `created_by`, `updated_by` |
 | `public.rows` | `(workspace_id, table_id, row_id BIGINT)` | `row_data JSONB`, `created_by`, `updated_by` |
 
-- `tables.config` shape: `{columns: [{column_id, name, type, options}, ...], view_order: [view_id, ...], default_view: view_id | null}`
+- `tables.config` shape: `{columns: [{column_id, name, type, options}, ...], view_order: [view_id, ...], default_view: view_id | 0 | null}`. The API normalizes null/falsy values to `0` (implicit Table/Schema view); V29 backfilled existing rows and made `update_default_view(null)` write `0`, but the original JSON default and blank seeder can still create null.
 - `table_schemas` was merged into `tables` in `V23__merge_table_schemas_into_tables.sql`
 - `row_id` and `view_id` are per-(workspace_id, table_id) auto-increment BIGINTs (BEFORE INSERT triggers in V7, V9)
 - Column position = array index in `config.columns`; reorder via `update_col_order()`
@@ -29,7 +29,7 @@ All schema mutations go through PG functions (originally V13/V14, rewritten in V
 | `delete_column` | `(ws, tid, column_id, by)` | `config` |
 | `update_col_order` | `(ws, tid, order_jsonb_array, by)` | `config` |
 | `update_view_order` | `(ws, tid, order_jsonb_array, by)` | `config` |
-| `update_default_view` | `(ws, tid, view_id_or_null, by)` | `config` |
+| `update_default_view` | `(ws, tid, view_id_or_null, by)` | `config` (`null` input is normalized to `0`) |
 | `create_view` | `(ws, tid, config, by)` | `config` |
 | `update_view` | `(ws, tid, view_id, patch, by)` | `config` |
 | `delete_view` | `(ws, tid, view_id, by)` | `config` |
@@ -60,8 +60,15 @@ FE renders via `colorToStyle(hex)` — no local color palettes.
 
 ## Templates
 
-`_seed_blank`, `_seed_pm`, `_seed_crm` in `V12__template_functions.sql`.
-Dispatcher: `create_table_from_template(ws, tid, kind, by)` (rewritten in V23 to UPDATE `public.tables`).
+`_seed_blank`, `_seed_pm`, `_seed_crm` start in `V12__template_functions.sql`;
+V27 adds `_seed_workflow` and extends the dispatcher.
+`create_table_from_template(ws, tid, kind, by)` is rewritten in V23 to update `public.tables.config`.
+
+## Workspace Authorization (V33)
+
+All three tables use action-grant RLS: `read` controls SELECT and `write`
+controls INSERT/UPDATE/DELETE. `get_rls_session` sets
+`app.current_user_id`; the policies call `check_workspace_permission`.
 
 ## BE Router
 
@@ -78,4 +85,5 @@ Models: `backend/src/models/table.py`, `backend/src/models/table_view.py`.
 
 ## URL Pattern
 
-`/<workspace_id>/<table_id>/<row_id>` — all IDs, no names in URLs.
+`/<workspace_id>/<table_id>/<row_id>` — workspace accepts UUID or workspace
+name; `table_id` is the table's case-insensitive name; `row_id` is BIGINT.

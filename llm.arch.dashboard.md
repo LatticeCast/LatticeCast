@@ -2,7 +2,7 @@
 
 ## Overview
 
-Dashboard is a fourth view type (alongside Table/Kanban/Timeline). It renders **aggregates** over rows via LatticeQL block queries — counts, sums, group-bys — not raw rows. Chart library: **ECharts** (replaced chart.js). Terminology: **blocks** (not widgets).
+Dashboard is a view type alongside Table, Kanban, Timeline, and Workflow. It renders **aggregates** over rows via LatticeQL block queries — counts, sums, group-bys — not raw rows. Chart library: **ECharts** (replaced chart.js). Terminology: **blocks** (not widgets).
 
 ## View Config Shape (`table_views.config` for type=dashboard)
 
@@ -59,7 +59,11 @@ Files: `router/api/dashboard.py`, `repository/dashboard.py`, `config/lattice_ql.
 lattice-ql @ git+https://github.com/latticeCast/LatticeQL@v0.2.0
 ```
 
-`config/lattice_ql.py`: `compile(lql, schema)` → SQL. Schema built from `__schema__` rows per table, cached in Postgres 60s via `config/pg_cache.py` (`private.cache`, key `lql:schema:{workspace_id}`). `invalidate_schema_cache()` exported for column changes.
+`config/lattice_ql.py`: `compile(lql, schema)` → SQL. Schema is built from
+each table's `tables.config.columns` via `TableViewRepository.get_tables_schema`,
+then cached in PostgreSQL for 60s through `config/pg_cache.py`
+(`private.cache`, key `lql:schema:{workspace_id}`). Column mutations call
+`invalidate_schema_cache()`.
 
 Adapter rewrites: `_inline_workspace()` (replace `$1`), `_fix_table_name()` (subquery → direct filter). Upstream is pure Python (hatchling) — bump git ref in `backend/pyproject.toml` to upgrade.
 

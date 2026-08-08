@@ -1,6 +1,6 @@
 # LLM Context - Storage System
 
-> **Note:** For general project context, see `llm.md`.
+> **Note:** For general project context, see `llm.root.md`.
 
 S3-compatible object storage using MinIO for user data persistence (activity history, preferences, etc.).
 
@@ -79,8 +79,8 @@ async function saveJson<T>(path: string, data: T): Promise<boolean>
 
 ```bash
 MINIO_ENDPOINT=minio:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin
+MINIO_ACCESS_KEY=_minio_user
+MINIO_SECRET_KEY=_minio_password
 MINIO_BUCKET=lattice-cast
 MINIO_SECURE=false
 ```
