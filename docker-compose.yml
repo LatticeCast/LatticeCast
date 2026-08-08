@@ -83,7 +83,7 @@ services:
     networks:
       - app-network
 
-  # See Skill(developing-db-sql) for migration commands (lint/test/apply/hash).
+  # See Skill(developing/db-sql) for migration commands (lint/test/apply/hash).
   migration:
     profiles:
       - migration

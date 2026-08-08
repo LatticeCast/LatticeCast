@@ -93,10 +93,10 @@ async def bootstrap_user(
     workspace = Workspace(workspace_name=email)
     login_session.add(workspace)
     await login_session.flush()
-    member = WorkspaceMember(
-        workspace_id=workspace.workspace_id, user_id=user.user_id, role="owner"
-    )
-    login_session.add(member)
+    # V33: owner is materialized as read+write+owner rows, not a single
+    # role — mirrors what the create_workspace PG function does.
+    for action in ("read", "write", "owner"):
+        login_session.add(WorkspaceMember(workspace_id=workspace.workspace_id, user_id=user.user_id, action=action))
     await login_session.commit()
     await login_session.refresh(user)
     _ = app_session  # kept for API compatibility; not used in bootstrap

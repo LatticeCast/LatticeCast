@@ -73,65 +73,23 @@ class TestWorkspaceRepositoryCreate:
         _run(_run_test())
 
 
-class TestWorkspaceRepositoryAddMember:
-    def test_refresh_called_once_after_commit(self):
-        """add_member() adds WorkspaceMember to session, commits, then refreshes — attached."""
+class TestWorkspaceRepositoryGrant:
+    """V33: add_member()/update_member_role() were replaced by grant(), which
+    calls the grant_workspace_action PG function via raw SQL — no ORM
+    WorkspaceMember instance is created or loaded, so unlike the other
+    repository methods in this file, it must NOT call session.refresh()."""
 
+    def test_executes_grant_function_and_commits_without_refresh(self):
         async def _run_test():
             from repository.workspace import WorkspaceRepository
 
             session = _make_session()
+            session.execute = AsyncMock()
             repo = WorkspaceRepository(session)
-            member = await repo.add_member(uuid4(), uuid4(), role="member")
+            await repo.grant(uuid4(), uuid4(), "write")
+
+            session.execute.assert_called_once()
             session.commit.assert_called_once()
-            session.refresh.assert_called_once()
-            assert session.refresh.call_args == call(member)
-
-        _run(_run_test())
-
-
-class TestWorkspaceRepositoryUpdateMemberRole:
-    def test_refresh_called_on_orm_loaded_member(self):
-        """update_member_role() loads member via ORM select then refreshes — attached."""
-
-        async def _run_test():
-            from models.workspace import WorkspaceMember
-            from repository.workspace import WorkspaceRepository
-
-            workspace_id = uuid4()
-            user_id = uuid4()
-            existing_member = WorkspaceMember(workspace_id=workspace_id, user_id=user_id, role="member")
-
-            session = _make_session()
-            scalar_result = MagicMock()
-            scalar_result.scalar_one_or_none.return_value = existing_member
-            session.execute = AsyncMock(return_value=scalar_result)
-
-            repo = WorkspaceRepository(session)
-            result = await repo.update_member_role(workspace_id, user_id, "owner")
-
-            assert result is not None
-            session.commit.assert_called_once()
-            session.refresh.assert_called_once()
-            assert session.refresh.call_args == call(existing_member)
-
-        _run(_run_test())
-
-    def test_returns_none_when_member_not_found(self):
-        """update_member_role() returns None without calling refresh if member missing."""
-
-        async def _run_test():
-            from repository.workspace import WorkspaceRepository
-
-            session = _make_session()
-            scalar_result = MagicMock()
-            scalar_result.scalar_one_or_none.return_value = None
-            session.execute = AsyncMock(return_value=scalar_result)
-
-            repo = WorkspaceRepository(session)
-            result = await repo.update_member_role(uuid4(), uuid4(), "owner")
-
-            assert result is None
             session.refresh.assert_not_called()
 
         _run(_run_test())

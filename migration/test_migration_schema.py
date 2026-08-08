@@ -20,10 +20,10 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "workspaces", "workspace_name", "character varying"),
     ("public", "workspaces", "created_at", "timestamp"),
     ("public", "workspaces", "updated_at", "timestamp"),
-    # public.workspace_members
+    # public.workspace_members (V33: role → multi-row action grant)
     ("public", "workspace_members", "workspace_id", "uuid"),
     ("public", "workspace_members", "user_id", "uuid"),
-    ("public", "workspace_members", "role", "character varying"),
+    ("public", "workspace_members", "action", "character varying"),
     # public.tables (V23: merged table_schemas into tables)
     ("public", "tables", "workspace_id", "uuid"),
     ("public", "tables", "table_id", "character varying"),
@@ -67,6 +67,7 @@ FORBIDDEN_COLUMNS: list[tuple[str, str, str]] = [
     ("public", "table_views", "name"),       # in config jsonb now
     ("public", "table_views", "type"),       # in config jsonb now
     ("public", "table_views", "is_default"), # default_view in tables.config
+    ("public", "workspace_members", "role"), # V33: replaced by action
 ]
 
 
@@ -149,15 +150,15 @@ def verify(psql_fn) -> list[str]:
             "public.table_views.table_views_one_default (V41 drop)"
         )
 
-    # RLS policy on table_views still in place
+    # RLS policy on table_views still in place (V33: read/write split)
     result = psql_fn(
         "SELECT 1 FROM pg_policies "
         "WHERE schemaname='public' AND tablename='table_views' "
-        "  AND policyname='table_views_workspace_member';"
+        "  AND policyname='table_views_read';"
     )
     if not result:
         errors.append(
-            "MISSING RLS POLICY: public.table_views.table_views_workspace_member"
+            "MISSING RLS POLICY: public.table_views.table_views_read"
         )
 
     # v40: PK is (workspace_id, table_id, view_id BIGINT)
@@ -249,5 +250,59 @@ def verify(psql_fn) -> list[str]:
             f"WRONG RESULT: immutable_iso_to_ts('2025-05-15') "
             f"expected '2025-05-15' got '{result.strip()}'"
         )
+
+    # V33: workspace_members PK is (workspace_id, user_id, action) —
+    # multiple rows per member, one per granted action.
+    result = psql_fn(
+        "SELECT string_agg(kcu.column_name, ',' "
+        "  ORDER BY kcu.ordinal_position) "
+        "FROM information_schema.table_constraints tc "
+        "JOIN information_schema.key_column_usage kcu "
+        "  ON tc.constraint_name = kcu.constraint_name "
+        "  AND tc.table_schema = kcu.table_schema "
+        "WHERE tc.table_schema='public' "
+        "  AND tc.table_name='workspace_members' "
+        "  AND tc.constraint_type='PRIMARY KEY';"
+    )
+    expected_pk = "workspace_id,user_id,action"
+    if result.strip() != expected_pk:
+        errors.append(
+            f"WRONG PK: workspace_members expected '{expected_pk}' "
+            f"got '{result.strip()}'"
+        )
+
+    # V33: action CHECK constraint restricts to read/write/owner.
+    result = psql_fn(
+        "SELECT 1 FROM pg_constraint "
+        "WHERE conrelid = 'public.workspace_members'::regclass "
+        "  AND conname = 'workspace_members_action_check' "
+        "  AND contype = 'c';"
+    )
+    if not result:
+        errors.append(
+            "MISSING CHECK: workspace_members_action_check (V33)"
+        )
+
+    # V33: check_workspace_permission replaces check_workspace_member.
+    result = psql_fn(
+        "SELECT 1 FROM pg_proc WHERE proname='check_workspace_permission';"
+    )
+    if not result:
+        errors.append("MISSING FUNCTION: check_workspace_permission (V33)")
+
+    result = psql_fn(
+        "SELECT 1 FROM pg_proc WHERE proname='check_workspace_member';"
+    )
+    if result:
+        errors.append(
+            "FORBIDDEN FUNCTION still present: check_workspace_member (V33 drop)"
+        )
+
+    # V33: grant_workspace_action does the atomic multi-row grant/revoke.
+    result = psql_fn(
+        "SELECT 1 FROM pg_proc WHERE proname='grant_workspace_action';"
+    )
+    if not result:
+        errors.append("MISSING FUNCTION: grant_workspace_action (V33)")
 
     return errors

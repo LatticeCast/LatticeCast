@@ -66,9 +66,9 @@ private.schema_migrations
 
 ## Key Patterns
 
-- **Async-native I/O** — sync calls freeze the event loop. See `Skill(developing-fastapi)`.
+- **Async-native I/O** — sync calls freeze the event loop. See `Skill(developing/fastapi)`.
 - **RLS session** — `get_rls_session` → `app.current_user_id` → PG policies enforce isolation
-- **Migrations** — V1–V14 squashed baseline (v0.40), head **V30**. Flyway format, checksum-tracked. See `Skill(developing-db-sql)`.
+- **Migrations** — V1–V14 squashed baseline (v0.40), head **V30**. Flyway format, checksum-tracked. See `Skill(developing/db-sql)`.
 - **FE stores** split by concern; layout = Sidebar + TopBar; cells in `table/cells/`
 
 ## API Routes (`/api/v1/*`)

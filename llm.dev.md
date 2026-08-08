@@ -1,6 +1,6 @@
 # Dev Guide
 
-> Deploy: `llm.deploy.md` | Schema: `llm.arch.db.md` | Skills: `Skill(developing-fastapi)`, `Skill(developing-db-sql)`
+> Deploy: `llm.deploy.md` | Schema: `llm.arch.db.md` | Skills: `Skill(developing/fastapi)`, `Skill(developing/db-sql)`
 
 ## Bootstrap (from zero)
 
@@ -43,7 +43,7 @@ docker compose up frontend -d       # Vite dev, HMR auto
 docker compose exec frontend npm run lint && docker compose exec frontend npm run build
 ```
 
-Playwright snapshot (MUST after FE changes) — see `Skill(developing-debug-frontend)`:
+Playwright snapshot (MUST after FE changes) — see `Skill(developing/debug-frontend)`:
 ```bash
 docker compose --profile test up -d browser
 docker compose exec browser python3 browser/snapshot_page.py <path>
@@ -62,7 +62,7 @@ Host `./backend/` bind-mounted to `/app/`. Log rotation: `json-file`, 100m × 50
 **Deps change**: rebuild image (`docker compose build backend && docker compose restart backend`).
 `lattice-ql`: bump tag in `backend/pyproject.toml`, rebuild.
 
-**Async rule**: all I/O must be awaitable — sync calls freeze the event loop. See `Skill(developing-fastapi)`.
+**Async rule**: all I/O must be awaitable — sync calls freeze the event loop. See `Skill(developing/fastapi)`.
 
 ## Migrations
 
@@ -74,7 +74,7 @@ docker compose --profile migration run --rm migration
 git add migration/V<N>__*.sql migration/checksums.txt
 ```
 
-See `Skill(developing-db-sql)` for full workflow.
+See `Skill(developing/db-sql)` for full workflow.
 
 ## E2E Tests
 
@@ -87,7 +87,7 @@ docker compose exec e2e pytest e2e/workspace/test_create.py -v   # single test
 docker compose exec e2e pytest                                    # all tests
 ```
 
-See `Skill(developing-e2e)`.
+See `Skill(developing/e2e)`.
 
 ## curl Smoke Tests
 

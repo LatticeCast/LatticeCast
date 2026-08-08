@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 from sqlmodel import Field, SQLModel
 
-MemberRoleType = Literal["owner", "member"]
+ActionType = Literal["read", "write", "owner"]
 
 
 class Workspace(SQLModel, table=True):
@@ -20,13 +20,23 @@ class Workspace(SQLModel, table=True):
 
 
 class WorkspaceMember(SQLModel, table=True):
-    """Workspace member database model (composite PK)"""
+    """Workspace action-grant row (composite PK: workspace_id, user_id, action) — V33.
+
+    One row per granted action, NOT one row per member: a member with
+    'write' access has two rows (read + write), an owner has three
+    (read + write + owner). Owner is materialized this way rather than
+    encoded via hierarchy logic so every RLS check on this table (and
+    on tables/rows/table_views/workspaces) stays a flat equality
+    lookup. Use `repository.workspace.WorkspaceRepository` helpers
+    (which aggregate rows into a single level per member) rather than
+    querying this model directly for member-facing responses.
+    """
 
     __tablename__ = "workspace_members"
 
     workspace_id: UUID = Field(primary_key=True, foreign_key="workspaces.workspace_id", description="Workspace UUID")
     user_id: UUID = Field(primary_key=True, foreign_key="auth.users.user_id", description="User UUID")
-    role: str = Field(default="member", description="Member role (owner/member)")
+    action: str = Field(primary_key=True, description="Granted action (read/write/owner)")
 
 
 class WorkspaceCreate(SQLModel):
@@ -63,7 +73,9 @@ class MemberCreate(SQLModel):
     user_id: UUID | None = Field(default=None, description="User UUID")
     user_name: str | None = Field(default=None, description="User user_name (e.g. lattice)")
     user_email: str | None = Field(default=None, description="User email")
-    role: MemberRoleType = Field(default="member", description="Member role")
+    level: ActionType = Field(
+        default="write", description="Access level — implies every action at or below it (owner ⊇ write ⊇ read)"
+    )
 
 
 class MemberResponse(SQLModel):
@@ -71,7 +83,7 @@ class MemberResponse(SQLModel):
 
     workspace_id: UUID = Field(..., description="Workspace UUID")
     user_id: UUID = Field(..., description="User UUID")
-    role: MemberRoleType = Field(..., description="Member role")
+    level: ActionType = Field(..., description="Access level (highest of the member's granted actions)")
 
     model_config = {
         "json_schema_extra": {
@@ -79,7 +91,7 @@ class MemberResponse(SQLModel):
                 {
                     "workspace_id": "00000000-0000-0000-0000-000000000000",
                     "user_id": "00000000-0000-0000-0000-000000000000",
-                    "role": "owner",
+                    "level": "owner",
                 }
             ]
         }
@@ -93,10 +105,10 @@ class MemberFullResponse(SQLModel):
     user_id: UUID = Field(..., description="User UUID")
     user_name: str | None = Field(default=None, description="User handle from user_info")
     email: str | None = Field(default=None, description="User email from auth.gdpr")
-    role: MemberRoleType = Field(..., description="Member role")
+    level: ActionType = Field(..., description="Access level (highest of the member's granted actions)")
 
 
-class MemberRoleUpdate(SQLModel):
-    """Schema for updating a member's role"""
+class MemberLevelUpdate(SQLModel):
+    """Schema for updating a member's access level"""
 
-    role: MemberRoleType = Field(..., description="New role (owner/member)")
+    level: ActionType = Field(..., description="New access level (read/write/owner)")

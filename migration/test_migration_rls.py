@@ -46,11 +46,15 @@ def verify(psql_fn) -> list[str]:
         if "t" not in (result or ""):
             errors.append(f"RLS NOT ENABLED: public.{table}")
 
-    # Structural: policies exist
+    # Structural: policies exist (V33: read/write split, no more single
+    # *_workspace_member policy)
     for table, policy in [
-        ("tables", "tables_workspace_member"),
-        ("rows", "rows_workspace_member"),
-        ("table_views", "table_views_workspace_member"),
+        ("tables", "tables_read"),
+        ("tables", "tables_write_insert"),
+        ("rows", "rows_read"),
+        ("rows", "rows_write_insert"),
+        ("table_views", "table_views_read"),
+        ("table_views", "table_views_write_insert"),
     ]:
         result = psql_fn(
             f"SELECT 1 FROM pg_policies "
@@ -59,7 +63,7 @@ def verify(psql_fn) -> list[str]:
         if not result:
             errors.append(f"MISSING POLICY: {table}.{policy}")
 
-    for func in ("check_workspace_member",):
+    for func in ("check_workspace_permission", "grant_workspace_action"):
         result = psql_fn(f"SELECT 1 FROM pg_proc WHERE proname='{func}';")
         if not result:
             errors.append(f"MISSING FUNCTION: {func}")
@@ -79,10 +83,15 @@ def verify(psql_fn) -> list[str]:
         f"INSERT INTO public.workspaces (workspace_id, workspace_name) VALUES "
         f"('{_WS_A}'::uuid,'tv_rls_wsa'),('{_WS_B}'::uuid,'tv_rls_wsb') "
         f"ON CONFLICT (workspace_id) DO NOTHING; "
-        f"INSERT INTO public.workspace_members (workspace_id, user_id, role) "
-        f"VALUES ('{_WS_A}'::uuid,'{_USER_A}'::uuid,'owner'),"
+        f"INSERT INTO public.workspace_members (workspace_id, user_id, action) "
+        f"VALUES "
+        f"('{_WS_A}'::uuid,'{_USER_A}'::uuid,'read'),"
+        f"('{_WS_A}'::uuid,'{_USER_A}'::uuid,'write'),"
+        f"('{_WS_A}'::uuid,'{_USER_A}'::uuid,'owner'),"
+        f"('{_WS_B}'::uuid,'{_USER_B}'::uuid,'read'),"
+        f"('{_WS_B}'::uuid,'{_USER_B}'::uuid,'write'),"
         f"('{_WS_B}'::uuid,'{_USER_B}'::uuid,'owner') "
-        f"ON CONFLICT (workspace_id, user_id) DO NOTHING; "
+        f"ON CONFLICT (workspace_id, user_id, action) DO NOTHING; "
         f"INSERT INTO public.tables (workspace_id, table_id) VALUES "
         f"('{_WS_A}'::uuid,'tv_rls_tbl_a'),"
         f"('{_WS_B}'::uuid,'tv_rls_tbl_b') "
@@ -181,6 +190,33 @@ def verify(psql_fn) -> list[str]:
     if count != "0":
         errors.append(
             "RLS BEHAVIORAL: user A cannot DELETE in own workspace table_views"
+        )
+
+    # V33: workspace_members is owner-only, even for SELECT. Both seeded
+    # users hold 'owner' on their own workspace, so this is a
+    # same-workspace-different-owner-only check: user A has no grant of
+    # any kind on workspace B, so this doubles as a membership-visibility
+    # isolation check too.
+    count = _as_app(
+        psql_fn,
+        _USER_A,
+        f"SELECT COUNT(*) FROM public.workspace_members "
+        f"WHERE workspace_id = '{_WS_A}'::uuid;",
+    )
+    if not count.isdigit() or int(count) == 0:
+        errors.append(
+            "RLS BEHAVIORAL: owner cannot SELECT own workspace_members"
+        )
+
+    count = _as_app(
+        psql_fn,
+        _USER_A,
+        f"SELECT COUNT(*) FROM public.workspace_members "
+        f"WHERE workspace_id = '{_WS_B}'::uuid;",
+    )
+    if count.isdigit() and int(count) > 0:
+        errors.append(
+            "RLS BEHAVIORAL: user A can SELECT workspace B's workspace_members"
         )
 
     return errors

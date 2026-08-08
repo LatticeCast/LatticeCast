@@ -1,4 +1,5 @@
-.claude/
+.agent-skills/
+
 *.pyc
 .ruff_cache/
 

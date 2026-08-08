@@ -13,10 +13,9 @@ from models.user import User
 from models.workspace import (
     MemberCreate,
     MemberFullResponse,
-    MemberRoleUpdate,
+    MemberLevelUpdate,
     Workspace,
     WorkspaceCreate,
-    WorkspaceMember,
     WorkspaceResponse,
 )
 from repository.user import resolve_user_by_email
@@ -67,28 +66,9 @@ async def _get_workspace_or_404(workspace_id: str, repo: WorkspaceRepository):
     return workspace
 
 
-async def _require_owner(workspace_id: UUID, user_id: UUID, session: AsyncSession):
-    result = await session.execute(
-        select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.user_id == user_id,
-            WorkspaceMember.role == "owner",
-        )
-    )
-    if result.scalar_one_or_none() is None:
+async def _require_owner(workspace_id: UUID, user_id: UUID, repo: WorkspaceRepository):
+    if not await repo.is_owner(workspace_id, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner access required")
-
-
-async def _count_owners(workspace_id: UUID, session: AsyncSession) -> int:
-    result = await session.execute(
-        select(func.count())
-        .select_from(WorkspaceMember)
-        .where(
-            WorkspaceMember.workspace_id == workspace_id,
-            WorkspaceMember.role == "owner",
-        )
-    )
-    return result.scalar_one()
 
 
 @router.post("", response_model=WorkspaceResponse, status_code=status.HTTP_201_CREATED)
@@ -99,10 +79,11 @@ async def create_workspace(
 ):
     """Create a new workspace; creator becomes owner.
 
-    Delegates to V17 SECURITY DEFINER PG function `create_workspace`
-    which inserts the workspace + owner-member row atomically. Bypasses
-    RLS at INSERT time (the creator isn't a member yet); per-row
-    permissions kick back in on subsequent reads.
+    Delegates to the SECURITY DEFINER PG function `create_workspace`
+    (V17, updated by V33) which inserts the workspace + creator's
+    read+write+owner rows atomically. Bypasses RLS at INSERT time (the
+    creator isn't a member yet); per-row permissions kick back in on
+    subsequent reads.
     """
     if data.workspace_name.lower() in RESERVED_WORKSPACE_NAMES:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That workspace name is reserved")
@@ -127,7 +108,7 @@ async def list_workspaces(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """List all workspaces the current user is a member of"""
+    """List all workspaces the current user can read"""
     repo = WorkspaceRepository(session)
     return await repo.list_by_user(user.user_id)
 
@@ -138,11 +119,14 @@ async def list_members(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """List all members of a workspace (must be a member). Returns user_name and email joined from auth tables."""
+    """List all members of a workspace (owner only — see V33: workspace_members
+    RLS is owner-gated for every command, including SELECT). Returns each
+    member's user_name/email joined from auth tables, aggregated to their
+    highest access level.
+    """
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
-    if not await repo.is_member(workspace.workspace_id, user.user_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of this workspace")
+    await _require_owner(workspace.workspace_id, user.user_id, repo)
     return await repo.get_members_with_info(workspace.workspace_id)
 
 
@@ -153,14 +137,14 @@ async def add_member(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Add a member to a workspace (owner only)"""
+    """Add a member to a workspace at the given access level (owner only)"""
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
-    await _require_owner(workspace.workspace_id, user.user_id, session)
+    await _require_owner(workspace.workspace_id, user.user_id, repo)
     new_member = await _resolve_member_user(data, session)
     if await repo.is_member(workspace.workspace_id, new_member.user_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User is already a member")
-    await repo.add_member(workspace_id=workspace.workspace_id, user_id=new_member.user_id, role=data.role)
+    await repo.grant(workspace_id=workspace.workspace_id, user_id=new_member.user_id, level=data.level)
     return await repo.get_member_with_info(workspace.workspace_id, new_member.user_id)
 
 
@@ -168,14 +152,14 @@ async def add_member(
 async def update_member_role(
     workspace_id: str,
     member_user_id: str,
-    data: MemberRoleUpdate,
+    data: MemberLevelUpdate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Update a member's role (owner only). Blocks demotion of the last owner."""
+    """Update a member's access level (owner only). Blocks demoting the last owner."""
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
-    await _require_owner(workspace.workspace_id, user.user_id, session)
+    await _require_owner(workspace.workspace_id, user.user_id, repo)
     member_data = MemberCreate(user_name=member_user_id)
     try:
         member_data.user_id = UUID(member_user_id)
@@ -185,18 +169,10 @@ async def update_member_role(
     target = await _resolve_member_user(member_data, session)
     if not await repo.is_member(workspace.workspace_id, target.user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
-    if data.role != "owner":
-        result = await session.execute(
-            select(WorkspaceMember).where(
-                WorkspaceMember.workspace_id == workspace.workspace_id,
-                WorkspaceMember.user_id == target.user_id,
-                WorkspaceMember.role == "owner",
-            )
-        )
-        if result.scalar_one_or_none() is not None:
-            if await _count_owners(workspace.workspace_id, session) <= 1:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot demote the last owner")
-    await repo.update_member_role(workspace.workspace_id, target.user_id, data.role)
+    if data.level != "owner" and await repo.is_owner(workspace.workspace_id, target.user_id):
+        if await repo.count_owners(workspace.workspace_id) <= 1:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot demote the last owner")
+    await repo.grant(workspace.workspace_id, target.user_id, data.level)
     return await repo.get_member_with_info(workspace.workspace_id, target.user_id)
 
 
@@ -210,7 +186,7 @@ async def remove_member(
     """Remove a member from a workspace (owner only). member_user_id can be UUID or user_name."""
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
-    await _require_owner(workspace.workspace_id, user.user_id, session)
+    await _require_owner(workspace.workspace_id, user.user_id, repo)
     member_data = MemberCreate(user_name=member_user_id)
     try:
         member_data.user_id = UUID(member_user_id)
@@ -220,15 +196,8 @@ async def remove_member(
     member = await _resolve_member_user(member_data, session)
     if not await repo.is_member(workspace.workspace_id, member.user_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
-    result = await session.execute(
-        select(WorkspaceMember).where(
-            WorkspaceMember.workspace_id == workspace.workspace_id,
-            WorkspaceMember.user_id == member.user_id,
-            WorkspaceMember.role == "owner",
-        )
-    )
-    if result.scalar_one_or_none() is not None:
-        if await _count_owners(workspace.workspace_id, session) <= 1:
+    if await repo.is_owner(workspace.workspace_id, member.user_id):
+        if await repo.count_owners(workspace.workspace_id) <= 1:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove the last owner")
     await repo.remove_member(workspace_id=workspace.workspace_id, user_id=member.user_id)
 
@@ -239,12 +208,15 @@ async def get_workspace(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Get a workspace by ID (must be a member)"""
+    """Get a workspace by ID (must be able to read it).
+
+    No separate membership check here: `workspaces_read` RLS (V33)
+    already scopes the underlying SELECT to workspaces the caller holds
+    a 'read' grant on, so an unreadable workspace_id resolves to 404
+    via `_get_workspace_or_404` rather than a distinct 403.
+    """
     repo = WorkspaceRepository(session)
-    workspace = await _get_workspace_or_404(workspace_id, repo)
-    if not await repo.is_member(workspace.workspace_id, user.user_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of this workspace")
-    return workspace
+    return await _get_workspace_or_404(workspace_id, repo)
 
 
 @router.put("/{workspace_id}", response_model=WorkspaceResponse)
@@ -259,7 +231,7 @@ async def update_workspace(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That workspace name is reserved")
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
-    await _require_owner(workspace.workspace_id, user.user_id, session)
+    await _require_owner(workspace.workspace_id, user.user_id, repo)
 
     # Check uniqueness: workspace_name is globally unique
     conflict = await session.execute(
@@ -288,6 +260,6 @@ async def delete_workspace(
     """Delete a workspace (owner only)"""
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
-    await _require_owner(workspace.workspace_id, user.user_id, session)
+    await _require_owner(workspace.workspace_id, user.user_id, repo)
     await session.delete(workspace)
     await session.commit()
