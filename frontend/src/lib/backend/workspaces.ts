@@ -6,7 +6,12 @@ import { get } from 'svelte/store';
 import { BACKEND_URL } from './config';
 import { getAuthHeaders } from './http';
 import { workspaces, currentWorkspaceId, tables } from '$lib/stores/table_schemas.store';
-import type { Workspace, WorkspaceMemberFull } from '$lib/types/table';
+import {
+	deleteWorkspaceMember,
+	setWorkspaceMembers,
+	upsertWorkspaceMember
+} from '$lib/stores/workspace_members.store';
+import type { Workspace, WorkspaceAccessLevel, WorkspaceMemberFull } from '$lib/types/table';
 
 export interface CreateWorkspace {
 	workspace_name: string;
@@ -18,8 +23,9 @@ export interface UpdateWorkspace {
 
 export interface AddMember {
 	user_id?: string;
+	user_name?: string;
 	user_email?: string;
-	role?: string;
+	level: WorkspaceAccessLevel;
 }
 
 // ─── Workspaces ───────────────────────────────────────────────────────────────
@@ -87,7 +93,9 @@ export async function fetchMembers(workspaceId: string): Promise<WorkspaceMember
 		headers
 	});
 	if (!response.ok) throw new Error(`Failed to fetch members: ${response.statusText}`);
-	return response.json();
+	const result: WorkspaceMemberFull[] = await response.json();
+	setWorkspaceMembers(workspaceId, result);
+	return result;
 }
 
 export async function addMember(
@@ -104,13 +112,15 @@ export async function addMember(
 		const body = await response.json().catch(() => ({}));
 		throw new Error(body.detail || `Failed to add member: ${response.statusText}`);
 	}
-	return response.json();
+	const member: WorkspaceMemberFull = await response.json();
+	upsertWorkspaceMember(workspaceId, member);
+	return member;
 }
 
-export async function updateMemberRole(
+export async function updateMemberLevel(
 	workspaceId: string,
 	userId: string,
-	role: string
+	level: WorkspaceAccessLevel
 ): Promise<WorkspaceMemberFull> {
 	const headers = await getAuthHeaders();
 	const response = await fetch(
@@ -118,14 +128,16 @@ export async function updateMemberRole(
 		{
 			method: 'PUT',
 			headers,
-			body: JSON.stringify({ role })
+			body: JSON.stringify({ level })
 		}
 	);
 	if (!response.ok) {
 		const body = await response.json().catch(() => ({}));
-		throw new Error(body.detail || `Failed to update role: ${response.statusText}`);
+		throw new Error(body.detail || `Failed to update access level: ${response.statusText}`);
 	}
-	return response.json();
+	const member: WorkspaceMemberFull = await response.json();
+	upsertWorkspaceMember(workspaceId, member);
+	return member;
 }
 
 export async function removeMember(workspaceId: string, userId: string): Promise<void> {
@@ -141,4 +153,5 @@ export async function removeMember(workspaceId: string, userId: string): Promise
 		const body = await response.json().catch(() => ({}));
 		throw new Error(body.detail || `Failed to remove member: ${response.statusText}`);
 	}
+	deleteWorkspaceMember(workspaceId, userId);
 }

@@ -41,11 +41,11 @@ Requires the full stack running (`docker compose up -d`) plus the `browser` cont
 | `tables/` | `column_add`, `column_delete`, `column_rename`, `column_checkbox_type`, `column_doc_type`, `column_tags_type`, `column_url_type`, `column_option_add_remove`, `column_option_colors`, `col_order`, `col_resize`, `filter`, `inline_edit`, `search`, `row_create`, `row_delete`, `row_update`, `row_doc_round_trip`, `row_filter_json`, `table_create` |
 | `table_views/` | `views_create`, `views_delete`, `views_default`, `views_order`, `views_rename`, `kanban_add_row`, `kanban_card_fields`, `kanban_drag_card`, `kanban_groupby`, `timeline_color_by`, `timeline_granularity`, `timeline_groupby` |
 | `template/` | `pm`, `crm`, `workflow`, `seo_framework` |
-| `workspace/` | `create`, `delete_cascade`, `rename`, `sidebar`, `member_invite`, `member_remove`, `member_role` |
+| `workspace/` | `create`, `delete_cascade`, `rename`, `sidebar`, `member_invite`, `member_remove`, `member_level` |
 
-The three `member_*` tests still encode the pre-V33 `role=member|owner`
-contract. The current backend expects `level=read|write|owner`, so those tests
-are transition coverage rather than passing V33 coverage until updated.
+Workspace member tests use the V33 `level=read|write|owner` contract. They
+cover the default write invite, write→owner→read changes, last-owner
+protection, removal, and access revocation.
 
 ## Fixtures (`conftest.py`)
 

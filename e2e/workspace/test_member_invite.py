@@ -1,5 +1,5 @@
 """
-E2E test: task-48 — add member by user_name/email
+E2E test: add a workspace member by email with write access
 
 Verifies:
   1. Setup: create workspace + second test user via API.
@@ -22,12 +22,8 @@ SCREENSHOT_DIR = "/output"
 
 
 def snap(page, name: str, snapshot: bool) -> None:
-    if not snapshot:
-        return
-    try:
+    if snapshot:
         page.screenshot(path=f"{SCREENSHOT_DIR}/{name}.png", full_page=True)
-    except Exception:
-        pass
 
 
 def test_member_invite(authed_page, workspace, admin_token, snapshot):
@@ -60,6 +56,9 @@ def test_member_invite(authed_page, workspace, admin_token, snapshot):
         email_input.wait_for(state="visible", timeout=5000)
         add_btn = page.get_by_test_id("member-add-btn")
         add_btn.wait_for(state="visible", timeout=5000)
+        level_select = page.get_by_test_id("member-level-select")
+        level_select.wait_for(state="visible", timeout=5000)
+        assert level_select.input_value() == "write"
 
         # ── Step 5: Invite member by email ───────────────────────────────────
         print(f"[5] UI: add member '{invitee_email}'")
@@ -74,6 +73,8 @@ def test_member_invite(authed_page, workspace, admin_token, snapshot):
         # Wait for the new member row to appear in the list
         member_row = page.get_by_test_id(f"member-row-{invitee_user_id}")
         member_row.wait_for(state="visible", timeout=5000)
+        member_level = page.get_by_test_id(f"level-select-{invitee_user_id}")
+        assert member_level.input_value() == "write"
         snap(page, "t48_03_member_added", snapshot)
         print("    UI: member row visible")
 
@@ -84,9 +85,11 @@ def test_member_invite(authed_page, workspace, admin_token, snapshot):
         members = r.json()
         invitee = next((m for m in members if m["user_id"] == invitee_user_id), None)
         assert invitee is not None, f"Invitee not in members: {[m['user_id'] for m in members]}"
-        assert invitee["role"] == "member", f"Expected role 'member', got '{invitee['role']}'"
+        assert invitee["level"] == "write", (
+            f"Expected level 'write', got '{invitee['level']}'"
+        )
         assert invitee["email"] == invitee_email, f"Email mismatch: {invitee['email']}"
-        print(f"    BE: found member role={invitee['role']} email={invitee['email']}")
+        print(f"    BE: found member level={invitee['level']} email={invitee['email']}")
 
         # ── Step 7: UI — invite non-existent email → error ───────────────────
         print("[7] UI: invite non-existent email → error")
@@ -126,7 +129,6 @@ def test_member_invite(authed_page, workspace, admin_token, snapshot):
         # ── Teardown: invitee user (workspace cleanup handled by fixture) ────
         print("[9] Teardown: delete invitee user")
         r = api("DELETE", f"/api/v1/admin/users/{invitee_email}", admin_token)
-        if r.status_code not in (204, 404):
-            print(f"    WARN: delete user returned {r.status_code}")
+        assert r.status_code in (204, 404)
 
     print("PASS: e2e_test_workspace_member_invite")

@@ -88,10 +88,12 @@ export interface Workspace {
 	updated_at: string;
 }
 
+export type WorkspaceAccessLevel = 'read' | 'write' | 'owner';
+
 export interface WorkspaceMember {
 	workspace_id: UUID;
 	user_id: UUID;
-	role: string;
+	level: WorkspaceAccessLevel;
 }
 
 export interface WorkspaceMemberFull {
@@ -99,7 +101,7 @@ export interface WorkspaceMemberFull {
 	user_id: UUID;
 	user_name: string | null;
 	email: string | null;
-	role: string;
+	level: WorkspaceAccessLevel;
 }
 
 // ─── Request types (FE → BE → PG) ────────────────────────────────────────────

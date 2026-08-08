@@ -36,7 +36,7 @@ lib/
     Portal.svelte
   icons/view.ts                     # SVG path constants per view type
   stores/{auth,settings,table_schema,table_schemas,table_views,table_rows,
-          table_workflow,tables}.store.ts
+          table_workflow,tables,workspace_members}.store.ts
   types/{auth,dashboard,json,table}.ts
   UI/{brand.ts, theme.svelte.ts, Button,Input,Label}.svelte
   utils/{date_time,url}.ts
@@ -58,6 +58,7 @@ routes/
 | `table_workflow.store.ts` | `screenToFlowStore`, `NODE_TYPES`, `NODE_COLORS`, `findColId`, `deriveGraphNames` |
 | `tables.store.ts` | Backward-compat shim — re-exports stores + orchestrator fns (`loadTable`, `refreshRows`) |
 | `settings.store.ts` | `darkMode` (server-backed), `speechLang`, notifications (localStorage), `hydrateFromServer` |
+| `workspace_members.store.ts` | Member cache keyed by workspace UUID; populated and mutated only by `backend/workspaces.ts` responses |
 
 ## Controllers (`lib/backend/`)
 
@@ -68,7 +69,7 @@ routes/
 | `tables.ts` | `fetchTable`, `fetchRows`, `createRow`, `updateRow`, `deleteRow`, `createColumn`, `updateColumn`, `deleteColumn`, `patchSchema`, `batchDocsExist` |
 | `table_schemas.ts` | `fetchSidebar` — bulk `GET /api/v1/sidebar` → `applySidebar()` |
 | `views.ts` | `createView`, `updateView`, `deleteView` |
-| `workspaces.ts` | workspace + member CRUD, `fetchWorkspaces` |
+| `workspaces.ts` | Workspace CRUD plus level-based member CRUD; updates workspace/member stores from API responses |
 | `storage.ts` | MinIO file upload/download |
 
 ## Key Pages
@@ -88,24 +89,9 @@ routes/
 | `/[workspace_id]/[table_id]` | Table god-page (Table/Kanban/Timeline/Dashboard/Workflow) |
 | `/[workspace_id]/[table_id]/[row_id]` | Row detail (`[row_id]/doc` = doc editor) |
 
-## Charts
+## Workspace Member Access
 
-ECharts 5.6 via `lib/charts/`. `EChart.svelte` wrapper + `inject.ts` (`applyInjects` for `$inject: rows`). Dashboard blocks in `components/dashboard/blocks/`.
-
-## Current Workspace-Member Contract Gap
-
-The V33 backend request/response field is `level` with values
-`read|write|owner`. The current frontend member client, types, and page still
-send/read `role` with `member|owner`:
-
-- `lib/backend/workspaces.ts`
-- `lib/types/table.ts`
-- `routes/[workspace_id]/members/+page.svelte`
-
-Those member add/update UI paths are not yet compatible with the current
-backend contract; workspace list/create and non-member-management pages use
-the current API normally.
-
-## Tech Stack
-
-SvelteKit 2, Svelte 5, Tailwind CSS 4, TypeScript 5, Vite 7, ECharts 5.6, @xyflow/svelte (workflow), Playwright 1.55. Adapter: `@sveltejs/adapter-static` (SPA). Dev: `npm run dev`, check: `npm run check`, lint: `npm run lint`, test: `npm test`.
+`WorkspaceAccessLevel` is `read|write|owner`. The member controller sends and
+receives the backend `level` field, updates `workspace_members.store.ts`, and
+the members page derives its rows and owner controls from that cache. New
+members default to `write`, matching the backend request model.

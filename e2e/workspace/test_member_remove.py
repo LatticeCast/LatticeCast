@@ -1,12 +1,12 @@
 """
-E2E test: task-50 — remove member loses access
+E2E test: removing a read-level member revokes workspace access
 
 Verifies:
   1. Setup: create workspace + second user; add as member via API.
   2. UI: owner navigates to members page; member row visible.
   3. UI: owner clicks remove button → member row disappears.
   4. BE: GET /workspaces/{ws_id}/members no longer includes removed user.
-  5. BE: removed user cannot access the workspace (403).
+  5. BE: removed user cannot access the workspace (404 under read-scoped RLS).
   6. UI: removed user navigates to workspace → denied / redirected.
   7. Teardown: delete workspace + test user.
 
@@ -16,13 +16,10 @@ Run:
 
 import time
 
-import pytest
-
 from e2e_base import BASE, api, login, seed_login_info
 
 SCREENSHOT_DIR = "/output"
 
-ADMIN_USER = "lattice"
 SUFFIX = int(time.time()) % 100000
 WS_NAME = f"ws-remove-{SUFFIX}"
 MEMBER_USER = f"e2e-remove-{SUFFIX}"
@@ -30,12 +27,8 @@ MEMBER_EMAIL = f"{MEMBER_USER}@e2e.local"
 
 
 def snap(page, name: str, snapshot: bool) -> None:
-    if not snapshot:
-        return
-    try:
+    if snapshot:
         page.screenshot(path=f"{SCREENSHOT_DIR}/{name}.png", full_page=True)
-    except Exception:
-        pass
 
 
 def test_member_remove_loses_access(browser, authed_page, admin_token, snapshot) -> None:
@@ -58,9 +51,18 @@ def test_member_remove_loses_access(browser, authed_page, admin_token, snapshot)
 
     # ── Setup: add member to workspace ───────────────────────────────────────
     print("[3] Setup: add member to workspace via API")
-    r = api("POST", f"/api/v1/workspaces/{ws_id}/members", admin_token,
-            json={"user_email": MEMBER_EMAIL, "role": "member"})
+    r = api(
+        "POST",
+        f"/api/v1/workspaces/{ws_id}/members",
+        admin_token,
+        json={"user_email": MEMBER_EMAIL, "level": "read"},
+    )
     assert r.status_code == 201, f"add member: {r.status_code} {r.text[:200]}"
+    assert r.json()["level"] == "read"
+
+    member_token = login(member_user_name)
+    r = api("GET", f"/api/v1/workspaces/{ws_id}", member_token)
+    assert r.status_code == 200, f"read member should access workspace: {r.status_code}"
 
     # ── Step 4: Navigate to members page, verify member present ──────────
     print(f"[4] UI: navigate to /{WS_NAME}/members")
@@ -72,6 +74,8 @@ def test_member_remove_loses_access(browser, authed_page, admin_token, snapshot)
 
     member_row = page.get_by_test_id(f"member-row-{member_user_id}")
     member_row.wait_for(state="visible", timeout=5000)
+    member_level = page.get_by_test_id(f"level-select-{member_user_id}")
+    assert member_level.input_value() == "read"
     snap(page, "t50_01_member_present", snapshot)
     print(f"    member row visible: member-row-{member_user_id}")
 
@@ -100,11 +104,8 @@ def test_member_remove_loses_access(browser, authed_page, admin_token, snapshot)
 
     # ── Step 7: BE verify — removed user cannot access workspace ─────────
     print("[7] BE verify: removed user cannot access workspace")
-    member_token = login(member_user_name)
-    r = api("GET", f"/api/v1/workspaces/{ws_id}/members", member_token)
-    assert r.status_code in (403, 404), (
-        f"Removed user should get 403/404, got {r.status_code}"
-    )
+    r = api("GET", f"/api/v1/workspaces/{ws_id}", member_token)
+    assert r.status_code == 404, f"Removed user should get 404, got {r.status_code}"
     print(f"    removed user gets {r.status_code} — access denied")
 
     # ── Step 8: UI verify — removed user sees no access ──────────────────
@@ -127,7 +128,6 @@ def test_member_remove_loses_access(browser, authed_page, admin_token, snapshot)
     r = api("DELETE", f"/api/v1/workspaces/{ws_id}", admin_token)
     assert r.status_code == 204, f"Delete workspace failed: {r.status_code}"
     r = api("DELETE", f"/api/v1/admin/users/{MEMBER_EMAIL}", admin_token)
-    if r.status_code not in (204, 404):
-        print(f"    WARN: delete user returned {r.status_code}")
+    assert r.status_code in (204, 404)
 
     print("PASS: e2e_test_workspace_member_remove")

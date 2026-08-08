@@ -42,7 +42,7 @@ backend/src/
 frontend/src/
   routes/              +layout.ts (auth gate), [workspace_id]/[table_id]/
   lib/backend/         http, tables, views, table_schemas, workspaces, storage
-  lib/stores/          table_schema, table_schemas, table_rows, table_views, table_workflow, tables, auth, settings
+  lib/stores/          table_schema, table_schemas, table_rows, table_views, table_workflow, tables, workspace_members, auth, settings
   lib/components/      sidebar/, layout/ (TopBar), table/ (cells/), workflow/, dashboard/
   lib/charts/          EChart.svelte (ECharts 5)
 migration/             V1..V33 SQL + migrate.py (lint→verify→test→apply)
@@ -70,9 +70,9 @@ private.schema_migrations · private.cache (UNLOGGED)
 - **Async-native I/O** — sync calls freeze the event loop. See `Skill(developing/fastapi)`.
 - **RLS session** — `get_rls_session` → `app.current_user_id` → PG policies enforce isolation
 - **Workspace access** — materialized `read`/`write`/`owner` grants; reads and mutations are separated by V33 policies
+- **FE member access** — `level=read|write|owner`; controllers update the workspace-member cache from backend responses
 - **Migrations** — head **V33**. Flyway format, checksum-tracked. See `Skill(developing/db-sql)`.
 - **FE stores** split by concern; layout = Sidebar + TopBar; cells in `table/cells/`
-- **Known V33 boundary** — backend member APIs use `level=read|write|owner`; the current member-management UI/tests still use the old `role=member|owner` contract (see `llm.frontend.md`)
 
 ## API Routes (`/api/v1/*`)
 

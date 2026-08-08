@@ -4,27 +4,36 @@
 	import { page } from '$app/stores';
 	import { authStore } from '$lib/stores/auth.store';
 	import { fetchMe } from '$lib/backend/auth';
-	import { fetchMembers, addMember, removeMember, updateMemberRole } from '$lib/backend/workspaces';
-	import type { WorkspaceMemberFull } from '$lib/types/table';
+	import {
+		addMember,
+		fetchMembers,
+		fetchWorkspaces,
+		removeMember,
+		updateMemberLevel
+	} from '$lib/backend/workspaces';
+	import { workspaceMembers } from '$lib/stores/workspace_members.store';
+	import type { WorkspaceAccessLevel, WorkspaceMemberFull } from '$lib/types/table';
 	import { get } from 'svelte/store';
-	import { fetchWorkspaces } from '$lib/backend/workspaces';
 	import {
 		currentWorkspace,
 		workspaces,
 		currentWorkspaceId
 	} from '$lib/stores/table_schemas.store';
 
-	let workspaceId = $derived($page.params.workspace_id ?? '');
-	let members = $state<WorkspaceMemberFull[]>([]);
+	let workspaceParam = $derived($page.params.workspace_id ?? '');
+	let activeWorkspaceId = $state('');
+	let members = $derived($workspaceMembers[activeWorkspaceId] ?? []);
 	let loading = $state(true);
 	let errorMsg = $state('');
 	let currentUserId = $state('');
 
-	let currentRole = $derived(members.find((m) => m.user_id === currentUserId)?.role ?? 'member');
-	let isOwner = $derived(currentRole === 'owner');
+	let currentLevel = $derived(
+		members.find((member) => member.user_id === currentUserId)?.level ?? 'read'
+	);
+	let isOwner = $derived(currentLevel === 'owner');
 
 	let newEmail = $state('');
-	let newRole = $state<'owner' | 'member'>('member');
+	let newLevel = $state<WorkspaceAccessLevel>('write');
 	let adding = $state(false);
 	let addError = $state('');
 
@@ -33,8 +42,8 @@
 	let initialized = false;
 
 	$effect(() => {
-		const wsId = workspaceId; // track reactive dep
-		if (!wsId) return;
+		const wsParam = workspaceParam; // track reactive dep
+		if (!wsParam) return;
 
 		const token = $authStore?.accessToken;
 		if (!token) return;
@@ -47,27 +56,33 @@
 				initialized = true;
 			}
 
-			if (get(currentWorkspace)?.workspace_id !== wsId) {
+			let workspace = get(currentWorkspace);
+			if (
+				!workspace ||
+				(workspace.workspace_id !== wsParam && workspace.workspace_name !== wsParam)
+			) {
 				await fetchWorkspaces();
-				const ws = get(workspaces).find(
-					(w) => w.workspace_id === wsId || w.workspace_name === wsId
-				);
-				if (!ws) {
-					goto('/');
-					return;
-				}
-				currentWorkspaceId.set(ws.workspace_id);
+				workspace =
+					get(workspaces).find(
+						(item) => item.workspace_id === wsParam || item.workspace_name === wsParam
+					) ?? null;
+			}
+			if (!workspace) {
+				goto('/');
+				return;
 			}
 
-			await loadMembers();
+			activeWorkspaceId = workspace.workspace_id;
+			currentWorkspaceId.set(workspace.workspace_id);
+			await loadMembers(workspace.workspace_id);
 		})();
 	});
 
-	async function loadMembers() {
+	async function loadMembers(workspaceId: string) {
 		loading = true;
 		errorMsg = '';
 		try {
-			members = await fetchMembers(workspaceId);
+			await fetchMembers(workspaceId);
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : '';
 			if (msg.includes('403') || msg.includes('Forbidden')) {
@@ -85,10 +100,12 @@
 		adding = true;
 		addError = '';
 		try {
-			const added = await addMember(workspaceId, { user_email: newEmail.trim(), role: newRole });
-			members = [...members, added];
+			await addMember(activeWorkspaceId, {
+				user_email: newEmail.trim(),
+				level: newLevel
+			});
 			newEmail = '';
-			newRole = 'member';
+			newLevel = 'write';
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : 'Failed to add member';
 			addError =
@@ -100,26 +117,25 @@
 		}
 	}
 
-	async function handleRoleChange(userId: string, role: string) {
-		const prev = members.map((m) => ({ ...m }));
-		members = members.map((m) => (m.user_id === userId ? { ...m, role } : m));
+	async function handleLevelChange(
+		member: WorkspaceMemberFull,
+		level: WorkspaceAccessLevel,
+		select: HTMLSelectElement
+	) {
 		errorMsg = '';
 		try {
-			await updateMemberRole(workspaceId, userId, role);
+			await updateMemberLevel(activeWorkspaceId, member.user_id, level);
 		} catch (e) {
-			members = prev;
-			errorMsg = e instanceof Error ? e.message : 'Failed to update role';
+			select.value = member.level;
+			errorMsg = e instanceof Error ? e.message : 'Failed to update access level';
 		}
 	}
 
 	async function handleRemove(userId: string) {
-		const prev = members.map((m) => ({ ...m }));
-		members = members.filter((m) => m.user_id !== userId);
 		errorMsg = '';
 		try {
-			await removeMember(workspaceId, userId);
+			await removeMember(activeWorkspaceId, userId);
 		} catch (e) {
-			members = prev;
 			errorMsg = e instanceof Error ? e.message : 'Failed to remove member';
 		}
 	}
@@ -136,7 +152,7 @@
 	<div class="mx-auto max-w-2xl">
 		<div class="mb-6 flex items-center justify-between pt-8">
 			<button
-				onclick={() => goto(`/${workspaceId}`)}
+				onclick={() => goto(`/${workspaceParam}`)}
 				class="flex items-center gap-2 rounded-xl bg-white/20 px-4 py-2 text-white backdrop-blur-sm transition-all hover:bg-white/30"
 			>
 				← Back
@@ -171,13 +187,15 @@
 							{addError ? 'border-red-400' : 'border-gray-200 focus:border-blue-500'}"
 					/>
 					<select
-						bind:value={newRole}
-						data-testid="member-role-select"
+						bind:value={newLevel}
+						data-testid="member-level-select"
+						aria-label="New member access level"
 						disabled={adding}
 						class="rounded-2xl border-2 border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-700 focus:border-blue-500 focus:outline-none disabled:opacity-50"
 					>
-						<option value="member">member</option>
-						<option value="owner">owner</option>
+						<option value="read">Read</option>
+						<option value="write">Write</option>
+						<option value="owner">Owner</option>
 					</select>
 					<button
 						onclick={handleAdd}
@@ -235,24 +253,32 @@
 								<p class="truncate text-xs text-gray-400">{member.user_id}</p>
 							</div>
 
-							<!-- Role dropdown (owner only) -->
+							<!-- Access-level dropdown (owner only) -->
 							{#if isOwner}
 								<select
-									value={member.role}
-									data-testid="role-select-{member.user_id}"
-									onchange={(e) =>
-										handleRoleChange(member.user_id, (e.target as HTMLSelectElement).value)}
+									value={member.level}
+									data-testid="level-select-{member.user_id}"
+									aria-label="Access level for {displayName(member)}"
+									onchange={(event) => {
+										const select = event.currentTarget;
+										handleLevelChange(member, select.value as WorkspaceAccessLevel, select);
+									}}
 									class="rounded-lg border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700 focus:outline-none"
 								>
-									<option value="member">member</option>
-									<option value="owner">owner</option>
+									<option value="read">Read</option>
+									<option value="write">Write</option>
+									<option value="owner">Owner</option>
 								</select>
 							{:else}
 								<span
 									class="rounded-full px-2.5 py-0.5 text-xs font-medium
-										{member.role === 'owner' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}"
+										{member.level === 'owner'
+										? 'bg-blue-100 text-blue-700'
+										: member.level === 'write'
+											? 'bg-emerald-100 text-emerald-700'
+											: 'bg-gray-100 text-gray-600'}"
 								>
-									{member.role}
+									{member.level}
 								</span>
 							{/if}
 
