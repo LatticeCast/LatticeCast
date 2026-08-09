@@ -1,97 +1,83 @@
-# LLM Context - Frontend
+# LatticeCast — Frontend Architecture
 
-> For general project context, see `llm.root.md`. For deployment, see `llm.deploy.md`.
+The frontend is SvelteKit 2 with Svelte 5 runes. It treats the backend as the
+source of truth and keeps a client cache in Svelte stores.
 
-## MVC Architecture
+## Top-Level Rule
 
-| Layer | Location | Purpose |
-|-------|----------|---------|
-| **Model** | `lib/stores/*.store.ts` | Writable stores — FE cache of BE SSOT |
-| **View** | `routes/**/*.svelte`, `components/**/*.svelte` | UI rendering via `$derived` |
-| **Controller** | `lib/backend/*.ts` | API calls → update stores |
-
-Rules: stores = plain `.store.ts` only (no runes). `.svelte.ts` rune files go in `components/`. All colors hex from BE.
-
-## Directory Tree (`frontend/src/`)
-
-```
-lib/
-  api/dashboard.ts                  # dashboard block query client
-  auth/{auth.service,login.svelte,pkce}.ts, providers/{google,authentik,index}.ts
-  backend/{auth,config,http,storage,tables,table_schemas,views,workspaces}.ts
-  charts/{EChart.svelte,ChartSanity.svelte,index,inject}.ts
-  components/
-    dashboard/{DashboardView.svelte, blocks/{Block,ChartBlock,ListBlock,NumberBlock}.svelte}
-    layout/TopBar.svelte
-    sidebar/{Sidebar,CreateWorkspaceModal}.svelte
-    table/{TableGrid,TableHeader,TableGroupHeader,TableToolbar,ViewSwitcher,
-           KanbanBoard,TimelineView,ContextMenu,RowExpandPanel,DocCellEditor,
-           AddColumnModal,ManageOptionsModal,CreateTicketModal,ImportPreviewModal,
-           ImportTemplateModal,GroupBySelector,GridAddRowFooter,GridDeleteCell,
-           RowNumberCell}.svelte
-    table/cells/{Checkbox,Date,Doc,Number,Select,Tags,Text,Url}Cell.svelte
-    table/{table-page.svelte.ts, table.utils.ts, timeline.utils.ts,
-           tableGrid.types.ts, dragReorder.svelte.ts}
-    workflow/{WorkflowView,WorkflowNode,WorkflowGraphPanel,WorkflowFlowCapture}.svelte
-    Portal.svelte
-  icons/view.ts                     # SVG path constants per view type
-  stores/{auth,settings,table_schema,table_schemas,table_views,table_rows,
-          table_workflow,tables,workspace_members}.store.ts
-  types/{auth,dashboard,json,table}.ts
-  UI/{brand.ts, theme.svelte.ts, Button,Input,Label}.svelte
-  utils/{date_time,url}.ts
-routes/
-  +layout.{svelte,ts}  login/  callback/{google,authentik}/  settings/  config/  debug/
-  [workspace_id]/  [workspace_id]/members/  [workspace_id]/[table_id]/
-  [workspace_id]/[table_id]/[row_id]/  [workspace_id]/[table_id]/[row_id]/doc/
+```text
+UI event
+  -> controller in lib/backend
+  -> FastAPI and PostgreSQL/MinIO
+  <- exact backend response
+  -> controller updates the relevant store
+  -> component $derived state recomputes
+  -> GUI rerenders
 ```
 
-## Stores (Model)
+This applies to reads and mutations. A component may own temporary UI state
+(open modal, draft input, drag position), but it must not own a second copy of
+server-backed tables, rows, views, workspaces, or members.
 
-| Store | Key exports |
-|-------|-------------|
-| `auth.store.ts` | `authStore` — `{accessToken, provider, user, role}` |
-| `table_schemas.store.ts` | **Sidebar SSOT** — `workspaces`, `tables`, `currentTableId`, `tablesByWorkspace`, `columns`, `viewOrder`, `defaultView`, `views`, `applySchema`, `applySidebar`, `initSidebar`, `resetSidebar` |
-| `table_schema.store.ts` | Re-exports `columns, viewOrder, defaultView, views, applySchema` from `table_schemas` |
-| `table_views.store.ts` | Re-exports `views` from `table_schemas` |
-| `table_rows.store.ts` | `rows`, `resetRows` |
-| `table_workflow.store.ts` | `screenToFlowStore`, `NODE_TYPES`, `NODE_COLORS`, `findColId`, `deriveGraphNames` |
-| `tables.store.ts` | Backward-compat shim — re-exports stores + orchestrator fns (`loadTable`, `refreshRows`) |
-| `settings.store.ts` | `darkMode` (server-backed), `speechLang`, notifications (localStorage), `hydrateFromServer` |
-| `workspace_members.store.ts` | Member cache keyed by workspace UUID; populated and mutated only by `backend/workspaces.ts` responses |
+## Layer Map (`frontend/src/`)
 
-## Controllers (`lib/backend/`)
+| Layer | Paths | Responsibility |
+|---|---|---|
+| Route/load | `routes/` | Resolve URL, start reads, choose page composition |
+| Controller | `lib/backend/`, `lib/api/` | Call API, validate response, update store |
+| Model/cache | `lib/stores/*.store.ts` | Writable server cache and derived selectors |
+| View | `routes/**/*.svelte`, `lib/components/` | Render stores through `$derived`; emit events |
+| UI-only state | `lib/components/**/*.svelte.ts` | Svelte rune state tied to component behavior |
 
-| File | Functions |
-|------|-----------|
-| `http.ts` | `getAuthHeaders`, `getBearerHeader` — shared auth header helpers |
-| `auth.ts` | `fetchMe`, login flows |
-| `tables.ts` | `fetchTable`, `fetchRows`, `createRow`, `updateRow`, `deleteRow`, `createColumn`, `updateColumn`, `deleteColumn`, `patchSchema`, `batchDocsExist` |
-| `table_schemas.ts` | `fetchSidebar` — bulk `GET /api/v1/sidebar` → `applySidebar()` |
-| `views.ts` | `createView`, `updateView`, `deleteView` |
-| `workspaces.ts` | Workspace CRUD plus level-based member CRUD; updates workspace/member stores from API responses |
-| `storage.ts` | MinIO file upload/download |
+Plain store modules use `.store.ts`. Rune-bearing state uses `.svelte.ts`.
 
-## Key Pages
+## Main Stores
 
-**Table god-page** (`routes/[workspace_id]/[table_id]/+page.svelte`): reactive state in `table-page.svelte.ts` — `TablePageStore` class, `$state()` fields (~40 UI vars), singleton `s`.
-**Layout** (`+layout.svelte`): `Sidebar.svelte` + `TopBar.svelte`. `+layout.ts` = single auth gate. No per-page auth checks.
+| Store | Owns |
+|---|---|
+| `auth.store.ts` | Login token, provider, current user, application role |
+| `table_schemas.store.ts` | Workspaces, tables, current IDs, schema cache, sidebar-derived data |
+| `table_rows.store.ts` | Rows for the active table |
+| `workspace_members.store.ts` | Member lists keyed by workspace UUID |
+| `settings.store.ts` | Server-backed and local user preferences |
+| `table_workflow.store.ts` | Workflow-specific derived helpers/state |
 
-## Routing
+`table_schema.store.ts` and `table_views.store.ts` are compatibility re-exports
+from the consolidated table cache. `tables.store.ts` is also a compatibility
+and orchestration layer; do not create a new competing source of truth.
 
-| Route | Purpose |
-|-------|---------|
-| `/` | Home — redirect to last workspace |
-| `/login`, `/callback/{google,authentik}` | OAuth + password login |
-| `/settings`, `/config`, `/debug` | Per-user settings, app config, debug |
-| `/[workspace_id]` | Workspace overview |
-| `/[workspace_id]/members` | Member admin |
-| `/[workspace_id]/[table_id]` | Table god-page (Table/Kanban/Timeline/Dashboard/Workflow) |
-| `/[workspace_id]/[table_id]/[row_id]` | Row detail (`[row_id]/doc` = doc editor) |
+## Controllers
 
-## Workspace Member Access
+| File | Scope |
+|---|---|
+| `lib/backend/table_schemas.ts` | Bulk sidebar load -> `applySidebar()` |
+| `lib/backend/tables.ts` | Tables, columns, schema patches, rows, ticket docs |
+| `lib/backend/views.ts` | View reads and mutations -> `applySchema()` |
+| `lib/backend/workspaces.ts` | Workspace/member CRUD -> workspace/member stores |
+| `lib/backend/auth.ts` | Login/me/config calls |
+| `lib/backend/storage.ts` | Generic user-file API |
+| `lib/api/dashboard.ts` | Dashboard block queries |
 
-`WorkspaceAccessLevel` is `read|write|owner`. The member controller sends and
-receives the backend `level` field, updates `workspace_members.store.ts`, and
-the members page derives its rows and owner controls from that cache. New
-members default to `write`, matching the backend request model.
+Mutation endpoints for columns, views, and schema ordering return the full
+schema snapshot. Controllers pass that response to `applySchema()`.
+
+## Page Flow
+
+- `routes/+layout.ts` is the central auth gate.
+- `routes/+layout.svelte` owns the shared Sidebar + TopBar shell and hydrates
+  the sidebar/user config.
+- `routes/[workspace_id]/[table_id]/+page.ts` starts table/view/row reads.
+- The table page derives columns, rows, filters, groups, and active view from
+  stores plus `table-page.svelte.ts` UI state.
+- Table, Kanban, Timeline, Dashboard, and Workflow are renderings of the same
+  table/row data.
+
+## Gotchas
+
+- URLs may show `workspace_name`, but stores and API data use `workspace_id`.
+- `table_id` can repeat across workspaces; pass `workspace_id` when resolving an
+  uncached table.
+- Use backend-provided option colors; do not invent a separate frontend palette.
+- After a mutation, assert the response-driven store and visible derived GUI,
+  not only the HTTP status.
+- Read `.agent-skills/developing/svelte/SKILL.md` before structural Svelte work.

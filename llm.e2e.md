@@ -1,67 +1,54 @@
-# E2E Tests
+# LatticeCast — E2E Tests
 
-## Location
+`e2e/` uses pytest, requests, and a remote Playwright Chromium instance against
+the real frontend, backend, PostgreSQL, and MinIO. Tests are not mocked unit
+tests.
 
-`e2e/` — pytest + Playwright + requests against the live stack.
-
-## How to Run
+## Run
 
 ```bash
-# 1. Start test container (rebuild if deps changed)
-docker compose --profile test up -d --build e2e
-
-# 2. Run all tests
+docker compose up -d
+docker compose --profile test up -d --build browser e2e
 docker compose --profile test exec e2e pytest -v
-
-# Run a single package
-docker compose --profile test exec e2e pytest tables/ -v
-
-# Run a single test
-docker compose --profile test exec e2e pytest tables/test_column_add.py -v
-
-# With screenshots
+docker compose --profile test exec e2e pytest tables/test_row_update.py -v
 docker compose --profile test exec e2e pytest -v --snapshot
 ```
 
-Requires the full stack running (`docker compose up -d`) plus the `browser` container.
+`BASE_URL` selects the tested deployment. `BROWSER_WS` selects the remote
+browser. Their Compose defaults target the local host-network stack.
 
-## Architecture
+## Test Architecture
 
-- `conftest.py` — shared pytest fixtures: `browser`, `page`, `authed_page`, `admin_token`, `workspace`, `pm_table`
-- `e2e_base.py` — low-level helpers: `BASE` URL, `login()`, `api()`, `seed_login_info()`, `connect_browser()`
-- `{package}/test_*.py` — one file per test topic, uses pytest fixtures + assertions
-- Connects to Playwright browser container via `BROWSER_WS` websocket
-- Tests hit the real backend API + real DB (not mocked)
+| Path | Purpose |
+|---|---|
+| `e2e/e2e_base.py` | Base URL, login, authenticated request, browser connection, auth seeding |
+| `e2e/conftest.py` | Shared browser/page/user/workspace/table fixtures |
+| `e2e/auth/` | Login, self-service config, and admin behavior |
+| `e2e/workspace/` | Workspace CRUD, sidebar, member levels and revocation |
+| `e2e/tables/` | Table, column, row, filter/edit, and document behavior |
+| `e2e/table_views/` | Views, Kanban, Timeline, and Workflow behavior |
+| `e2e/template/` | Template seed contracts |
 
-## Test Packages
+Fixtures create isolated workspaces/tables and clean them up. Prefer existing
+fixtures and `e2e_base.py` helpers over reimplementing login or HTTP boilerplate.
 
-| Package | Tests |
-|---------|-------|
-| `auth/` | `admin_create_user`, `admin_only`, `me_config_darkmode`, `me_email_change` |
-| `tables/` | `column_add`, `column_delete`, `column_rename`, `column_checkbox_type`, `column_doc_type`, `column_tags_type`, `column_url_type`, `column_option_add_remove`, `column_option_colors`, `col_order`, `col_resize`, `filter`, `inline_edit`, `search`, `row_create`, `row_delete`, `row_update`, `row_doc_round_trip`, `row_filter_json`, `table_create` |
-| `table_views/` | `views_create`, `views_delete`, `views_default`, `views_order`, `views_rename`, `kanban_add_row`, `kanban_card_fields`, `kanban_drag_card`, `kanban_groupby`, `timeline_color_by`, `timeline_granularity`, `timeline_groupby` |
-| `template/` | `pm`, `crm`, `workflow`, `seo_framework` |
-| `workspace/` | `create`, `delete_cascade`, `rename`, `sidebar`, `member_invite`, `member_remove`, `member_level` |
+## Test Rules
 
-Workspace member tests use the V33 `level=read|write|owner` contract. They
-cover the default write invite, write→owner→read changes, last-owner
-protection, removal, and access revocation.
+- Exercise behavior through public API/UI boundaries.
+- Use a real token and seed `localStorage.loginInfo` before first navigation.
+- Wait for a URL, response, locator, or derived GUI state; never use a fixed
+  sleep as synchronization.
+- Assert the final visible state after the controller response updated stores.
+  An HTTP success alone does not prove the frontend flow works.
+- Keep each test focused and use unique workspace/table names.
+- Capture screenshots only when they help verify UI state; artifacts go to
+  `.browser/` through `/output`.
 
-## Fixtures (`conftest.py`)
+## Choosing Scope
 
-| Fixture | Scope | Description |
-|---------|-------|-------------|
-| `browser` | session | Playwright browser connected via `BROWSER_WS` |
-| `page` | function | Fresh browser page (1400x900) |
-| `admin_token` | session | Login token for `lattice` user |
-| `authed_page` | function | Page with `loginInfo` seeded in localStorage |
-| `workspace` | function | Creates + tears down a workspace, yields `(ws_id, ws_name)` |
-| `pm_table` | function | Creates PM template table, yields `(table_id, ws_id, columns, views)` |
+Start with the smallest affected test, then its package, then the whole suite
+when the change crosses shared auth, sidebar, schema, or fixture behavior.
+Frontend structural changes also need the checks in `llm.dev.md`.
 
-## Writing New Tests
-
-1. Create `e2e/{package}/test_<name>.py`
-2. Use conftest fixtures by parameter name: `def test_foo(authed_page, workspace, admin_token):`
-3. Import helpers from `e2e_base`: `from e2e_base import BASE, api`
-4. Use `assert` for verifications (pytest handles failures)
-5. Use `--snapshot` flag for Playwright screenshots
+Read `.agent-skills/developing/e2e/SKILL.md` before adding or restructuring E2E
+coverage. See `llm.snapshot.md` for ad-hoc browser evidence.

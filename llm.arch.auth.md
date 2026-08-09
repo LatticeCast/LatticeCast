@@ -1,111 +1,73 @@
-# LLM Context — Authentication Architecture
+# LatticeCast — Authentication Architecture
 
-## Overview
+LatticeCast accepts password-login JWTs and OAuth credentials from Google or
+Authentik. Authentication resolves a token; PostgreSQL RLS authorizes access to
+workspace data.
 
-Dual OAuth (Google + Authentik) with PKCE, plus a password-login flow that
-issues a self-signed JWT. Per-account `gdpr.user_password` (1:1 with
-`user_info`, no grants to `app` — see Database Schema) decides whether
-`POST /login/password` checks the password: no row skips verification
-and issues a JWT directly, a row → password must match (bcrypt,
-`util/security.py`). Two PG engines: `app_engine` (RLS) and `login_engine`
-(`mgr_user`, BYPASSRLS).
+## Request Flow
 
-## Backend Auth Files
-
-| File | Purpose |
-|------|---------|
-| `middleware/token.py` | `verify_bearer_token()` — local JWT → Authentik JWT → Google userinfo → 401 |
-| `middleware/auth.py` | `get_current_user`, `get_rls_session`, `require_admin`, `require_user` |
-| `middleware/jwks.py` | JWKS fetch + PG cache (`{provider}:jwks`, TTL 3600s) |
-| `router/api/auth.py` | `/login/*` endpoints (OAuth exchange, password, me, email) |
-| `util/security.py` | `hash_password` / `verify_password` (bcrypt via passlib) |
-| `config/settings.py` | `DatabaseSettings.app_async_url` / `login_async_url`, `jwt_secret_key`, OAuth config |
-
-## Frontend Auth Files
-
-| File | Purpose |
-|------|---------|
-| `lib/stores/auth.store.ts` | Svelte writable store ↔ localStorage (`loginInfo` key) |
-| `lib/auth/auth.service.ts` | Login flow orchestration |
-| `lib/auth/pkce.ts` | PKCE verifier (128-char) + SHA256 challenge |
-| `lib/auth/providers/` | google.ts, authentik.ts — provider-specific config |
-| `lib/backend/auth.ts` | API client (fetchAppConfig, exchangeCodeViaBackend, fetchMe) |
-| `routes/login/+page.svelte` | Login UI |
-| `routes/callback/{provider}/` | OAuth callback pages (google, authentik) |
-
-## Token Verification (`middleware/token.py`)
-
-1. Extract Bearer token from `Authorization` header
-2. Try our own JWT (HS256, `JWT_SECRET_KEY`, issued by `password_login`) → `_provider: "none"`
-3. Try Authentik JWT (RS256 via JWKS, validate audience + issuer) → `_provider: "authentik"`
-4. Fallback: Google userinfo endpoint (opaque token) → `_provider: "google"`
-5. Raise 401 `"Token expired"` if any step's JWT was expired, else `"Invalid token"`
-
-## User Resolution (`middleware/auth.py`)
-
-`get_current_user` resolves token payload → `User`:
-- `user_id` field (UUID or user_name) → `UserRepository.resolve_user()` via app session
-- `email` field → `resolve_user_by_email()` via app session (queries `gdpr.user_info`)
-- No auto-creation — admins must bootstrap users; raises 403 if not found
-
-`get_rls_session`: sets `app.current_user_id` via `set_config()`. No manual reset — pool's `DISCARD ALL` on release clears it.
-
-`require_admin` / `require_user`: role gate dependencies (403 on mismatch).
-
-## Dual Engine Architecture (`core/db.py`)
-
-| Engine | PG Role | search_path | Purpose |
-|--------|---------|-------------|---------|
-| `app_engine` | `app_user` | `public,auth,gdpr` | General API — CRUD on public, SELECT on auth |
-| `login_engine` | `mgr_user` | `public,auth,gdpr` | Auth/admin — BYPASSRLS, CRUD everywhere |
-
-`mgr_user` has `BYPASSRLS` (V15 grant) — needed at login time when no user is authenticated yet (RLS would return zero rows). Both engines include `gdpr` in search_path so unqualified `user_info` references resolve.
-
-Env: `POSTGRES_MGR_PASSWORD` configures `mgr_user` password.
-
-## API Endpoints (`/api/v1/login/`)
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/password` | No | Password login → self-signed JWT (no row in `user_password` = unchecked) |
-| POST | `/{provider}/token` | No | OAuth code exchange (google, authentik) |
-| GET | `/me` | Yes | Current user info + config (uses RLS session) |
-| PATCH | `/me/config` | Yes | Shallow-merge keys into `user_info.config` (null removes key) |
-| PUT | `/me/email` | Yes | Update email (uniqueness enforced, uses login_session) |
-| PUT | `/me/password` | Yes | Set/change password (`current_password` required once one is set) |
-
-## Database Schema
-
-```sql
--- V2: auth.users (identity only)
-auth.users (user_id UUID PK, role VARCHAR DEFAULT 'user', created_at, updated_at)
-
--- V3: gdpr.user_info (PII + handle + config)
-gdpr.user_info (user_id UUID PK FK→auth.users CASCADE, email UNIQUE, user_name VARCHAR(32) UNIQUE, config JSONB)
--- user_name CHECK: ^[a-z0-9][a-z0-9_-]{2,31}$
-
--- V32: gdpr.user_password (optional password-login credential)
-gdpr.user_password (user_id UUID PK FK→user_info CASCADE, password_hash VARCHAR, updated_at TIMESTAMP)
--- No grants to app at all — only mgr_user (login_session) touches it.
--- Kept off user_info because V20 grants app_user broad SELECT there
--- (needed to resolve other users by email/user_name for workspace
--- invites); a password_hash column on that table would leak through
--- every one of those reads. Self-only RLS too, as a second layer.
+```text
+Authorization: Bearer <token>
+  -> middleware/token.py verifies local JWT, Authentik JWT, or Google token
+  -> middleware/auth.py resolves a registered auth.users identity
+  -> get_rls_session sets app.current_user_id
+  -> PostgreSQL policies filter/permit data
 ```
 
-GDPR purge: drop `gdpr.user_info` row — cascades `gdpr.user_password`.
-`auth.users` and audit trails remain.
+Users are not auto-created during token verification. Bootstrap and admin user
+creation are explicit flows.
 
-## Environment Variables
+## Credentials and Identity
 
-```bash
-JWT_SECRET_KEY=xxx             # signs self-issued JWTs (password-login flow)
-JWT_EXPIRE_MINUTES=1440        # self-issued JWT lifetime (default 24h)
-GOOGLE_CLIENT_ID=xxx           # Google OAuth
-GOOGLE_CLIENT_SECRET=xxx
-AUTHENTIK_URL=https://...      # Authentik OAuth
-AUTHENTIK_CLIENT_ID=xxx
-POSTGRES_MGR_PASSWORD=mgr_pws  # mgr_user password (login_engine)
-```
+- `auth.users` contains UUID identity and application role (`user`/`admin`).
+- `gdpr.user_info` contains email, unique `user_name`, and user config.
+- `gdpr.user_password` contains an optional bcrypt hash and is accessible only
+  through the login/admin database role.
+- Password login resolves `user_name` or email and issues a locally signed JWT.
+  Existing accounts without a password row use the repository's bootstrap
+  behavior; inspect `router/api/auth.py` before changing it.
+- Google and Authentik use PKCE flows coordinated by the frontend auth modules.
 
-`vite.config.ts` maps env vars to `VITE_*` at build time.
+## Two Database Engines
+
+| Engine | Role | Use |
+|---|---|---|
+| `app_engine` | `app_user` | Normal API work with RLS |
+| `login_engine` | `mgr_user` | Login/admin operations with `BYPASSRLS` |
+
+Engine setup is in `backend/src/core/db.py`. Keep normal domain routes on the
+RLS engine; do not use the manager engine to bypass workspace authorization.
+
+## Backend Entry Points
+
+| File | Responsibility |
+|---|---|
+| `backend/src/middleware/token.py` | Bearer verification across providers |
+| `backend/src/middleware/auth.py` | User resolution, role gates, RLS session |
+| `backend/src/middleware/jwks.py` | Authentik JWKS retrieval and PG caching |
+| `backend/src/router/api/auth.py` | Login and self-service endpoints |
+| `backend/src/router/api/admin/users.py` | Admin user lifecycle |
+| `backend/src/repository/user.py` | Identity/PII/password persistence |
+| `backend/src/util/security.py` | Password hashing and verification |
+
+## Frontend Entry Points
+
+| File | Responsibility |
+|---|---|
+| `frontend/src/lib/stores/auth.store.ts` | Persisted login state |
+| `frontend/src/lib/auth/auth.service.ts` | Login orchestration |
+| `frontend/src/lib/auth/pkce.ts` | PKCE verifier/challenge |
+| `frontend/src/lib/auth/providers/` | Provider-specific configuration |
+| `frontend/src/lib/backend/auth.ts` | Auth/current-user controller |
+| `frontend/src/routes/+layout.ts` | Central route auth gate |
+
+## Configuration and Gotchas
+
+Relevant settings are defined in `.env.example` and
+`backend/src/config/settings.py`: JWT secret/lifetime, provider client settings,
+and manager DB credentials. Vite exposes only selected provider configuration.
+
+- Application admin role and workspace owner level are different concepts.
+- A valid external token still fails if no registered local user resolves.
+- Clear/reset auth-dependent stores on logout.
+- Never expose password hashes through `gdpr.user_info` or the app engine.

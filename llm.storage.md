@@ -1,86 +1,65 @@
-# LLM Context - Storage System
+# LatticeCast — Storage Architecture
 
-> **Note:** For general project context, see `llm.root.md`.
+MinIO provides S3-compatible object storage through async `aioboto3`. There are
+two distinct key spaces: generic user files and table-row Markdown documents.
 
-S3-compatible object storage using MinIO for user data persistence (activity history, preferences, etc.).
+## Runtime Flow
 
-## Architecture
-
-```
-Frontend (storage.ts) → Backend (router/api/storage.py) → MinIO (:9000)
-```
-
-## Backend
-
-### Files
-- `config/storage.py` - Async S3 client (aioboto3)
-- `router/api/storage.py` - REST API endpoints
-
-### Path Isolation
-- **Admin**: Full access to all paths
-- **User**: Files prefixed with UUID (first 20 chars, no dashes)
-  - User sees `/file.txt` → stored as `{uuid_prefix}/file.txt`
-
-### Endpoints
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/storage/files` | List files (with prefix filter) |
-| GET | `/api/v1/storage/file/{path}` | Download file |
-| PUT | `/api/v1/storage/file/{path}` | Upload file |
-| DELETE | `/api/v1/storage/file/{path}` | Delete file |
-| GET | `/api/v1/storage/admin/files` | Admin: list all files |
-
-### Request/Response
-
-```python
-# List files
-GET /api/v1/storage/files?prefix=&max_keys=1000
-→ { files: [{key, size, last_modified}], prefix, truncated }
-
-# Upload (multipart/form-data)
-PUT /api/v1/storage/file/entries.json
-← { key: "entries.json", size: 1234 }
-
-# Download
-GET /api/v1/storage/file/entries.json
-← StreamingResponse (file content)
+```text
+frontend/controller -> FastAPI -> config/storage.py -> MinIO bucket
 ```
 
-## Frontend
+`backend/src/config/storage.py` creates async S3 clients and ensures the bucket
+exists during application startup.
 
-### Files
-- `lib/backend/config.ts` - `BACKEND_URL`
-- `lib/backend/storage.ts` - Storage API client
+## Generic User Files
 
-### Usage
+Routes in `backend/src/router/api/storage.py` expose list/download/upload/delete
+under `/api/v1/storage`.
 
-```typescript
-import { loadJson, saveJson } from '$lib/backend/storage';
+- Non-admin keys are automatically prefixed with a stable prefix derived from
+  the user's UUID; clients see paths without that prefix.
+- Admins may address full keys and list the whole bucket.
+- Paths strip leading slashes and reject `..` traversal.
+- Frontend JSON helpers live in `frontend/src/lib/backend/storage.ts`.
 
-// Load JSON data
-const data = await loadJson<MyType>('data.json');
+This API is for general per-user files. It is not the ticket-document API.
 
-// Save JSON data
-await saveJson('data.json', { key: 'value' });
+## Table Documents
+
+Routes in `backend/src/router/api/rows.py` access Markdown objects directly:
+
+```text
+{workspace_id}/{table_id}/{row_id}.md
+{workspace_id}/{table_id}/col-{column_id}/{row_id}.md
 ```
 
-### Functions
+- The first segment is the UUID `workspace_id`, never `workspace_name` or
+  `user_name`.
+- The second segment is `table_id`; `workspace_name` and `table_id` cannot
+  contain `.` because they are also browser/storage path-facing values.
+- Creating a row best-effort creates objects for document columns and stores
+  their keys in `row_data`.
+- Main-document reads may inject live hierarchy links into template comments.
+- Deleting a row also performs document cleanup.
+- `/docs-exist` batches object discovery for the table UI.
 
-```typescript
-// Load JSON from storage (returns null if not found)
-async function loadJson<T>(path: string): Promise<T | null>
+## Main Files
 
-// Save JSON to storage (returns success boolean)
-async function saveJson<T>(path: string, data: T): Promise<boolean>
-```
+| Concern | Source |
+|---|---|
+| Client/bucket setup | `backend/src/config/storage.py` |
+| Generic storage API | `backend/src/router/api/storage.py` |
+| Row document API | `backend/src/router/api/rows.py` |
+| Generic FE client | `frontend/src/lib/backend/storage.ts` |
+| Ticket-doc FE client | `frontend/src/lib/backend/tables.ts` |
+| Settings | `.env.example`, `backend/src/config/settings.py` |
 
-## Environment
+## Gotchas
 
-```bash
-MINIO_ENDPOINT=minio:9000
-MINIO_ACCESS_KEY=_minio_user
-MINIO_SECRET_KEY=_minio_password
-MINIO_BUCKET=lattice-cast
-MINIO_SECURE=false
-```
+- Use only awaitable S3 calls in FastAPI paths.
+- Preserve the distinction between user-prefixed generic keys and
+  workspace/table document keys.
+- Resolve and authorize the table through PostgreSQL before touching its
+  document objects.
+- Do not expose MinIO credentials or internal endpoints to the browser.

@@ -1,98 +1,56 @@
-# LLM Context - API Endpoints
+# LatticeCast — API Map
 
-> Auth → `llm.user.md` | Storage → `llm.storage.md` | Schema → `llm.arch.airtable.md`
+All application routes are under `/api/v1`. The authoritative route signatures
+are the FastAPI decorators in `backend/src/main.py` and
+`backend/src/router/api/`; interactive docs are at `/api/v1/docs`.
 
-All routes under `/api/v1`. Rows keyed by `row_id` (int). Views keyed by `view_id` (int).
+## Route Groups
 
-## Health & Debug
+| Prefix | Main operations | Source |
+|---|---|---|
+| `/status`, `/settings` | Health and non-secret runtime settings | `backend/src/main.py` |
+| `/login` | Password/OAuth login, current user, config, email, password | `router/api/auth.py` |
+| `/admin/users` | Admin user CRUD | `router/api/admin/users.py` |
+| `/workspaces` | Workspace CRUD and member access levels | `router/api/workspaces.py` |
+| `/sidebar` | Bulk accessible workspace/table tree | `router/api/table_schemas.py` |
+| `/tables` | Table CRUD, schema patch, templates, columns, views | `router/api/tables/` |
+| `/tables/{table_id}/rows` | Row CRUD, ticket docs, column docs | `router/api/rows.py` |
+| `/tables/{table_id}/views/{view_name}/blocks` | Dashboard block query | `router/api/dashboard.py` |
+| `/storage` | Generic user-prefixed file CRUD and admin listing | `router/api/storage.py` |
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/status` | None | DB health |
-| GET | `/settings` | None | Non-sensitive settings |
-| GET | `/run-task/{seconds}` | None | Blocking task (debug) |
-| GET | `/openapi-export` | None | Export OpenAPI spec |
+## Table API Shape
 
-## Auth (`/login`) · Sidebar (`/sidebar`)
+- `GET /tables/{table_id}` returns identity plus the complete schema snapshot:
+  columns, view order, default view, and ordered user views.
+- Column and view mutations also return that full snapshot. Frontend
+  controllers must apply it to the table cache.
+- `PATCH /tables/{table_id}` accepts partial schema-order/default-view changes.
+- `POST /tables/template/{kind}` creates a table through the shared template
+  dispatcher; supported kinds come from the backend model/PG function.
+- A `workspace_id` query parameter disambiguates equal table names in different
+  workspaces.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/login/password` | None | Username+password → self-signed JWT |
-| POST | `/login/{provider}/token` | None | OAuth code→tokens (google\|authentik) |
-| GET | `/login/me` | Bearer | Current user info + config |
-| PATCH | `/login/me/config` | Bearer | Shallow-merge user UI config |
-| PUT | `/login/me/email` | Bearer | Update email |
-| PUT | `/login/me/password` | Bearer | Set/change password |
-| GET | `/sidebar` | Bearer | Workspace/table tree (PG function) |
+## Row and Document API
 
-## Workspaces (`/workspaces`)
+- Row identity is `(workspace_id, table_id, row_id)`, while routes expose the
+  table name and per-table numeric `row_id`.
+- Row writes merge `row_data`, whose keys are column UUID strings.
+- `/rows/{row_id}/doc` reads/writes the main Markdown document.
+- `/rows/{row_id}/col-doc/{column_id}` handles a document-type column.
+- `/docs-exist` batches document-existence lookup for the table UI.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/workspaces` | User | Create (creator receives read+write+owner) |
-| GET | `/workspaces` | User | List workspaces with a read grant |
-| GET | `/workspaces/{wid}` | Read | Get workspace |
-| PUT | `/workspaces/{wid}` | Owner | Rename |
-| DELETE | `/workspaces/{wid}` | Owner | Delete |
-| GET | `/workspaces/{wid}/members` | Owner | List members, aggregated to highest level |
-| POST | `/workspaces/{wid}/members` | Owner | Add member with `level=read|write|owner` |
-| PUT | `/workspaces/{wid}/members/{uid}` | Owner | Replace member access level |
-| DELETE | `/workspaces/{wid}/members/{uid}` | Owner | Remove member |
+## Access Model
 
-## Tables (`/tables`)
+- Public health/login exchange routes do not require an existing session.
+- Normal data routes resolve a bearer token to a registered user and run with
+  an RLS session.
+- Workspace data reads require `read`; data mutation requires `write`;
+  workspace/member administration requires `owner`.
+- Admin application role is separate from workspace access level.
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/tables` | Write | Create blank table |
-| GET | `/tables` | User | List all tables (all workspaces) |
-| GET | `/tables/{tid}` | Read | Full schema snapshot (`workspace_id` query param disambiguates names) |
-| PUT | `/tables/{tid}` | Write | Rename table |
-| DELETE | `/tables/{tid}` | Write | Delete table |
-| PATCH | `/tables/{tid}` | Write | Patch {view_order, default_view, col_order} |
-| POST | `/tables/template/{kind}` | Write | Create from template (pm\|crm\|workflow\|blank) |
+## Change Checklist
 
-## Columns · Views · Dashboard
-
-Per-aspect GETs removed — `GET /tables/{tid}` returns full schema. Column mutations return full schema. view_order/default_view via `PATCH /tables/{tid}`.
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/tables/{tid}/columns` | Write | Add column |
-| PATCH | `/tables/{tid}/columns/{cid}` | Write | Update column |
-| DELETE | `/tables/{tid}/columns/{cid}` | Write | Delete column |
-| GET | `/tables/{tid}/views` | Read | List views (ordered) |
-| GET | `/tables/{tid}/views/{vid}` | Read | Get single view |
-| POST | `/tables/{tid}/views` | Write | Create view {name, type, config?} |
-| PUT | `/tables/{tid}/views/{vid}` | Write | Update view |
-| DELETE | `/tables/{tid}/views/{vid}` | Write | Delete view |
-| POST | `/tables/{tid}/views/{vname}/blocks/{bid}/query` | Read | Dashboard LatticeQL query |
-
-## Rows (`/tables/{tid}/rows`)
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/tables/{tid}/rows` | Write | Create row (auto-doc for doc cols) |
-| GET | `/tables/{tid}/rows` | Read | List (offset, limit, sort, filter_json) |
-| GET | `/tables/{tid}/rows/{row_id}` | Read | Get single row |
-| PUT | `/tables/{tid}/rows/{row_id}` | Write | Update row data |
-| DELETE | `/tables/{tid}/rows/{row_id}` | Write | Delete row (+ MinIO cleanup) |
-| GET | `/tables/{tid}/rows/{row_id}/doc` | Read | Get ticket doc (MinIO markdown) |
-| PUT | `/tables/{tid}/rows/{row_id}/doc` | Read | Save ticket doc (route currently checks readability only) |
-| GET | `/tables/{tid}/docs-exist` | Read | List row_ids with non-empty docs |
-| GET | `/tables/{tid}/rows/{row_id}/col-doc/{cid}` | Read | Get per-column doc |
-| PUT | `/tables/{tid}/rows/{row_id}/col-doc/{cid}` | Read | Save per-column doc (route currently checks readability only) |
-
-## Storage (`/storage`) · Admin (`/admin/users`)
-
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| GET | `/storage/files` | User | List files (prefix, max_keys) |
-| GET | `/storage/file/{path}` | User | Download file |
-| PUT | `/storage/file/{path}` | User | Upload file (multipart) |
-| DELETE | `/storage/file/{path}` | User | Delete file |
-| GET | `/storage/admin/files` | Admin | List all files (full paths) |
-| POST | `/admin/users` | Admin | Create user (bootstrap account) |
-| GET | `/admin/users` | Admin | List users (offset, limit) |
-| GET | `/admin/users/{email}` | Admin | Get user by email |
-| PUT | `/admin/users/{email}` | Admin | Update role |
-| DELETE | `/admin/users/{email}` | Admin | Delete user (cascades) |
+When an endpoint changes, update the backend response model, its frontend
+controller/store application, focused E2E coverage, and this route map only if
+the stable contract changed. Do not duplicate every request/response field here;
+use OpenAPI and the Pydantic models for that detail.

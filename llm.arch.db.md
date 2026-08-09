@@ -1,108 +1,85 @@
-# DB Architecture
+# LatticeCast — Database Architecture
+
+PostgreSQL stores identity, authorization, table schemas, rows, views, and the
+application cache. MinIO stores document bodies.
 
 ## Source of Truth
 
-- **Schema definition:** `migration/V*.sql` (V1–V34) — CREATE TABLE + CREATE OR REPLACE FUNCTION
-- **Schema verification:** `migration/test_migration_schema.py` — `EXPECTED_COLUMNS` / `FORBIDDEN_COLUMNS`
-- **RLS verification:** `migration/test_migration_rls.py` — behavioral tests
-- **Roles & grants:** `migration/V1__init.sql` (roles), `migration/V15__grants_app.sql` (explicit grants)
+- DDL and functions: `migration/V*.sql`
+- Expected/forbidden shape: `migration/test_migration_schema.py`
+- RLS behavior: `migration/test_migration_rls.py`
+- Migration ordering and checksums: `migration/migrate.py`,
+  `migration/checksums.txt`
+- Runtime access: `backend/src/models/` and `backend/src/repository/`
 
-## Schemas
+## Schemas and Tables
 
-| Schema | Purpose |
-|--------|---------|
-| `public` | workspaces, workspace_members, tables, table_views, rows |
-| `auth` | users (identity only — user_id, role, timestamps) |
-| `gdpr` | user_info (PII/config) + user_password (optional credential) |
-| `private` | schema_migrations + UNLOGGED cache |
+| Schema | Tables | Purpose |
+|---|---|---|
+| `auth` | `users` | UUID identity and application role |
+| `gdpr` | `user_info`, `user_password` | PII, handle, config, optional credential |
+| `public` | `workspaces`, `workspace_members` | Workspace identity and access grants |
+| `public` | `tables`, `table_views`, `rows` | Generic table engine |
+| `private` | `schema_migrations`, `cache` | Migration state and UNLOGGED TTL cache |
 
-## Roles & Login Users
+## Core Keys and Shapes
 
-| Role | Type | Privileges |
-|------|------|------------|
-| `dba` | group | DDL on all schemas. No DML on data tables. |
-| `mgr` | group, BYPASSRLS | DML on all schemas. No DDL. |
-| `app` | group | CRUD public, SELECT auth, SELECT+UPDATE gdpr (RLS-limited) |
-| `dba_user` | login (superuser) | Inherits dba. Owns all objects. Runs migrations. |
-| `mgr_user` | login, BYPASSRLS | Inherits mgr. Auth/admin backend. Env: `POSTGRES_MGR_PASSWORD` |
-| `app_user` | login | Inherits app. End-user sessions via RLS. |
+| Relation | Identity | Important data |
+|---|---|---|
+| `workspaces` | `workspace_id UUID` | `workspace_name` is a display/path alias |
+| `workspace_members` | `(workspace_id, user_id, action)` | one row per `read`/`write`/`owner` action |
+| `tables` | `(workspace_id, table_id)` | `config JSONB` contains columns and view metadata |
+| `table_views` | `(workspace_id, table_id, view_id)` | view name/type/options in `config JSONB` |
+| `rows` | `(workspace_id, table_id, row_id)` | `row_data JSONB`, keyed by column UUID |
 
-## Engines (`backend/src/core/db.py`)
+`row_id` and `view_id` are numeric and allocated per table. Rows and views have
+composite foreign keys to tables with cascade behavior.
 
-| Engine | PG User | search_path | Used by |
-|--------|---------|-------------|---------|
-| `app_engine` | app_user | `public,auth,gdpr` | General API (CRUD public, SELECT auth) |
-| `login_engine` | mgr_user | `public,auth,gdpr` | Auth endpoints (CRUD auth, BYPASSRLS) |
+`tables.config` is the schema cache returned to the frontend. Its stable fields
+are `columns`, `view_order`, and `default_view`; API responses also attach the
+ordered view rows. Exact JSON shape belongs to the PG functions, repository,
+and response models rather than this overview.
 
-Both: pool_size=5, max_overflow=10, async (asyncpg).
+## Authorization
 
-## Tables
+`get_rls_session` sets `app.current_user_id` for the request. Policies use
+materialized workspace actions:
 
-| Table | PK | Key columns | RLS |
-|-------|-----|-------------|-----|
-| `auth.users` | `user_id` UUID | role, timestamps | — |
-| `gdpr.user_info` | `user_id` UUID (FK→users) | email (unique), user_name (unique, `^[a-z0-9][a-z0-9_-]{2,31}$`), config JSONB | self-only |
-| `gdpr.user_password` | `user_id` UUID (FK→user_info) | password_hash, updated_at | no app grant; mgr only |
-| `public.workspaces` | `workspace_id` UUID | workspace_name | read grant to SELECT; owner to mutate |
-| `public.workspace_members` | `(workspace_id, user_id, action)` | action = read/write/owner | owner-only, including SELECT |
-| `public.tables` | `(workspace_id, table_id)` | config JSONB, created_by, updated_by | read to SELECT; write to mutate |
-| `public.table_views` | `(workspace_id, table_id, view_id)` | config JSONB, view_id auto-increment trigger | read/write split |
-| `public.rows` | `(workspace_id, table_id, row_id)` | row_data JSONB, row_id auto-increment trigger | read/write split |
-| `private.schema_migrations` | `filename` | checksum, applied_at | — |
-| `private.cache` | `key` | value JSONB, expires_at | UNLOGGED PG cache |
+| Level exposed by API | Stored action rows |
+|---|---|
+| `read` | `read` |
+| `write` | `read`, `write` |
+| `owner` | `read`, `write`, `owner` |
 
-`tables.config` JSONB shape: `{columns: [...], view_order: [view_id, ...], default_view: view_id|0|null}`. Repository/API responses normalize null to `0`.
+Workspace data SELECT uses `read`; data INSERT/UPDATE/DELETE uses `write`;
+workspace/member administration uses `owner`. Repository helpers aggregate the
+action rows back into one level for API responses.
 
-FK cascades: rows→tables and table_views→tables have `ON DELETE CASCADE ON UPDATE CASCADE` (V30).
+## Database Roles and Engines
 
-## RLS (`V10`, rewritten by `V33`)
+| Engine | Login role | Purpose |
+|---|---|---|
+| `app_engine` | `app_user` | General API under RLS |
+| `login_engine` | `mgr_user` | Login/admin paths with `BYPASSRLS` |
+| migration runner | `dba_user` | DDL, verification, migration tracking |
 
-`get_rls_session` sets session var `app.current_user_id` (UUID) per request.
-`check_workspace_permission(ws_id, user_id, action)` is SECURITY DEFINER/STABLE
-to avoid recursive policy evaluation. An owner is three materialized rows
-(`read`, `write`, `owner`); write is two; read is one. `workspace_members`
-is owner-visible only. Workspace data uses `read` for SELECT and `write` for
-INSERT/UPDATE/DELETE; workspace rename/delete requires `owner`.
+Both application engines are async and configured in `backend/src/core/db.py`.
 
-## PG Functions (SECURITY DEFINER)
+## PG-Owned Operations
 
-| Function | Source | Purpose |
-|----------|--------|---------|
-| `add_column` / `update_column` / `delete_column` | V23 | Column CRUD on tables.config.columns |
-| `update_col_order` / `update_view_order` / `update_default_view` | V23 | Reorder columns/views, set default view |
-| `create_view` / `update_view` / `delete_view` | V23 | View CRUD on table_views + tables.config |
-| `create_table_from_template` | V27 | Dispatch to `_seed_blank`/`_seed_pm`/`_seed_crm`/`_seed_workflow` |
-| `create_workspace` | V17/V33 | Atomic workspace + creator's three action grants (RLS bypass) |
-| `check_workspace_permission` | V33 | Flat action lookup used by RLS policies |
-| `grant_workspace_action` | V33 | Atomically materialize a read/write/owner level; invoker remains subject to RLS |
-| `get_user_sidebar` | V24/V34 | Return each accessible workspace and table once, independent of action-grant count |
-| `create_row_data_index` / `drop_row_data_index` | V11 | Auto-managed per-column indexes (btree/GIN) |
+SECURITY DEFINER functions own atomic workspace creation, access grants,
+sidebar aggregation, column/view/schema mutation, template creation, and
+row-data index management. Backend repositories are thin callers and then read
+the canonical result.
 
-## Key Migration Milestones
+## Invariants and Gotchas
 
-| Migration | What changed |
-|-----------|--------------|
-| V1–V7 | Base schema: roles, users, user_info, workspaces, members, tables, rows |
-| V8–V9 | table_schemas + table_views (both 1:1 with tables) |
-| V10–V11 | RLS policies + per-column index helpers |
-| V12–V14 | Template seeders + schema/view CRUD functions |
-| V15 | Explicit grants fixing default-priv gap; mgr_user BYPASSRLS |
-| V17 | `create_workspace` atomic function |
-| V23 | **Merge table_schemas → tables.config** — all PG functions rewritten |
-| V24–V26 | User table schemas, default_view=0 allowed, view type check |
-| V27–V28 | Workflow template (`_seed_workflow`), drop title col |
-| V29 | Backfill default_view to 0 and normalize null in its update function; blank/default configs can still store null |
-| V30 | FK ON UPDATE CASCADE on rows + table_views |
-| V31 | PostgreSQL UNLOGGED cache replaces external cache service |
-| V32 | Optional `gdpr.user_password`; only mgr/login session can access it |
-| V33 | Replace member roles with action grants; split RLS into read/write/owner policies |
-| V34 | Deduplicate sidebar workspaces and tables after the action-grant migration |
-
-## Migration Commands
-
-```bash
-docker compose --profile migration run --rm --entrypoint python migration migrate.py --test-only  # test
-docker compose --profile migration run --rm --entrypoint python migration migrate.py --hash       # regen checksums
-docker compose --profile migration run --rm --entrypoint python migration migrate.py --dump       # dump first!
-docker compose --profile migration run --rm --entrypoint python migration migrate.py --apply-only # apply
-```
+- `workspace_id`, not `workspace_name` or `user_name`, is the workspace key.
+- `workspace_name` and `table_id` cannot contain `.` because they are URL/S3
+  path-facing values.
+- The same `table_id` may exist in different workspaces.
+- `user_password` is not readable through the app role.
+- RLS is the authorization boundary; route-level membership checks are not a
+  substitute for policies.
+- Before any migration command, create the dump required by `migrate.py`. Never
+  edit an applied migration; add a new migration and refresh checksums.

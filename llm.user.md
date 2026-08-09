@@ -1,114 +1,74 @@
-# LLM Context - User Management
+# LatticeCast — Users and Workspace Access
 
-> See `llm.arch.auth.md` for auth architecture, `llm.root.md` for project context.
+User identity, application role, workspace membership, and login credential are
+separate concepts. See `llm.arch.auth.md` for token verification and engines.
 
-## Login API Endpoints
+## User Data
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| POST | `/api/v1/login/{provider}/token` | None | Exchange OAuth code for tokens (provider: google \| authentik) |
-| POST | `/api/v1/login/password` | None | `{user_name, password}` — self-signed JWT; password only checked if `gdpr.user_password` has a row |
-| GET | `/api/v1/login/me` | Bearer | Current user info (user_id, user_name, config, role) |
-| PATCH | `/api/v1/login/me/config` | Bearer | Shallow-merge patch into `gdpr.user_info.config`; null removes key |
-| PUT | `/api/v1/login/me/email` | Bearer | Update caller's email (enforces uniqueness) |
-| PUT | `/api/v1/login/me/password` | Bearer | `{new_password, current_password?}` — set/change password |
+| Relation | Owns |
+|---|---|
+| `auth.users` | `user_id UUID`, application role, audit timestamps |
+| `gdpr.user_info` | email, unique `user_name`, per-user UI config |
+| `gdpr.user_password` | optional bcrypt hash, isolated from app-role reads |
 
-### Password Login
+The UUID is identity. `user_name` and email are lookup/display fields and are
+not workspace or S3 key components.
 
-```bash
-POST /api/v1/login/password
-{"user_name": "handle-or-email", "password": "unchecked-unless-a-password-is-set"}
-# Resolves by user_name first, then email.
-# No row in gdpr.user_password → password ignored, JWT issued directly.
-# Row exists → password must match the bcrypt hash, else 401.
-# Response: TokenResponse with access_token = self-signed JWT (see llm.arch.auth.md)
+## Application Roles vs Workspace Levels
+
+- Application role is `user` or `admin`; admin gates `/admin/users`.
+- Workspace level is `read`, `write`, or `owner`; it governs one workspace.
+- Being an application admin does not replace workspace membership/RLS.
+- The API returns one highest workspace level, while PostgreSQL stores one row
+  per granted action:
+
+| API level | Stored actions |
+|---|---|
+| `read` | `read` |
+| `write` | `read`, `write` |
+| `owner` | `read`, `write`, `owner` |
+
+Owners manage membership. The backend prevents removal or demotion of the last
+owner.
+
+## User Lifecycle
+
+- Tokens resolve only registered local users; authentication does not
+  auto-create identities.
+- Admin user creation writes identity and PII through the manager session and
+  bootstraps initial workspace access.
+- Self-service endpoints expose current user/config, email update, and password
+  set/change.
+- Workspace invitations resolve a target by UUID, `user_name`, or email.
+- GDPR-sensitive data remains in the `gdpr` schema; do not move credentials into
+  broadly readable user-info data.
+
+## Frontend Member Flow
+
+```text
+members page event
+  -> lib/backend/workspaces.ts
+  -> workspace member endpoint
+  <- MemberFullResponse with level
+  -> workspace_members.store.ts cache
+  -> page $derived member rows and controls
 ```
 
-### Token Exchange
+New UI behavior must use the response-provided `level` and update the store
+through its helpers. Do not create three visible rows for the three database
+actions and do not infer the new level from the request.
 
-```bash
-POST /api/v1/login/{provider}/token
-{"code": "auth_code", "redirect_uri": "https://…/callback/google", "code_verifier": "pkce_43_to_128"}
-# Response: {access_token, refresh_token?, id_token?, expires_in?, userinfo: {sub, email, name?, picture?}}
-```
+## Main Files
 
-### Get Current User (`/me`)
+| Concern | Source |
+|---|---|
+| Models | `backend/src/models/user.py`, `backend/src/models/workspace.py` |
+| Persistence | `backend/src/repository/user.py`, `backend/src/repository/workspace.py` |
+| Login/self service | `backend/src/router/api/auth.py` |
+| Admin users | `backend/src/router/api/admin/users.py` |
+| Workspace members | `backend/src/router/api/workspaces.py` |
+| FE controller/cache | `frontend/src/lib/backend/workspaces.ts`, `frontend/src/lib/stores/workspace_members.store.ts` |
+| Members page | `frontend/src/routes/[workspace_id]/members/+page.svelte` |
 
-```bash
-GET /api/v1/login/me   # Authorization: Bearer $TOKEN
-# Response (MeResponse — email/user_name/config from gdpr.user_info)
-{"user_id": "uuid", "sub": "…", "email": "…", "name": "…", "picture": "…",
- "provider": "google|authentik|none", "role": "user|admin", "user_name": "…", "config": {}}
-```
-
-### Patch Config / Update Email
-
-```bash
-PATCH /api/v1/login/me/config   # body: {"darkMode": true, "lastView": null}  → returns merged config
-PUT   /api/v1/login/me/email    # body: {"email": "new@example.com"}          → returns MeResponse
-```
-
-## Admin API Endpoints
-
-All require `admin` role. Path param `{user_email}` looked up case-insensitive via `gdpr.user_info.email`.
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/admin/users` | Create user (bootstraps auth.users + gdpr.user_info + workspace) |
-| GET | `/api/v1/admin/users` | List users (paginated, `?offset=0&limit=100`) |
-| GET | `/api/v1/admin/users/{user_email}` | Get user by email |
-| PUT | `/api/v1/admin/users/{user_email}` | Update user role |
-| DELETE | `/api/v1/admin/users/{user_email}` | Delete user (cascades to gdpr.user_info, workspace_members) |
-
-Create: `POST {"email":"…","role":"user","user_name":"optional"}` → 201 UserResponse. user_name auto-slugged from email if omitted.
-
-## Roles
-
-**PG roles:** `mgr` (group, BYPASSRLS, full DML all schemas) → `mgr_user` (login, used by login_session). `app` (group, RLS, DML public + SELECT auth) → `app_user` (login, used by app_session).
-
-**App roles:** `user` (standard) | `admin` (manages users via `/admin/users/*`).
-
-## Database Schema
-
-```sql
--- auth.users — identity core (V2__users.sql)
--- app: SELECT; mgr: full CRUD
-auth.users (
-    user_id    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    role       VARCHAR NOT NULL DEFAULT 'user',  -- 'user' | 'admin'
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP NOT NULL DEFAULT now()
-)
-
--- gdpr.user_info — PII + handle + config (V3__user_info.sql)
--- Replaces old auth.gdpr + public.user_info split.
--- app: SELECT/UPDATE own row (RLS user_id = current_user_id)
--- mgr: full CRUD (BYPASSRLS)
--- GDPR purge: drop this row without touching auth.users or workspaces.
-gdpr.user_info (
-    user_id   UUID PRIMARY KEY REFERENCES auth.users(user_id) ON DELETE CASCADE,
-    email     VARCHAR UNIQUE NOT NULL,
-    user_name VARCHAR(32) UNIQUE NOT NULL,       -- CHECK: ^[a-z0-9][a-z0-9_-]{2,31}$
-    config    JSONB NOT NULL DEFAULT '{}'        -- per-user UI config (darkMode, lastView, …)
-)
-```
-
-## Auto-created Workspace
-
-`bootstrap_user` (admin create/bootstrap path) creates:
-
-- `workspace_id` = fresh UUID (`default_factory=uuid4`)
-- `workspace_name` = user's **email** (not user_name)
-- three `workspace_members` rows: `read`, `write`, and `owner`
-
-## Workspace Access Levels
-
-The API presents one `level`, but V33 stores one row per granted action:
-
-| Level | Stored actions | Effective access |
-|-------|----------------|------------------|
-| `read` | read | View workspace/table/row/view data |
-| `write` | read + write | Read plus mutate tables, rows, and views |
-| `owner` | read + write + owner | Write plus workspace/member administration |
-
-Member list responses aggregate action rows back to the highest level.
+Use API models/OpenAPI for exact payload fields. Keep this document focused on
+the identity and authorization boundaries.

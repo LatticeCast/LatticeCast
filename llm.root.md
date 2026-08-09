@@ -1,99 +1,89 @@
-# LLM Context — Lattice Cast
+# LatticeCast — Repository Map
 
-Self-hosted Airtable + Jira/CRM. JSONB tables, views (Table/Kanban/Timeline/Workflow/Dashboard), PM/CRM templates, ticket docs in MinIO.
-- **Layer-1** — generic JSONB table engine with sort/filter/group, auto indexes, RLS.
-- **Layer-2** — template seeders only: `POST /api/v1/tables/template/{kind}` (pm/crm/workflow).
+LatticeCast is a self-hosted Airtable-like table engine. PM, CRM, workflow,
+and dashboard features are conventions and templates on top of the same table,
+view, and row primitives.
 
-**Docs:** `llm.dev.md` `llm.frontend.md` `llm.arch.{airtable,pm,dashboard,db,auth}.md` `llm.endpoint.md` `llm.storage.md` `llm.e2e.md` `llm.snapshot.md` `llm.user.md` `llm.deploy.md`
+## Read Next
 
-## Tech Stack
-
-| Layer | Tech |
-|-------|------|
-| FE | SvelteKit 2, Svelte 5 Runes, Tailwind 4, Vite 7, TS 5.9, ECharts 5 |
-| BE | FastAPI, Python 3.12, SQLModel, asyncpg, aioboto3 (async S3) |
-| DB | PostgreSQL 18 — JSONB, GIN/B-tree, RLS | Cache: PG UNLOGGED table |
-| Storage | MinIO (ticket markdown docs) | Auth: Google OAuth, Authentik PKCE |
-| Infra | Docker Compose (dev, UV-based images), Kubernetes (prod) |
-| DSL | `lattice-ql` — compiles dashboard block queries to PG SQL |
-
-## Architecture
-
-```
-Browser → Nginx :13491 → /api/* FastAPI | /* Vite
-BE → PG (app_engine + login_engine, cache: private.cache) → MinIO (aioboto3)
-```
-
-**Roles:** `dba_user` (migrations, ALL) · `app_user` (CRUD + RLS) · `mgr_user` (BYPASSRLS, login/admin)
-
-## Directory
-
-```
-backend/src/
-  main.py              lifespan: pool + JWKS + MinIO
-  config/              settings, pg_cache, storage, lattice_ql
-  core/db.py           app_engine + login_engine
-  middleware/           auth, jwks, token
-  models/ repository/  SQLModel + CRUD layer
-  router/api/
-    tables/            crud, columns, views, templates, _shared
-    table_schemas.py   GET /sidebar
-    rows, dashboard, storage, auth, workspaces, admin/users
-frontend/src/
-  routes/              +layout.ts (auth gate), [workspace_id]/[table_id]/
-  lib/backend/         http, tables, views, table_schemas, workspaces, storage
-  lib/stores/          table_schema, table_schemas, table_rows, table_views, table_workflow, tables, workspace_members, auth, settings
-  lib/components/      sidebar/, layout/ (TopBar), table/ (cells/), workflow/, dashboard/
-  lib/charts/          EChart.svelte (ECharts 5)
-migration/             V1..V34 SQL + migrate.py (lint→verify→test→apply)
-e2e/                   Playwright + pytest
-```
-
-## DB Schema
-
-4 schemas: `public`, `auth`, `gdpr`, `private` (migration metadata + cache). See `llm.arch.db.md`.
-
-```
-auth.users · gdpr.user_info · gdpr.user_password
-public.workspaces · public.workspace_members (one row per read/write/owner grant)
-public.tables       (config={columns, view_order, default_view})
-public.table_views  (config={name, type, ...}, view_id BIGINT auto-inc)
-public.rows         (row_data JSONB, row_id BIGINT)
-private.schema_migrations · private.cache (UNLOGGED)
-```
-
-- V23 merged table_schemas → tables.config · V29 normalizes default_view reads/updates to 0 · V31 PG cache · V32 password table · V33 action-grant RLS · V34 deduplicated sidebar payloads
-- PG functions own schema/view mutations — BE repos are thin wrappers. RLS on all public + gdpr tables.
-
-## Key Patterns
-
-- **Async-native I/O** — sync calls freeze the event loop. See `Skill(developing/fastapi)`.
-- **RLS session** — `get_rls_session` → `app.current_user_id` → PG policies enforce isolation
-- **Workspace access** — materialized `read`/`write`/`owner` grants; reads and mutations are separated by V33 policies
-- **FE member access** — `level=read|write|owner`; controllers update the workspace-member cache from backend responses
-- **Migrations** — head **V34**. Flyway format, checksum-tracked. See `Skill(developing/db-sql)`.
-- **FE stores** split by concern; layout = Sidebar + TopBar; cells in `table/cells/`
-
-## API Routes (`/api/v1/*`)
-
-| Route | Purpose |
+| Area | Document |
 |---|---|
-| `/status` `/settings` | Health, config |
-| `/login/*` | OAuth token exchange |
-| `/workspaces/*` | Workspace + members CRUD |
-| `/sidebar` | Sidebar table-schema tree |
-| `/tables/*` | Tables CRUD, columns, views |
-| `/tables/template/{kind}` | Seeders: pm, crm, workflow |
-| `/tables/{tid}` PATCH | Schema patches |
-| `/tables/{id}/rows/*` | Row CRUD + docs |
-| `/tables/{id}/views/{vid}/blocks/{bid}/query` | Dashboard LatticeQL |
-| `/storage/*` | File upload/download |
-| `/admin/*` | Admin endpoints |
+| Local development and checks | `llm.dev.md` |
+| Frontend architecture | `llm.frontend.md` |
+| Database and authorization | `llm.arch.db.md`, `llm.arch.auth.md` |
+| Table engine and PM layer | `llm.arch.airtable.md`, `llm.arch.pm.md` |
+| Dashboard queries | `llm.arch.dashboard.md` |
+| API route map | `llm.endpoint.md` |
+| MinIO and ticket documents | `llm.storage.md` |
+| E2E and screenshots | `llm.e2e.md`, `llm.snapshot.md` |
+| Users and workspace access | `llm.user.md` |
+| Compose and Kubernetes | `llm.deploy.md` |
 
-## Dev Bootstrap
+## Runtime Architecture
 
-```bash
-docker compose up -d db && docker compose --profile migration run --rm migration && docker compose up -d
+```text
+Browser -> nginx :${NGX_PORT}
+             |-- /*       -> SvelteKit/Vite frontend
+             `-- /api/*   -> FastAPI
+                               |-- PostgreSQL (data, RLS, cache)
+                               `-- MinIO (documents and files)
 ```
 
-Dev user `lattice` seeded via DBA. See `llm.dev.md`.
+Stack: SvelteKit 2/Svelte 5/TypeScript/Tailwind 4, FastAPI/Python 3.12,
+PostgreSQL 18, MinIO, ECharts, and `lattice-ql`.
+
+## Repository Layout
+
+| Path | Responsibility |
+|---|---|
+| `frontend/src/routes/` | SvelteKit pages and route loading |
+| `frontend/src/lib/backend/` | API controllers; update stores from responses |
+| `frontend/src/lib/stores/` | Client cache and derived state |
+| `frontend/src/lib/components/` | Table, sidebar, workflow, and dashboard views |
+| `backend/src/router/api/` | FastAPI route handlers |
+| `backend/src/repository/` | Database access and PG-function wrappers |
+| `backend/src/middleware/` | Token verification, user resolution, RLS sessions |
+| `backend/src/config/` | Settings, MinIO, PG cache, LatticeQL adapter |
+| `migration/` | Ordered SQL migrations, checksums, and schema/RLS tests |
+| `e2e/` | pytest + remote Playwright tests against the live stack |
+| `docker-compose.yml` | Development services and test/migration profiles |
+| `k8s/` | Production manifests |
+
+## Core Data Flow
+
+```text
+UI event -> frontend controller -> FastAPI -> repository/PG function
+         <- exact API response  <- PostgreSQL/MinIO
+controller updates store -> Svelte $derived state -> GUI rerenders
+```
+
+Server-backed data must follow this flow. Components do not invent a second
+copy of backend state or manually patch the GUI after a successful mutation.
+
+## Stable Invariants
+
+- `workspace_id` is the workspace UUID identity; `workspace_name` is a display
+  and browser-path alias.
+- A table is keyed by `(workspace_id, table_id)`; rows and views add their
+  per-table numeric IDs.
+- Table columns and ordering live in `public.tables.config`; row values live in
+  `public.rows.row_data`, keyed by column UUID.
+- Workspace access is materialized as `read`, `write`, and `owner` action rows.
+  PostgreSQL RLS is the final authorization boundary.
+- Schema/view mutations return a full schema snapshot so the frontend can
+  replace its cache from the server response.
+- Ticket document keys begin with the workspace UUID, never a user name or
+  workspace display name.
+- `workspace_name` and `table_id` are path-facing and cannot contain `.`.
+- Backend I/O is async. Do not add blocking database, HTTP, or S3 calls to the
+  event loop.
+
+## Source of Truth
+
+- API: FastAPI decorators under `backend/src/router/api/` and generated OpenAPI.
+- Database: `migration/V*.sql`; assertions live in
+  `migration/test_migration_schema.py` and `migration/test_migration_rls.py`.
+- Frontend state flow: controllers in `frontend/src/lib/backend/`, then stores
+  in `frontend/src/lib/stores/`, then `$derived` UI.
+- Runtime topology and environment wiring: `docker-compose.yml` and
+  `.env.example`.

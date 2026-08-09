@@ -1,101 +1,60 @@
-# Browser Snapshot Guide
+# LatticeCast — Browser Snapshot Guide
+
+Use snapshots to verify the rendered result of frontend changes against the
+real stack. The `e2e` service drives remote Chromium in the `browser` service;
+both share `.browser/` as `/output`.
 
 ## Setup
 
-The `browser` service runs Playwright's remote Chromium server on the host
-network. The `e2e` container connects through `BROWSER_WS`; Chromium sees
-`localhost:13491` exactly like a real user's browser.
-
-Screenshots write to `.browser/`. Both `e2e` (the Playwright client that
-resolves `page.screenshot(path=...)`) and `browser` mount it as `/output`.
-
 ```bash
+docker compose up -d
 docker compose --profile test up -d browser e2e
 ```
 
-## Login
+Chromium and the E2E client use host networking. Navigate to the public URL
+from `BASE_URL` (local default `http://localhost:13491`), not an internal
+Compose service hostname.
 
-Auth is stored in `localStorage` key `loginInfo`. Obtain a real password-login
-JWT, then inject the same shape used by `e2e/e2e_base.py`:
+## Authentication
 
-```python
-import json
-import os
-import requests
-from playwright.sync_api import sync_playwright
+Use the same flow as `e2e/e2e_base.py`:
 
-base = os.environ.get("BASE_URL", "http://localhost:13491").rstrip("/")
-token = requests.post(
-    f"{base}/api/v1/login/password",
-    json={"user_name": "lattice", "password": ""},
-    timeout=10,
-).json()["access_token"]
-LOGIN_INFO = json.dumps({
-    "provider": "none",
-    "accessToken": token,
-    "userInfo": {"sub": token, "email": "lattice@e2e.local", "name": "lattice"},
-    "role": "admin",
-})
+1. Obtain a real token from `POST /api/v1/login/password`.
+2. Call `seed_login_info(page, token, user_name, role)` before the first
+   navigation, or reproduce its `localStorage.loginInfo` shape exactly.
+3. Ensure that user has access to the target workspace.
 
-with sync_playwright() as p:
-    browser = p.chromium.connect(os.environ["BROWSER_WS"])
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
-    page.add_init_script(
-        f"localStorage.setItem('loginInfo', {json.dumps(LOGIN_INFO)});"
-    )
-    page.goto(f"{base}/{{workspace_id}}/{{table_id}}")
-    # Pick a selector that proves the target feature, not only the shell, is ready.
-    page.get_by_test_id("grid-add-row-btn").wait_for(
-        state="visible", timeout=10000
-    )
-    page.screenshot(path="/output/my_screenshot.png")
-    page.close()
-    browser.close()
-```
+Do not treat a bare user name as a bearer token and do not automate the login UI
+unless login itself is the feature under test.
 
-### Login user: `lattice`
+## Capture Rules
 
-Use `POST /api/v1/login/password` for the `lattice` dev user; a bare username
-is not the current bearer-token format.
+- Wait for feature-specific observable state: a stable URL, successful response,
+  visible locator, or derived GUI value.
+- Never use a fixed sleep to guess readiness.
+- Prove the requested feature, not only that the application shell loaded.
+- Use a deterministic viewport and descriptive filenames.
+- Write directly to `/output/<name>.png`; it appears at `.browser/<name>.png`.
+- Do not use `docker cp`.
 
-The user must be a workspace member to see tables. If "Failed to fetch" appears, the user isn't a member of that workspace.
+## Recommended Pattern
 
-### data-testid attributes on login page
+Reuse `connect_browser`, `login`, and `seed_login_info` from
+`e2e/e2e_base.py`, create a fresh page, navigate, wait for the target locator,
+capture to `/output`, then close the page/browser cleanly.
 
-- `data-testid="login-userid"` — username input
-- `data-testid="login-start"` — submit button
-
-## Rules
-
-1. **Always use `localhost:13491`** — the browser container uses `network_mode: host`, same as a real user
-2. **Never use `docker cp`** — screenshots go to `/output` which is mounted as `.browser/`
-3. **Inject localStorage, don't fill the login form** — faster and matches E2E fixtures
-4. **Use a real JWT** from `/api/v1/login/password`
-5. **Wait for observable UI state** after navigation (`locator.wait_for`, URL, response, or derived GUI); never use a fixed sleep
-
-## Running a snapshot
+For repeatable snapshots, add or extend a pytest test and run:
 
 ```bash
-docker compose exec -T e2e python3 -c "
-import json
-from playwright.sync_api import sync_playwright
-# ... script here ...
-" 2>&1
+docker compose --profile test exec e2e pytest path/to/test.py -v --snapshot
 ```
 
-Or write a temporary script under `./.tmp/` and pipe it to Python in the
-E2E container:
-```bash
-docker compose exec -T e2e python3 - < .tmp/snapshot.py
-```
+For a one-off investigation, place the script under `.tmp/` and pipe it into
+the E2E container. Do not leave credentials in the script or artifact name.
 
 ## Output
 
-Screenshots go to `.browser/` on the host (= `/output` in the E2E client container).
-
-```
-.browser/
-├── _old/           # archived screenshots from previous workers
-├── doc_z_01_table.png
-└── doc_z_02_popup.png
-```
+`.browser/` is evidence and debug output, not application source. Inspect the
+image after capture and report what visible state it proves. Read
+`.agent-skills/developing/debug-frontend/SKILL.md` for the full debugging
+workflow.

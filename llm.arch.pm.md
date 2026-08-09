@@ -1,72 +1,59 @@
-# LLM Context - PM System (Layer 2)
+# LatticeCast — PM Layer
 
-Built ON the Airtable core. PM is just a template + conventions — no special code paths.
+PM is Layer 2: a seeded table schema plus conventions on top of the generic
+table engine. It does not have separate row, view, authorization, or storage
+models.
 
-## PM Template
+## Template
 
-`POST /api/v1/tables/template/pm` creates a table with these columns:
+`POST /api/v1/tables/template/pm` creates the PM table through the shared PG
+template dispatcher. The seed defines ticket-oriented columns such as Title,
+Doc, Type, Status, Priority, Assignee, dates, estimate, tags, description, and
+Parent, plus Kanban and Timeline views.
 
-| Position | Column | Type |
-|----------|--------|------|
-| 0 | Title | text (short summary) |
-| 1 | Doc | doc (read-only, auto-creates MinIO .md on row insert) |
-| 2 | Type | select (epic/story/task/bug) |
-| 3 | Status | select (todo/in_progress/testing/debugging/review/done/merged) |
-| 4 | Priority | select (critical/high/medium/low) |
-| 5 | Assignee | text |
-| 6 | Start Date | date |
-| 7 | Due Date | date |
-| 8 | Estimate | number |
-| 9 | Tags | tags |
-| 10 | Description | text |
-| 11 | Parent | text (row_id of parent) |
+The migration seeder is the source of truth for exact column order, choices,
+colors, and default view. Do not duplicate that configuration in frontend code
+or this onboarding document.
 
-Available views: implicit Table (rendered from `tables.config`) + Sprint Board
-(Kanban by Status) + Roadmap (Timeline). The seeder inserts only the Kanban
-and Timeline rows, sets Sprint Board as `default_view`, and leaves the
-implicit Table without a `table_views` row.
+## Ticket Conventions
 
-## Hierarchy
+- Ticket kinds are epic, story, task, and bug.
+- Parent stores the parent row's per-table numeric `row_id`.
+- Display keys are derived from ticket type and `row_id`; there is no separate
+  global ticket identity.
+- Title stays short; detailed requirements, decisions, and work notes belong in
+  the Markdown document.
+- The main document object key is
+  `{workspace_id}/{table_id}/{row_id}.md`.
 
-```
-Epic (type=epic, parent=null)
-└── Story (type=story, parent=epic_rn)
-    └── Task/Bug (type=task/bug, parent=story_rn)
-```
+Typical hierarchy:
 
-- Workers only implement tasks/bugs
-- The core API stores hierarchy values but does not cascade statuses.
-- Agentic-hive/project automation may advance parents after checking children.
-
-## Ticket ID
-
-`<type>-<row_id>` — e.g. `task-42`, `story-15`, `bug-7`. No Key column.
-
-## Ticket Doc
-
-Each ticket has a markdown doc in MinIO at `{workspace_id}/{table_id}/{row_id}.md`.
-
-- **Title is SHORT** (max 80 chars, one line)
-- **Doc has ALL detail** (implementation instructions, files, decisions, work log)
-- Workers READ doc first before implementing
-
-## Status Flow
-
-```
-todo → in_progress → testing → review → done
-                       ↓
-                    debugging → testing (loop)
-
-Parent status changes are performed by automation, not by a PM-specific backend route.
+```text
+Epic
+  `-- Story
+        |-- Task
+        `-- Bug
 ```
 
-## What's NOT PM-specific
+## Workflow Boundary
 
-These are Layer 1 (Airtable core), not PM:
-- Column CRUD, row CRUD, view CRUD
-- Sort, filter, group, search
-- Import/export
-- Kanban drag-and-drop
-- Timeline date bars
-- Markdown rendering
-- URL resolution
+Status, hierarchy, and parent progression are conventions consumed by agents or
+automation. The core backend stores the values and renders the views; it does
+not introduce a PM-only CRUD path for every workflow transition.
+
+Generic Layer-1 behavior includes column/row/view CRUD, filtering, grouping,
+Kanban drag-and-drop, Timeline rendering, import/export, and document access.
+
+## Main Files
+
+| Concern | Source |
+|---|---|
+| PM template SQL | template functions under `migration/V*.sql` |
+| Template endpoint | `backend/src/router/api/tables/templates.py` |
+| Row/doc behavior | `backend/src/router/api/rows.py` |
+| Table UI | `frontend/src/routes/[workspace_id]/[table_id]/+page.svelte` |
+| Kanban/Timeline | `frontend/src/lib/components/table/` |
+| Project automation skill | `.agent-skills/developing/project-management/SKILL.md` |
+
+When changing the PM template, update the SQL seeder and its template E2E test;
+keep generic table code generic.

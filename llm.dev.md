@@ -1,115 +1,92 @@
-# Dev Guide
+# LatticeCast — Development Guide
 
-> Deploy: `llm.deploy.md` | Schema: `llm.arch.db.md` | Skills: `Skill(developing/fastapi)`, `Skill(developing/db-sql)`
+Use this file for the normal local workflow. Architecture lives in
+`llm.root.md`; specialized checks live in the linked documents and skills.
 
-## Bootstrap (from zero)
+## Start the Stack
 
 ```bash
-# 1. DB + migrations
-docker compose up -d db
-docker compose exec db pg_isready -U dba_user -d db
+docker compose up -d db minio
 docker compose --profile migration run --rm migration
-
-# 2. Seed dev user (app_user lacks INSERT on auth — must use DBA)
-docker compose exec db psql -U dba_user -d db -c "
-  INSERT INTO auth.users (user_id, role) VALUES (gen_random_uuid(), 'user');"
-USER_ID=$(docker compose exec -T db psql -U dba_user -d db -t -A -c \
-  "SELECT user_id FROM auth.users LIMIT 1")
-docker compose exec db psql -U dba_user -d db -c "
-  INSERT INTO gdpr.user_info (user_id, email, user_name)
-  VALUES ('$USER_ID', 'lattice@latticecast.local', 'lattice');"
-
-# 3. Start, log in, create the first workspace, verify
 docker compose up -d
 curl http://localhost:13491/api/v1/status
-TOKEN=$(curl -s -X POST http://localhost:13491/api/v1/login/password \
-  -H "Content-Type: application/json" \
-  -d '{"user_name":"lattice","password":""}' | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-curl -X POST http://localhost:13491/api/v1/workspaces \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"workspace_name":"lattice"}'
-curl http://localhost:13491/api/v1/workspaces -H "Authorization: Bearer $TOKEN"
 ```
 
-## Auth
+The public entry point is `http://localhost:${NGX_PORT}`; the default in
+`.env.example` is `13491`. Nginx sends `/api/*` to FastAPI and everything else
+to the Vite frontend.
 
-`POST /login/password` resolves the user by `user_name`/email and returns a
-self-signed JWT (`JWT_SECRET_KEY` in `.env`). Accounts with no
-`password_hash` set skip password verification; set one via
-`PUT /login/me/password`. OAuth (Google, Authentik) remains available as
-an alternative — see `llm.arch.auth.md`.
+## Work by Area
 
-## Frontend
+| Change | Primary paths | Minimum checks |
+|---|---|---|
+| Frontend | `frontend/src/` | `npm run check`, `npm run build`, focused E2E/snapshot |
+| Backend | `backend/src/` | `ruff check`, focused API/E2E test |
+| Database | `migration/` | dump, migration test, checksum update, apply |
+| E2E | `e2e/` | focused pytest, then affected package/suite |
+| Deployment | `docker-compose.yml`, `k8s/` | render/config validation and service smoke test |
+
+Run commands in the existing containers when the stack is available:
 
 ```bash
-docker compose up frontend -d       # Vite dev, HMR auto
-docker compose exec frontend npm run lint && docker compose exec frontend npm run build
+docker compose exec frontend npm run check
+docker compose exec frontend npm run build
+docker compose exec backend ruff check src
+docker compose --profile test exec e2e pytest -v
 ```
 
-Playwright snapshot (MUST after FE changes) — see `llm.snapshot.md` and `Skill(developing/debug-frontend)`:
-```bash
-docker compose --profile test up -d browser e2e
-docker compose exec -T e2e python3 -c '<connect to BROWSER_WS and save to /output/...>'
-```
+Dependency changes require rebuilding the affected image. Frontend and backend
+source are bind-mounted for local development.
 
-## Backend
+## Database Changes
 
-```bash
-docker compose up backend -d        # reload=True auto-picks up src/ changes
-curl http://localhost:13491/api/v1/status
-```
+`migration/V*.sql` and `migration/checksums.txt` are the source of truth. Never
+edit an applied migration; add a new ordered file.
 
-UV-based image (`ghcr.io/astral-sh/uv:python3.12-bookworm-slim`), `uv pip install --system` — no `.venv`.
-Host `./backend/` bind-mounted to `/app/`. Log rotation: `json-file`, 100m × 50 files.
-
-**Deps change**: rebuild image (`docker compose build backend && docker compose restart backend`).
-`lattice-ql`: bump tag in `backend/pyproject.toml`, rebuild.
-
-**Async rule**: all I/O must be awaitable — sync calls freeze the event loop. See `Skill(developing/fastapi)`.
-
-## Migrations
-
-Current head is V34. V31 adds the PostgreSQL cache, V32 adds optional
-password credentials, V33 replaces workspace roles with materialized
-read/write/owner action grants and corresponding RLS policies, and V34
-deduplicates sidebar workspaces and tables after that grant migration.
+The runner requires a database dump before migration work:
 
 ```bash
-# Add V<N>__name.sql — never modify existing files
+docker compose --profile migration run --rm --entrypoint python migration migrate.py --dump
 docker compose --profile migration run --rm migration --test-only
 docker compose --profile migration run --rm --entrypoint python migration migrate.py --hash
 docker compose --profile migration run --rm migration
-git add migration/V<N>__*.sql migration/checksums.txt
 ```
 
-See `Skill(developing/db-sql)` for full workflow.
+Read `.agent-skills/developing/db-sql/SKILL.md` before touching migration SQL.
 
-## E2E Tests
+## Frontend Rule
 
-pytest-based in `e2e/`. Browser in separate container (Playwright `run-server` on `:4444`),
-e2e connects via WS. Both under `--profile test`, `network_mode: host`.
+All server-backed changes follow:
+
+```text
+component -> controller -> backend -> response -> store -> $derived -> GUI
+```
+
+The response is authoritative. Do not mutate a component-only copy of server
+state. See `llm.frontend.md` and
+`.agent-skills/developing/svelte/SKILL.md`.
+
+## E2E and Visual Verification
 
 ```bash
-docker compose --profile test up -d
-docker compose exec e2e pytest e2e/workspace/test_create.py -v   # single test
-docker compose exec e2e pytest                                    # all tests
+docker compose --profile test up -d browser e2e
+docker compose --profile test exec e2e pytest tables/test_row_update.py -v
+docker compose --profile test exec e2e pytest -v --snapshot
 ```
 
-See `Skill(developing/e2e)`.
+Tests target the real stack and remote Chromium. Wait for observable page state,
+not fixed sleeps. Screenshots are written to `.browser/`. See `llm.e2e.md` and
+`llm.snapshot.md`.
 
-## curl Smoke Tests
+## Useful Diagnostics
 
 ```bash
-curl http://localhost:13491/api/v1/status
-curl http://localhost:13491/api/v1/workspaces -H "Authorization: Bearer lattice"
-curl "http://localhost:13491/api/v1/tables?workspace_id=<uuid>" -H "Authorization: Bearer lattice"
-curl "http://localhost:13491/api/v1/tables/<table_id>/rows?limit=50" -H "Authorization: Bearer lattice"
+docker compose ps
+docker compose logs backend
+docker compose logs frontend
+docker compose exec db pg_isready -U dba_user -d "$POSTGRES_DB"
 ```
 
-## Common Issues
-
-| Symptom | Fix |
-|---|---|
-| "permission denied for table users" | Seed via DBA (see bootstrap) |
-| Checksum mismatch | Don't modify applied V*.sql — add new V<N+1> |
-| 502 on `/api/*` | `docker compose logs backend` |
+Common causes: unapplied migrations, a stale image after dependency changes,
+missing user bootstrap data, or a frontend controller that did not update its
+store from the backend response.

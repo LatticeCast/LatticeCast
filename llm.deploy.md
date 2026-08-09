@@ -1,118 +1,75 @@
-# LLM Context - Deployment
+# LatticeCast — Deployment and Runtime
 
-> For general project context, see `llm.root.md`.
+`docker-compose.yml` is the local runtime source of truth. `k8s/` contains the
+production manifests. Environment names and safe examples live in
+`.env.example`.
 
-## Quick Start
+## Compose Topology
+
+```text
+host :${NGX_PORT} -> lattice-cast (nginx)
+                         |-- frontend (Vite)
+                         `-- backend (FastAPI)
+                                |-- db (PostgreSQL)
+                                `-- minio (S3-compatible storage)
+```
+
+| Service | Role | Persistent/source mount |
+|---|---|---|
+| `lattice-cast` | Public reverse proxy | nginx template |
+| `frontend` | SvelteKit dev server | `./frontend` bind mount |
+| `backend` | FastAPI workers | `./backend` bind mount |
+| `db` | PostgreSQL data and PG cache | `db_data` volume |
+| `minio` | Documents and generic files | `.minio_data/` |
+| `migration` | SQL migration runner | `./migration`, migration profile |
+| `browser` | Remote Chromium server | `.browser/`, test profile |
+| `e2e` | pytest/Playwright client | `./e2e`, `.browser/`, test profile |
+
+The backend reaches database/MinIO through `app-network`. Nginx, frontend, and
+backend share the external `shared-network`. The E2E and browser services use
+host networking so Chromium reaches the same public URL as a developer.
+
+## Common Commands
 
 ```bash
-docker compose up                                     # all services (nginx + fe + be + db + minio)
-docker compose --profile migration run --rm migration  # run DB migrations
-docker compose --profile test up -d e2e browser        # e2e + headless Chromium
+docker compose up -d
+docker compose ps
+docker compose logs backend
+docker compose --profile migration run --rm migration
+docker compose --profile test up -d browser e2e
+docker compose build frontend backend
 ```
 
-Single entry point: `http://localhost:${NGX_PORT}` (default **13491**). Nginx (`lattice-cast` service) proxies `/api/*` → backend, `/*` → frontend.
+Use `llm.dev.md` for the required migration dump/test/hash sequence; the short
+command above is only normal startup/application of already-reviewed files.
 
-## Architecture
+## Configuration Groups
 
-```
-browser → :13491 nginx (lattice-cast)
-              ├─ /api/*  → backend:13491  (uvicorn × 4 via supervisord)
-              └─ /*      → frontend:13491 (vite dev server)
-         backend → db:5432 (cache: private.cache table), minio:9000
-```
+| Group | Examples |
+|---|---|
+| Public entry point | `NGX_PORT` |
+| PostgreSQL | `POSTGRES_DB`, app/manager passwords |
+| Local JWT | secret key and expiry |
+| OAuth | Google and Authentik client settings |
+| MinIO | endpoint, access key, secret, bucket |
+| E2E target | base URL and browser WebSocket override |
 
-## Services (docker-compose.yml)
+Frontend provider values are supplied as build arguments and baked by Vite.
+Backend/runtime secrets remain environment variables. Do not copy real `.env`
+values into documentation, manifests, logs, or commits.
 
-| Service | Image / Build | Network | Notes |
-|---------|---------------|---------|-------|
-| `lattice-cast` | nginx:alpine | shared-network | Reverse proxy, single exposed port `NGX_PORT` |
-| `frontend` | `./frontend` (node:24) | shared-network | Vite dev server, source-mounted |
-| `backend` | `./backend` (uv/python3.12-bookworm-slim) | shared + app | Supervisord → uvicorn --workers 4 |
-| `db` | postgres:18 | app-network | Port 15432 exposed to host. Also serves the cache (`private.cache` UNLOGGED table) |
-| `minio` | minio/minio:latest | app-network | Console on :9001 (internal) |
+## Kubernetes
 
-### Profiles
+The `k8s/` directory separates namespace/config, deployments, services, and
+ingress resources for frontend, backend, database, and MinIO. Read
+`k8s/README.md` before applying them. TLS secrets and image publication are
+external deployment steps, not encoded in the onboarding docs.
 
-| Profile | Services | Purpose |
-|---------|----------|---------|
-| `migration` | `migration` | DB migrations (Python migrate.py, mounts docker.sock) |
-| `test` | `e2e`, `browser` | E2E: uv + Playwright client; Browser: Chromium run-server :4444. Both use `network_mode: host` |
+## Gotchas
 
-### Networks
-
-- `app-network` (bridge) — internal: backend, db, minio, migration
-- `shared-network` (external) — nginx ↔ frontend ↔ backend; cross-compose communication
-
-### Volumes / Mounts
-
-| Mount | Type | Target |
-|-------|------|--------|
-| `db_data` | named volume | PostgreSQL data |
-| `.minio_data/` | bind mount | MinIO object storage |
-| `./frontend` | bind mount | FE source (hot reload) |
-| `./backend/` | bind mount | BE source (hot reload) |
-| `.browser/` | bind mount | E2E screenshot output |
-
-## Dockerfiles
-
-| Path | Base | Purpose |
-|------|------|---------|
-| `frontend/Dockerfile` | node:24 | Dev + build; `npm run preview` in prod |
-| `frontend/Dockerfile.build` | node:24 → scratch | Multi-stage export of `build/` dir only |
-| `backend/Dockerfile` | uv:python3.12-bookworm-slim | Supervisord entry; installs from pyproject.toml |
-| `migration/Dockerfile` | uv:python3.12-bookworm-slim | Docker CLI + psycopg2 + sqlfluff |
-| `e2e/Dockerfile` | uv:python3.12-bookworm-slim | Playwright client (no browsers) |
-| `browser/Dockerfile` | playwright/python:v1.50.0-noble | Chromium host, run-server :4444; mem_limit 2g |
-
-## Kubernetes (Production)
-
-```
-k8s/
-├── namespace/lattice-cast.yaml
-├── configmaps/backend-config.yaml
-├── {frontend,backend,db,minio}-deployment.yaml
-├── {frontend,backend,db,minio}-service.yaml
-└── {frontend,backend}-ingress.yaml
-```
-
-```bash
-kubectl apply -f k8s/namespace/
-kubectl apply -f k8s/configmaps/
-kubectl create secret tls lattice-cast-tls-secret --key domain.key --cert domain.pem -n lattice-cast
-kubectl apply -f k8s/
-```
-
-### Build & Push
-
-```bash
-set -a && source .env && set +a && docker compose build
-docker tag lattice-cast-frontend:latest 127.0.0.1:7000/lattice-cast-frontend:latest
-docker tag lattice-cast-backend:latest  127.0.0.1:7000/lattice-cast-backend:latest
-docker push 127.0.0.1:7000/lattice-cast-frontend:latest
-docker push 127.0.0.1:7000/lattice-cast-backend:latest
-```
-
-Frontend build requires `GOOGLE_CLIENT_ID`, `AUTHENTIK_URL`, `AUTHENTIK_CLIENT_ID` exported — Vite bakes them at build time via docker-compose build args.
-
-### Ingress
-
-| Path | Service |
-|------|---------|
-| `/` | frontend-service |
-| `/api/*` | backend-service |
-
-## Environment Variables (.env.example)
-
-| Variable | Description |
-|----------|-------------|
-| `NGX_PORT` | Single exposed port (default 13491) |
-| `POSTGRES_DB` | Database name |
-| `POSTGRES_APP_PASSWORD` | app_user (RLS-enforced CRUD) |
-| `POSTGRES_MGR_PASSWORD` | mgr_user (BYPASSRLS, login/admin) |
-| `GOOGLE_CLIENT_ID/SECRET` | Google OAuth (build-time for FE) |
-| `AUTHENTIK_URL/CLIENT_ID` | Authentik OAuth (build-time for FE) |
-| `MINIO_*` | MinIO S3 storage (root user, endpoint, bucket) |
-| `SAMPLE_USER/PASSWORD` | Dev seed user |
-| `E2E_BASE_URL` | Override e2e target (default: local stack) |
-
-DB DBA creds (`dba_user`/`dba_pws`) are hardcoded in `docker-compose.yml`, not in `.env`.
+- `shared-network` is external and must exist for Compose startup.
+- Source changes hot-reload, but dependency or Dockerfile changes require an
+  image rebuild.
+- Database and MinIO data outlive containers through their mounts.
+- Test screenshots are shared through `.browser/`; do not use `docker cp`.
+- Validate the rendered Compose/Kubernetes configuration before deployment.

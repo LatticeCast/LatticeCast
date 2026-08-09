@@ -1,89 +1,68 @@
-# Airtable Core (Layer 1)
+# LatticeCast — Generic Table Engine
 
-The generic table engine. Everything here works for ANY table — PM, CRM, or custom.
+This is Layer 1: all PM, CRM, workflow, and custom tables use the same workspace,
+table, column, view, and row machinery. Templates seed configuration; they do
+not create separate storage models.
 
-## Tables (DDL)
+## Data Model
 
-Three PG tables. See `migration/test_migration_schema.py` for exact columns.
+```text
+workspace (UUID identity)
+  `-- table (workspace_id + table_id)
+        |-- schema in tables.config
+        |     `-- columns [{column_id, name, type, options}, ...]
+        |-- views (per-table numeric view_id + config JSONB)
+        `-- rows  (per-table numeric row_id + row_data JSONB)
+```
 
-| Table | PK | Key columns |
-|---|---|---|
-| `public.tables` | `(workspace_id UUID, table_id VARCHAR)` | `config JSONB`, `created_by`, `updated_by` |
-| `public.table_views` | `(workspace_id, table_id, view_id BIGINT)` | `config JSONB`, `created_by`, `updated_by` |
-| `public.rows` | `(workspace_id, table_id, row_id BIGINT)` | `row_data JSONB`, `created_by`, `updated_by` |
+Row values are keyed by column UUID, not by display name. Column position comes
+from schema ordering. View display name and type live in the view config.
 
-- `tables.config` shape: `{columns: [{column_id, name, type, options}, ...], view_order: [view_id, ...], default_view: view_id | 0 | null}`. The API normalizes null/falsy values to `0` (implicit Table/Schema view); V29 backfilled existing rows and made `update_default_view(null)` write `0`, but the original JSON default and blank seeder can still create null.
-- `table_schemas` was merged into `tables` in `V23__merge_table_schemas_into_tables.sql`
-- `row_id` and `view_id` are per-(workspace_id, table_id) auto-increment BIGINTs (BEFORE INSERT triggers in V7, V9)
-- Column position = array index in `config.columns`; reorder via `update_col_order()`
-- FK cascade: deleting a table cascades to `table_views` and `rows`
+## Supported Concepts
 
-## PG Functions
+- Column types include text, number, date/datetime, select, tags, checkbox,
+  URL/contact types, and document cells.
+- View types include table, kanban, timeline, dashboard, and workflow.
+- View `0` is the frontend's implicit table/schema view and may have no
+  `table_views` row.
+- Select/tag option colors come from backend column options as hex values.
+- PostgreSQL helpers manage expression/GIN indexes for searchable JSONB columns.
 
-All schema mutations go through PG functions (originally V13/V14, rewritten in V23 to target `public.tables`).
+Consult migration functions and frontend types for the exact supported enum and
+config fields; do not duplicate them in feature code.
 
-| Function | Signature | Returns |
-|---|---|---|
-| `add_column` | `(ws, tid, name, type, options, by)` | `config` |
-| `update_column` | `(ws, tid, column_id, patch, by)` | `config` |
-| `delete_column` | `(ws, tid, column_id, by)` | `config` |
-| `update_col_order` | `(ws, tid, order_jsonb_array, by)` | `config` |
-| `update_view_order` | `(ws, tid, order_jsonb_array, by)` | `config` |
-| `update_default_view` | `(ws, tid, view_id_or_null, by)` | `config` (`null` input is normalized to `0`) |
-| `create_view` | `(ws, tid, config, by)` | `config` |
-| `update_view` | `(ws, tid, view_id, patch, by)` | `config` |
-| `delete_view` | `(ws, tid, view_id, by)` | `config` |
-| `create_table_from_template` | `(ws, tid, kind, by)` | `void` |
+## Mutation Contract
 
-All return the full `tables.config` (except `create_table_from_template`). BE hands it straight to FE.
+Column, view, ordering, and default-view changes are performed through PG
+functions wrapped by `TableViewRepository`. The API returns one canonical schema
+snapshot:
 
-Column helper: `_build_column_dict(name, type, options)` in `V12__template_functions.sql`.
-Index helper: `create_row_data_index / drop_row_data_index` in `V11__index_helper.sql`.
+```text
+{ columns, view_order, default_view, views }
+```
 
-## Column Types
+Frontend controllers call the endpoint, pass that response to `applySchema()`,
+and let derived state rerender the active view. Do not locally reconstruct the
+expected schema after a mutation.
 
-`text`, `number`, `date`, `datetime`, `select`, `tags`, `checkbox`, `url`, `email`, `phone`, `doc`.
+## Main Files
 
-## View Types
-
-Enforced by CHECK constraint (`V26__view_type_check.sql`):
-`table`, `kanban`, `timeline`, `dashboard`, `workflow`.
-
-- Implicit "Schema" view (view_id=0) — FE-only, no DB row
-- `view_id` BIGINT auto-assigned per table (BEFORE INSERT trigger, V9)
-- View name/type live inside `table_views.config` JSONB: `{"name": "...", "type": "kanban", ...}`
-
-## Option Colors
-
-Stored in column options: `{"choices": [{"value": "todo", "color": "#9ca3af"}, ...]}`.
-FE renders via `colorToStyle(hex)` — no local color palettes.
-
-## Templates
-
-`_seed_blank`, `_seed_pm`, `_seed_crm` start in `V12__template_functions.sql`;
-V27 adds `_seed_workflow` and extends the dispatcher.
-`create_table_from_template(ws, tid, kind, by)` is rewritten in V23 to update `public.tables.config`.
-
-## Workspace Authorization (V33)
-
-All three tables use action-grant RLS: `read` controls SELECT and `write`
-controls INSERT/UPDATE/DELETE. `get_rls_session` sets
-`app.current_user_id`; the policies call `check_workspace_permission`.
-
-## BE Router
-
-`backend/src/router/api/tables/` — thin wrappers around PG functions:
-
-| File | Routes |
+| Concern | Source |
 |---|---|
-| `crud.py` | `POST/GET/PUT/DELETE /tables`, `PATCH /tables/{tid}` (view_order, default_view, col_order) |
-| `columns.py` | `POST/PATCH/DELETE /tables/{tid}/columns` |
-| `views.py` | `GET/POST/PUT/DELETE /tables/{tid}/views` |
-| `templates.py` | `POST /tables/template/{kind}` |
+| Table/row/view models | `backend/src/models/table.py`, `backend/src/models/row.py`, `backend/src/models/table_view.py` |
+| Table and schema access | `backend/src/repository/table.py`, `backend/src/repository/table_view.py` |
+| Table API | `backend/src/router/api/tables/`, `backend/src/router/api/rows.py` |
+| Schema SQL | `migration/V*.sql` |
+| Frontend controllers | `frontend/src/lib/backend/tables.ts`, `frontend/src/lib/backend/views.ts` |
+| Frontend cache | `frontend/src/lib/stores/table_schemas.store.ts`, `frontend/src/lib/stores/table_rows.store.ts` |
+| Main renderer | `frontend/src/routes/[workspace_id]/[table_id]/+page.svelte` |
 
-Models: `backend/src/models/table.py`, `backend/src/models/table_view.py`.
+## Resolution and Authorization
 
-## URL Pattern
-
-`/<workspace_id>/<table_id>/<row_id>` — workspace accepts UUID or workspace
-name; `table_id` is the table's case-insensitive name; `row_id` is BIGINT.
+- Browser paths are `/<workspace>/<table_id>` with optional row/doc segments.
+- The workspace path may be a UUID or display name; internal identity remains
+  the UUID.
+- Table names are case-insensitively resolved within accessible workspaces, so
+  use workspace context to disambiguate duplicates.
+- PostgreSQL RLS applies `read` to selects and `write` to mutations.
+- `workspace_name` and `table_id` cannot contain `.` because both are path-facing.
