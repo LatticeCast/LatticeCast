@@ -20,12 +20,8 @@ USER = "lattice"
 
 
 def snap(page, name: str, snapshot: bool) -> None:
-    if not snapshot:
-        return
-    try:
+    if snapshot:
         page.screenshot(path=f"{SCREENSHOT_DIR}/{name}.png", full_page=True)
-    except Exception:
-        pass
 
 
 def test_workspace_create(authed_page, admin_token, snapshot):
@@ -54,8 +50,13 @@ def test_workspace_create(authed_page, admin_token, snapshot):
         page.goto(f"{BASE}/{existing_ws}/", wait_until="networkidle")
         assert "/login" not in page.url, "Redirected to /login — auth failed"
 
-        new_ws_btn = page.get_by_test_id("new-workspace-btn")
+        page.get_by_test_id("menu-toggle").click()
+        new_ws_btn = page.get_by_test_id("create-workspace-btn")
         new_ws_btn.wait_for(state="visible", timeout=10000)
+        page.wait_for_function(
+            "() => document.querySelector('aside')?.getBoundingClientRect().width >= 208",
+            timeout=10000,
+        )
         snap(page, "t45_01_workspace_page", snapshot)
 
         # ── Step 2: Open modal and create workspace ──────────────────────────
@@ -69,10 +70,18 @@ def test_workspace_create(authed_page, admin_token, snapshot):
 
         page.get_by_test_id("create-workspace-submit").click()
 
-        # ── Step 3: UI — verify navigation to new workspace ──────────────────
-        print("[3] Verify URL navigated to new workspace")
+        # ── Step 3: UI — verify response → store → derived GUI ───────────────
+        print("[3] Verify modal closed, URL changed, and derived GUI updated")
+        name_input.wait_for(state="hidden", timeout=10000)
         page.wait_for_url(f"**/{ws_name}*", timeout=10000)
         assert ws_name in page.url, f"Expected '{ws_name}' in URL, got {page.url}"
+
+        sidebar_name = page.locator("aside").get_by_text(ws_name, exact=True)
+        sidebar_name.wait_for(state="visible", timeout=10000)
+        assert sidebar_name.count() == 1, f"Expected one sidebar entry for '{ws_name}'"
+        page.get_by_role("heading", name=ws_name, exact=True).wait_for(
+            state="visible", timeout=10000
+        )
         snap(page, "t45_03_navigated", snapshot)
 
         # ── Step 4: BE — verify workspace exists via API ─────────────────────
@@ -87,7 +96,7 @@ def test_workspace_create(authed_page, admin_token, snapshot):
         r = api("GET", f"/api/v1/workspaces/{ws_id}/members", admin_token)
         assert r.status_code == 200
         members = r.json()
-        owner = next((m for m in members if m["role"] == "owner"), None)
+        owner = next((m for m in members if m["level"] == "owner"), None)
         assert owner is not None, "No owner found in workspace members"
 
 

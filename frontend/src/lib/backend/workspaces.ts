@@ -48,7 +48,10 @@ export async function createWorkspace(data: CreateWorkspace): Promise<Workspace>
 	});
 	if (!response.ok) throw new Error(`Failed to create workspace: ${response.statusText}`);
 	const ws: Workspace = await response.json();
-	workspaces.update((list) => [...list, ws]);
+	workspaces.update((list) => [
+		...list.filter((item) => item.workspace_id !== ws.workspace_id),
+		ws
+	]);
 	return ws;
 }
 

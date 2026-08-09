@@ -211,6 +211,23 @@ def verify(psql_fn) -> list[str]:
             "MISSING CHECK: table_views_valid_type (V26)"
         )
 
+    # V35: path-facing workspace/table names cannot contain dots. Both
+    # constraints are validated, so they cover existing and future rows.
+    for relation, constraint in [
+        ("public.workspaces", "workspaces_workspace_name_no_dot"),
+        ("public.tables", "tables_table_id_no_dot"),
+    ]:
+        result = psql_fn(
+            "SELECT convalidated FROM pg_constraint "
+            f"WHERE conrelid = '{relation}'::regclass "
+            f"  AND conname = '{constraint}' "
+            "  AND contype = 'c';"
+        ).strip()
+        if result != "t":
+            errors.append(
+                f"MISSING/UNVALIDATED CHECK: {constraint} (V35)"
+            )
+
     # V27: _seed_workflow function exists
     result = psql_fn(
         "SELECT 1 FROM pg_proc "

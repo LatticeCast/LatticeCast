@@ -45,7 +45,7 @@ frontend/src/
   lib/stores/          table_schema, table_schemas, table_rows, table_views, table_workflow, tables, workspace_members, auth, settings
   lib/components/      sidebar/, layout/ (TopBar), table/ (cells/), workflow/, dashboard/
   lib/charts/          EChart.svelte (ECharts 5)
-migration/             V1..V33 SQL + migrate.py (lint→verify→test→apply)
+migration/             V1..V34 SQL + migrate.py (lint→verify→test→apply)
 e2e/                   Playwright + pytest
 ```
 
@@ -62,7 +62,7 @@ public.rows         (row_data JSONB, row_id BIGINT)
 private.schema_migrations · private.cache (UNLOGGED)
 ```
 
-- V23 merged table_schemas → tables.config · V29 normalizes default_view reads/updates to 0 · V31 PG cache · V32 password table · V33 action-grant RLS
+- V23 merged table_schemas → tables.config · V29 normalizes default_view reads/updates to 0 · V31 PG cache · V32 password table · V33 action-grant RLS · V34 deduplicated sidebar payloads
 - PG functions own schema/view mutations — BE repos are thin wrappers. RLS on all public + gdpr tables.
 
 ## Key Patterns
@@ -71,7 +71,7 @@ private.schema_migrations · private.cache (UNLOGGED)
 - **RLS session** — `get_rls_session` → `app.current_user_id` → PG policies enforce isolation
 - **Workspace access** — materialized `read`/`write`/`owner` grants; reads and mutations are separated by V33 policies
 - **FE member access** — `level=read|write|owner`; controllers update the workspace-member cache from backend responses
-- **Migrations** — head **V33**. Flyway format, checksum-tracked. See `Skill(developing/db-sql)`.
+- **Migrations** — head **V34**. Flyway format, checksum-tracked. See `Skill(developing/db-sql)`.
 - **FE stores** split by concern; layout = Sidebar + TopBar; cells in `table/cells/`
 
 ## API Routes (`/api/v1/*`)

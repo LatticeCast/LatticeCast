@@ -132,6 +132,7 @@ services:
       network: host
     volumes:
       - ./e2e:/scripts
+      - ./.browser:/output
     env_file:
       - .env
     environment:

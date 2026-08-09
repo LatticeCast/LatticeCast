@@ -2,7 +2,7 @@
 
 ## Source of Truth
 
-- **Schema definition:** `migration/V*.sql` (V1–V33) — CREATE TABLE + CREATE OR REPLACE FUNCTION
+- **Schema definition:** `migration/V*.sql` (V1–V34) — CREATE TABLE + CREATE OR REPLACE FUNCTION
 - **Schema verification:** `migration/test_migration_schema.py` — `EXPECTED_COLUMNS` / `FORBIDDEN_COLUMNS`
 - **RLS verification:** `migration/test_migration_rls.py` — behavioral tests
 - **Roles & grants:** `migration/V1__init.sql` (roles), `migration/V15__grants_app.sql` (explicit grants)
@@ -75,6 +75,7 @@ INSERT/UPDATE/DELETE; workspace rename/delete requires `owner`.
 | `create_workspace` | V17/V33 | Atomic workspace + creator's three action grants (RLS bypass) |
 | `check_workspace_permission` | V33 | Flat action lookup used by RLS policies |
 | `grant_workspace_action` | V33 | Atomically materialize a read/write/owner level; invoker remains subject to RLS |
+| `get_user_sidebar` | V24/V34 | Return each accessible workspace and table once, independent of action-grant count |
 | `create_row_data_index` / `drop_row_data_index` | V11 | Auto-managed per-column indexes (btree/GIN) |
 
 ## Key Migration Milestones
@@ -95,6 +96,7 @@ INSERT/UPDATE/DELETE; workspace rename/delete requires `owner`.
 | V31 | PostgreSQL UNLOGGED cache replaces external cache service |
 | V32 | Optional `gdpr.user_password`; only mgr/login session can access it |
 | V33 | Replace member roles with action grants; split RLS into read/write/owner policies |
+| V34 | Deduplicate sidebar workspaces and tables after the action-grant migration |
 
 ## Migration Commands
 

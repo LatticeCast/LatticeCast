@@ -73,7 +73,6 @@
 	}
 
 	function onWorkspaceCreated(ws: Workspace) {
-		workspaces.update((list) => [...list, ws]);
 		showCreateWorkspace = false;
 		navigate(`/${encodeURIComponent(ws.workspace_name)}/`);
 	}

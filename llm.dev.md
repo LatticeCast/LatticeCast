@@ -69,9 +69,10 @@ Host `./backend/` bind-mounted to `/app/`. Log rotation: `json-file`, 100m × 50
 
 ## Migrations
 
-Current head is V33. V31 adds the PostgreSQL cache, V32 adds optional
-password credentials, and V33 replaces workspace roles with materialized
-read/write/owner action grants and corresponding RLS policies.
+Current head is V34. V31 adds the PostgreSQL cache, V32 adds optional
+password credentials, V33 replaces workspace roles with materialized
+read/write/owner action grants and corresponding RLS policies, and V34
+deduplicates sidebar workspaces and tables after that grant migration.
 
 ```bash
 # Add V<N>__name.sql — never modify existing files

@@ -98,6 +98,19 @@ def verify(psql_fn) -> list[str]:
         f"ON CONFLICT (workspace_id, table_id) DO NOTHING"
     )
 
+    # V34: action grants must not multiply sidebar workspaces or tables.
+    # User A owns one workspace with one table despite holding three actions.
+    sidebar_counts = psql_fn(
+        f"SELECT jsonb_array_length(payload->'workspaces') || ',' || "
+        f"jsonb_array_length(payload->'tables') "
+        f"FROM (SELECT public.get_user_sidebar('{_USER_A}'::uuid) payload) s;"
+    ).strip()
+    if sidebar_counts != "1,1":
+        errors.append(
+            "SIDEBAR BEHAVIORAL: action grants multiply payload rows "
+            f"(expected 1,1 got {sidebar_counts!r})"
+        )
+
     # SELECT positive: user A can see own workspace tables row
     # (V23: table_schemas merged into tables — config lives here now)
     count = _as_app(

@@ -6,7 +6,8 @@ The `browser` service runs Playwright's remote Chromium server on the host
 network. The `e2e` container connects through `BROWSER_WS`; Chromium sees
 `localhost:13491` exactly like a real user's browser.
 
-Screenshots write to `.browser/`, mounted as `/output` in the browser service.
+Screenshots write to `.browser/`. Both `e2e` (the Playwright client that
+resolves `page.screenshot(path=...)`) and `browser` mount it as `/output`.
 
 ```bash
 docker compose --profile test up -d browser e2e
@@ -43,7 +44,10 @@ with sync_playwright() as p:
         f"localStorage.setItem('loginInfo', {json.dumps(LOGIN_INFO)});"
     )
     page.goto(f"{base}/{{workspace_id}}/{{table_id}}")
-    page.wait_for_timeout(4000)
+    # Pick a selector that proves the target feature, not only the shell, is ready.
+    page.get_by_test_id("grid-add-row-btn").wait_for(
+        state="visible", timeout=10000
+    )
     page.screenshot(path="/output/my_screenshot.png")
     page.close()
     browser.close()
@@ -67,7 +71,7 @@ The user must be a workspace member to see tables. If "Failed to fetch" appears,
 2. **Never use `docker cp`** — screenshots go to `/output` which is mounted as `.browser/`
 3. **Inject localStorage, don't fill the login form** — faster and matches E2E fixtures
 4. **Use a real JWT** from `/api/v1/login/password`
-5. **`wait_for_timeout(4000)`** after navigation — give SvelteKit time to hydrate and fetch data
+5. **Wait for observable UI state** after navigation (`locator.wait_for`, URL, response, or derived GUI); never use a fixed sleep
 
 ## Running a snapshot
 
@@ -87,7 +91,7 @@ docker compose exec -T e2e python3 - < .tmp/snapshot.py
 
 ## Output
 
-Screenshots go to `.browser/` on the host (= `/output` in container).
+Screenshots go to `.browser/` on the host (= `/output` in the E2E client container).
 
 ```
 .browser/
