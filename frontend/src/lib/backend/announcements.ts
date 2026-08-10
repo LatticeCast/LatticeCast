@@ -3,7 +3,7 @@
 // Controller: load server-wide announcements and replace the shared cache.
 
 import { BACKEND_URL } from './config';
-import { setAnnouncements, type Announcement } from '$lib/stores/announcements.store';
+import { setAnnouncements, type Announcement } from '$lib/stores/announcement.store';
 
 export const SERVER_ANNOUNCEMENTS_LQL = 'table("announcement") | filter(Type = "server")';
 
