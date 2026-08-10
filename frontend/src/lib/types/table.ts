@@ -84,6 +84,7 @@ export interface Table {
 export interface Workspace {
 	workspace_id: UUID;
 	workspace_name: string;
+	level: WorkspaceAccessLevel;
 	created_at: string;
 	updated_at: string;
 }

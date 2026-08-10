@@ -21,7 +21,7 @@ export interface SidebarTable {
 }
 
 export interface SidebarPayload {
-	workspaces: { workspace_id: string; workspace_name: string }[];
+	workspaces: { workspace_id: string; workspace_name: string; level: 'read' | 'write' | 'owner' }[];
 	tables: SidebarTable[];
 }
 
@@ -80,6 +80,7 @@ export function applySidebar(payload: SidebarPayload): void {
 		payload.workspaces.map((w) => ({
 			workspace_id: w.workspace_id,
 			workspace_name: w.workspace_name,
+			level: w.level,
 			created_at: '',
 			updated_at: ''
 		}))

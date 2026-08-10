@@ -1,6 +1,7 @@
 <!-- $lib/components/layout/TopBar.svelte — menu toggle, home, breadcrumb -->
 <script lang="ts">
 	import { page } from '$app/stores';
+	import AnnouncementBanner from '$lib/components/layout/AnnouncementBanner.svelte';
 	import { currentTable, workspaces, tablesByWorkspace } from '$lib/stores/table_schemas.store';
 	import { navigate } from '$lib/utils/url';
 
@@ -85,4 +86,7 @@
 			{/if}
 		{/if}
 	</nav>
+	<div class="ml-auto flex shrink-0 items-center">
+		<AnnouncementBanner />
+	</div>
 </header>

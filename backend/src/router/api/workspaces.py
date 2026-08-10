@@ -71,6 +71,20 @@ async def _require_owner(workspace_id: UUID, user_id: UUID, repo: WorkspaceRepos
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Owner access required")
 
 
+async def _build_workspace_response(
+    workspace: Workspace,
+    user_id: UUID,
+    repo: WorkspaceRepository,
+) -> WorkspaceResponse:
+    return WorkspaceResponse(
+        workspace_id=workspace.workspace_id,
+        workspace_name=workspace.workspace_name,
+        level=await repo.get_user_level(workspace.workspace_id, user_id),
+        created_at=workspace.created_at,
+        updated_at=workspace.updated_at,
+    )
+
+
 @router.post("", response_model=WorkspaceResponse, status_code=status.HTTP_201_CREATED)
 async def create_workspace(
     data: WorkspaceCreate,
@@ -85,6 +99,7 @@ async def create_workspace(
     creator isn't a member yet); per-row permissions kick back in on
     subsequent reads.
     """
+    repo = WorkspaceRepository(session)
     if data.workspace_name.lower() in RESERVED_WORKSPACE_NAMES:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That workspace name is reserved")
     try:
@@ -100,7 +115,11 @@ async def create_workspace(
             status_code=status.HTTP_409_CONFLICT,
             detail="A workspace with that name already exists",
         ) from exc
-    return result.scalar_one()
+    created = result.scalar_one()
+    workspace = await repo.resolve_workspace(str(created["workspace_id"]))
+    if not workspace:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Created workspace not found")
+    return await _build_workspace_response(workspace, user.user_id, repo)
 
 
 @router.get("", response_model=list[WorkspaceResponse])
@@ -110,7 +129,8 @@ async def list_workspaces(
 ):
     """List all workspaces the current user can read"""
     repo = WorkspaceRepository(session)
-    return await repo.list_by_user(user.user_id)
+    workspaces = await repo.list_by_user(user.user_id)
+    return [await _build_workspace_response(workspace, user.user_id, repo) for workspace in workspaces]
 
 
 @router.get("/{workspace_id}/members", response_model=list[MemberFullResponse])
@@ -216,7 +236,8 @@ async def get_workspace(
     via `_get_workspace_or_404` rather than a distinct 403.
     """
     repo = WorkspaceRepository(session)
-    return await _get_workspace_or_404(workspace_id, repo)
+    workspace = await _get_workspace_or_404(workspace_id, repo)
+    return await _build_workspace_response(workspace, user.user_id, repo)
 
 
 @router.put("/{workspace_id}", response_model=WorkspaceResponse)
@@ -248,7 +269,7 @@ async def update_workspace(
     session.add(workspace)
     await session.commit()
     await session.refresh(workspace)  # refreshes attached instance — safe
-    return workspace
+    return await _build_workspace_response(workspace, user.user_id, repo)
 
 
 @router.delete("/{workspace_id}", status_code=status.HTTP_204_NO_CONTENT)

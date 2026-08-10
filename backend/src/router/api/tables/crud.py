@@ -29,6 +29,11 @@ from ._shared import _build_table_response, _get_table_for_member
 router = APIRouter(prefix="/tables", tags=["tables"])
 
 
+async def _require_write(workspace_id: UUID, user_id: UUID, repo: WorkspaceRepository) -> None:
+    if not await repo.can_write(workspace_id, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Write access required")
+
+
 @router.post("", response_model=TableResponse, status_code=status.HTTP_201_CREATED)
 async def create_table(
     data: TableCreate,
@@ -42,8 +47,7 @@ async def create_table(
         workspace = await ws_repo.resolve_workspace(data.workspace_id)
         if not workspace:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
-        if not await ws_repo.is_member(workspace.workspace_id, user.user_id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of that workspace")
+        await _require_write(workspace.workspace_id, user.user_id, ws_repo)
         workspace_id = workspace.workspace_id
     else:
         workspace = await ws_repo.get_first_owned_workspace(user.user_id)
@@ -101,6 +105,7 @@ async def update_table(
     session: AsyncSession = Depends(get_rls_session),
 ):
     table = await _get_table_for_member(table_id, user, session)
+    await _require_write(table.workspace_id, user.user_id, WorkspaceRepository(session))
     table_repo = TableRepository(session)
     existing = await table_repo.list_by_workspace(table.workspace_id)
     if any(t.table_id == data.table_id and t.table_id != table.table_id for t in existing):
@@ -118,6 +123,7 @@ async def delete_table(
     session: AsyncSession = Depends(get_rls_session),
 ):
     table = await _get_table_for_member(table_id, user, session)
+    await _require_write(table.workspace_id, user.user_id, WorkspaceRepository(session))
     table_repo = TableRepository(session)
     await table_repo.delete(table)
 
@@ -143,6 +149,7 @@ async def patch_schema(
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
     table = await _get_table_for_member(table_id, user, session)
+    await _require_write(table.workspace_id, user.user_id, WorkspaceRepository(session))
     view_repo = TableViewRepository(session)
 
     if data.view_order is not None:

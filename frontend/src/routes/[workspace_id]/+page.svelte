@@ -42,6 +42,12 @@
 			: []
 	);
 
+	const activeWorkspaceLevel = $derived(activeWorkspace?.level ?? 'read');
+	const canWriteWorkspace = $derived(
+		activeWorkspaceLevel === 'write' || activeWorkspaceLevel === 'owner'
+	);
+	const canOwnWorkspace = $derived(activeWorkspaceLevel === 'owner');
+
 	// Per-workspace create state
 	let newTableNames = $state<Record<string, string>>({});
 	let creating = $state<Record<string, boolean>>({});
@@ -327,76 +333,79 @@
 				<!-- Workspace header -->
 				<div class="mb-3 flex items-center gap-2">
 					<h2 class="text-lg font-bold {T.body}">{activeWorkspace.workspace_name}</h2>
-					<button
-						data-testid="home-workspace-members-{activeWorkspace.workspace_id}"
-						onclick={() =>
-							navigate(`/${encodeURIComponent(activeWorkspace.workspace_name)}/members`)}
-						class="rounded-lg p-1 {T.muted} transition {T.hoverBg}"
-						aria-label="Workspace members"
-						title="Workspace members"
-					>
-						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-							/>
-						</svg>
-					</button>
-					<button
-						data-testid="ws-settings-btn"
-						onclick={(e) => openWsSettings(activeWorkspace, e)}
-						class="rounded-lg p-1 {T.muted} transition {T.hoverBg}"
-						aria-label="Workspace settings"
-						title="Workspace settings"
-					>
-						<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-							/>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-							/>
-						</svg>
-					</button>
+					{#if canOwnWorkspace}
+						<button
+							data-testid="home-workspace-members-{activeWorkspace.workspace_id}"
+							onclick={() =>
+								navigate(`/${encodeURIComponent(activeWorkspace.workspace_name)}/members`)}
+							class="rounded-lg p-1 {T.muted} transition {T.hoverBg}"
+							aria-label="Workspace members"
+							title="Workspace members"
+						>
+							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+								/>
+							</svg>
+						</button>
+						<button
+							data-testid="ws-settings-btn"
+							onclick={(e) => openWsSettings(activeWorkspace, e)}
+							class="rounded-lg p-1 {T.muted} transition {T.hoverBg}"
+							aria-label="Workspace settings"
+							title="Workspace settings"
+						>
+							<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+								/>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+								/>
+							</svg>
+						</button>
+					{/if}
 				</div>
 
-				<!-- Create Table -->
-				<div class="mb-3 flex gap-2">
-					<input
-						type="text"
-						data-testid="create-table-name-input"
-						bind:value={newTableNames[activeWorkspace.workspace_id]}
-						onkeydown={(e) => {
-							if (e.key === 'Enter') handleCreate(activeWorkspace.workspace_id);
-						}}
-						placeholder="New table name..."
-						class="flex-1 rounded-2xl border-2 {T.inputBorder} {T.inputBg} px-4 py-2.5 {T.body} {T.placeholder} {T.inputFocusBorder} focus:outline-none"
-					/>
-					<button
-						data-testid="create-table-submit"
-						onclick={() => handleCreate(activeWorkspace.workspace_id)}
-						disabled={creating[activeWorkspace.workspace_id] ||
-							!(newTableNames[activeWorkspace.workspace_id] ?? '').trim()}
-						class="rounded-2xl bg-blue-600 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
-					>
-						{creating[activeWorkspace.workspace_id] ? 'Creating...' : 'Create'}
-					</button>
-					<button
-						data-testid="create-table-from-template-btn"
-						onclick={() => openTemplateModal(activeWorkspace.workspace_id)}
-						class="rounded-2xl border-2 {T.badgeBorder} {T.cardBg} px-4 py-2.5 font-semibold {T.badgeText} transition {T.hoverBg}"
-					>
-						From Template
-					</button>
-				</div>
+				{#if canWriteWorkspace}
+					<div class="mb-3 flex gap-2">
+						<input
+							type="text"
+							data-testid="create-table-name-input"
+							bind:value={newTableNames[activeWorkspace.workspace_id]}
+							onkeydown={(e) => {
+								if (e.key === 'Enter') handleCreate(activeWorkspace.workspace_id);
+							}}
+							placeholder="New table name..."
+							class="flex-1 rounded-2xl border-2 {T.inputBorder} {T.inputBg} px-4 py-2.5 {T.body} {T.placeholder} {T.inputFocusBorder} focus:outline-none"
+						/>
+						<button
+							data-testid="create-table-submit"
+							onclick={() => handleCreate(activeWorkspace.workspace_id)}
+							disabled={creating[activeWorkspace.workspace_id] ||
+								!(newTableNames[activeWorkspace.workspace_id] ?? '').trim()}
+							class="rounded-2xl bg-blue-600 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+						>
+							{creating[activeWorkspace.workspace_id] ? 'Creating...' : 'Create'}
+						</button>
+						<button
+							data-testid="create-table-from-template-btn"
+							onclick={() => openTemplateModal(activeWorkspace.workspace_id)}
+							class="rounded-2xl border-2 {T.badgeBorder} {T.cardBg} px-4 py-2.5 font-semibold {T.badgeText} transition {T.hoverBg}"
+						>
+							From Template
+						</button>
+					</div>
+				{/if}
 
 				<!-- Tables -->
 				{#if activeTables.length === 0}
@@ -420,28 +429,30 @@
 								<span class="flex-1 text-left font-medium {T.body}">
 									{table.table_id}
 								</span>
-								<button
-									data-testid="table-settings-btn-{table.table_id}"
-									onclick={(e) => openTableSettings(table, e)}
-									class="rounded-xl p-2 {T.muted} transition {T.hoverBg}"
-									aria-label="Table settings"
-									title="Table settings"
-								>
-									<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-										/>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-										/>
-									</svg>
-								</button>
+								{#if canWriteWorkspace}
+									<button
+										data-testid="table-settings-btn-{table.table_id}"
+										onclick={(e) => openTableSettings(table, e)}
+										class="rounded-xl p-2 {T.muted} transition {T.hoverBg}"
+										aria-label="Table settings"
+										title="Table settings"
+									>
+										<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+											/>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+											/>
+										</svg>
+									</button>
+								{/if}
 							</div>
 						{/each}
 					</div>

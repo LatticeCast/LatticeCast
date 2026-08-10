@@ -50,6 +50,7 @@ class WorkspaceResponse(SQLModel):
 
     workspace_id: UUID = Field(..., description="Workspace UUID")
     workspace_name: str = Field(..., description="Workspace display name")
+    level: ActionType = Field(..., description="Current caller access level")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
 
@@ -59,6 +60,7 @@ class WorkspaceResponse(SQLModel):
                 {
                     "workspace_id": "00000000-0000-0000-0000-000000000000",
                     "workspace_name": "My Workspace",
+                    "level": "writer",
                     "created_at": "2026-01-01T00:00:00",
                     "updated_at": "2026-01-01T00:00:00",
                 }

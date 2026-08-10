@@ -16,10 +16,10 @@
 	import { hydrateFromServer } from '$lib/stores/settings.store';
 	import { fetchMe } from '$lib/backend/auth';
 	import { fetchAnnouncements } from '$lib/backend/announcements';
+	import { setAnnouncements } from '$lib/stores/announcement.store';
 	import type { Workspace } from '$lib/types/table';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
 	import Sidebar from '$lib/components/sidebar/Sidebar.svelte';
-	import AnnouncementBanner from '$lib/components/layout/AnnouncementBanner.svelte';
 	import TopBar from '$lib/components/layout/TopBar.svelte';
 	import { isUuid, prettifyWorkspacePathname, navigate } from '$lib/utils/url';
 
@@ -50,6 +50,7 @@
 	$effect(() => {
 		fetchAnnouncements().catch(() => {
 			// Announcements are best-effort; the shared layout remains usable without them.
+			setAnnouncements([]);
 		});
 	});
 
@@ -124,7 +125,6 @@
 	<!-- Right column: top bar + content -->
 	<div class="flex min-w-0 flex-1 flex-col">
 		<TopBar bind:menuOpen />
-		<AnnouncementBanner />
 
 		<!-- Main content -->
 		<main class="flex-1 overflow-auto dark:bg-gray-950">

@@ -139,6 +139,29 @@ class WorkspaceRepository:
         )
         return bool(result.scalar_one())
 
+    async def can_write(self, workspace_id: UUID, user_id: UUID) -> bool:
+        result = await self.session.execute(
+            text("SELECT check_workspace_permission(CAST(:ws AS uuid), CAST(:user_id AS uuid), 'write')").bindparams(
+                ws=str(workspace_id), user_id=str(user_id)
+            )
+        )
+        return bool(result.scalar_one())
+
+    async def get_user_level(self, workspace_id: UUID, user_id: UUID) -> str:
+        result = await self.session.execute(
+            text(
+                """
+                SELECT CASE
+                    WHEN check_workspace_permission(CAST(:ws AS uuid), CAST(:user_id AS uuid), 'owner') THEN 'owner'
+                    WHEN check_workspace_permission(CAST(:ws AS uuid), CAST(:user_id AS uuid), 'write') THEN 'write'
+                    WHEN check_workspace_permission(CAST(:ws AS uuid), CAST(:user_id AS uuid), 'read') THEN 'read'
+                    ELSE NULL
+                END
+                """
+            ).bindparams(ws=str(workspace_id), user_id=str(user_id))
+        )
+        return result.scalar_one() or "read"
+
     async def count_owners(self, workspace_id: UUID) -> int:
         result = await self.session.execute(
             select(func.count())

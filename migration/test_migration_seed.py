@@ -46,7 +46,8 @@ def verify(psql_fn) -> list[str]:
         )
 
     # Blank-template columns are generated first, then V36 adds Type and
-    # Time. Check the whole generated schema rather than hard-coding UUIDs.
+    # Time, and V38 replaces Doc/Time with explicit metadata columns. Check the whole
+    # generated schema rather than hard-coding UUIDs.
     columns = psql_fn(
         "SELECT string_agg("
         "  (c.column_data ->> 'name') || ':' || (c.column_data ->> 'type'), "
@@ -58,7 +59,10 @@ def verify(psql_fn) -> list[str]:
         f"WHERE t.workspace_id = '{_ANNOUNCEMENT_WORKSPACE_ID}'::uuid "
         "  AND t.table_id = 'announcement';"
     ).strip()
-    expected_columns = "Title:text,Doc:doc,Description:text,Type:select,Time:date"
+    expected_columns = (
+        "Title:text,Description:text,Type:select,"
+        "updated_at:date,updated_by:text,created_at:date,created_by:text"
+    )
     if columns != expected_columns:
         errors.append(
             "WRONG ANNOUNCEMENT COLUMNS: "
