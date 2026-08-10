@@ -13,6 +13,7 @@ from config.settings import settings
 from config.storage import ensure_bucket_exists
 from core.db import close_db, init_db
 from middleware.jwks import get_jwks
+from router.api.admin.announcements import router as admin_announcements_router
 from router.api.admin.users import router as admin_users_router
 from router.api.announcements import router as api_announcements_router
 from router.api.auth import router as api_auth_router
@@ -119,6 +120,7 @@ api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(api_auth_router)
 api_router.include_router(api_announcements_router)
 api_router.include_router(api_storage_router)
+api_router.include_router(admin_announcements_router)
 api_router.include_router(admin_users_router)
 api_router.include_router(api_workspaces_router)
 api_router.include_router(api_tables_router)
