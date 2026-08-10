@@ -5,15 +5,18 @@
 -- public.tables.config->columns by removing any existing copies and
 -- appending the desired definitions.
 
-UPDATE public.tables
+UPDATE public.tables AS tables
 SET config = jsonb_set(
-        config,
+        tables.config,
         '{columns}',
         (
-            SELECT COALESCE(jsonb_agg(column_data ORDER BY ordinality), '[]'::JSONB)
-            FROM jsonb_array_elements(config -> 'columns')
-                WITH ORDINALITY AS c(column_data, ordinality)
-            WHERE column_data ->> 'name' NOT IN (
+            SELECT coalesce(
+                jsonb_agg(column_rows.column_data ORDER BY column_rows.ordinality),
+                '[]'::JSONB
+            )
+            FROM jsonb_array_elements(tables.config -> 'columns')
+                WITH ORDINALITY AS column_rows(column_data, ordinality)
+            WHERE column_rows.column_data ->> 'name' NOT IN (
                 'Doc',
                 'Time',
                 'updated_at',
