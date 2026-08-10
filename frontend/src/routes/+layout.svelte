@@ -14,8 +14,8 @@
 	} from '$lib/stores/table_schemas.store';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { hydrateFromServer } from '$lib/stores/settings.store';
-	import { fetchAnnouncements } from '$lib/stores/announcement.store';
 	import { fetchMe } from '$lib/backend/auth';
+	import { fetchAnnouncements } from '$lib/backend/announcements';
 	import type { Workspace } from '$lib/types/table';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
 	import Sidebar from '$lib/components/sidebar/Sidebar.svelte';
