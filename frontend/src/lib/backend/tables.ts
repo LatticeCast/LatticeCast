@@ -262,6 +262,28 @@ export async function saveDocCell(
 	return response.text();
 }
 
+/** Download an explicitly selected blob cell using the current authenticated session. */
+export async function downloadBlobCell(
+	tableId: string,
+	rowNumber: number,
+	columnId: string,
+	filename: string
+): Promise<void> {
+	const headers = await getBearerHeader();
+	const response = await fetch(
+		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/blob/${columnId}`,
+		{ headers }
+	);
+	if (!response.ok) throw new Error(`Failed to download blob: ${response.statusText}`);
+
+	const url = URL.createObjectURL(await response.blob());
+	const link = document.createElement('a');
+	link.href = url;
+	link.download = filename;
+	link.click();
+	URL.revokeObjectURL(url);
+}
+
 export async function checkDocExists(tableId: string, rowNumber: number): Promise<boolean> {
 	const auth = get(authStore);
 	if (!auth?.accessToken) return false;
