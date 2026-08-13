@@ -565,11 +565,15 @@
 									{i === 0 ? `sticky left-12 z-10 border-r ${T.cardBorder} ${T.cardBg} px-2` : 'px-2'}"
 									style="width: {getColWidth(col)}px;"
 									onclick={() => {
-										if (col.type === 'doc') {
+										if (
+											col.type === 'doc' ||
+											(col.type === 'blob' && col.options?.kind === 'doc')
+										) {
 											onOpenDocCell(row, col);
 										} else if (
 											col.type !== 'checkbox' &&
 											col.type !== 'tags' &&
+											col.type !== 'blob' &&
 											!(editingCell?.rowId === row.row_id && editingCell?.colId === col.column_id)
 										) {
 											onStartEdit(row.row_id, col, row.row_data[col.column_id]);
@@ -670,7 +674,7 @@
 													: 'translate-x-1'}"
 											></span>
 										</button>
-									{:else if col.type === 'doc'}
+									{:else if col.type === 'doc' || (col.type === 'blob' && col.options?.kind === 'doc')}
 										<button
 											data-testid="doc-open-{row.row_id}-{col.column_id}"
 											class="flex items-center gap-1.5 rounded px-2 py-1 text-xs transition hover:bg-blue-50 hover:text-blue-700"

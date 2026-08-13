@@ -1,17 +1,17 @@
-"""E2E test: e2e_test_column_doc_type — doc column upload + download.
+"""E2E test: e2e_test_column_doc_type — doc blob cell upload + download.
 
-Topic: Writing markdown content into a doc-type column cell via the
+Topic: Writing markdown content into a doc blob column cell via the
 DocCellEditor modal persists to MinIO and is readable on re-open.
 
 Three pillars (developing-e2e):
   - Playwright UI    — click "Open doc" button in grid → editor modal opens,
                        type markdown → close (save) → re-open and verify
-  - BE API verify    — GET /tables/{tid}/rows/{rid}/doc confirms content saved
+  - BE API verify    — GET /tables/{tid}/rows/{rid}/blob/{cid}/doc confirms content saved
   - Cross-view check — navigate away and back, re-open editor, content persists
 
 Flow:
   setup:  login as "lattice" → create workspace → create blank table →
-          add doc column → add Table view → add row
+          add doc blob column → add Table view → add row
   step 1: Table view → click "Open doc" button for the row's doc cell
           → editor modal visible
   step 2: type markdown content into the editor textarea → close modal
@@ -50,6 +50,9 @@ def snap(page, name: str, snapshot: bool) -> None:
 
 
 def goto_table(page, ws_id: str, table_id: str, snapshot: bool) -> None:
+    # Hydrate the auth store and sidebar cache before invoking a route loader
+    # that conditionally starts its table reads from that store.
+    page.goto(f"{BASE}/", wait_until="domcontentloaded")
     page.goto(f"{BASE}/{ws_id}/{table_id}", wait_until="domcontentloaded")
     try:
         page.wait_for_selector('[data-testid="view-tab-Schema"]', state="visible", timeout=15000)
@@ -74,18 +77,22 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
     print(f"[ok] blank table {table_id!r}")
 
-    # ── 3. Add a doc column ───────────────────────────────────────────────
+    # ── 3. Add a doc blob column ──────────────────────────────────────────
     r = api("POST", f"/api/v1/tables/{table_id}/columns", admin_token,
-            json={"name": "Notes", "type": "doc", "options": {}})
-    assert r.status_code == 201, f"add doc column: {r.status_code} {r.text[:200]}"
+            json={"name": "Notes", "type": "blob", "options": {"kind": "doc"}})
+    assert r.status_code == 201, f"add doc blob column: {r.status_code} {r.text[:200]}"
     schema = r.json()
     doc_col = next(
-        (c for c in schema["columns"] if c.get("name") == "Notes" and c.get("type") == "doc"),
+        (
+            c
+            for c in schema["columns"]
+            if c.get("name") == "Notes" and c.get("options", {}).get("kind") == "doc"
+        ),
         None,
     )
-    assert doc_col, "doc column 'Notes' not found in schema after creation"
+    assert doc_col, "doc blob column 'Notes' not found in schema after creation"
     doc_col_id = doc_col["column_id"]
-    print(f"[ok] doc column 'Notes' ({doc_col_id[:8]}…)")
+    print(f"[ok] doc blob column 'Notes' ({doc_col_id[:8]}…)")
 
     # ── 4. Add a Table view ───────────────────────────────────────────────
     r = api("POST", f"/api/v1/tables/{table_id}/views", admin_token,
@@ -166,18 +173,18 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
 
     snap(page, "doc_col_03_content_typed", snapshot)
 
-    # Close the modal — triggers blur → auto-save → PUT /doc
+    # Close the modal — triggers blur → auto-save → PUT the selected blob cell
     close_btn = '[data-testid="doc-cell-editor-close"]'
     with page.expect_response(
         lambda resp: (
-            f"/api/v1/tables/{table_id}/rows/{row_id}/doc" in resp.url
+            f"/api/v1/tables/{table_id}/rows/{row_id}/blob/{doc_col_id}/doc" in resp.url
             and resp.request.method == "PUT"
             and resp.ok
         ),
         timeout=10000,
     ):
         page.click(close_btn)
-    print("[ok] closed editor; PUT /doc confirmed")
+    print("[ok] closed editor; selected cell PUT confirmed")
 
     # Verify modal is gone
     page.locator(editor_modal).wait_for(state="hidden", timeout=5000)
@@ -185,9 +192,9 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
     snap(page, "doc_col_04_after_close", snapshot)
 
     # ═══════════════════════════════════════════════════════════════════
-    # STEP 3: API verify — GET /doc returns the saved content
+    # STEP 3: API verify — GET selected cell returns the saved content
     # ═══════════════════════════════════════════════════════════════════
-    r = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}/doc", admin_token)
+    r = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}/blob/{doc_col_id}/doc", admin_token)
     assert r.status_code == 200, f"GET doc: {r.status_code} {r.text[:200]}"
     saved_content = r.text
     assert saved_content.strip() == DOC_CONTENT.strip(), (

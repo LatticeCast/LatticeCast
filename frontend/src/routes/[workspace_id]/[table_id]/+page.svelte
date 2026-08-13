@@ -385,7 +385,6 @@
 		row={s.docCellState.row}
 		column={s.docCellState.col}
 		{tableId}
-		workspaceId={wsId}
 		onClose={() => (s.docCellState = null)}
 	/>
 {/if}
