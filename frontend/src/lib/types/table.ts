@@ -21,7 +21,18 @@ export type ColumnType =
 	| 'blob';
 
 /** The rendering/picker hint for a single-file blob column. */
-export type BlobKind = 'file' | 'image';
+export type BlobKind = 'file' | 'image' | 'doc';
+
+/**
+ * The storage metadata persisted as the value of one blob column cell.
+ * The file body remains in object storage; row_data contains this descriptor.
+ */
+export interface BlobCellMetadata {
+	key: string;
+	filename: string;
+	content_type: string;
+	size: number;
+}
 
 export interface ColumnChoice {
 	value: string;
