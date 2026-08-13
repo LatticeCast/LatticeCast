@@ -3,6 +3,8 @@
 schema cache from the response (server is source of truth).
 """
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
