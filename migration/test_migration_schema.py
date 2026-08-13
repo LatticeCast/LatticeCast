@@ -322,4 +322,38 @@ def verify(psql_fn) -> list[str]:
     if not result:
         errors.append("MISSING FUNCTION: grant_workspace_action (V33)")
 
+    # V39: the table trigger must reject names that collide after the
+    # case-insensitive, whitespace-trimming normalization. Keep this inside
+    # the migration verifier so it exercises the installed trigger, not only
+    # the helper function's implementation.
+    result = psql_fn(
+        "CREATE TEMP TABLE column_name_validation_result ("
+        "  was_rejected BOOLEAN NOT NULL"
+        "); "
+        "INSERT INTO column_name_validation_result VALUES (FALSE); "
+        "INSERT INTO public.workspaces (workspace_id, workspace_name) "
+        "VALUES ('39000000-0000-0000-0000-000000000001'::uuid, "
+        "'column_name_validation') "
+        "ON CONFLICT (workspace_id) DO NOTHING; "
+        "DO $$ "
+        "BEGIN "
+        "  INSERT INTO public.tables (workspace_id, table_id, config) "
+        "  VALUES ("
+        "    '39000000-0000-0000-0000-000000000001'::uuid, "
+        "    'duplicate_column_names', "
+        "    '{\"columns\":[{\"column_id\":\"first\",\"name\":\"Status\"},"
+        "{\"column_id\":\"second\",\"name\":\" status \"}]}'::jsonb"
+        "  ); "
+        "EXCEPTION WHEN unique_violation THEN "
+        "  UPDATE column_name_validation_result SET was_rejected = TRUE; "
+        "END; "
+        "$$; "
+        "SELECT was_rejected FROM column_name_validation_result;"
+    )
+    rejected = result.splitlines()[-1].strip() if result else ""
+    if rejected != "t":
+        errors.append(
+            "COLUMN NAME VALIDATION: duplicate normalized names were accepted"
+        )
+
     return errors
