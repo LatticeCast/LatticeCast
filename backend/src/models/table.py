@@ -10,9 +10,9 @@ from sqlmodel import Field, SQLModel
 
 
 ColumnType = Literal[
-    "text", "string", "number", "date", "select", "tags", "checkbox", "url", "doc", "blob"
+    "text", "string", "number", "date", "select", "tags", "checkbox", "url", "blob"
 ]
-BlobKind = Literal["file", "image"]
+BlobKind = Literal["file", "image", "doc"]
 
 
 class ColumnOptions(SQLModel):
