@@ -6,6 +6,7 @@ schema cache from the response (server is source of truth).
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.lattice_ql import invalidate_schema_cache
@@ -32,11 +33,20 @@ async def create_column(
 ) -> dict[str, Any]:
     table = await _get_table_for_member(table_id, user, session)
     view_repo = TableViewRepository(session)
-    schema = await view_repo.add_column(
-        table.workspace_id, table.table_id,
-        data.get("name", ""), data.get("type", "text"),
-        data.get("options", {}), user.user_id,
-    )
+    try:
+        schema = await view_repo.add_column(
+            table.workspace_id, table.table_id,
+            data.get("name", ""), data.get("type", "text"),
+            data.get("options", {}), user.user_id,
+        )
+    except IntegrityError as exc:
+        await session.rollback()
+        if "duplicate normalized column name" in str(exc).lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A column with that name already exists",
+            ) from exc
+        raise
     await invalidate_schema_cache(str(table.workspace_id))
     return schema
 
@@ -56,6 +66,14 @@ async def update_column(
         await view_repo.update_column(
             table.workspace_id, table.table_id, column_id, patch, user.user_id
         )
+    except IntegrityError as exc:
+        await session.rollback()
+        if "duplicate normalized column name" in str(exc).lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A column with that name already exists",
+            ) from exc
+        raise
     except Exception as e:
         if "not found" in str(e).lower():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found") from e
