@@ -9,8 +9,11 @@
 		colorToStyle,
 		getTagValues,
 		formatDate,
+		formatBlobSize,
+		getBlobCellMetadata,
 		sortLabels
 	} from './table.utils';
+	import { downloadBlobCell } from '$lib/backend/tables';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { createDragReorder } from './dragReorder.svelte';
 
@@ -126,6 +129,14 @@
 
 	function getColWidth(col: Column): number {
 		return localWidths[col.column_id] ?? col.options?.width ?? 150;
+	}
+
+	async function handleBlobDownload(row: Row, col: Column, filename: string) {
+		try {
+			await downloadBlobCell(row.table_id, row.row_id, col.column_id, filename);
+		} catch {
+			// The cell metadata remains authoritative; a later click can retry a failed download.
+		}
 	}
 
 	let containerEl = $state<HTMLDivElement | null>(null);
@@ -565,11 +576,15 @@
 									{i === 0 ? `sticky left-12 z-10 border-r ${T.cardBorder} ${T.cardBg} px-2` : 'px-2'}"
 									style="width: {getColWidth(col)}px;"
 									onclick={() => {
-										if (col.type === 'doc') {
+										if (
+											col.type === 'doc' ||
+											(col.type === 'blob' && col.options?.kind === 'doc')
+										) {
 											onOpenDocCell(row, col);
 										} else if (
 											col.type !== 'checkbox' &&
 											col.type !== 'tags' &&
+											col.type !== 'blob' &&
 											!(editingCell?.rowId === row.row_id && editingCell?.colId === col.column_id)
 										) {
 											onStartEdit(row.row_id, col, row.row_data[col.column_id]);
@@ -670,7 +685,7 @@
 													: 'translate-x-1'}"
 											></span>
 										</button>
-									{:else if col.type === 'doc'}
+									{:else if col.type === 'doc' || (col.type === 'blob' && col.options?.kind === 'doc')}
 										<button
 											data-testid="doc-open-{row.row_id}-{col.column_id}"
 											class="flex items-center gap-1.5 rounded px-2 py-1 text-xs transition hover:bg-blue-50 hover:text-blue-700"
@@ -692,6 +707,41 @@
 											</svg>
 											<span class="text-blue-500">Open doc</span>
 										</button>
+									{:else if col.type === 'blob'}
+										{@const blob = getBlobCellMetadata(row, col.column_id)}
+										{#if blob}
+											<button
+												data-testid="blob-download-{row.row_id}-{col.column_id}"
+												class="flex max-w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition hover:bg-blue-50 hover:text-blue-700"
+												title="Download {blob.filename}"
+												onclick={(e) => {
+													e.stopPropagation();
+													void handleBlobDownload(row, col, blob.filename);
+												}}
+											>
+												<svg
+													class="h-3.5 w-3.5 shrink-0 text-blue-400"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+													aria-hidden="true"
+												>
+													<path
+														stroke-linecap="round"
+														stroke-linejoin="round"
+														stroke-width="2"
+														d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"
+													/>
+												</svg>
+												<span class="min-w-0 truncate text-blue-600">{blob.filename}</span>
+												<span class="shrink-0 {T.muted}">{formatBlobSize(blob.size)}</span>
+											</button>
+										{:else}
+											<span
+												data-testid="blob-empty-{row.row_id}-{col.column_id}"
+												class="block min-h-[1.5rem] py-1 text-gray-300">—</span
+											>
+										{/if}
 									{:else if col.type === 'url'}
 										{@const urlVal = (row.row_data[col.column_id] as string) ?? ''}
 										{#if urlVal && (urlVal.startsWith('http://') || urlVal.startsWith('https://'))}

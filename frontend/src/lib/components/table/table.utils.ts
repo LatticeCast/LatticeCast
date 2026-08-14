@@ -1,4 +1,4 @@
-import type { Column, ColumnChoice, ColumnType, Row } from '$lib/types/table';
+import type { BlobCellMetadata, Column, ColumnChoice, ColumnType, Row } from '$lib/types/table';
 
 export const COLUMN_TYPES = [
 	'text',
@@ -9,6 +9,7 @@ export const COLUMN_TYPES = [
 	'tags',
 	'checkbox',
 	'url',
+	'blob',
 	'doc'
 ] as const;
 
@@ -56,7 +57,37 @@ export function getCellValue(row: { row_data: Record<string, unknown> }, colId: 
 	const val = row.row_data[colId];
 	if (val === null || val === undefined) return '';
 	if (typeof val === 'boolean') return val ? '✓' : '';
+	if (isBlobCellMetadata(val)) return val.filename;
 	return String(val);
+}
+
+/** Return true only for the storage descriptor written to blob cells. */
+export function isBlobCellMetadata(value: unknown): value is BlobCellMetadata {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+	const metadata = value as Record<string, unknown>;
+	return (
+		typeof metadata.key === 'string' &&
+		typeof metadata.filename === 'string' &&
+		typeof metadata.content_type === 'string' &&
+		typeof metadata.size === 'number'
+	);
+}
+
+/** Read a blob cell without duplicating metadata in component-local state. */
+export function getBlobCellMetadata(
+	row: { row_data: Record<string, unknown> },
+	colId: string
+): BlobCellMetadata | null {
+	const value = row.row_data[colId];
+	return isBlobCellMetadata(value) ? value : null;
+}
+
+/** Compact, human-readable size for a blob metadata label. */
+export function formatBlobSize(size: number): string {
+	if (!Number.isFinite(size) || size < 0) return '';
+	if (size < 1024) return `${size} B`;
+	if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+	return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export function getChoices(col: Column): ColumnChoice[] {

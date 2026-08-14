@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Column, Row } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
-	import { fetchDoc, saveDoc } from '$lib/backend/tables';
+	import { fetchDocCell, saveDocCell } from '$lib/backend/tables';
 	import { marked } from 'marked';
 	import Portal from '$lib/components/Portal.svelte';
 
@@ -9,13 +9,11 @@
 		row,
 		column,
 		tableId,
-		workspaceId,
 		onClose
 	}: {
 		row: Row;
 		column: Column;
 		tableId: string;
-		workspaceId: string;
 		onClose: () => void;
 	} = $props();
 
@@ -27,7 +25,7 @@
 
 	$effect(() => {
 		docLoading = true;
-		fetchDoc(tableId, row.row_id)
+		fetchDocCell(tableId, row.row_id, column.column_id)
 			.then((content) => {
 				docContent = content;
 				docEditing = true;
@@ -43,7 +41,7 @@
 		if (docSaving) return;
 		docSaving = true;
 		try {
-			await saveDoc(tableId, row.row_id, docContent);
+			await saveDocCell(tableId, row.row_id, column.column_id, docContent);
 		} catch {
 			// best-effort
 		} finally {
@@ -87,12 +85,6 @@
 				<span class="text-xs text-white/60">· Row {row.row_id}</span>
 			</div>
 			<div class="flex items-center gap-2">
-				<a
-					data-testid="doc-cell-open-full-editor-link"
-					href="/{workspaceId}/{tableId}/{row.row_id}/doc"
-					class="rounded px-2 py-1 text-xs text-white/70 transition hover:bg-white/20 hover:text-white"
-					>Open full editor ↗</a
-				>
 				<span class="text-xs text-white/60">
 					{docSaving ? 'saving…' : 'Markdown'}
 				</span>

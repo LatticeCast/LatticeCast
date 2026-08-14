@@ -201,6 +201,7 @@ export async function deleteRow(tableId: string, rowNumber: number): Promise<voi
 
 // ─── Docs ─────────────────────────────────────────────────────────────────────
 
+/** Read the legacy default document attached to a row. */
 export async function fetchDoc(tableId: string, rowNumber: number): Promise<string> {
 	const headers = await getBearerHeader();
 	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/doc`, {
@@ -210,6 +211,22 @@ export async function fetchDoc(tableId: string, rowNumber: number): Promise<stri
 	return response.text();
 }
 
+/** Read a document from one explicitly selected blob cell. */
+export async function fetchDocCell(
+	tableId: string,
+	rowNumber: number,
+	columnId: string
+): Promise<string> {
+	const headers = await getBearerHeader();
+	const response = await fetch(
+		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/blob/${columnId}/doc`,
+		{ headers }
+	);
+	if (!response.ok) throw new Error(`Failed to fetch doc: ${response.statusText}`);
+	return response.text();
+}
+
+/** Save the legacy default document attached to a row. */
 export async function saveDoc(
 	tableId: string,
 	rowNumber: number,
@@ -223,6 +240,48 @@ export async function saveDoc(
 	});
 	if (!response.ok) throw new Error(`Failed to save doc: ${response.statusText}`);
 	return response.text();
+}
+
+/** Save a document into one explicitly selected blob cell. */
+export async function saveDocCell(
+	tableId: string,
+	rowNumber: number,
+	columnId: string,
+	content: string
+): Promise<string> {
+	const headers = await getBearerHeader();
+	const response = await fetch(
+		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/blob/${columnId}/doc`,
+		{
+			method: 'PUT',
+			headers: { ...headers, 'Content-Type': 'text/plain' },
+			body: content
+		}
+	);
+	if (!response.ok) throw new Error(`Failed to save doc: ${response.statusText}`);
+	return response.text();
+}
+
+/** Download an explicitly selected blob cell using the current authenticated session. */
+export async function downloadBlobCell(
+	tableId: string,
+	rowNumber: number,
+	columnId: string,
+	filename: string
+): Promise<void> {
+	const headers = await getBearerHeader();
+	const response = await fetch(
+		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/blob/${columnId}`,
+		{ headers }
+	);
+	if (!response.ok) throw new Error(`Failed to download blob: ${response.statusText}`);
+
+	const url = URL.createObjectURL(await response.blob());
+	const link = document.createElement('a');
+	link.href = url;
+	link.download = filename;
+	link.click();
+	URL.revokeObjectURL(url);
 }
 
 export async function checkDocExists(tableId: string, rowNumber: number): Promise<boolean> {

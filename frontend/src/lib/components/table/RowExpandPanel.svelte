@@ -7,12 +7,14 @@
 		colorToStyle,
 		getTagValues,
 		formatDate,
+		formatBlobSize,
+		getBlobCellMetadata,
 		applyEditToRowData,
 		toggleCheckboxInRowData,
 		removeTagFromRowData,
 		addTagToRowData
 	} from './table.utils';
-	import { fetchDoc, saveDoc } from '$lib/backend/tables';
+	import { downloadBlobCell, fetchDoc, saveDoc } from '$lib/backend/tables';
 	import { marked } from 'marked';
 
 	let {
@@ -119,6 +121,14 @@
 		localRow = { ...localRow, row_data: newData };
 		await onUpdateRow(localRow.row_id, newData);
 		await onRefreshRows(tableId);
+	}
+
+	async function handleBlobDownload(col: Column, filename: string) {
+		try {
+			await downloadBlobCell(tableId, localRow.row_id, col.column_id, filename);
+		} catch {
+			// The descriptor in the row store is still valid; the user can retry the download.
+		}
 	}
 </script>
 
@@ -431,7 +441,7 @@
 								{/if}
 							</button>
 						{/if}
-					{:else if col.type === 'doc'}
+					{:else if col.type === 'doc' || (col.type === 'blob' && col.options?.kind === 'doc')}
 						<button
 							class="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition {T.inputBorder} {T.link} hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
 							onclick={() => onOpenDocCell?.(localRow, col)}
@@ -445,6 +455,40 @@
 							</svg>
 							Open doc
 						</button>
+					{:else if col.type === 'blob'}
+						{@const blob = getBlobCellMetadata(localRow, col.column_id)}
+						{#if blob}
+							<button
+								data-testid="row-panel-blob-download-{col.column_id}"
+								class="flex min-h-[2.25rem] w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition {T.inputBorder} hover:border-blue-400"
+								title="Download {blob.filename}"
+								onclick={() => void handleBlobDownload(col, blob.filename)}
+							>
+								<svg
+									class="h-4 w-4 shrink-0 text-blue-500"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+									aria-hidden="true"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"
+									/>
+								</svg>
+								<span class="min-w-0 flex-1 truncate {T.link}">{blob.filename}</span>
+								<span class="shrink-0 text-xs {T.muted}"
+									>{blob.content_type} · {formatBlobSize(blob.size)}</span
+								>
+							</button>
+						{:else}
+							<span
+								class="flex min-h-[2.25rem] items-center rounded-xl border px-3 py-2 text-sm text-gray-400 {T.inputBorder}"
+								>No file</span
+							>
+						{/if}
 					{:else if editField === col.column_id}
 						<textarea
 							class="w-full resize-none rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder} focus:ring-blue-500"
