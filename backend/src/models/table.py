@@ -2,10 +2,46 @@
 # V34: Table is identity-only. Columns moved to the __schema__ row in
 # public.table_views; views moved to user-named rows in the same table.
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
+from pydantic import ConfigDict
 from sqlmodel import Field, SQLModel
+
+
+ColumnType = Literal[
+    "text", "string", "number", "date", "select", "tags", "checkbox", "url", "blob"
+]
+BlobKind = Literal["file", "image", "doc"]
+
+
+class ColumnOptions(SQLModel):
+    """Column options shared by the column mutation API and frontend contract.
+
+    Blob values describe one stored file. Deliberately omit a `multiple` option
+    so the contract cannot represent a multi-file blob cell.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    # Existing tables may carry either the legacy {label} or current
+    # {value, color} choice shape, so preserve choices as opaque JSON.
+    choices: list[dict[str, Any]] | None = None
+    width: int | None = None
+    kind: BlobKind | None = None
+    accept: str | None = None
+
+
+class ColumnCreate(SQLModel):
+    name: str
+    type: ColumnType = "text"
+    options: ColumnOptions = Field(default_factory=ColumnOptions)
+
+
+class ColumnUpdate(SQLModel):
+    name: str | None = None
+    type: ColumnType | None = None
+    options: ColumnOptions | None = None
 
 
 class Table(SQLModel, table=True):

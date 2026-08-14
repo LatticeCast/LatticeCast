@@ -1,10 +1,14 @@
 # router/api/rows.py
 
 import re
+from io import BytesIO
+from typing import Annotated
+from urllib.parse import quote
 
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from fastapi.responses import PlainTextResponse
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import PlainTextResponse, StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
@@ -18,6 +22,76 @@ from repository.table_view import TableViewRepository
 from repository.workspace import WorkspaceRepository
 
 router = APIRouter(tags=["rows"])
+
+
+class BlobCellMetadata(BaseModel):
+    """The single-file value persisted in a blob column's row_data cell."""
+
+    key: str
+    filename: str
+    content_type: str
+    size: int
+
+
+def _blob_storage_key(workspace_id: str, table_id: str, row_id: int, column_id: str) -> str:
+    """Build a blob key only from stable workspace/table/row/column identifiers."""
+    return f"{workspace_id}/{table_id}/rows/{row_id}/blobs/{column_id}"
+
+
+async def _get_blob_column(table, column_id: str, session: AsyncSession) -> dict:
+    """Return a blob column or reject a missing/non-blob cell address."""
+    columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
+    column = next((column for column in columns if column["column_id"] == column_id), None)
+    if not column:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found")
+    if column.get("type") != "blob":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Column is not a blob column")
+    return column
+
+
+async def _get_doc_column(table, column_id: str, session: AsyncSession) -> dict:
+    """Return a markdown blob column, accepting legacy doc columns during migration."""
+    columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
+    column = next((column for column in columns if column["column_id"] == column_id), None)
+    if not column:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found")
+    if column.get("type") == "doc":  # Compatibility for schemas not yet migrated.
+        return column
+    if column.get("type") != "blob" or column.get("options", {}).get("kind") != "doc":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Column is not a doc blob column")
+    return column
+
+
+async def _get_default_doc_column(table, session: AsyncSession) -> dict | None:
+    """Find the legacy row-doc target without assuming a fixed column name."""
+    columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
+    return next(
+        (
+            column
+            for column in columns
+            if column.get("type") == "doc"
+            or (column.get("type") == "blob" and column.get("options", {}).get("kind") == "doc")
+        ),
+        None,
+    )
+
+
+async def _read_blob_content(key: str) -> bytes | None:
+    try:
+        async with s3_client() as s3:
+            response = await s3.get_object(Bucket=settings.minio.bucket, Key=key)
+            return await response["Body"].read()
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+            return None
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
+
+
+def _cell_blob_key(cell_value: object) -> str | None:
+    """Read a storage key from current metadata or a legacy string cell value."""
+    if isinstance(cell_value, dict) and isinstance(cell_value.get("key"), str):
+        return cell_value["key"]
+    return cell_value if isinstance(cell_value, str) else None
 
 
 def _build_doc_template(row_type: str, key: str, title: str) -> str:
@@ -154,9 +228,14 @@ async def create_row(
         updated_by=user.user_id,
     )
 
-    # Auto-create MinIO object and fill cell for every doc-type column
+    # Auto-create the markdown file in each doc blob cell.
     columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
-    doc_cols = [c for c in columns if c.get("type") == "doc"]
+    doc_cols = [
+        column
+        for column in columns
+        if column.get("type") == "doc"
+        or (column.get("type") == "blob" and column.get("options", {}).get("kind") == "doc")
+    ]
     if doc_cols:
         import json as _json
 
@@ -170,7 +249,9 @@ async def create_row(
 
         patch: dict = {}
         for doc_col in doc_cols:
-            minio_key = f"{table.workspace_id}/{table.table_id}/{row.row_id}.md"
+            minio_key = _blob_storage_key(
+                str(table.workspace_id), table.table_id, row.row_id, doc_col["column_id"]
+            )
             if row_type in ("epic", "story", "task", "bug"):
                 doc_content = _build_doc_template(row_type, row_key, row_title)
             else:
@@ -185,8 +266,14 @@ async def create_row(
                     )
             except Exception:
                 pass  # best-effort; don't fail row creation
-            patch[doc_col["column_id"]] = minio_key
-            row.row_data[doc_col["column_id"]] = minio_key
+            metadata = BlobCellMetadata(
+                key=minio_key,
+                filename="doc.md",
+                content_type="text/markdown",
+                size=len(doc_content.encode("utf-8")),
+            ).model_dump()
+            patch[doc_col["column_id"]] = metadata
+            row.row_data[doc_col["column_id"]] = metadata
 
         await session.execute(
             sa_text("""
@@ -267,11 +354,15 @@ async def update_row(
     row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-    # Silently drop any attempts to change doc-type column values (system-managed)
+    # Silently drop any attempts to change storage-backed column values (system-managed).
     columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
-    doc_col_ids = {c["column_id"] for c in columns if c.get("type") == "doc"}
-    if doc_col_ids:
-        data = RowUpdate(row_data={k: v for k, v in data.row_data.items() if k not in doc_col_ids})
+    managed_col_ids = {
+        column["column_id"]
+        for column in columns
+        if column.get("type") == "doc" or column.get("type") == "blob"
+    }
+    if managed_col_ids:
+        data = RowUpdate(row_data={k: v for k, v in data.row_data.items() if k not in managed_col_ids})
     return await repo.update(row=row, data=data, updated_by=user.user_id)
 
 
@@ -282,23 +373,23 @@ async def get_row_doc(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> str:
-    """Get markdown doc for a row from MinIO by row_id (returns empty string if not found)"""
+    """Compatibility route for the table's first doc blob column."""
     table = await _get_table_for_member(table_id, user, session)
+    doc_column = await _get_default_doc_column(table, session)
+    if not doc_column:
+        return ""
     repo = RowRepository(session)
     row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
-    workspace_id = table.workspace_id
-    key = f"{workspace_id}/{table.table_id}/{row.row_id}.md"
-    try:
-        async with s3_client() as s3:
-            response = await s3.get_object(Bucket=settings.minio.bucket, Key=key)
-            content = (await response["Body"].read()).decode("utf-8")
-    except ClientError as e:
-        if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
-            return ""
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
+    key = _cell_blob_key(row.row_data.get(doc_column["column_id"]))
+    if not key:
+        return ""
+    content_bytes = await _read_blob_content(key)
+    if content_bytes is None:
+        return ""
+    content = content_bytes.decode("utf-8")
 
     if content and (re.search(r"<!--\s*\[PARENT-KEY\]", content) or re.search(r"<!--\s*Links to child", content)):
         content = await _inject_hierarchy(content, table, row, session)
@@ -314,8 +405,7 @@ async def put_row_doc(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> str:
-    """Save markdown doc for a row to MinIO by row_id.
-    Accepts text/plain body or multipart/form-data with a 'file' field."""
+    """Compatibility route for saving to the table's first doc blob column."""
     content_type = request.headers.get("content-type", "")
     if "multipart/form-data" in content_type:
         form = await request.form()
@@ -329,13 +419,15 @@ async def put_row_doc(
         body = (await request.body()).decode("utf-8")
 
     table = await _get_table_for_member(table_id, user, session)
+    doc_column = await _get_default_doc_column(table, session)
+    if not doc_column:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Table has no doc blob column")
     repo = RowRepository(session)
     row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
-    workspace_id = table.workspace_id
-    key = f"{workspace_id}/{table.table_id}/{row.row_id}.md"
+    key = _blob_storage_key(str(table.workspace_id), table.table_id, row.row_id, doc_column["column_id"])
     try:
         async with s3_client() as s3:
             await s3.put_object(
@@ -344,6 +436,17 @@ async def put_row_doc(
                 Body=body.encode("utf-8"),
                 ContentType="text/markdown",
             )
+        await repo.update(
+            row,
+            RowUpdate(
+                row_data={
+                    doc_column["column_id"]: BlobCellMetadata(
+                        key=key, filename="doc.md", content_type="text/markdown", size=len(body.encode("utf-8"))
+                    ).model_dump()
+                }
+            ),
+            updated_by=user.user_id,
+        )
         return body
     except ClientError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
@@ -355,26 +458,19 @@ async def batch_docs_exist(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, list[int]]:
-    """Return list of row_ids that have non-empty docs in MinIO (single S3 list, no DB lookup)"""
+    """Compatibility route reporting rows whose default doc blob cell is non-empty."""
     table = await _get_table_for_member(table_id, user, session)
-    workspace_id = table.workspace_id
-    prefix = f"{workspace_id}/{table.table_id}/"
-    try:
-        async with s3_client() as s3:
-            response = await s3.list_objects_v2(Bucket=settings.minio.bucket, Prefix=prefix, MaxKeys=1000)
-        row_ids = []
-        for obj in response.get("Contents", []):
-            key = obj["Key"]
-            if key.endswith(".md") and obj.get("Size", 0) > 0:
-                filename = key.rsplit("/", 1)[-1].replace(".md", "")
-                try:
-                    row_ids.append(int(filename))
-                except ValueError:
-                    pass
-    except ClientError:
+    doc_column = await _get_default_doc_column(table, session)
+    if not doc_column:
         return {"row_ids": []}
-
-    return {"row_ids": row_ids}
+    rows = await RowRepository(session).list_by_table(table.workspace_id, table.table_id, limit=1000)
+    return {
+        "row_ids": [
+            row.row_id
+            for row in rows
+            if _cell_blob_key(row.row_data.get(doc_column["column_id"]))
+        ]
+    }
 
 
 @router.get("/tables/{table_id}/rows/{row_id}/col-doc/{column_id}", response_class=PlainTextResponse)
@@ -385,23 +481,18 @@ async def get_col_doc(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> str:
-    """Get markdown doc for a specific column cell from MinIO (returns empty string if not found)"""
+    """Legacy alias for the canonical doc blob cell endpoint."""
     table = await _get_table_for_member(table_id, user, session)
-    repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
+    await _get_doc_column(table, column_id, session)
+    row = await RowRepository(session).get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
-    workspace_id = table.workspace_id
-    key = f"{workspace_id}/{table.table_id}/col-{column_id}/{row.row_id}.md"
-    try:
-        async with s3_client() as s3:
-            response = await s3.get_object(Bucket=settings.minio.bucket, Key=key)
-            return (await response["Body"].read()).decode("utf-8")
-    except ClientError as e:
-        if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
-            return ""
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
+    key = _cell_blob_key(row.row_data.get(column_id))
+    if not key:
+        return ""
+    content = await _read_blob_content(key)
+    return content.decode("utf-8") if content is not None else ""
 
 
 @router.put("/tables/{table_id}/rows/{row_id}/col-doc/{column_id}", response_class=PlainTextResponse)
@@ -413,17 +504,17 @@ async def put_col_doc(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> str:
-    """Save markdown doc for a specific column cell to MinIO."""
+    """Legacy alias for the canonical doc blob cell endpoint."""
     body = (await request.body()).decode("utf-8")
 
     table = await _get_table_for_member(table_id, user, session)
+    await _get_doc_column(table, column_id, session)
     repo = RowRepository(session)
     row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
 
-    workspace_id = table.workspace_id
-    key = f"{workspace_id}/{table.table_id}/col-{column_id}/{row.row_id}.md"
+    key = _blob_storage_key(str(table.workspace_id), table.table_id, row.row_id, column_id)
     try:
         async with s3_client() as s3:
             await s3.put_object(
@@ -432,9 +523,187 @@ async def put_col_doc(
                 Body=body.encode("utf-8"),
                 ContentType="text/markdown",
             )
+        await repo.update(
+            row,
+            RowUpdate(
+                row_data={
+                    column_id: BlobCellMetadata(
+                        key=key, filename="doc.md", content_type="text/markdown", size=len(body.encode("utf-8"))
+                    ).model_dump()
+                }
+            ),
+            updated_by=user.user_id,
+        )
         return body
     except ClientError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
+
+
+# --------------------------------------------------
+# BLOB CELLS (one file per blob-type column)
+# --------------------------------------------------
+
+
+@router.get("/tables/{table_id}/rows/{row_id}/blob/{column_id}/doc", response_class=PlainTextResponse)
+async def get_doc_blob_cell(
+    table_id: str,
+    row_id: int,
+    column_id: str,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+) -> str:
+    """Read a markdown document stored in one explicitly addressed blob cell."""
+    table = await _get_table_for_member(table_id, user, session)
+    await _get_doc_column(table, column_id, session)
+    row = await RowRepository(session).get_by_number(table.workspace_id, table.table_id, row_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+    key = _cell_blob_key(row.row_data.get(column_id))
+    if not key:
+        return ""
+    content = await _read_blob_content(key)
+    if content is None:
+        return ""
+    return content.decode("utf-8")
+
+
+@router.put("/tables/{table_id}/rows/{row_id}/blob/{column_id}/doc", response_class=PlainTextResponse)
+async def put_doc_blob_cell(
+    table_id: str,
+    row_id: int,
+    column_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+) -> str:
+    """Write a markdown document to one explicitly addressed blob cell."""
+    body = (await request.body()).decode("utf-8")
+    table = await _get_table_for_member(table_id, user, session)
+    await _get_doc_column(table, column_id, session)
+    repo = RowRepository(session)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+    metadata = BlobCellMetadata(
+        key=_blob_storage_key(str(table.workspace_id), table.table_id, row.row_id, column_id),
+        filename="doc.md",
+        content_type="text/markdown",
+        size=len(body.encode("utf-8")),
+    )
+    try:
+        async with s3_client() as s3:
+            await s3.put_object(
+                Bucket=settings.minio.bucket,
+                Key=metadata.key,
+                Body=body.encode("utf-8"),
+                ContentType=metadata.content_type,
+            )
+    except ClientError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
+    await repo.update(row, RowUpdate(row_data={column_id: metadata.model_dump()}), updated_by=user.user_id)
+    return body
+
+
+@router.put("/tables/{table_id}/rows/{row_id}/blob/{column_id}", response_model=BlobCellMetadata)
+async def put_blob_cell(
+    table_id: str,
+    row_id: int,
+    column_id: str,
+    file: Annotated[UploadFile, File(description="The single file stored in this blob cell")],
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+) -> BlobCellMetadata:
+    """Upload the one file stored by a blob column and persist its metadata in row_data."""
+    table = await _get_table_for_member(table_id, user, session)
+    await _get_blob_column(table, column_id, session)
+    repo = RowRepository(session)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+
+    content = await file.read()
+    metadata = BlobCellMetadata(
+        key=_blob_storage_key(str(table.workspace_id), table.table_id, row.row_id, column_id),
+        filename=file.filename or "blob",
+        content_type=file.content_type or "application/octet-stream",
+        size=len(content),
+    )
+    try:
+        async with s3_client() as s3:
+            await s3.put_object(
+                Bucket=settings.minio.bucket,
+                Key=metadata.key,
+                Body=content,
+                ContentType=metadata.content_type,
+            )
+    except ClientError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
+
+    await repo.update(row, RowUpdate(row_data={column_id: metadata.model_dump()}), updated_by=user.user_id)
+    return metadata
+
+
+@router.get("/tables/{table_id}/rows/{row_id}/blob/{column_id}")
+async def get_blob_cell(
+    table_id: str,
+    row_id: int,
+    column_id: str,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+) -> StreamingResponse:
+    """Download the file currently stored in a blob column cell."""
+    table = await _get_table_for_member(table_id, user, session)
+    await _get_blob_column(table, column_id, session)
+    row = await RowRepository(session).get_by_number(table.workspace_id, table.table_id, row_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+    metadata = row.row_data.get(column_id)
+    if not isinstance(metadata, dict) or not isinstance(metadata.get("key"), str):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blob not found")
+
+    try:
+        async with s3_client() as s3:
+            response = await s3.get_object(Bucket=settings.minio.bucket, Key=metadata["key"])
+            content = await response["Body"].read()
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blob not found") from e
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
+
+    filename = str(metadata.get("filename") or "blob")
+    return StreamingResponse(
+        BytesIO(content),
+        media_type=str(metadata.get("content_type") or "application/octet-stream"),
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
+
+
+@router.delete("/tables/{table_id}/rows/{row_id}/blob/{column_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_blob_cell(
+    table_id: str,
+    row_id: int,
+    column_id: str,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+):
+    """Delete a blob object's immutable storage key and clear its row_data metadata."""
+    table = await _get_table_for_member(table_id, user, session)
+    await _get_blob_column(table, column_id, session)
+    repo = RowRepository(session)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+    metadata = row.row_data.get(column_id)
+    if not isinstance(metadata, dict) or not isinstance(metadata.get("key"), str):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blob not found")
+
+    try:
+        async with s3_client() as s3:
+            await s3.delete_object(Bucket=settings.minio.bucket, Key=metadata["key"])
+    except ClientError as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
+
+    await repo.remove_cell(row, column_id, updated_by=user.user_id)
 
 
 @router.delete("/tables/{table_id}/rows/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -450,11 +719,12 @@ async def delete_row(
     row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-    # Delete MinIO objects for any doc-type columns (best-effort)
+    # Delete MinIO objects for storage-backed columns (best-effort).
     columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
-    doc_cols = [c for c in columns if c.get("type") == "doc"]
-    for doc_col in doc_cols:
-        minio_key = row.row_data.get(doc_col["column_id"])
+    storage_cols = [c for c in columns if c.get("type") in {"doc", "blob"}]
+    for storage_col in storage_cols:
+        cell_value = row.row_data.get(storage_col["column_id"])
+        minio_key = cell_value.get("key") if isinstance(cell_value, dict) else cell_value
         if minio_key:
             try:
                 async with s3_client() as s3:

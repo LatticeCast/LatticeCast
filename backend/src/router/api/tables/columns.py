@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.lattice_ql import invalidate_schema_cache
 from middleware.auth import get_current_user, get_rls_session
+from models.table import ColumnCreate, ColumnUpdate
 from models.user import User
 from repository.table_view import TableViewRepository
 
@@ -27,7 +28,7 @@ router = APIRouter(prefix="/tables", tags=["tables"])
 @router.post("/{table_id}/columns", status_code=status.HTTP_201_CREATED)
 async def create_column(
     table_id: str,
-    data: dict[str, Any],
+    data: ColumnCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
@@ -36,8 +37,8 @@ async def create_column(
     try:
         schema = await view_repo.add_column(
             table.workspace_id, table.table_id,
-            data.get("name", ""), data.get("type", "text"),
-            data.get("options", {}), user.user_id,
+            data.name, data.type,
+            data.options.model_dump(), user.user_id,
         )
     except IntegrityError as exc:
         await session.rollback()
@@ -55,13 +56,15 @@ async def create_column(
 async def update_column(
     table_id: str,
     column_id: str,
-    data: dict[str, Any],
+    data: ColumnUpdate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
     table = await _get_table_for_member(table_id, user, session)
     view_repo = TableViewRepository(session)
-    patch = {k: v for k, v in data.items() if k not in ("column_id", "created_at", "position")}
+    patch = data.model_dump(exclude_unset=True)
+    if "options" in patch:
+        patch["options"] = data.options.model_dump() if data.options is not None else {}
     try:
         await view_repo.update_column(
             table.workspace_id, table.table_id, column_id, patch, user.user_id

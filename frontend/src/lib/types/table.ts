@@ -17,7 +17,11 @@ export type ColumnType =
 	| 'tags'
 	| 'checkbox'
 	| 'url'
-	| 'doc';
+	| 'doc'
+	| 'blob';
+
+/** The rendering/picker hint for a single-file blob column. */
+export type BlobKind = 'file' | 'image';
 
 export interface ColumnChoice {
 	value: string;
@@ -27,6 +31,10 @@ export interface ColumnChoice {
 export interface ColumnOptions {
 	choices?: ColumnChoice[];
 	width?: number;
+	/** Blob picker/rendering hint. Blob cells always hold exactly one file. */
+	kind?: BlobKind;
+	/** HTML file-input accept value, for example `image/*` or `.pdf`. */
+	accept?: string;
 }
 
 // ─── PG output shapes (BE passthrough) ────────────────────────────────────────

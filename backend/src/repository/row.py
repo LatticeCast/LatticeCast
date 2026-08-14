@@ -83,6 +83,16 @@ class RowRepository:
         await self.session.refresh(row)  # refreshes attached instance — safe (row loaded via get_by_number ORM select)
         return row
 
+    async def remove_cell(self, row: Row, column_id: str, updated_by: UUID | None = None) -> Row:
+        """Remove a system-managed cell value while preserving other row data."""
+        row.row_data = {key: value for key, value in (row.row_data or {}).items() if key != column_id}
+        row.updated_by = updated_by
+        row.updated_at = datetime.utcnow()
+        self.session.add(row)
+        await self.session.commit()
+        await self.session.refresh(row)
+        return row
+
     async def delete(self, row: Row) -> None:
         await self.session.delete(row)
         await self.session.commit()
