@@ -4,10 +4,9 @@ User authentication middleware.
 """
 
 from fastapi import Depends, HTTPException, status
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.db import get_session
+from core.db import get_session, set_rls_context
 from middleware.token import verify_bearer_token
 from models.user import User
 from repository.user import UserRepository, resolve_user_by_email
@@ -89,8 +88,7 @@ async def get_rls_session(
     all session-level settings (incl. `app.current_user_id`). So the next
     request starts clean even if this one aborted.
     """
-    uid = str(user.user_id)
-    await session.execute(text("SELECT set_config('app.current_user_id', :uid, false)").bindparams(uid=uid))
+    await set_rls_context(session, str(user.user_id))
     yield session
 
 

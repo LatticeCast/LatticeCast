@@ -2,6 +2,7 @@
 
 import asyncio
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -107,6 +108,19 @@ async def get_login_session() -> AsyncSession:
         await init_db()
     async with login_session_factory() as session:
         yield session
+
+
+async def set_rls_context(session: AsyncSession, user_id: str) -> None:
+    """Store and apply the current request's PG RLS user context."""
+    session.info["rls_user_id"] = str(user_id)
+    await session.execute(text("SELECT set_config('app.current_user_id', :uid, false)").bindparams(uid=str(user_id)))
+
+
+async def reapply_rls_context(session: AsyncSession) -> None:
+    """Re-apply PG RLS user context after a commit may swap connections."""
+    user_id = session.info.get("rls_user_id")
+    if user_id:
+        await session.execute(text("SELECT set_config('app.current_user_id', :uid, false)").bindparams(uid=str(user_id)))
 
 
 # --------------------------------------------------

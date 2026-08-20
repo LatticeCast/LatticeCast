@@ -280,8 +280,11 @@ export async function downloadBlobCell(
 	const link = document.createElement('a');
 	link.href = url;
 	link.download = filename;
+	link.style.display = 'none';
+	document.body.appendChild(link);
 	link.click();
-	URL.revokeObjectURL(url);
+	link.remove();
+	window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 export async function checkDocExists(tableId: string, rowNumber: number): Promise<boolean> {

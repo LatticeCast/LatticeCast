@@ -13,6 +13,7 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from core.db import reapply_rls_context
 from models.table_view import TableView
 
 
@@ -23,6 +24,7 @@ class TableViewRepository:
     # ── Row access ────────────────────────────────────────────────────────
 
     async def list_all(self, workspace_id: UUID, table_id: str) -> list[TableView]:
+        await reapply_rls_context(self.session)
         # populate_existing=True forces SA to overwrite any cached
         # TableView instances in the identity map with fresh DB rows.
         # Without it, after a PG-function UPDATE the session keeps the
@@ -39,6 +41,7 @@ class TableViewRepository:
     async def get_by_id(
         self, workspace_id: UUID, table_id: str, view_id: int
     ) -> TableView | None:
+        await reapply_rls_context(self.session)
         result = await self.session.execute(
             select(TableView).where(
                 TableView.workspace_id == workspace_id,
@@ -51,6 +54,7 @@ class TableViewRepository:
     async def get_by_name(
         self, workspace_id: UUID, table_id: str, name: str
     ) -> TableView | None:
+        await reapply_rls_context(self.session)
         result = await self.session.execute(
             sa_text(
                 "SELECT * FROM table_views "
@@ -160,6 +164,7 @@ class TableViewRepository:
         """Return the entire schema snapshot the FE needs to render a
         table: {columns, view_order, default_view, views}. Used by GET
         and every mutation endpoint (server-is-SSOT)."""
+        await reapply_rls_context(self.session)
         result = await self.session.execute(
             sa_text(
                 "SELECT config FROM public.tables "

@@ -116,10 +116,13 @@ async def create_workspace(
             detail="A workspace with that name already exists",
         ) from exc
     created = result.scalar_one()
-    workspace = await repo.resolve_workspace(str(created["workspace_id"]))
-    if not workspace:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Created workspace not found")
-    return await _build_workspace_response(workspace, user.user_id, repo)
+    return WorkspaceResponse(
+        workspace_id=created["workspace_id"],
+        workspace_name=created["workspace_name"],
+        level="owner",
+        created_at=created["created_at"],
+        updated_at=created["updated_at"],
+    )
 
 
 @router.get("", response_model=list[WorkspaceResponse])

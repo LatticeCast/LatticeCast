@@ -75,23 +75,81 @@ class RowRepository:
         return list(result.scalars().all())
 
     async def update(self, row: Row, data: RowUpdate, updated_by: UUID | None = None) -> Row:
-        row.row_data = {**(row.row_data or {}), **data.row_data}
-        row.updated_by = updated_by
-        row.updated_at = datetime.utcnow()
-        self.session.add(row)
+        next_row_data = {**(row.row_data or {}), **data.row_data}
+        next_updated_at = datetime.utcnow()
+        result = await self.session.execute(
+            text("""
+                UPDATE rows
+                SET row_data = CAST(:row_data AS jsonb),
+                    updated_by = :updated_by,
+                    updated_at = :updated_at
+                WHERE workspace_id = :workspace_id
+                  AND table_id = :table_id
+                  AND row_id = :row_id
+                RETURNING workspace_id, table_id, row_id, row_data, created_by, updated_by, created_at, updated_at
+            """),
+            {
+                "workspace_id": str(row.workspace_id),
+                "table_id": str(row.table_id),
+                "row_id": row.row_id,
+                "row_data": json.dumps(next_row_data),
+                "updated_by": str(updated_by) if updated_by else None,
+                "updated_at": next_updated_at,
+            },
+        )
         await self.session.commit()
-        await self.session.refresh(row)  # refreshes attached instance — safe (row loaded via get_by_number ORM select)
-        return row
+        updated = result.mappings().one_or_none()
+        if updated is None:
+            raise RuntimeError("Row disappeared during update")
+        return Row(
+            workspace_id=updated["workspace_id"],
+            table_id=updated["table_id"],
+            row_id=updated["row_id"],
+            row_data=updated["row_data"],
+            created_by=updated["created_by"],
+            updated_by=updated["updated_by"],
+            created_at=updated["created_at"],
+            updated_at=updated["updated_at"],
+        )
 
     async def remove_cell(self, row: Row, column_id: str, updated_by: UUID | None = None) -> Row:
         """Remove a system-managed cell value while preserving other row data."""
-        row.row_data = {key: value for key, value in (row.row_data or {}).items() if key != column_id}
-        row.updated_by = updated_by
-        row.updated_at = datetime.utcnow()
-        self.session.add(row)
+        next_row_data = {key: value for key, value in (row.row_data or {}).items() if key != column_id}
+        next_updated_at = datetime.utcnow()
+        result = await self.session.execute(
+            text("""
+                UPDATE rows
+                SET row_data = CAST(:row_data AS jsonb),
+                    updated_by = :updated_by,
+                    updated_at = :updated_at
+                WHERE workspace_id = :workspace_id
+                  AND table_id = :table_id
+                  AND row_id = :row_id
+                RETURNING workspace_id, table_id, row_id, row_data, created_by, updated_by, created_at, updated_at
+            """),
+            {
+                "workspace_id": str(row.workspace_id),
+                "table_id": str(row.table_id),
+                "row_id": row.row_id,
+                "row_data": json.dumps(next_row_data),
+                "updated_by": str(updated_by) if updated_by else None,
+                "updated_at": next_updated_at,
+            },
+        )
         await self.session.commit()
-        await self.session.refresh(row)
-        return row
+        updated = result.mappings().one_or_none()
+        if updated is None:
+            raise RuntimeError("Row disappeared during cell removal")
+        return Row(
+            workspace_id=updated["workspace_id"],
+            table_id=updated["table_id"],
+            row_id=updated["row_id"],
+            row_data=updated["row_data"],
+            created_by=updated["created_by"],
+            updated_by=updated["updated_by"],
+            created_at=updated["created_at"],
+            updated_at=updated["updated_at"],
+        )
 
     async def delete(self, row: Row) -> None:
         await self.session.delete(row)

@@ -10,6 +10,7 @@ from uuid import UUID
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.db import reapply_rls_context
 from models.table import Table
 
 # Column types that get B-tree expression indexes (sortable/range queries)
@@ -59,6 +60,7 @@ class TableRepository:
         )
 
     async def get_by_id(self, workspace_id: UUID, table_id: str) -> Table | None:
+        await reapply_rls_context(self.session)
         result = await self.session.execute(
             select(Table).where(Table.workspace_id == workspace_id, Table.table_id == table_id)
         )
@@ -66,6 +68,7 @@ class TableRepository:
 
     async def resolve_table(self, workspace_id: UUID, identifier: str) -> Table | None:
         """Resolve a table by table_id (case-insensitive) within a workspace."""
+        await reapply_rls_context(self.session)
         result = await self.session.execute(
             select(Table).where(
                 Table.workspace_id == workspace_id,
@@ -78,6 +81,7 @@ class TableRepository:
         """Resolve a table by case-insensitive name across the given workspaces."""
         if not workspace_ids:
             return None
+        await reapply_rls_context(self.session)
         result = await self.session.execute(
             select(Table).where(
                 Table.workspace_id.in_(workspace_ids),
@@ -87,16 +91,39 @@ class TableRepository:
         return result.scalars().first()
 
     async def list_by_workspace(self, workspace_id: UUID) -> list[Table]:
+        await reapply_rls_context(self.session)
         result = await self.session.execute(select(Table).where(Table.workspace_id == workspace_id))
         return list(result.scalars().all())
 
     async def update(self, table: Table, table_id: str) -> Table:
-        table.table_id = table_id.lower()
-        table.updated_at = datetime.utcnow()
-        self.session.add(table)
+        next_table_id = table_id.lower()
+        next_updated_at = datetime.utcnow()
+        result = await self.session.execute(
+            text("""
+                UPDATE tables
+                SET table_id = :next_table_id,
+                    updated_at = :updated_at
+                WHERE workspace_id = :workspace_id
+                  AND table_id = :table_id
+                RETURNING workspace_id, table_id, created_at, updated_at
+            """),
+            {
+                "workspace_id": str(table.workspace_id),
+                "table_id": str(table.table_id),
+                "next_table_id": next_table_id,
+                "updated_at": next_updated_at,
+            },
+        )
         await self.session.commit()
-        await self.session.refresh(table)  # refreshes attached instance — safe
-        return table
+        updated = result.mappings().one_or_none()
+        if updated is None:
+            raise RuntimeError("Table disappeared during update")
+        return Table(
+            workspace_id=updated["workspace_id"],
+            table_id=updated["table_id"],
+            created_at=updated["created_at"],
+            updated_at=updated["updated_at"],
+        )
 
     async def delete(self, table: Table) -> None:
         await self.session.delete(table)

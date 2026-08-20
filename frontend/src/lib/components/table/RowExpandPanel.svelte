@@ -459,6 +459,7 @@
 						{@const blob = getBlobCellMetadata(localRow, col.column_id)}
 						{#if blob}
 							<button
+								type="button"
 								data-testid="row-panel-blob-download-{col.column_id}"
 								class="flex min-h-[2.25rem] w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition {T.inputBorder} hover:border-blue-400"
 								title="Download {blob.filename}"

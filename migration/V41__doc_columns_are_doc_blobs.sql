@@ -42,6 +42,9 @@ WHERE rows.workspace_id = migrated_rows.workspace_id
   AND rows.table_id = migrated_rows.table_id
   AND rows.row_id = migrated_rows.row_id;
 
+ALTER TABLE public.tables
+DISABLE TRIGGER trg_tables_validate_column_names;
+
 UPDATE public.tables AS tables
 SET config = jsonb_set(
     tables.config,
@@ -61,4 +64,14 @@ SET config = jsonb_set(
         FROM jsonb_array_elements(tables.config -> 'columns')
             WITH ORDINALITY AS column_entry(column_data, ordinality)
     )
+)
+WHERE EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(
+        coalesce(tables.config -> 'columns', '[]'::JSONB)
+    ) AS doc_column(column_data)
+    WHERE doc_column.column_data ->> 'type' = 'doc'
 );
+
+ALTER TABLE public.tables
+ENABLE TRIGGER trg_tables_validate_column_names;

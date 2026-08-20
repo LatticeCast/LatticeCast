@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core.db import reapply_rls_context
 from models.workspace import Workspace, WorkspaceMember
 
 _LEVEL_ORDER = ("read", "write", "owner")
@@ -29,6 +30,7 @@ class WorkspaceRepository:
         return workspace
 
     async def get_by_id(self, workspace_id: UUID) -> Workspace | None:
+        await reapply_rls_context(self.session)
         result = await self.session.execute(select(Workspace).where(Workspace.workspace_id == workspace_id))
         return result.scalar_one_or_none()
 
@@ -42,6 +44,7 @@ class WorkspaceRepository:
         silently drop every workspace they can merely read/write but
         don't own.
         """
+        await reapply_rls_context(self.session)
         result = await self.session.execute(
             select(Workspace).where(
                 text("check_workspace_permission(workspaces.workspace_id, CAST(:user_id AS uuid), 'read')").bindparams(
@@ -84,6 +87,7 @@ class WorkspaceRepository:
         from models.user import UserInfo
         from models.workspace import MemberFullResponse
 
+        await reapply_rls_context(self.session)
         result = await self.session.execute(
             select(
                 WorkspaceMember.workspace_id,
@@ -123,6 +127,7 @@ class WorkspaceRepository:
         their own membership — RLS only asks "is the caller an owner of
         this workspace", not "is this the caller's own row".
         """
+        await reapply_rls_context(self.session)
         result = await self.session.execute(
             text("SELECT check_workspace_permission(CAST(:ws AS uuid), CAST(:user_id AS uuid), 'read')").bindparams(
                 ws=str(workspace_id), user_id=str(user_id)
@@ -132,6 +137,7 @@ class WorkspaceRepository:
 
     async def is_owner(self, workspace_id: UUID, user_id: UUID) -> bool:
         """Same RLS-bypass reasoning as is_member — see its docstring."""
+        await reapply_rls_context(self.session)
         result = await self.session.execute(
             text("SELECT check_workspace_permission(CAST(:ws AS uuid), CAST(:user_id AS uuid), 'owner')").bindparams(
                 ws=str(workspace_id), user_id=str(user_id)
@@ -140,6 +146,7 @@ class WorkspaceRepository:
         return bool(result.scalar_one())
 
     async def can_write(self, workspace_id: UUID, user_id: UUID) -> bool:
+        await reapply_rls_context(self.session)
         result = await self.session.execute(
             text("SELECT check_workspace_permission(CAST(:ws AS uuid), CAST(:user_id AS uuid), 'write')").bindparams(
                 ws=str(workspace_id), user_id=str(user_id)
@@ -148,6 +155,7 @@ class WorkspaceRepository:
         return bool(result.scalar_one())
 
     async def get_user_level(self, workspace_id: UUID, user_id: UUID) -> str:
+        await reapply_rls_context(self.session)
         result = await self.session.execute(
             text(
                 """
@@ -178,6 +186,7 @@ class WorkspaceRepository:
 
         Tries UUID parse first; falls back to LOWER(workspace_name) lookup.
         """
+        await reapply_rls_context(self.session)
         try:
             workspace_uuid = UUID(identifier)
             workspace = await self.get_by_id(workspace_uuid)
@@ -195,6 +204,7 @@ class WorkspaceRepository:
         """Return the first workspace the user owns, or any workspace they can
         read. See list_by_user's docstring for why this filters via
         check_workspace_permission rather than joining workspace_members."""
+        await reapply_rls_context(self.session)
         result = await self.session.execute(
             select(Workspace)
             .where(
