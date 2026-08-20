@@ -75,7 +75,15 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
     r = api("POST", "/api/v1/tables", admin_token,
             json={"table_id": table_id, "workspace_id": ws_id})
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+    default_doc = next(c for c in r.json()["columns"] if c["name"] == "Doc")
+    assert default_doc["type"] == "blob"
+    assert default_doc.get("options", {}).get("kind") == "doc"
     print(f"[ok] blank table {table_id!r}")
+
+    # Legacy document columns are no longer part of the column contract.
+    r = api("POST", f"/api/v1/tables/{table_id}/columns", admin_token,
+            json={"name": "Legacy Doc", "type": "doc"})
+    assert r.status_code == 422, f"legacy doc type accepted: {r.status_code} {r.text[:200]}"
 
     # ── 3. Add a doc blob column ──────────────────────────────────────────
     r = api("POST", f"/api/v1/tables/{table_id}/columns", admin_token,
@@ -127,6 +135,11 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
         pytest.fail("Table grid did not render")
 
     snap(page, "doc_col_01_initial_table", snapshot)
+
+    page.locator('[data-testid="grid-add-column-btn"]').first.click()
+    col_types = page.locator('#col-type option').all_text_contents()
+    assert "doc" not in col_types, f"legacy doc type still offered: {col_types}"
+    page.get_by_test_id("add-column-cancel-btn").click()
 
     # ═══════════════════════════════════════════════════════════════════
     # STEP 1: Click "Open doc" button in the doc cell

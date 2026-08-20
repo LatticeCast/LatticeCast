@@ -441,7 +441,7 @@
 								{/if}
 							</button>
 						{/if}
-					{:else if col.type === 'doc' || (col.type === 'blob' && col.options?.kind === 'doc')}
+					{:else if col.type === 'blob' && col.options?.kind === 'doc'}
 						<button
 							class="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition {T.inputBorder} {T.link} hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
 							onclick={() => onOpenDocCell?.(localRow, col)}

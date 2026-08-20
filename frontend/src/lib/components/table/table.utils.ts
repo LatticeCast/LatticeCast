@@ -9,8 +9,7 @@ export const COLUMN_TYPES = [
 	'tags',
 	'checkbox',
 	'url',
-	'blob',
-	'doc'
+	'blob'
 ] as const;
 
 export interface FilterCondition {

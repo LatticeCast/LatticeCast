@@ -50,13 +50,11 @@ async def _get_blob_column(table, column_id: str, session: AsyncSession) -> dict
 
 
 async def _get_doc_column(table, column_id: str, session: AsyncSession) -> dict:
-    """Return a markdown blob column, accepting legacy doc columns during migration."""
+    """Return an explicitly addressed markdown blob column."""
     columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
     column = next((column for column in columns if column["column_id"] == column_id), None)
     if not column:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found")
-    if column.get("type") == "doc":  # Compatibility for schemas not yet migrated.
-        return column
     if column.get("type") != "blob" or column.get("options", {}).get("kind") != "doc":
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Column is not a doc blob column")
     return column
@@ -69,8 +67,7 @@ async def _get_default_doc_column(table, session: AsyncSession) -> dict | None:
         (
             column
             for column in columns
-            if column.get("type") == "doc"
-            or (column.get("type") == "blob" and column.get("options", {}).get("kind") == "doc")
+            if column.get("type") == "blob" and column.get("options", {}).get("kind") == "doc"
         ),
         None,
     )
@@ -169,9 +166,7 @@ async def _inject_hierarchy(content: str, table, row: Row, session: AsyncSession
     # Inject children links — filter by row_id (integer) stored in parent column
     if parent_col_id and re.search(r"<!--\s*Links to child", content):
         try:
-            children = await repo.filter_by_jsonb(
-                table.workspace_id, table.table_id, {parent_col_id: str(row.row_id)}
-            )
+            children = await repo.filter_by_jsonb(table.workspace_id, table.table_id, {parent_col_id: str(row.row_id)})
             if children:
                 lines = []
                 for child in children:
@@ -231,10 +226,7 @@ async def create_row(
     # Auto-create the markdown file in each doc blob cell.
     columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
     doc_cols = [
-        column
-        for column in columns
-        if column.get("type") == "doc"
-        or (column.get("type") == "blob" and column.get("options", {}).get("kind") == "doc")
+        column for column in columns if column.get("type") == "blob" and column.get("options", {}).get("kind") == "doc"
     ]
     if doc_cols:
         import json as _json
@@ -249,9 +241,7 @@ async def create_row(
 
         patch: dict = {}
         for doc_col in doc_cols:
-            minio_key = _blob_storage_key(
-                str(table.workspace_id), table.table_id, row.row_id, doc_col["column_id"]
-            )
+            minio_key = _blob_storage_key(str(table.workspace_id), table.table_id, row.row_id, doc_col["column_id"])
             if row_type in ("epic", "story", "task", "bug"):
                 doc_content = _build_doc_template(row_type, row_key, row_title)
             else:
@@ -356,11 +346,7 @@ async def update_row(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     # Silently drop any attempts to change storage-backed column values (system-managed).
     columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
-    managed_col_ids = {
-        column["column_id"]
-        for column in columns
-        if column.get("type") == "doc" or column.get("type") == "blob"
-    }
+    managed_col_ids = {column["column_id"] for column in columns if column.get("type") == "blob"}
     if managed_col_ids:
         data = RowUpdate(row_data={k: v for k, v in data.row_data.items() if k not in managed_col_ids})
     return await repo.update(row=row, data=data, updated_by=user.user_id)
@@ -464,13 +450,7 @@ async def batch_docs_exist(
     if not doc_column:
         return {"row_ids": []}
     rows = await RowRepository(session).list_by_table(table.workspace_id, table.table_id, limit=1000)
-    return {
-        "row_ids": [
-            row.row_id
-            for row in rows
-            if _cell_blob_key(row.row_data.get(doc_column["column_id"]))
-        ]
-    }
+    return {"row_ids": [row.row_id for row in rows if _cell_blob_key(row.row_data.get(doc_column["column_id"]))]}
 
 
 @router.get("/tables/{table_id}/rows/{row_id}/col-doc/{column_id}", response_class=PlainTextResponse)
@@ -721,7 +701,7 @@ async def delete_row(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     # Delete MinIO objects for storage-backed columns (best-effort).
     columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
-    storage_cols = [c for c in columns if c.get("type") in {"doc", "blob"}]
+    storage_cols = [c for c in columns if c.get("type") == "blob"]
     for storage_col in storage_cols:
         cell_value = row.row_data.get(storage_col["column_id"])
         minio_key = cell_value.get("key") if isinstance(cell_value, dict) else cell_value

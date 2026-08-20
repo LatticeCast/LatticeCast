@@ -22,7 +22,7 @@ from e2e_base import BASE, api
 
 CRM_COLUMNS = [
     ("Title", "text"),
-    ("Doc", "doc"),
+    ("Doc", "blob"),
     ("Stage", "select"),
     ("Value", "number"),
     ("Owner", "text"),
@@ -78,6 +78,8 @@ def test_crm_template_columns(crm_table, admin_token):
         assert actual_type == expected_type, (
             f"column '{name}': expected type '{expected_type}', got '{actual_type}'"
         )
+
+    assert col_map["Doc"].get("options", {}).get("kind") == "doc"
 
     stage_opts = col_map["Stage"].get("options", {})
     stage_values = [ch["value"] for ch in stage_opts.get("choices", [])]

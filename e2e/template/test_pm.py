@@ -22,7 +22,7 @@ from e2e_base import BASE, api
 
 PM_COLUMNS = [
     ("Title", "text"),
-    ("Doc", "doc"),
+    ("Doc", "blob"),
     ("Type", "select"),
     ("Status", "select"),
     ("Priority", "select"),
@@ -80,6 +80,8 @@ def test_pm_template_structure(authed_page, workspace, admin_token, snapshot):
         assert actual_type == expected_type, (
             f"column '{name}': expected type '{expected_type}', got '{actual_type}'"
         )
+
+    assert col_map["Doc"].get("options", {}).get("kind") == "doc"
 
     # Verify select column choices
     type_opts = col_map["Type"].get("options", {})

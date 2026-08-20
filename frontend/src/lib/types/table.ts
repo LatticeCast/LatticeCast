@@ -17,7 +17,6 @@ export type ColumnType =
 	| 'tags'
 	| 'checkbox'
 	| 'url'
-	| 'doc'
 	| 'blob';
 
 /** The rendering/picker hint for a single-file blob column. */
