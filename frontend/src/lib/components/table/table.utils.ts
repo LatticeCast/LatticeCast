@@ -1,4 +1,4 @@
-import type { BlobCellMetadata, Column, ColumnChoice, ColumnType, Row } from '$lib/types/table';
+import type { BlobCellMetadata, BlobKind, Column, ColumnChoice, ColumnType, Row } from '$lib/types/table';
 
 export const COLUMN_TYPES = [
 	'text',
@@ -11,6 +11,31 @@ export const COLUMN_TYPES = [
 	'url',
 	'blob'
 ] as const;
+
+/** Fixed single-file blob categories. The UI selects a category, never a free-form accept string. */
+export const BLOB_KIND_OPTIONS: ReadonlyArray<{
+	value: BlobKind;
+	label: string;
+	description: string;
+	accept?: string;
+}> = [
+	{
+		value: 'doc',
+		label: 'Document',
+		description: 'Markdown, text, Word documents',
+		accept:
+			'.md,.txt,.doc,.docx,text/markdown,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+	},
+	{
+		value: 'table',
+		label: 'Table data',
+		description: 'CSV, Excel, JSON Lines',
+		accept:
+			'.csv,.xlsx,.jsonl,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/x-ndjson,application/jsonl'
+	},
+	{ value: 'image', label: 'Image', description: 'Any image file', accept: 'image/*' },
+	{ value: 'file', label: 'File', description: 'Any single file' }
+];
 
 export interface FilterCondition {
 	id: string;

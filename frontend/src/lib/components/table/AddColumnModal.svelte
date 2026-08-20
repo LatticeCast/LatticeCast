@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { COLUMN_TYPES } from './table.utils';
+	import { BLOB_KIND_OPTIONS, COLUMN_TYPES } from './table.utils';
+	import type { BlobKind, ColumnOptions } from '$lib/types/table';
 
 	let {
 		show,
@@ -9,23 +10,33 @@
 	}: {
 		show: boolean;
 		onClose: () => void;
-		onAdd: (name: string, type: string) => void;
+		onAdd: (name: string, type: string, options?: ColumnOptions) => void;
 		pending?: boolean;
 	} = $props();
 
 	let newColName = $state('');
 	let newColType = $state<string>('text');
+	let newBlobKind = $state<BlobKind>('file');
 
 	function handleAdd() {
 		if (!newColName.trim()) return;
-		onAdd(newColName.trim(), newColType);
+		const blobOption = BLOB_KIND_OPTIONS.find((option) => option.value === newBlobKind);
+		onAdd(
+			newColName.trim(),
+			newColType,
+			newColType === 'blob'
+				? { kind: newBlobKind, ...(blobOption?.accept ? { accept: blobOption.accept } : {}) }
+				: undefined
+		);
 		newColName = '';
 		newColType = 'text';
+		newBlobKind = 'file';
 	}
 
 	function handleClose() {
 		newColName = '';
 		newColType = 'text';
+		newBlobKind = 'file';
 		onClose();
 	}
 </script>
@@ -68,6 +79,24 @@
 					{/each}
 				</select>
 			</div>
+			{#if newColType === 'blob'}
+				<div class="mb-6">
+					<label class="mb-1 block text-sm font-medium text-gray-600" for="blob-kind">Blob category</label>
+					<select
+						id="blob-kind"
+						data-testid="blob-kind-select"
+						class="w-full rounded-xl border border-gray-200 px-4 py-2 text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+						bind:value={newBlobKind}
+					>
+						{#each BLOB_KIND_OPTIONS as option (option.value)}
+							<option value={option.value}>{option.label}</option>
+						{/each}
+					</select>
+					<p class="mt-1 text-xs text-gray-500">
+						{BLOB_KIND_OPTIONS.find((option) => option.value === newBlobKind)?.description}
+					</p>
+				</div>
+			{/if}
 			<div class="flex gap-3">
 				<button
 					data-testid="add-column-cancel-btn"

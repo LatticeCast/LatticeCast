@@ -344,12 +344,12 @@ class TablePageStore {
 
 	// ─── Column handlers ───────────────────────────────────────────────────────
 
-	async handleAddColumn(name: string, type: string) {
+	async handleAddColumn(name: string, type: string, options?: ColumnOptions) {
 		const tableId = this.tableId;
 		this.addingColumn = true;
 		error.set(null);
 		try {
-			await createColumn(tableId, { name, type: type as ColumnType });
+			await createColumn(tableId, { name, type: type as ColumnType, options });
 			await fetchTable(tableId);
 			this.showAddColumn = false;
 			this.scrollToColTrigger += 1;

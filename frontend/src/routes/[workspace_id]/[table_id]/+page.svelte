@@ -360,7 +360,7 @@
 <AddColumnModal
 	show={s.showAddColumn}
 	onClose={() => (s.showAddColumn = false)}
-	onAdd={(name, type) => s.handleAddColumn(name, type)}
+	onAdd={(name, type, options) => s.handleAddColumn(name, type, options)}
 	pending={s.addingColumn}
 />
 

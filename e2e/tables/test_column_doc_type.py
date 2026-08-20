@@ -139,7 +139,24 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
     page.locator('[data-testid="grid-add-column-btn"]').first.click()
     col_types = page.locator('#col-type option').all_text_contents()
     assert "doc" not in col_types, f"legacy doc type still offered: {col_types}"
-    page.get_by_test_id("add-column-cancel-btn").click()
+    page.locator('#col-type').select_option('blob')
+    blob_kinds = page.locator('[data-testid="blob-kind-select"] option').all_text_contents()
+    assert blob_kinds == ["Document", "Table data", "Image", "File"]
+    page.locator('[data-testid="blob-kind-select"]').select_option('table')
+    page.locator('[data-testid="add-column-name-input"]').fill('Import data')
+    snap(page, "doc_col_01b_blob_category", snapshot)
+    with page.expect_response(
+        lambda response: response.request.method == "POST"
+        and f"/api/v1/tables/{table_id}/columns" in response.url
+    ) as response_info:
+        page.get_by_test_id("add-column-submit-btn").click()
+    assert response_info.value.status == 201, response_info.value.text()
+
+    schema = response_info.value.json()
+    import_column = next(c for c in schema["columns"] if c["name"] == "Import data")
+    assert import_column["type"] == "blob"
+    assert import_column.get("options", {}).get("kind") == "table"
+    assert ".jsonl" in import_column.get("options", {}).get("accept", "")
 
     # ═══════════════════════════════════════════════════════════════════
     # STEP 1: Click "Open doc" button in the doc cell
