@@ -1,6 +1,6 @@
 # AGENT.md
 
-load Skill(developing/*)
+load Skills(.agent-skills/dev*)
 
 dont use `/plan`. Use Skill(agent/agentic-hive)
 
