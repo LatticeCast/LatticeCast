@@ -1,6 +1,5 @@
 # src/repository/row.py
 import json
-from datetime import datetime
 from typing import Any
 from uuid import UUID
 
@@ -75,71 +74,73 @@ class RowRepository:
         return list(result.scalars().all())
 
     async def update(self, row: Row, data: RowUpdate, updated_by: UUID | None = None) -> Row:
-        next_row_data = {**(row.row_data or {}), **data.row_data}
-        next_updated_at = datetime.utcnow()
+        """Backward-compatible alias for ordinary row-data mutations."""
+        return await self.update_row(row, data, updated_by)
+
+    async def update_row(self, row: Row, data: RowUpdate, updated_by: UUID | None = None) -> Row:
+        """Merge non-blob cells through the PostgreSQL mutation boundary.
+
+        ``updated_by`` remains accepted while callers migrate to the database-owned
+        audit context; ``update_row_data`` reads the authenticated RLS user instead.
+        """
         result = await self.session.execute(
             text("""
-                UPDATE rows
-                SET row_data = CAST(:row_data AS jsonb),
-                    updated_by = :updated_by,
-                    updated_at = :updated_at
-                WHERE workspace_id = :workspace_id
-                  AND table_id = :table_id
-                  AND row_id = :row_id
-                RETURNING workspace_id, table_id, row_id, row_data, created_by, updated_by, created_at, updated_at
+                SELECT *
+                FROM public.update_row_data(
+                    :workspace_id,
+                    :table_id,
+                    :row_id,
+                    CAST(:patch AS jsonb)
+                )
             """),
             {
                 "workspace_id": str(row.workspace_id),
                 "table_id": str(row.table_id),
                 "row_id": row.row_id,
-                "row_data": json.dumps(next_row_data),
-                "updated_by": str(updated_by) if updated_by else None,
-                "updated_at": next_updated_at,
+                "patch": json.dumps(data.row_data),
             },
         )
         await self.session.commit()
         updated = result.mappings().one_or_none()
         if updated is None:
             raise RuntimeError("Row disappeared during update")
-        return Row(
-            workspace_id=updated["workspace_id"],
-            table_id=updated["table_id"],
-            row_id=updated["row_id"],
-            row_data=updated["row_data"],
-            created_by=updated["created_by"],
-            updated_by=updated["updated_by"],
-            created_at=updated["created_at"],
-            updated_at=updated["updated_at"],
-        )
+        return self._row_from_mapping(updated)
 
-    async def remove_cell(self, row: Row, column_id: str, updated_by: UUID | None = None) -> Row:
-        """Remove a system-managed cell value while preserving other row data."""
-        next_row_data = {key: value for key, value in (row.row_data or {}).items() if key != column_id}
-        next_updated_at = datetime.utcnow()
+    async def update_blob(
+        self, row: Row, column_id: str, metadata: dict[str, Any], updated_by: UUID | None = None
+    ) -> Row:
+        """Write metadata for exactly one blob cell through PostgreSQL."""
         result = await self.session.execute(
             text("""
-                UPDATE rows
-                SET row_data = CAST(:row_data AS jsonb),
-                    updated_by = :updated_by,
-                    updated_at = :updated_at
-                WHERE workspace_id = :workspace_id
-                  AND table_id = :table_id
-                  AND row_id = :row_id
-                RETURNING workspace_id, table_id, row_id, row_data, created_by, updated_by, created_at, updated_at
+                SELECT *
+                FROM public.update_blob_cell(
+                    :workspace_id,
+                    :table_id,
+                    :row_id,
+                    :column_id,
+                    CAST(:metadata AS jsonb)
+                )
             """),
             {
                 "workspace_id": str(row.workspace_id),
                 "table_id": str(row.table_id),
                 "row_id": row.row_id,
-                "row_data": json.dumps(next_row_data),
-                "updated_by": str(updated_by) if updated_by else None,
-                "updated_at": next_updated_at,
+                "column_id": column_id,
+                "metadata": json.dumps(metadata),
             },
         )
         await self.session.commit()
         updated = result.mappings().one_or_none()
         if updated is None:
-            raise RuntimeError("Row disappeared during cell removal")
+            raise RuntimeError("Row disappeared during blob update")
+        return self._row_from_mapping(updated)
+
+    async def remove_cell(self, row: Row, column_id: str, updated_by: UUID | None = None) -> Row:
+        """Clear system-managed blob metadata through its dedicated PG function."""
+        return await self.update_blob(row, column_id, {}, updated_by)
+
+    @staticmethod
+    def _row_from_mapping(updated: Any) -> Row:
         return Row(
             workspace_id=updated["workspace_id"],
             table_id=updated["table_id"],
