@@ -576,9 +576,7 @@
 									{i === 0 ? `sticky left-12 z-10 border-r ${T.cardBorder} ${T.cardBg} px-2` : 'px-2'}"
 									style="width: {getColWidth(col)}px;"
 									onclick={() => {
-										if (col.type === 'blob' && col.options?.kind === 'doc') {
-											onOpenDocCell(row, col);
-										} else if (
+										if (
 											col.type !== 'checkbox' &&
 											col.type !== 'tags' &&
 											col.type !== 'blob' &&
@@ -682,39 +680,20 @@
 													: 'translate-x-1'}"
 											></span>
 										</button>
-									{:else if col.type === 'blob' && col.options?.kind === 'doc'}
-										<button
-											data-testid="doc-open-{row.row_id}-{col.column_id}"
-											class="flex items-center gap-1.5 rounded px-2 py-1 text-xs transition hover:bg-blue-50 hover:text-blue-700"
-											onclick={(e) => {
-												e.stopPropagation();
-												onOpenDocCell(row, col);
-											}}
-										>
-											<svg
-												class="h-3.5 w-3.5 text-blue-400"
-												fill="currentColor"
-												viewBox="0 0 20 20"
-											>
-												<path
-													fill-rule="evenodd"
-													d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
-													clip-rule="evenodd"
-												/>
-											</svg>
-											<span class="text-blue-500">Open doc</span>
-										</button>
 									{:else if col.type === 'blob'}
 										{@const blob = getBlobCellMetadata(row, col.column_id)}
 										{#if blob}
 											<button
 												type="button"
-												data-testid="blob-download-{row.row_id}-{col.column_id}"
+												data-testid="blob-open-{row.row_id}-{col.column_id}"
 												class="flex max-w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition hover:bg-blue-50 hover:text-blue-700"
-												title="Download {blob.filename}"
+												title={col.options?.kind === 'doc'
+													? `Open ${blob.filename}`
+													: `Download ${blob.filename}`}
 												onclick={(e) => {
 													e.stopPropagation();
-													void handleBlobDownload(row, col, blob.filename);
+													if (col.options?.kind === 'doc') onOpenDocCell(row, col);
+													else void handleBlobDownload(row, col, blob.filename);
 												}}
 											>
 												<svg
@@ -734,6 +713,17 @@
 												<span class="min-w-0 truncate text-blue-600">{blob.filename}</span>
 												<span class="shrink-0 {T.muted}">{formatBlobSize(blob.size)}</span>
 											</button>
+										{:else if col.options?.kind === 'doc'}
+											<button
+												type="button"
+												data-testid="blob-create-{row.row_id}-{col.column_id}"
+												class="rounded px-2 py-1 text-xs text-gray-400 transition hover:bg-blue-50 hover:text-blue-700"
+												title="Create markdown document"
+												onclick={(e) => {
+													e.stopPropagation();
+													onOpenDocCell(row, col);
+												}}>+</button
+											>
 										{:else}
 											<span
 												data-testid="blob-empty-{row.row_id}-{col.column_id}"

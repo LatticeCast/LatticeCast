@@ -222,43 +222,6 @@ async def create_row(
         created_by=user.user_id,
         updated_by=user.user_id,
     )
-
-    # Auto-create the markdown file in each doc blob cell.
-    columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
-    doc_cols = [
-        column for column in columns if column.get("type") == "blob" and column.get("options", {}).get("kind") == "doc"
-    ]
-    if doc_cols:
-        type_col = next((c for c in columns if c.get("name") == "Type"), None)
-        title_col = next((c for c in columns if c.get("name") == "Title"), None)
-        row_type = row.row_data.get(type_col["column_id"], "") if type_col else ""
-        row_title = row.row_data.get(title_col["column_id"], "") if title_col else ""
-        row_key = f"{row_type}-{row.row_id}" if row_type else str(row.row_id)
-
-        for doc_col in doc_cols:
-            minio_key = _blob_storage_key(str(table.workspace_id), table.table_id, row.row_id, doc_col["column_id"])
-            if row_type in ("epic", "story", "task", "bug"):
-                doc_content = _build_doc_template(row_type, row_key, row_title)
-            else:
-                doc_content = ""
-            try:
-                async with s3_client() as s3:
-                    await s3.put_object(
-                        Bucket=settings.minio.bucket,
-                        Key=minio_key,
-                        Body=doc_content.encode("utf-8"),
-                        ContentType="text/markdown",
-                    )
-            except Exception:
-                pass  # best-effort; don't fail row creation
-            metadata = BlobCellMetadata(
-                key=minio_key,
-                filename="doc.md",
-                content_type="text/markdown",
-                size=len(doc_content.encode("utf-8")),
-            ).model_dump()
-            row = await repo.update_blob(row, doc_col["column_id"], metadata, updated_by=user.user_id)
-
     return row
 
 
@@ -536,7 +499,7 @@ async def get_doc_blob_cell(
     return content.decode("utf-8")
 
 
-@router.put("/tables/{table_id}/rows/{row_id}/blob/{column_id}/doc", response_class=PlainTextResponse)
+@router.put("/tables/{table_id}/rows/{row_id}/blob/{column_id}/doc", response_model=BlobCellMetadata)
 async def put_doc_blob_cell(
     table_id: str,
     row_id: int,
@@ -544,18 +507,24 @@ async def put_doc_blob_cell(
     request: Request,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
-) -> str:
+) -> BlobCellMetadata:
     """Write a markdown document to one explicitly addressed blob cell."""
     body = (await request.body()).decode("utf-8")
     table = await _get_table_for_member(table_id, user, session)
-    await _get_doc_column(table, column_id, session)
+    column = await _get_doc_column(table, column_id, session)
     repo = RowRepository(session)
     row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+    current_metadata = row.row_data.get(column_id)
+    filename = (
+        current_metadata.get("filename")
+        if isinstance(current_metadata, dict) and isinstance(current_metadata.get("filename"), str)
+        else f"{column['name']}.md"
+    )
     metadata = BlobCellMetadata(
         key=_blob_storage_key(str(table.workspace_id), table.table_id, row.row_id, column_id),
-        filename="doc.md",
+        filename=filename,
         content_type="text/markdown",
         size=len(body.encode("utf-8")),
     )
@@ -570,7 +539,7 @@ async def put_doc_blob_cell(
     except ClientError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
     await repo.update_blob(row, column_id, metadata.model_dump(), updated_by=user.user_id)
-    return body
+    return metadata
 
 
 @router.put("/tables/{table_id}/rows/{row_id}/blob/{column_id}", response_model=BlobCellMetadata)

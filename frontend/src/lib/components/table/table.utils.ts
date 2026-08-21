@@ -1,4 +1,11 @@
-import type { BlobCellMetadata, BlobKind, Column, ColumnChoice, ColumnType, Row } from '$lib/types/table';
+import type {
+	BlobCellMetadata,
+	BlobKind,
+	Column,
+	ColumnChoice,
+	ColumnType,
+	Row
+} from '$lib/types/table';
 
 export const COLUMN_TYPES = [
 	'text',

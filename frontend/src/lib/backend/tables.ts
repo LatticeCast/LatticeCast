@@ -15,6 +15,7 @@ import type {
 	Table,
 	TableSchema,
 	Row,
+	BlobCellMetadata,
 	CreateTable,
 	CreateColumn,
 	CreateRow,
@@ -248,7 +249,7 @@ export async function saveDocCell(
 	rowNumber: number,
 	columnId: string,
 	content: string
-): Promise<string> {
+): Promise<BlobCellMetadata> {
 	const headers = await getBearerHeader();
 	const response = await fetch(
 		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/blob/${columnId}/doc`,
@@ -259,7 +260,15 @@ export async function saveDocCell(
 		}
 	);
 	if (!response.ok) throw new Error(`Failed to save doc: ${response.statusText}`);
-	return response.text();
+	const metadata: BlobCellMetadata = await response.json();
+	rows.update((list) =>
+		list.map((row) =>
+			row.row_id === rowNumber
+				? { ...row, row_data: { ...row.row_data, [columnId]: metadata } }
+				: row
+		)
+	);
+	return metadata;
 }
 
 /** Download an explicitly selected blob cell using the current authenticated session. */

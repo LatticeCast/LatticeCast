@@ -60,7 +60,9 @@
 			<p class="truncate font-medium">公告</p>
 		</div>
 		{#if hasAnnouncement}
-			<span class="shrink-0 rounded-full bg-amber-300 px-1.5 py-0.5 text-[10px] font-semibold text-slate-900">
+			<span
+				class="shrink-0 rounded-full bg-amber-300 px-1.5 py-0.5 text-[10px] font-semibold text-slate-900"
+			>
 				{announcementItems.length}
 			</span>
 		{/if}
@@ -95,7 +97,9 @@
 											<p class="font-semibold text-slate-950">{announcement.title}</p>
 										{/if}
 										{#if announcement.type}
-											<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium uppercase text-slate-600">
+											<span
+												class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 uppercase"
+											>
 												{announcement.type}
 											</span>
 										{/if}

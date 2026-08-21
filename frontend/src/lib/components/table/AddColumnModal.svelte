@@ -81,7 +81,9 @@
 			</div>
 			{#if newColType === 'blob'}
 				<div class="mb-6">
-					<label class="mb-1 block text-sm font-medium text-gray-600" for="blob-kind">Blob category</label>
+					<label class="mb-1 block text-sm font-medium text-gray-600" for="blob-kind"
+						>Blob category</label
+					>
 					<select
 						id="blob-kind"
 						data-testid="blob-kind-select"

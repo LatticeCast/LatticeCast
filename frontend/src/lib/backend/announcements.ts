@@ -59,7 +59,9 @@ function normalizeAnnouncements(
 	return rows
 		.map((row) => {
 			const rowData =
-				'row_data' in row && typeof row.row_data === 'object' && row.row_data !== null ? row.row_data : {};
+				'row_data' in row && typeof row.row_data === 'object' && row.row_data !== null
+					? row.row_data
+					: {};
 			const title = readCell(rowData, idByName.Title);
 			const description = readCell(rowData, idByName.Description);
 			const type = readCell(rowData, idByName.Type);
