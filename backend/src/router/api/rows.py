@@ -512,7 +512,7 @@ async def put_doc_blob_cell(
     """Write a markdown document to one explicitly addressed blob cell."""
     body = (await request.body()).decode("utf-8")
     table = await _get_table_for_member(table_id, user, session)
-    await _get_doc_column(table, column_id, session)
+    column = await _get_doc_column(table, column_id, session)
     repo = RowRepository(session)
     row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
