@@ -442,6 +442,7 @@
 							</button>
 						{/if}
 					{:else if col.type === 'blob' && col.options?.kind === 'doc'}
+						{@const blob = getBlobCellMetadata(localRow, col.column_id)}
 						<button
 							class="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition {T.inputBorder} {T.link} hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
 							onclick={() => onOpenDocCell?.(localRow, col)}
@@ -453,7 +454,7 @@
 									clip-rule="evenodd"
 								/>
 							</svg>
-							Open doc
+							<span class="min-w-0 truncate">{blob?.filename ?? '+'}</span>
 						</button>
 					{:else if col.type === 'blob'}
 						{@const blob = getBlobCellMetadata(localRow, col.column_id)}

@@ -28,7 +28,7 @@
 		fetchDocCell(tableId, row.row_id, column.column_id)
 			.then((content) => {
 				docContent = content;
-				docEditing = true;
+				docEditing = Boolean(content);
 			})
 			.catch(() => {})
 			.finally(() => {
@@ -37,7 +37,7 @@
 			});
 	});
 
-	async function handleDocBlur() {
+	async function handleSave() {
 		if (docSaving) return;
 		docSaving = true;
 		try {
@@ -49,17 +49,12 @@
 		}
 	}
 
-	async function handleClose() {
-		await handleDocBlur();
-		onClose();
-	}
-
 	const docPreview = $derived(marked(docContent) as string);
 </script>
 
 <Portal>
 	<!-- Backdrop -->
-	<div class="fixed inset-0 z-[9999] bg-black/30" onclick={handleClose} role="presentation"></div>
+	<div class="fixed inset-0 z-[9999] bg-black/30" onclick={onClose} role="presentation"></div>
 
 	<!-- Editor panel -->
 	<div
@@ -90,7 +85,7 @@
 				</span>
 				<button
 					data-testid="doc-cell-editor-close"
-					onclick={handleClose}
+					onclick={onClose}
 					class="rounded-lg p-1.5 text-white/70 transition hover:bg-white/20 hover:text-white"
 					aria-label="Close"
 				>
@@ -136,7 +131,6 @@
 					class="flex-1 resize-none border-none px-5 py-4 font-mono text-sm outline-none {T.cardBg} {T.body}"
 					placeholder="Write markdown here…"
 					bind:value={docContent}
-					onblur={handleDocBlur}
 					autofocus
 				></textarea>
 				<!-- Preview pane -->
@@ -148,5 +142,18 @@
 				</div>
 			</div>
 		{/if}
+		<div class="flex justify-end gap-2 border-t px-5 py-3 {T.border}">
+			<button class="rounded-lg px-4 py-2 text-sm {T.muted} hover:bg-gray-100" onclick={onClose}
+				>Cancel</button
+			>
+			<button
+				data-testid="doc-cell-editor-save"
+				class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+				onclick={() => void handleSave()}
+				disabled={docLoading || !docLoaded || docSaving}
+			>
+				{docSaving ? 'Saving…' : 'Save'}
+			</button>
+		</div>
 	</div>
 </Portal>

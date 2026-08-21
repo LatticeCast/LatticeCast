@@ -683,6 +683,7 @@
 											></span>
 										</button>
 									{:else if col.type === 'blob' && col.options?.kind === 'doc'}
+										{@const blob = getBlobCellMetadata(row, col.column_id)}
 										<button
 											data-testid="doc-open-{row.row_id}-{col.column_id}"
 											class="flex items-center gap-1.5 rounded px-2 py-1 text-xs transition hover:bg-blue-50 hover:text-blue-700"
@@ -702,7 +703,7 @@
 													clip-rule="evenodd"
 												/>
 											</svg>
-											<span class="text-blue-500">Open doc</span>
+											<span class="min-w-0 truncate text-blue-600">{blob?.filename ?? '+'}</span>
 										</button>
 									{:else if col.type === 'blob'}
 										{@const blob = getBlobCellMetadata(row, col.column_id)}
