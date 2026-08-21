@@ -6,6 +6,7 @@ Fixtures auto-discovered by pytest — test files declare them by parameter name
 from __future__ import annotations
 
 import time
+import os
 
 import pytest
 from playwright.sync_api import sync_playwright
@@ -40,7 +41,7 @@ def page(browser):
 
 @pytest.fixture(scope="session")
 def admin_token():
-    return login("lattice")
+    return login(os.environ.get("E2E_USER", "lattice"), os.environ.get("E2E_PASS", ""))
 
 
 @pytest.fixture()

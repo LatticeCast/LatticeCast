@@ -426,7 +426,7 @@ async def get_col_doc(
 ) -> str:
     """Legacy alias for the canonical doc blob cell endpoint."""
     table = await _get_table_for_member(table_id, user, session)
-    column = await _get_doc_column(table, column_id, session)
+    await _get_doc_column(table, column_id, session)
     row = await RowRepository(session).get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
@@ -451,7 +451,7 @@ async def put_col_doc(
     body = (await request.body()).decode("utf-8")
 
     table = await _get_table_for_member(table_id, user, session)
-    await _get_doc_column(table, column_id, session)
+    column = await _get_doc_column(table, column_id, session)
     repo = RowRepository(session)
     row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
