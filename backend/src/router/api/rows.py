@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.settings import settings
 from config.storage import s3_client
 from middleware.auth import get_current_user, get_rls_session
-from models.row import Row, RowCreate, RowResponse, RowUpdate
+from models.row import Row, RowCreate, RowPut, RowResponse, RowUpdate
 from models.user import User
 from repository.row import RowRepository
 from repository.table import TableRepository
@@ -313,21 +313,38 @@ async def get_row(
     return row
 
 
-@router.put("/tables/{table_id}/rows/{row_id}", response_model=RowResponse)
-async def update_row(
+@router.patch("/tables/{table_id}/rows/{row_id}", response_model=RowResponse)
+async def patch_row(
     table_id: str,
     row_id: int,
     data: RowUpdate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Update a row's data by row_id (user must be a workspace member)"""
+    """Merge partial non-blob row data by row_id."""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
     row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-    return await repo.update_row(row=row, data=data, updated_by=user.user_id)
+    return await repo.patch_row(row=row, data=data, updated_by=user.user_id)
+
+
+@router.put("/tables/{table_id}/rows/{row_id}", response_model=RowResponse)
+async def put_row(
+    table_id: str,
+    row_id: int,
+    data: RowPut,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+):
+    """Replace all non-blob row data by row_id; blob metadata is preserved."""
+    table = await _get_table_for_member(table_id, user, session)
+    repo = RowRepository(session)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+    return await repo.put_row(row=row, data=data, updated_by=user.user_id)
 
 
 @router.get("/tables/{table_id}/rows/{row_id}/doc", response_class=PlainTextResponse)

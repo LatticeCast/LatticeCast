@@ -41,6 +41,15 @@ def test_row_and_blob_mutations_use_separate_endpoints(admin_token, workspace):
         "POST",
         f"/api/v1/tables/{table_id}/columns",
         admin_token,
+        json={"name": "Note", "type": "text"},
+    )
+    assert response.status_code == 201, f"create note column: {response.status_code} {response.text[:200]}"
+    note_column_id = _column_id(response.json(), "Note")
+
+    response = api(
+        "POST",
+        f"/api/v1/tables/{table_id}/columns",
+        admin_token,
         json={"name": "Attachment", "type": "blob", "options": {"kind": "file"}},
     )
     assert response.status_code == 201, f"create blob column: {response.status_code} {response.text[:200]}"
@@ -50,19 +59,37 @@ def test_row_and_blob_mutations_use_separate_endpoints(admin_token, workspace):
         "POST",
         f"/api/v1/tables/{table_id}/rows",
         admin_token,
-        json={"row_data": {text_column_id: "before"}},
+        json={"row_data": {text_column_id: "before", note_column_id: "preserve by patch"}},
     )
     assert response.status_code == 201, f"create row: {response.status_code} {response.text[:200]}"
-    row_id = response.json()["row_id"]
+    created_row = response.json()
+    row_id = created_row["row_id"]
+    existing_blob_data = {
+        column_id: value
+        for column_id, value in created_row["row_data"].items()
+        if column_id not in {text_column_id, note_column_id}
+    }
+
+    response = api(
+        "PATCH",
+        f"/api/v1/tables/{table_id}/rows/{row_id}",
+        admin_token,
+        json={"row_data": {text_column_id: "patched"}},
+    )
+    assert response.status_code == 200, f"patch text cell: {response.status_code} {response.text[:200]}"
+    assert response.json()["row_data"] == existing_blob_data | {
+        text_column_id: "patched",
+        note_column_id: "preserve by patch",
+    }
 
     response = api(
         "PUT",
         f"/api/v1/tables/{table_id}/rows/{row_id}",
         admin_token,
-        json={"row_data": {text_column_id: "ordinary update"}},
+        json={"row_data": {text_column_id: "put replaces non-blob data"}},
     )
-    assert response.status_code == 200, f"update text cell: {response.status_code} {response.text[:200]}"
-    assert response.json()["row_data"][text_column_id] == "ordinary update"
+    assert response.status_code == 200, f"put row data: {response.status_code} {response.text[:200]}"
+    assert response.json()["row_data"] == existing_blob_data | {text_column_id: "put replaces non-blob data"}
 
     response = api(
         "PUT",
@@ -91,6 +118,18 @@ def test_row_and_blob_mutations_use_separate_endpoints(admin_token, workspace):
     response = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", admin_token)
     assert response.status_code == 200, f"read blob metadata: {response.status_code} {response.text[:200]}"
     assert response.json()["row_data"][blob_column_id] == metadata
+
+    response = api(
+        "PUT",
+        f"/api/v1/tables/{table_id}/rows/{row_id}",
+        admin_token,
+        json={"row_data": {text_column_id: "put preserves blob metadata"}},
+    )
+    assert response.status_code == 200, f"put after blob: {response.status_code} {response.text[:200]}"
+    assert response.json()["row_data"] == existing_blob_data | {
+        text_column_id: "put preserves blob metadata",
+        blob_column_id: metadata,
+    }
 
     response = requests.put(
         f"{BASE}/api/v1/tables/{table_id}/rows/{row_id}/blob/{text_column_id}",

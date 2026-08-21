@@ -47,6 +47,12 @@ class RowUpdate(SQLModel):
     )
 
 
+class RowPut(SQLModel):
+    row_data: dict[str, Any] = Field(
+        ..., description="Complete non-blob row data; unspecified non-blob cells are removed"
+    )
+
+
 class RowResponse(SQLModel):
     workspace_id: UUID = Field(..., description="Workspace UUID")
     table_id: str = Field(..., description="Parent table ID (string)")

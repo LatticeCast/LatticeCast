@@ -315,6 +315,41 @@ def verify(psql_fn) -> list[str]:
             "FORBIDDEN FUNCTION still present: check_workspace_member (V33 drop)"
         )
 
+    # V45: PATCH and PUT row semantics are separate PG functions. The old
+    # ambiguous update_row_data function must not remain callable.
+    for function_name in ("patch_row_data", "put_row_data"):
+        result = psql_fn(
+            "SELECT 1 FROM pg_proc "
+            f"WHERE proname='{function_name}';"
+        )
+        if not result:
+            errors.append(f"MISSING FUNCTION: {function_name} (V45)")
+
+    result = psql_fn(
+        "SELECT 1 FROM pg_proc WHERE proname='update_row_data';"
+    )
+    if result:
+        errors.append("FORBIDDEN FUNCTION still present: update_row_data (V45 drop)")
+
+    # V45 replaces V44's SECURITY DEFINER blob mutation as well. Row mutation
+    # functions must execute as app so rows RLS policies cannot be bypassed.
+    for function_name in ("patch_row_data", "put_row_data", "update_blob_cell"):
+        result = psql_fn(
+            "SELECT prosecdef FROM pg_proc "
+            f"WHERE proname='{function_name}';"
+        ).strip()
+        if result != "f":
+            errors.append(f"RLS-BYPASS FUNCTION: {function_name} (V45)")
+
+    # Both public V45 functions invoke this SECURITY INVOKER helper.
+    result = psql_fn(
+        "SELECT has_function_privilege("
+        "'app', 'public._validate_row_data_mutation(uuid, varchar, jsonb)', 'EXECUTE'"
+        ");"
+    ).strip()
+    if result != "t":
+        errors.append("MISSING EXECUTE: app on _validate_row_data_mutation (V45)")
+
     # V33: grant_workspace_action does the atomic multi-row grant/revoke.
     result = psql_fn(
         "SELECT 1 FROM pg_proc WHERE proname='grant_workspace_action';"

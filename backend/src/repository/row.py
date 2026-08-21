@@ -7,7 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from models.row import Row, RowUpdate
+from models.row import Row, RowPut, RowUpdate
 
 
 class RowRepository:
@@ -74,19 +74,19 @@ class RowRepository:
         return list(result.scalars().all())
 
     async def update(self, row: Row, data: RowUpdate, updated_by: UUID | None = None) -> Row:
-        """Backward-compatible alias for ordinary row-data mutations."""
-        return await self.update_row(row, data, updated_by)
+        """Backward-compatible alias for a partial row-data mutation."""
+        return await self.patch_row(row, data, updated_by)
 
     async def update_row(self, row: Row, data: RowUpdate, updated_by: UUID | None = None) -> Row:
-        """Merge non-blob cells through the PostgreSQL mutation boundary.
+        """Backward-compatible alias for ``patch_row``."""
+        return await self.patch_row(row, data, updated_by)
 
-        ``updated_by`` remains accepted while callers migrate to the database-owned
-        audit context; ``update_row_data`` reads the authenticated RLS user instead.
-        """
+    async def patch_row(self, row: Row, data: RowUpdate, updated_by: UUID | None = None) -> Row:
+        """Pass a partial non-blob patch directly to PostgreSQL."""
         result = await self.session.execute(
             text("""
                 SELECT *
-                FROM public.update_row_data(
+                FROM public.patch_row_data(
                     :workspace_id,
                     :table_id,
                     :row_id,
@@ -98,6 +98,31 @@ class RowRepository:
                 "table_id": str(row.table_id),
                 "row_id": row.row_id,
                 "patch": json.dumps(data.row_data),
+            },
+        )
+        await self.session.commit()
+        updated = result.mappings().one_or_none()
+        if updated is None:
+            raise RuntimeError("Row disappeared during update")
+        return self._row_from_mapping(updated)
+
+    async def put_row(self, row: Row, data: RowPut, updated_by: UUID | None = None) -> Row:
+        """Pass complete non-blob row data directly to PostgreSQL."""
+        result = await self.session.execute(
+            text("""
+                SELECT *
+                FROM public.put_row_data(
+                    :workspace_id,
+                    :table_id,
+                    :row_id,
+                    CAST(:data AS jsonb)
+                )
+            """),
+            {
+                "workspace_id": str(row.workspace_id),
+                "table_id": str(row.table_id),
+                "row_id": row.row_id,
+                "data": json.dumps(data.row_data),
             },
         )
         await self.session.commit()
