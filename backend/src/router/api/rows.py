@@ -385,7 +385,15 @@ async def put_row_doc(
             row,
             doc_column["column_id"],
             BlobCellMetadata(
-                key=key, filename="doc.md", content_type="text/markdown", size=len(body.encode("utf-8"))
+                key=key,
+                filename=(
+                    row.row_data.get(doc_column["column_id"], {}).get("filename")
+                    if isinstance(row.row_data.get(doc_column["column_id"]), dict)
+                    else f"{doc_column['name']}.md"
+                )
+                or f"{doc_column['name']}.md",
+                content_type="text/markdown",
+                size=len(body.encode("utf-8")),
             ).model_dump(),
             updated_by=user.user_id,
         )
@@ -419,7 +427,7 @@ async def get_col_doc(
 ) -> str:
     """Legacy alias for the canonical doc blob cell endpoint."""
     table = await _get_table_for_member(table_id, user, session)
-    await _get_doc_column(table, column_id, session)
+    column = await _get_doc_column(table, column_id, session)
     row = await RowRepository(session).get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
@@ -463,7 +471,15 @@ async def put_col_doc(
             row,
             column_id,
             BlobCellMetadata(
-                key=key, filename="doc.md", content_type="text/markdown", size=len(body.encode("utf-8"))
+                key=key,
+                filename=(
+                    row.row_data.get(column_id, {}).get("filename")
+                    if isinstance(row.row_data.get(column_id), dict)
+                    else f"{column['name']}.md"
+                )
+                or f"{column['name']}.md",
+                content_type="text/markdown",
+                size=len(body.encode("utf-8")),
             ).model_dump(),
             updated_by=user.user_id,
         )
