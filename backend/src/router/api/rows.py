@@ -229,17 +229,12 @@ async def create_row(
         column for column in columns if column.get("type") == "blob" and column.get("options", {}).get("kind") == "doc"
     ]
     if doc_cols:
-        import json as _json
-
-        from sqlalchemy import text as sa_text
-
         type_col = next((c for c in columns if c.get("name") == "Type"), None)
         title_col = next((c for c in columns if c.get("name") == "Title"), None)
         row_type = row.row_data.get(type_col["column_id"], "") if type_col else ""
         row_title = row.row_data.get(title_col["column_id"], "") if title_col else ""
         row_key = f"{row_type}-{row.row_id}" if row_type else str(row.row_id)
 
-        patch: dict = {}
         for doc_col in doc_cols:
             minio_key = _blob_storage_key(str(table.workspace_id), table.table_id, row.row_id, doc_col["column_id"])
             if row_type in ("epic", "story", "task", "bug"):
@@ -262,19 +257,7 @@ async def create_row(
                 content_type="text/markdown",
                 size=len(doc_content.encode("utf-8")),
             ).model_dump()
-            patch[doc_col["column_id"]] = metadata
-            row.row_data[doc_col["column_id"]] = metadata
-
-        await session.execute(
-            sa_text("""
-                UPDATE rows
-                SET row_data = row_data || CAST(:patch AS jsonb),
-                    updated_at = NOW()
-                WHERE workspace_id = :wid AND table_id = :tid AND row_id = :rn
-            """),
-            {"patch": _json.dumps(patch), "wid": str(table.workspace_id), "tid": table.table_id, "rn": row.row_id},
-        )
-        await session.commit()
+            row = await repo.update_blob(row, doc_col["column_id"], metadata, updated_by=user.user_id)
 
     return row
 
@@ -344,12 +327,7 @@ async def update_row(
     row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-    # Silently drop any attempts to change storage-backed column values (system-managed).
-    columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
-    managed_col_ids = {column["column_id"] for column in columns if column.get("type") == "blob"}
-    if managed_col_ids:
-        data = RowUpdate(row_data={k: v for k, v in data.row_data.items() if k not in managed_col_ids})
-    return await repo.update(row=row, data=data, updated_by=user.user_id)
+    return await repo.update_row(row=row, data=data, updated_by=user.user_id)
 
 
 @router.get("/tables/{table_id}/rows/{row_id}/doc", response_class=PlainTextResponse)
@@ -422,15 +400,12 @@ async def put_row_doc(
                 Body=body.encode("utf-8"),
                 ContentType="text/markdown",
             )
-        await repo.update(
+        await repo.update_blob(
             row,
-            RowUpdate(
-                row_data={
-                    doc_column["column_id"]: BlobCellMetadata(
-                        key=key, filename="doc.md", content_type="text/markdown", size=len(body.encode("utf-8"))
-                    ).model_dump()
-                }
-            ),
+            doc_column["column_id"],
+            BlobCellMetadata(
+                key=key, filename="doc.md", content_type="text/markdown", size=len(body.encode("utf-8"))
+            ).model_dump(),
             updated_by=user.user_id,
         )
         return body
@@ -503,15 +478,12 @@ async def put_col_doc(
                 Body=body.encode("utf-8"),
                 ContentType="text/markdown",
             )
-        await repo.update(
+        await repo.update_blob(
             row,
-            RowUpdate(
-                row_data={
-                    column_id: BlobCellMetadata(
-                        key=key, filename="doc.md", content_type="text/markdown", size=len(body.encode("utf-8"))
-                    ).model_dump()
-                }
-            ),
+            column_id,
+            BlobCellMetadata(
+                key=key, filename="doc.md", content_type="text/markdown", size=len(body.encode("utf-8"))
+            ).model_dump(),
             updated_by=user.user_id,
         )
         return body
@@ -580,7 +552,7 @@ async def put_doc_blob_cell(
             )
     except ClientError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
-    await repo.update(row, RowUpdate(row_data={column_id: metadata.model_dump()}), updated_by=user.user_id)
+    await repo.update_blob(row, column_id, metadata.model_dump(), updated_by=user.user_id)
     return body
 
 
@@ -619,7 +591,7 @@ async def put_blob_cell(
     except ClientError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
 
-    await repo.update(row, RowUpdate(row_data={column_id: metadata.model_dump()}), updated_by=user.user_id)
+    await repo.update_blob(row, column_id, metadata.model_dump(), updated_by=user.user_id)
     return metadata
 
 
@@ -683,7 +655,7 @@ async def delete_blob_cell(
     except ClientError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
 
-    await repo.remove_cell(row, column_id, updated_by=user.user_id)
+    await repo.update_blob(row, column_id, {}, updated_by=user.user_id)
 
 
 @router.delete("/tables/{table_id}/rows/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
