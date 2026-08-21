@@ -48,10 +48,10 @@ class UserPassword(SQLModel, table=True):
     Kept out of gdpr.user_info: that table has a broad app_user SELECT
     policy (V20, needed to resolve other users by email/user_name for
     workspace invites) which would expose password_hash to every one of
-    those reads. This table has no grants to app at all — only
-    mgr_user (login_session, BYPASSRLS) touches it, and only via
-    password_login / set_me_password, both scoped to the caller's own
-    user_id. No row for a user = no password set.
+    those reads. Password login uses mgr_user before an identity exists;
+    authenticated password changes use context-bound PostgreSQL functions
+    that derive the target from app.current_user_id. No row means no password
+    is set.
     """
 
     __tablename__ = "user_password"

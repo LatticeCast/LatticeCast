@@ -86,7 +86,10 @@ def test_column_delete_propagates(authed_page, workspace, admin_token, snapshot)
 
     r = api("POST", f"/api/v1/tables/{table_id}/columns", token,
             json={"name": "TestCol", "type": "select",
-                  "options": [{"label": "Alpha"}, {"label": "Beta"}]})
+                  "options": {"choices": [
+                      {"value": "Alpha", "color": "#6b7280"},
+                      {"value": "Beta", "color": "#6b7280"},
+                  ]}})
     assert r.status_code == 201, f"create TestCol column: {r.status_code} {r.text[:200]}"
     schema = r.json()
     test_col = next((c for c in schema["columns"] if c.get("name") == "TestCol"), None)

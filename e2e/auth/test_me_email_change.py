@@ -3,7 +3,7 @@
 Verifies:
  - Changing email in /settings UI sends PUT /login/me/email
  - Success response updates the displayed email
- - GET /me returns the new email (DB persistence via login_session)
+ - GET /me returns the new email (DB persistence through self-row RLS)
  - Email persists after full page reload
  - Conflict (409) when attempting to use another user's email
 

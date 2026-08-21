@@ -350,6 +350,53 @@ def verify(psql_fn) -> list[str]:
     if result != "t":
         errors.append("MISSING EXECUTE: app on _validate_row_data_mutation (V45)")
 
+    # V46 removes caller-controlled identities from self-service functions.
+    for function_name, signature in [
+        ("create_workspace", "character varying"),
+        ("get_user_sidebar", ""),
+        ("get_current_user_password_hash", ""),
+        ("set_current_user_password_hash", "character varying"),
+    ]:
+        result = psql_fn(
+            "SELECT has_function_privilege("
+            f"'app', 'public.{function_name}({signature})', 'EXECUTE'"
+            ");"
+        ).strip()
+        if result != "t":
+            errors.append(f"MISSING EXECUTE: app on {function_name} (V46)")
+
+    for old_function, signature in [
+        ("create_workspace", "character varying, uuid"),
+        ("get_user_sidebar", "uuid"),
+    ]:
+        result = psql_fn(
+            "SELECT to_regprocedure("
+            f"'public.{old_function}({signature})'"
+            ");"
+        ).strip()
+        if result:
+            errors.append(f"FORBIDDEN CALLER IDENTITY FUNCTION: {old_function} (V46)")
+
+    for old_function, signature in [
+        ("create_row_data_index", "text, text, text, text"),
+        ("drop_row_data_index", "text"),
+    ]:
+        result = psql_fn(
+            "SELECT has_function_privilege("
+            f"'app', 'public.{old_function}({signature})', 'EXECUTE'"
+            ");"
+        ).strip()
+        if result != "f":
+            errors.append(f"BROAD DDL EXECUTE: app on {old_function} (V47)")
+
+    result = psql_fn(
+        "SELECT has_function_privilege("
+        "'app', 'public._build_rd_idx_name(uuid, text, text)', 'EXECUTE'"
+        ");"
+    ).strip()
+    if result != "t":
+        errors.append("MISSING EXECUTE: app on scoped index-name helper (V47)")
+
     # V33: grant_workspace_action does the atomic multi-row grant/revoke.
     result = psql_fn(
         "SELECT 1 FROM pg_proc WHERE proname='grant_workspace_action';"

@@ -93,21 +93,16 @@ async def create_workspace(
 ):
     """Create a new workspace; creator becomes owner.
 
-    Delegates to the SECURITY DEFINER PG function `create_workspace`
-    (V17, updated by V33) which inserts the workspace + creator's
-    read+write+owner rows atomically. Bypasses RLS at INSERT time (the
-    creator isn't a member yet); per-row permissions kick back in on
-    subsequent reads.
+    Delegates to the SECURITY DEFINER PG function `create_workspace` (V46).
+    It derives the creator from app.current_user_id, then inserts the
+    workspace and read+write+owner rows atomically. It must bypass RLS at
+    INSERT time because the creator is not yet a member.
     """
     repo = WorkspaceRepository(session)
     if data.workspace_name.lower() in RESERVED_WORKSPACE_NAMES:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That workspace name is reserved")
     try:
-        result = await session.execute(
-            text("SELECT create_workspace(:name, CAST(:by AS uuid))").bindparams(
-                name=data.workspace_name, by=str(user.user_id)
-            )
-        )
+        result = await session.execute(text("SELECT create_workspace(:name)").bindparams(name=data.workspace_name))
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()

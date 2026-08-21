@@ -9,7 +9,7 @@ from uuid import UUID
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
@@ -258,23 +258,22 @@ async def update_me_email(
     request: UpdateEmailRequest,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
-    login_session: AsyncSession = Depends(get_login_session),
 ) -> MeResponse:
-    """Update the current user's email. Enforces uniqueness (UNIQUE on gdpr.user_info.email)."""
-    existing = await UserRepository(login_session).get_by_email(request.email)
+    """Update the current user's email through the self-row RLS policy."""
+    existing = await UserRepository(session).get_by_email(request.email)
     if existing and existing.user_id != user.user_id:
         raise HTTPException(status_code=409, detail="email already registered")
 
-    info_result = await login_session.execute(
+    info_result = await session.execute(
         select(UserInfoModel).where(UserInfoModel.user_id == user.user_id)
     )
     info = info_result.scalar_one_or_none()
     if not info:
         raise HTTPException(status_code=403, detail="User profile not found")
     info.email = request.email
-    login_session.add(info)
-    await login_session.commit()
-    await login_session.refresh(info)
+    session.add(info)
+    await session.commit()
+    await session.refresh(info)
 
     token_payload = getattr(user, "_token_payload", {})
     provider = token_payload.get("_provider", "authentik")
@@ -312,7 +311,7 @@ class SetPasswordRequest(BaseModel):
 async def set_me_password(
     request: SetPasswordRequest,
     user: User = Depends(get_current_user),
-    login_session: AsyncSession = Depends(get_login_session),
+    session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
     """Set or change the caller's password_login password (gdpr.user_password).
 
@@ -321,18 +320,19 @@ async def set_me_password(
     Setting a password moves the account off the "no password → JWT
     issued directly" path in `password_login`.
     """
-    pwd_result = await login_session.execute(select(UserPassword).where(UserPassword.user_id == user.user_id))
-    stored_pwd = pwd_result.scalar_one_or_none()
+    pwd_result = await session.execute(text("SELECT public.get_current_user_password_hash()"))
+    stored_password_hash = pwd_result.scalar_one()
 
-    if stored_pwd:
-        if not request.current_password or not verify_password(request.current_password, stored_pwd.password_hash):
+    if stored_password_hash:
+        if not request.current_password or not verify_password(request.current_password, stored_password_hash):
             raise HTTPException(status_code=401, detail="Wrong current_password")
-        stored_pwd.password_hash = hash_password(request.new_password)
-        login_session.add(stored_pwd)
-    else:
-        login_session.add(UserPassword(user_id=user.user_id, password_hash=hash_password(request.new_password)))
 
-    await login_session.commit()
+    await session.execute(
+        text("SELECT public.set_current_user_password_hash(:password_hash)").bindparams(
+            password_hash=hash_password(request.new_password)
+        )
+    )
+    await session.commit()
     return {"detail": "password updated"}
 
 

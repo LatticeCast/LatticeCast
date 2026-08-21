@@ -90,7 +90,9 @@ async def bootstrap_user(
     info = UserInfo(user_id=user.user_id, email=email, user_name=handle)
     login_session.add(info)
 
-    workspace = Workspace(workspace_name=email)
+    # V35 rejects dots in path-derived workspace names. `handle` is already
+    # unique and URL-safe, unlike an email address.
+    workspace = Workspace(workspace_name=handle)
     login_session.add(workspace)
     await login_session.flush()
     # V33: owner is materialized as read+write+owner rows, not a single

@@ -98,18 +98,94 @@ def verify(psql_fn) -> list[str]:
         f"ON CONFLICT (workspace_id, table_id) DO NOTHING"
     )
 
-    # V34: action grants must not multiply sidebar workspaces or tables.
-    # User A owns one workspace with one table despite holding three actions.
-    sidebar_counts = psql_fn(
+    # V46: sidebar identity comes only from app.current_user_id. User A owns
+    # one workspace with one table despite holding three action rows.
+    sidebar_counts = _as_app(
+        psql_fn,
+        _USER_A,
         f"SELECT jsonb_array_length(payload->'workspaces') || ',' || "
         f"jsonb_array_length(payload->'tables') "
-        f"FROM (SELECT public.get_user_sidebar('{_USER_A}'::uuid) payload) s;"
+        f"FROM (SELECT public.get_user_sidebar() payload) s;"
     ).strip()
     if sidebar_counts != "1,1":
         errors.append(
             "SIDEBAR BEHAVIORAL: action grants multiply payload rows "
             f"(expected 1,1 got {sidebar_counts!r})"
         )
+
+    # A self-service workspace function must bind the owner from the RLS
+    # context instead of accepting a caller-controlled user UUID.
+    created_workspace_id = _as_app(
+        psql_fn,
+        _USER_A,
+        "SELECT public.create_workspace('tv_rls_context_created') ->> 'workspace_id';",
+    )
+    created_actions = psql_fn(
+        "SELECT string_agg(action, ',' ORDER BY action) "
+        "FROM public.workspace_members "
+        f"WHERE workspace_id = '{created_workspace_id}'::UUID "
+        f"AND user_id = '{_USER_A}'::UUID;"
+    ).strip()
+    if created_actions != "owner,read,write":
+        errors.append(
+            "SELF-SERVICE IDENTITY: create_workspace did not grant the "
+            f"RLS-context user ownership (got {created_actions!r})"
+        )
+    created_for_other = psql_fn(
+        "SELECT count(*) FROM public.workspace_members "
+        f"WHERE workspace_id = '{created_workspace_id}'::UUID "
+        f"AND user_id = '{_USER_B}'::UUID;"
+    ).strip()
+    if created_for_other != "0":
+        errors.append("SELF-SERVICE IDENTITY: create_workspace granted another user")
+
+    # gdpr.user_info UPDATE is RLS-bound: user A cannot change user B's email.
+    _as_app(
+        psql_fn,
+        _USER_A,
+        "UPDATE gdpr.user_info SET email = 'tv_rls_b_hijacked@example.com' "
+        f"WHERE user_id = '{_USER_B}'::UUID;",
+    )
+    user_b_email = psql_fn(
+        "SELECT email FROM gdpr.user_info "
+        f"WHERE user_id = '{_USER_B}'::UUID;"
+    ).strip()
+    if user_b_email != "tv_rls_b@example.com":
+        errors.append("RLS BEHAVIORAL: user A changed user B's email")
+
+    # Password helpers expose no user-id parameter. Their only target is the
+    # current RLS identity, so one user cannot read or overwrite another hash.
+    _as_app(
+        psql_fn,
+        _USER_A,
+        "SELECT public.set_current_user_password_hash('hash-for-user-a');",
+    )
+    _as_app(
+        psql_fn,
+        _USER_B,
+        "SELECT public.set_current_user_password_hash('hash-for-user-b');",
+    )
+    password_a = _as_app(psql_fn, _USER_A, "SELECT public.get_current_user_password_hash();")
+    password_b = _as_app(psql_fn, _USER_B, "SELECT public.get_current_user_password_hash();")
+    if password_a != "hash-for-user-a" or password_b != "hash-for-user-b":
+        errors.append("SELF-SERVICE IDENTITY: password helper crossed user identities")
+
+    # The scoped DDL helper must reject a user who has no write grant on the
+    # target workspace. The block converts the expected SQLSTATE into success.
+    index_guard = _as_app(
+        psql_fn,
+        _USER_A,
+        "DO $$ BEGIN "
+        "BEGIN "
+        "PERFORM public.create_row_data_index("
+        f"'{_WS_B}'::UUID, 'idx_rd_222222222222_tvrlstblb_000000000000', "
+        "'tv_rls_tbl_b', '00000000-0000-0000-0000-000000000000', 'text'); "
+        "RAISE EXCEPTION 'cross-workspace index creation succeeded'; "
+        "EXCEPTION WHEN insufficient_privilege THEN NULL; END; END $$; "
+        "SELECT 1;",
+    )
+    if index_guard != "1":
+        errors.append("DDL GUARD: index helper allowed another workspace")
 
     # SELECT positive: user A can see own workspace tables row
     # (V23: table_schemas merged into tables — config lives here now)
