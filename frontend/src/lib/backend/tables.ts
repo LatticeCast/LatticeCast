@@ -21,7 +21,8 @@ import type {
 	CreateRow,
 	UpdateTable,
 	UpdateColumn,
-	UpdateRow
+	UpdateRow,
+	BlobCellMetadata
 } from '$lib/types/table';
 
 // ─── Table CRUD ───────────────────────────────────────────────────────────────

@@ -1,21 +1,21 @@
 """E2E test: e2e_test_column_doc_type — doc blob cell upload + download.
 
 Topic: Writing markdown content into a doc blob column cell via the
-DocCellEditor modal persists to MinIO and is readable on re-open.
+DocCellEditor modal persists only after explicit Save and is readable on re-open.
 
 Three pillars (developing-e2e):
-  - Playwright UI    — click "Open doc" button in grid → editor modal opens,
-                       type markdown → close (save) → re-open and verify
+  - Playwright UI    — click the empty doc cell → editor modal opens,
+                       type markdown → Save → re-open and verify
   - BE API verify    — GET /tables/{tid}/rows/{rid}/blob/{cid}/doc confirms content saved
   - Cross-view check — navigate away and back, re-open editor, content persists
 
 Flow:
   setup:  login as "lattice" → create workspace → create blank table →
           add doc blob column → add Table view → add row
-  step 1: Table view → click "Open doc" button for the row's doc cell
+  step 1: Table view → click the empty doc cell for the row
           → editor modal visible
-  step 2: type markdown content into the editor textarea → close modal
-          (blur triggers auto-save) → wait for PUT response
+  step 2: type markdown content into the editor textarea → Save
+          → wait for one PUT response
   step 3: API verify — GET /tables/{tid}/rows/{rid}/doc returns the content
   step 4: Re-open editor modal → verify textarea shows saved content
   step 5: Navigate away and back → re-open editor → content persists
@@ -63,6 +63,13 @@ def goto_table(page, ws_id: str, table_id: str, snapshot: bool) -> None:
 
 def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
     page = authed_page
+    doc_put_responses: list[str] = []
+
+    def record_doc_put(response) -> None:
+        if response.request.method == "PUT" and "/blob/" in response.url and response.url.endswith("/doc"):
+            doc_put_responses.append(response.url)
+
+    page.on("response", record_doc_put)
     ws_id, _ws_name = workspace
     table_id = f"doc-col-{_SUFFIX}"
 
@@ -159,7 +166,7 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
     assert ".jsonl" in import_column.get("options", {}).get("accept", "")
 
     # ═══════════════════════════════════════════════════════════════════
-    # STEP 1: Click "Open doc" button in the doc cell
+    # STEP 1: Click the empty doc cell
     # ═══════════════════════════════════════════════════════════════════
     doc_btn = f'[data-testid="doc-open-{row_id}-{doc_col_id}"]'
     try:
@@ -168,7 +175,7 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
         snap(page, "doc_col_FAIL_no_doc_btn", snapshot)
         pytest.fail(f"doc-open button not visible for row {row_id}, col {doc_col_id[:8]}…")
     page.click(doc_btn)
-    print("[ok] clicked 'Open doc' button")
+    print("[ok] clicked empty doc cell")
 
     # Wait for editor modal to appear
     editor_modal = '[data-testid="doc-cell-editor"]'
@@ -182,7 +189,7 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
     snap(page, "doc_col_02_editor_open_empty", snapshot)
 
     # ═══════════════════════════════════════════════════════════════════
-    # STEP 2: Type markdown content and close (triggers save on blur)
+    # STEP 2: Type markdown content and explicitly save
     # ═══════════════════════════════════════════════════════════════════
     # The editor may show empty state with "Start writing →" button
     # or directly show the textarea (if doc already exists but empty)
@@ -203,8 +210,8 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
 
     snap(page, "doc_col_03_content_typed", snapshot)
 
-    # Close the modal — triggers blur → auto-save → PUT the selected blob cell
-    close_btn = '[data-testid="doc-cell-editor-close"]'
+    # Save is the only action that writes the selected blob cell.
+    save_btn = '[data-testid="doc-cell-editor-save"]'
     with page.expect_response(
         lambda resp: (
             f"/api/v1/tables/{table_id}/rows/{row_id}/blob/{doc_col_id}/doc" in resp.url
@@ -213,8 +220,13 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
         ),
         timeout=10000,
     ):
-        page.click(close_btn)
-    print("[ok] closed editor; selected cell PUT confirmed")
+        page.click(save_btn)
+    print("[ok] saved editor; selected cell PUT confirmed")
+    assert len(doc_put_responses) == 1, f"expected one Save PUT, got {doc_put_responses}"
+
+    close_btn = '[data-testid="doc-cell-editor-close"]'
+    page.click(close_btn)
+    assert len(doc_put_responses) == 1, "closing after Save must not issue another PUT"
 
     # Verify modal is gone
     page.locator(editor_modal).wait_for(state="hidden", timeout=5000)
@@ -260,9 +272,10 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
 
     snap(page, "doc_col_05_reopen_with_content", snapshot)
 
-    # Close the modal again
+    # Closing without saving does not write.
     page.click(close_btn)
     page.locator(editor_modal).wait_for(state="hidden", timeout=5000)
+    assert len(doc_put_responses) == 1, "closing an unchanged editor must not issue a PUT"
 
     # ═══════════════════════════════════════════════════════════════════
     # STEP 5: Navigate away and back → content persists

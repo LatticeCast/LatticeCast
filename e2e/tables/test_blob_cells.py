@@ -51,6 +51,8 @@ def test_blob_cells_round_trip(admin_token, workspace):
     response = api("POST", f"/api/v1/tables/{table_id}/rows", admin_token, json={"row_data": {}})
     assert response.status_code == 201, f"create row: {response.status_code} {response.text[:200]}"
     row_id = response.json()["row_id"]
+    assert response.json()["row_data"].get(default_doc_column_id) is None
+    assert response.json()["row_data"].get(doc_column_id) is None
 
     first_file = b"first blob payload\n"
     response = requests.put(
@@ -94,7 +96,7 @@ def test_blob_cells_round_trip(admin_token, workspace):
         timeout=15,
     )
     assert response.status_code == 200, f"write doc blob: {response.status_code} {response.text[:200]}"
-    assert response.text == document
+    assert response.json()["filename"] == "Notes.md"
 
     response = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}/blob/{doc_column_id}/doc", admin_token)
     assert response.status_code == 200, f"read addressed doc blob: {response.status_code} {response.text[:200]}"
@@ -126,7 +128,7 @@ def test_blob_cells_round_trip(admin_token, workspace):
     assert row_data[file_column_id]["filename"] == "replacement.txt"
     assert row_data[doc_column_id] == {
         "key": f"{ws_id}/{table_id}/rows/{row_id}/blobs/{doc_column_id}",
-        "filename": "doc.md",
+        "filename": "Notes.md",
         "content_type": "text/markdown",
         "size": len(document.encode()),
     }

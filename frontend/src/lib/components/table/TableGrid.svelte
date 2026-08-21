@@ -680,6 +680,29 @@
 													: 'translate-x-1'}"
 											></span>
 										</button>
+									{:else if col.type === 'blob' && col.options?.kind === 'doc'}
+										{@const blob = getBlobCellMetadata(row, col.column_id)}
+										<button
+											data-testid="doc-open-{row.row_id}-{col.column_id}"
+											class="flex items-center gap-1.5 rounded px-2 py-1 text-xs transition hover:bg-blue-50 hover:text-blue-700"
+											onclick={(e) => {
+												e.stopPropagation();
+												onOpenDocCell(row, col);
+											}}
+										>
+											<svg
+												class="h-3.5 w-3.5 text-blue-400"
+												fill="currentColor"
+												viewBox="0 0 20 20"
+											>
+												<path
+													fill-rule="evenodd"
+													d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
+													clip-rule="evenodd"
+												/>
+											</svg>
+										<span class="min-w-0 truncate text-blue-600">{blob?.filename ?? '+'}</span>
+									</button>
 									{:else if col.type === 'blob'}
 										{@const blob = getBlobCellMetadata(row, col.column_id)}
 										{#if blob}
