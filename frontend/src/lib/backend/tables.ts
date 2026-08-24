@@ -21,8 +21,7 @@ import type {
 	CreateRow,
 	UpdateTable,
 	UpdateColumn,
-	UpdateRow,
-	BlobCellMetadata
+	UpdateRow
 } from '$lib/types/table';
 
 // ─── Table CRUD ───────────────────────────────────────────────────────────────
@@ -260,7 +259,10 @@ export async function saveDocCell(
 			body: content
 		}
 	);
-	if (!response.ok) throw new Error(`Failed to save doc: ${response.statusText}`);
+	if (!response.ok) {
+		const detail = await response.text();
+		throw new Error(`Failed to save doc (${response.status}): ${detail || response.statusText}`);
+	}
 	const metadata: BlobCellMetadata = await response.json();
 	rows.update((list) =>
 		list.map((row) =>

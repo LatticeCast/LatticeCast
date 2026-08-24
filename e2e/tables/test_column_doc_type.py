@@ -189,16 +189,11 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
     snap(page, "doc_col_02_editor_open_empty", snapshot)
 
     # ═══════════════════════════════════════════════════════════════════
-    # STEP 2: Type markdown content and explicitly save
+    # STEP 2: Clicking + creates the markdown blob, then Save replaces it
     # ═══════════════════════════════════════════════════════════════════
-    # The editor may show empty state with "Start writing →" button
-    # or directly show the textarea (if doc already exists but empty)
+    # Opening an empty document cell creates its initial markdown file and
+    # therefore opens directly into the editor.
     textarea_sel = '[data-testid="doc-cell-editor-textarea"]'
-    start_writing_btn = page.locator(f"{editor_modal} button:has-text('Start writing')")
-    if start_writing_btn.count() > 0:
-        start_writing_btn.click()
-        print("[ok] clicked 'Start writing' button")
-
     try:
         page.wait_for_selector(textarea_sel, state="visible", timeout=5000)
     except PlaywrightTimeout:
@@ -210,7 +205,7 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
 
     snap(page, "doc_col_03_content_typed", snapshot)
 
-    # Save is the only action that writes the selected blob cell.
+    # Save replaces the initial blob content through the selected blob endpoint.
     save_btn = '[data-testid="doc-cell-editor-save"]'
     with page.expect_response(
         lambda resp: (
@@ -222,11 +217,11 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
     ):
         page.click(save_btn)
     print("[ok] saved editor; selected cell PUT confirmed")
-    assert len(doc_put_responses) == 1, f"expected one Save PUT, got {doc_put_responses}"
+    assert len(doc_put_responses) == 2, f"expected create + Save PUTs, got {doc_put_responses}"
 
     close_btn = '[data-testid="doc-cell-editor-close"]'
     page.click(close_btn)
-    assert len(doc_put_responses) == 1, "closing after Save must not issue another PUT"
+    assert len(doc_put_responses) == 2, "closing after Save must not issue another PUT"
 
     # Verify modal is gone
     page.locator(editor_modal).wait_for(state="hidden", timeout=5000)
@@ -275,7 +270,7 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
     # Closing without saving does not write.
     page.click(close_btn)
     page.locator(editor_modal).wait_for(state="hidden", timeout=5000)
-    assert len(doc_put_responses) == 1, "closing an unchanged editor must not issue a PUT"
+    assert len(doc_put_responses) == 2, "closing an unchanged editor must not issue a PUT"
 
     # ═══════════════════════════════════════════════════════════════════
     # STEP 5: Navigate away and back → content persists

@@ -22,6 +22,7 @@
 	let docLoaded = $state(false);
 	let docSaving = $state(false);
 	let docEditing = $state(false);
+	let saveError = $state('');
 
 	$effect(() => {
 		docLoading = true;
@@ -40,10 +41,11 @@
 	async function handleSave() {
 		if (docSaving) return;
 		docSaving = true;
+		saveError = '';
 		try {
 			await saveDocCell(tableId, row.row_id, column.column_id, docContent);
-		} catch {
-			// best-effort
+		} catch (err) {
+			saveError = err instanceof Error ? err.message : 'Failed to save document';
 		} finally {
 			docSaving = false;
 		}
@@ -143,6 +145,11 @@
 			</div>
 		{/if}
 		<div class="flex justify-end gap-2 border-t px-5 py-3 {T.border}">
+			{#if saveError}
+				<p data-testid="doc-cell-editor-error" class="mr-auto self-center text-sm text-red-600">
+					{saveError}
+				</p>
+			{/if}
 			<button class="rounded-lg px-4 py-2 text-sm {T.muted} hover:bg-gray-100" onclick={onClose}
 				>Cancel</button
 			>

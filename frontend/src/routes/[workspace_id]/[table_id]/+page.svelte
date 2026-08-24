@@ -9,7 +9,7 @@
 	import { rows } from '$lib/stores/table_rows.store';
 
 	// Controller
-	import { patchSchema, fetchRows } from '$lib/backend/tables';
+	import { patchSchema, fetchRows, saveDocCell } from '$lib/backend/tables';
 	import {
 		currentWorkspaceId,
 		currentTableId,
@@ -80,6 +80,22 @@
 	const wsId = $derived($currentWorkspaceId ?? '');
 
 	let loading = $state(true);
+
+	async function handleOpenDocCell(row: import('$lib/types/table').Row, col: import('$lib/types/table').Column) {
+		const cell = row.row_data[col.column_id];
+		const hasBlob = typeof cell === 'object' && cell !== null && 'key' in cell;
+
+		if (!hasBlob) {
+			try {
+				await saveDocCell(tableId, row.row_id, col.column_id, `# ${col.name}.md\n`);
+			} catch (err) {
+				error.set(err instanceof Error ? err.message : 'Failed to create document');
+				return;
+			}
+		}
+
+		s.docCellState = { row, col };
+	}
 
 	$effect(() => {
 		const { tableParam, urlViewId, cached, resolvedWsId, viewsP, rowsP, tableP } = data;
@@ -299,7 +315,7 @@
 				onAddRowInGroup={(key, col) => s.handleAddRowInGroup(key, col)}
 				onToggleCollapseGroup={(key) => s.toggleCollapseGroup(key)}
 				onManageOptions={(col) => (s.managingOptionsCol = col)}
-				onOpenDocCell={(row, col) => (s.docCellState = { row, col })}
+		onOpenDocCell={(row, col) => void handleOpenDocCell(row, col)}
 			/>
 		{:else if activeView.type === 'kanban'}
 			<KanbanBoard
@@ -375,7 +391,7 @@
 		workspaceId={wsId}
 		onOpenDocCell={(row, col) => {
 			s.expandedRow = null;
-			s.docCellState = { row, col };
+			void handleOpenDocCell(row, col);
 		}}
 	/>
 {/if}
