@@ -41,7 +41,7 @@ export const BLOB_KIND_OPTIONS: ReadonlyArray<{
 			'.csv,.xlsx,.jsonl,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/x-ndjson,application/jsonl'
 	},
 	{ value: 'image', label: 'Image', description: 'Any image file', accept: 'image/*' },
-	{ value: 'file', label: 'File', description: 'Any single file' }
+	{ value: 'file', label: 'File / Binary', description: 'Any single file, including ZIP and other binary data' }
 ];
 
 export interface FilterCondition {

@@ -274,6 +274,35 @@ export async function saveDocCell(
 	return metadata;
 }
 
+/** Upload one arbitrary file into an explicitly selected blob cell. */
+export async function uploadBlobCell(
+	tableId: string,
+	rowNumber: number,
+	columnId: string,
+	file: File
+): Promise<BlobCellMetadata> {
+	const headers = await getBearerHeader();
+	const form = new FormData();
+	form.set('file', file);
+	const response = await fetch(
+		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/blob/${columnId}`,
+		{ method: 'PUT', headers, body: form }
+	);
+	if (!response.ok) {
+		const detail = await response.text();
+		throw new Error(`Failed to upload file (${response.status}): ${detail || response.statusText}`);
+	}
+	const metadata: BlobCellMetadata = await response.json();
+	rows.update((list) =>
+		list.map((row) =>
+			row.row_id === rowNumber
+				? { ...row, row_data: { ...row.row_data, [columnId]: metadata } }
+				: row
+		)
+	);
+	return metadata;
+}
+
 /** Download an explicitly selected blob cell using the current authenticated session. */
 export async function downloadBlobCell(
 	tableId: string,

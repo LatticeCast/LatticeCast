@@ -8,7 +8,7 @@ from urllib.parse import quote
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import PlainTextResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
@@ -25,12 +25,12 @@ router = APIRouter(tags=["rows"])
 
 
 class BlobCellMetadata(BaseModel):
-    """The single-file value persisted in a blob column's row_data cell."""
+    """Descriptor stored in ``row_data[column_id]``; the object body is in S3-compatible storage."""
 
-    key: str
-    filename: str
-    content_type: str
-    size: int
+    key: str = Field(description="Server-owned object key; clients must not construct or edit it.")
+    filename: str = Field(description="Original upload filename or generated Markdown filename.")
+    content_type: str = Field(description="Stored MIME type, such as application/zip.")
+    size: int = Field(description="Object size in bytes.", ge=0)
 
 
 def _blob_storage_key(workspace_id: str, table_id: str, row_id: int, column_id: str) -> str:
@@ -492,7 +492,14 @@ async def put_col_doc(
 # --------------------------------------------------
 
 
-@router.get("/tables/{table_id}/rows/{row_id}/blob/{column_id}/doc", response_class=PlainTextResponse)
+@router.get(
+    "/tables/{table_id}/rows/{row_id}/blob/{column_id}/doc",
+    response_class=PlainTextResponse,
+    summary="Read an addressed Markdown blob cell",
+    description="""Use only with a `blob` column whose `options.kind` is `doc`.
+
+Returns an empty text body when the cell has no object yet. New clients should use this addressed route rather than the legacy row `/doc` routes.""",
+)
 async def get_doc_blob_cell(
     table_id: str,
     row_id: int,
@@ -515,7 +522,25 @@ async def get_doc_blob_cell(
     return content.decode("utf-8")
 
 
-@router.put("/tables/{table_id}/rows/{row_id}/blob/{column_id}/doc", response_model=BlobCellMetadata)
+@router.put(
+    "/tables/{table_id}/rows/{row_id}/blob/{column_id}/doc",
+    response_model=BlobCellMetadata,
+    summary="Replace an addressed Markdown blob cell",
+    description="""Use only with a `blob` column whose `options.kind` is `doc`.
+
+Send the Markdown text as the request body (`Content-Type: text/plain` or `text/markdown`). The response descriptor is also written to `row_data[column_id]`. Repeating this request replaces the prior document.""",
+    openapi_extra={
+        "requestBody": {
+            "required": True,
+            "content": {
+                "text/plain": {
+                    "schema": {"type": "string"},
+                    "example": "# Design notes\\n\\nInitial draft.\\n",
+                }
+            },
+        }
+    },
+)
 async def put_doc_blob_cell(
     table_id: str,
     row_id: int,
@@ -558,7 +583,14 @@ async def put_doc_blob_cell(
     return metadata
 
 
-@router.put("/tables/{table_id}/rows/{row_id}/blob/{column_id}", response_model=BlobCellMetadata)
+@router.put(
+    "/tables/{table_id}/rows/{row_id}/blob/{column_id}",
+    response_model=BlobCellMetadata,
+    summary="Upload or replace one arbitrary blob file",
+    description="""Upload one `multipart/form-data` field named `file` to any `blob` column.
+
+The column's `kind` and `accept` options are UI hints, not server-side MIME restrictions: `file` columns may store ZIP or any other binary. The uploaded object replaces the cell's prior object; the returned descriptor is persisted in `row_data[column_id]`. Each cell holds one file only.""",
+)
 async def put_blob_cell(
     table_id: str,
     row_id: int,
@@ -597,7 +629,13 @@ async def put_blob_cell(
     return metadata
 
 
-@router.get("/tables/{table_id}/rows/{row_id}/blob/{column_id}")
+@router.get(
+    "/tables/{table_id}/rows/{row_id}/blob/{column_id}",
+    summary="Download one blob cell's original bytes",
+    description="""Downloads the object described by `row_data[column_id]`.
+
+The response preserves the stored MIME type and sends an attachment filename. Returns 404 when the cell is empty or its object no longer exists.""",
+)
 async def get_blob_cell(
     table_id: str,
     row_id: int,
@@ -632,7 +670,12 @@ async def get_blob_cell(
     )
 
 
-@router.delete("/tables/{table_id}/rows/{row_id}/blob/{column_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/tables/{table_id}/rows/{row_id}/blob/{column_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete one blob cell",
+    description="Deletes the stored object and clears that cell's metadata. The cell remains available for a later upload.",
+)
 async def delete_blob_cell(
     table_id: str,
     row_id: int,

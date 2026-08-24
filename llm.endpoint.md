@@ -1,6 +1,6 @@
 # API Map
 
-All routes are `/api/v1`; decorators/OpenAPI are authoritative.
+All routes are `/api/v1`; decorators/OpenAPI are authoritative. Interactive docs: `/api/v1/docs`; machine spec: `/api/v1/openapi.json`.
 
 | Area | Source/prefix |
 |---|---|

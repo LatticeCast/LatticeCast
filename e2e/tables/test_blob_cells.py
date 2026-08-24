@@ -73,15 +73,16 @@ def test_blob_cells_round_trip(admin_token, workspace):
     assert response.content == first_file
     assert response.headers["content-type"].startswith("text/plain")
 
-    replacement_file = b"replacement blob payload\n"
+    replacement_file = b"PK\x03\x04binary zip payload\x00\xff"
     response = requests.put(
         f"{BASE}/api/v1/tables/{table_id}/rows/{row_id}/blob/{file_column_id}",
         headers={"Authorization": f"Bearer {admin_token}"},
-        files={"file": ("replacement.txt", replacement_file, "text/plain")},
+        files={"file": ("archive.zip", replacement_file, "application/zip")},
         timeout=15,
     )
     assert response.status_code == 200, f"replace file blob: {response.status_code} {response.text[:200]}"
-    assert response.json()["filename"] == "replacement.txt"
+    assert response.json()["filename"] == "archive.zip"
+    assert response.json()["content_type"] == "application/zip"
     assert response.json()["size"] == len(replacement_file)
 
     response = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}/blob/{file_column_id}", admin_token)
@@ -125,7 +126,7 @@ def test_blob_cells_round_trip(admin_token, workspace):
     response = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", admin_token)
     assert response.status_code == 200, f"read row metadata: {response.status_code} {response.text[:200]}"
     row_data = response.json()["row_data"]
-    assert row_data[file_column_id]["filename"] == "replacement.txt"
+    assert row_data[file_column_id]["filename"] == "archive.zip"
     assert row_data[doc_column_id] == {
         "key": f"{ws_id}/{table_id}/rows/{row_id}/blobs/{doc_column_id}",
         "filename": "Notes.md",

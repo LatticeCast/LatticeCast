@@ -13,7 +13,7 @@
 		getBlobCellMetadata,
 		sortLabels
 	} from './table.utils';
-	import { downloadBlobCell } from '$lib/backend/tables';
+	import { downloadBlobCell, uploadBlobCell } from '$lib/backend/tables';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { createDragReorder } from './dragReorder.svelte';
 
@@ -137,6 +137,20 @@
 		} catch {
 			// The cell metadata remains authoritative; a later click can retry a failed download.
 		}
+	}
+
+	function chooseBlobFile(row: Row, col: Column) {
+		const input = document.createElement('input');
+		input.type = 'file';
+		input.accept = col.options?.accept ?? '';
+		input.onchange = () => {
+			const file = input.files?.[0];
+			input.remove();
+			if (!file) return;
+			void uploadBlobCell(row.table_id, row.row_id, col.column_id, file);
+		};
+		document.body.appendChild(input);
+		input.click();
 	}
 
 	let containerEl = $state<HTMLDivElement | null>(null);
@@ -748,9 +762,15 @@
 												}}>+</button
 											>
 										{:else}
-											<span
-												data-testid="blob-empty-{row.row_id}-{col.column_id}"
-												class="block min-h-[1.5rem] py-1 text-gray-300">—</span
+											<button
+												type="button"
+												data-testid="blob-upload-{row.row_id}-{col.column_id}"
+												class="rounded px-2 py-1 text-xs text-gray-400 transition hover:bg-blue-50 hover:text-blue-700"
+												title="Upload file"
+												onclick={(e) => {
+													e.stopPropagation();
+													chooseBlobFile(row, col);
+												}}>Upload</button
 											>
 										{/if}
 									{:else if col.type === 'url'}

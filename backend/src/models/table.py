@@ -25,8 +25,14 @@ class ColumnOptions(SQLModel):
     # {value, color} choice shape, so preserve choices as opaque JSON.
     choices: list[dict[str, Any]] | None = None
     width: int | None = None
-    kind: BlobKind | None = None
-    accept: str | None = None
+    kind: BlobKind | None = Field(
+        default=None,
+        description="Blob UI hint: file=any binary, image=image, doc=Markdown, table=CSV/XLSX/JSONL.",
+    )
+    accept: str | None = Field(
+        default=None,
+        description="Optional HTML file-input accept hint. It does not enforce server-side MIME validation.",
+    )
 
 
 class ColumnCreate(SQLModel):

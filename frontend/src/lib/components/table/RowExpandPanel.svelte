@@ -14,7 +14,7 @@
 		removeTagFromRowData,
 		addTagToRowData
 	} from './table.utils';
-	import { downloadBlobCell, fetchDoc } from '$lib/backend/tables';
+	import { downloadBlobCell, fetchDoc, uploadBlobCell } from '$lib/backend/tables';
 	import { marked } from 'marked';
 
 	let {
@@ -117,6 +117,25 @@
 		} catch {
 			// The descriptor in the row store is still valid; the user can retry the download.
 		}
+	}
+
+	function chooseBlobFile(col: Column) {
+		const input = document.createElement('input');
+		input.type = 'file';
+		input.accept = col.options?.accept ?? '';
+		input.onchange = () => {
+			const file = input.files?.[0];
+			input.remove();
+			if (!file) return;
+			void uploadBlobCell(tableId, localRow.row_id, col.column_id, file).then((metadata) => {
+				localRow = {
+					...localRow,
+					row_data: { ...localRow.row_data, [col.column_id]: metadata }
+				};
+			});
+		};
+		document.body.appendChild(input);
+		input.click();
 	}
 </script>
 
@@ -464,9 +483,10 @@
 								>
 							</button>
 						{:else}
-							<span
-								class="flex min-h-[2.25rem] items-center rounded-xl border px-3 py-2 text-sm text-gray-400 {T.inputBorder}"
-								>No file</span
+							<button
+								type="button"
+								class="flex min-h-[2.25rem] w-full items-center rounded-xl border px-3 py-2 text-left text-sm text-gray-400 {T.inputBorder} hover:border-blue-400"
+								onclick={() => chooseBlobFile(col)}>Upload file</button
 							>
 						{/if}
 					{:else if editField === col.column_id}

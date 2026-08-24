@@ -24,7 +24,6 @@ from router.api.table_schemas import router as api_table_schemas_router
 from router.api.tables import router as api_tables_router
 from router.api.workspaces import router as api_workspaces_router
 
-
 # --------------------------------------------------
 # Lifespan (Startup / Shutdown)
 # --------------------------------------------------
@@ -74,15 +73,27 @@ app = FastAPI(
     redoc_url="/api/v1/redoc",
     openapi_url="/api/v1/openapi.json",
     description="""
-Lattice Cast backend API for project management.
+Generic workspace/table API. PM, CRM, and workflow features are table schemas and views on the same primitives.
 
-## Authentication
-- **Google OAuth**: Exchange auth code at `/api/login/google/token`
-- **Authentik OAuth**: JWT validation with JWKS
+## Use the API
+1. Authenticate and send `Authorization: Bearer <token>`.
+2. Create or resolve a workspace, then create/read a table. A `table_id` may exist in more than one workspace; pass `workspace_id` when ambiguity is possible.
+3. Read the table schema. Row values are keyed by the returned column UUID, never by the column name.
+4. After any table/schema/view mutation, replace local schema state with the returned full schema snapshot.
 
-## Features
-- User management (admin)
-- Health monitoring
+## Blob cells
+A `blob` column holds exactly one object. Its `options.kind` is a picker/rendering hint:
+
+| kind | intended content | write route |
+| --- | --- | --- |
+| `file` | any file or binary (ZIP, PDF, etc.) | generic blob upload |
+| `image` | image file | generic blob upload |
+| `table` | CSV, XLSX, JSONL | generic blob upload |
+| `doc` | Markdown text | doc blob route |
+
+`accept` is a browser file-picker hint; the generic blob API stores one arbitrary uploaded file and preserves its MIME type. Blob metadata is returned in `row_data[column_id]`; bodies are downloaded from the addressed blob endpoint.
+
+Use the **rows** tag for the exact upload, download, document, and delete contracts. Legacy `/doc` and `/col-doc` routes remain for compatibility; new clients should use addressed blob routes.
     """,
     version="1.0.0",
     contact={
@@ -94,6 +105,13 @@ Lattice Cast backend API for project management.
     },
     openapi_tags=[
         {"name": "auth", "description": "Authentication endpoints (Google/Authentik OAuth)"},
+        {"name": "workspaces", "description": "Workspace lifecycle and RLS-backed member access."},
+        {"name": "tables", "description": "Generic table, column, schema, template, and view operations."},
+        {
+            "name": "rows",
+            "description": "Row CRUD plus one-file blob cells. Read the blob endpoint descriptions before integrating uploads.",
+        },
+        {"name": "dashboard", "description": "Dashboard block queries over table rows."},
         {"name": "storage", "description": "File storage (S3-compatible, user files prefixed with UUID)"},
         {"name": "admin-users", "description": "User management (requires admin role)"},
         {"name": "health", "description": "Health check and debug endpoints"},
