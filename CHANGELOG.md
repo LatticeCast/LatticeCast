@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.60.0 — 2026-09-05 (storage-backed blob cells)
+
+- Replaced legacy `doc` columns with one-file storage-backed `blob` cells:
+  `doc`, `table`, `image`, and arbitrary `file`/binary content.
+- Added addressed Markdown and binary blob APIs, upload/download UI, filenames,
+  empty-doc creation, and E2E coverage.
+- PostgreSQL now owns RLS-protected row/blob mutation boundaries; blob metadata
+  cannot be changed through ordinary row PATCH/PUT.
+- Added column-name validation, public announcements, and owner/writer
+  permission enforcement in the UI and API.
+- Compact LLM/PM/hive documentation and bump frontend, backend, E2E, and
+  OpenAPI metadata to `0.60.0`.
+
 ## v0.53 — 2026-05-27 (default_view restore + FK cascade)
 
 - Fix: `default_view` not restoring after navigation — async path now

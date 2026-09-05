@@ -95,7 +95,7 @@ A `blob` column holds exactly one object. Its `options.kind` is a picker/renderi
 
 Use the **rows** tag for the exact upload, download, document, and delete contracts. Legacy `/doc` and `/col-doc` routes remain for compatibility; new clients should use addressed blob routes.
     """,
-    version="1.0.0",
+    version="0.60.0",
     contact={
         "name": "Lattice Cast Team",
         "url": "https://lattice-cast.posetmage.com",
