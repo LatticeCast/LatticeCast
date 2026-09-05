@@ -37,6 +37,8 @@ services:
     build:
       context: ./backend
       network: host
+      args:
+        DEPLOY_COMMIT: ${DEPLOY_COMMIT:-unknown}
     volumes:
       - ./backend/:/app/
     env_file:

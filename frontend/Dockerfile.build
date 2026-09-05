@@ -1,5 +1,7 @@
 # Dockerfile.build
 FROM node:24 AS builder
+ARG VITE_DEPLOY_COMMIT=unknown
+ENV VITE_DEPLOY_COMMIT=${VITE_DEPLOY_COMMIT}
 WORKDIR /app
 COPY . .
 RUN npm install

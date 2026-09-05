@@ -50,6 +50,7 @@ class TestHealthCheck:
         data = resp.json()
         assert data["status"] == "ok"
         assert "db" in data
+        assert "commit" in data
 
 
 class TestAdminAuth:

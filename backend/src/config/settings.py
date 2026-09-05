@@ -117,6 +117,7 @@ class AppSettings(BaseSettings):
 
     debug_mode: bool = Field(default=False, alias="DEBUG_MODE")
     NGX_PORT: int = Field(default=8000, alias="NGX_PORT")
+    deploy_commit: str = Field(default="unknown", alias="DEPLOY_COMMIT")
 
     # Self-issued JWT (password-login flow — see middleware/token.py)
     jwt_secret_key: str = Field(default="", alias="JWT_SECRET_KEY", description="Signs self-issued JWTs")

@@ -1,5 +1,8 @@
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
+ARG DEPLOY_COMMIT=unknown
+ENV DEPLOY_COMMIT=${DEPLOY_COMMIT}
+
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates supervisor git && \
     update-ca-certificates && rm -rf /var/lib/apt/lists/*
 
