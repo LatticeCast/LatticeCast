@@ -69,6 +69,29 @@ def verify(psql_fn) -> list[str]:
             f"expected {expected_columns!r} got {columns!r}"
         )
 
+    # V48/V49 canonicalise the announcement's temporal cells exactly like
+    # every other row_data date/datetime cell: epoch milliseconds or null.
+    temporal_cells = psql_fn(
+        "SELECT count(*) "
+        "FROM public.rows AS row_data "
+        "JOIN public.tables AS table_data "
+        "  ON table_data.workspace_id = row_data.workspace_id "
+        " AND table_data.table_id = row_data.table_id "
+        "CROSS JOIN LATERAL jsonb_array_elements(table_data.config -> 'columns') "
+        "  AS column_data "
+        "WHERE table_data.workspace_id = "
+        f"'{_ANNOUNCEMENT_WORKSPACE_ID}'::uuid "
+        "  AND column_data ->> 'type' IN ('date', 'datetime') "
+        "  AND row_data.row_data ? (column_data ->> 'column_id') "
+        "  AND jsonb_typeof(row_data.row_data -> (column_data ->> 'column_id')) "
+        "      NOT IN ('number', 'null');"
+    ).strip()
+    if temporal_cells != "0":
+        errors.append(
+            "NONCANONICAL ANNOUNCEMENT TEMPORAL CELLS: "
+            f"expected 0 got {temporal_cells!r}"
+        )
+
     # create_view() must create a regular table view, not rely only on the
     # frontend's implicit view zero.
     view = psql_fn(

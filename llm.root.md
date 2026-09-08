@@ -10,7 +10,8 @@ Browser -> nginx -> SvelteKit | FastAPI -> PostgreSQL (RLS) + S3-compatible stor
 
 - Identity: `workspace_id`; table identity: `(workspace_id, table_id)`; row/view IDs are per-table numbers.
 - Schema is `tables.config`; `rows.row_data` is keyed by column UUID.
-- PostgreSQL RLS is the authorization boundary. UI follows controller -> API -> response -> store -> `$derived` UI.
+- Every stored time is UTC+0 and carries no zone. `date`/`datetime` cells are epoch-millisecond integers; real columns are `TIMESTAMP`. Localisation is the frontend's job.
+- PostgreSQL RLS is the authorization boundary, and the only one. The backend does not ask permission questions of its own. UI follows controller -> API -> response -> store -> `$derived` UI.
 - Blob cells are storage-backed metadata, mutated only by the addressed blob routes/functions.
 - API: `backend/src/router/api/`; DB: `migration/V*.sql`; runtime: `docker-compose.yml`; exact contracts: models/OpenAPI.
 

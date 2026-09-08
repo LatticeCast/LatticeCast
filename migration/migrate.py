@@ -458,9 +458,14 @@ def step_test() -> bool:
         sys.path.insert(0, str(Path(__file__).parent))
         import test_migration_schema
         import test_migration_rls
+        import test_migration_seed
 
         all_errors = []
-        for name, module in [("schema", test_migration_schema), ("rls", test_migration_rls)]:
+        for name, module in [
+            ("schema", test_migration_schema),
+            ("rls", test_migration_rls),
+            ("seed", test_migration_seed),
+        ]:
             errors = module.verify(psql_query)
             if errors:
                 for err in errors:

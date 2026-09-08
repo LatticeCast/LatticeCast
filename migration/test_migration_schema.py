@@ -250,8 +250,8 @@ def verify(psql_fn) -> list[str]:
             "does not handle 'workflow' (V27)"
         )
 
-    # V18: immutable_iso_to_ts must exist so create_row_data_index() can
-    # build btree indexes on date columns (::NUMERIC cast fails on ISO strings).
+    # V18's helper remains for migration compatibility, but V49's temporal
+    # indexes must no longer use it: JSONB date/datetime cells are epoch-ms.
     result = psql_fn(
         "SELECT 1 FROM pg_proc WHERE proname='immutable_iso_to_ts';"
     )
@@ -267,6 +267,97 @@ def verify(psql_fn) -> list[str]:
             f"WRONG RESULT: immutable_iso_to_ts('2025-05-15') "
             f"expected '2025-05-15' got '{result.strip()}'"
         )
+
+    result = psql_fn(
+        "SELECT count(*) FROM pg_indexes "
+        "WHERE schemaname='public' "
+        "  AND indexdef LIKE '%immutable_iso_to_ts(%';"
+    ).strip()
+    if result != "0":
+        errors.append(
+            "RETIRED TEMPORAL INDEX: immutable_iso_to_ts still backs "
+            f"{result} public index(es) (V49)"
+        )
+
+    # V48/V49: JSONB temporal cells are UTC epoch-millisecond numbers and a
+    # rows trigger enforces the representation for every write path.
+    for function_name, signature in [
+        ("to_canonical_epoch_ms", "jsonb, text"),
+        ("_normalize_row_data_timestamps", "jsonb, jsonb"),
+    ]:
+        result = psql_fn(
+            "SELECT to_regprocedure("
+            f"'public.{function_name}({signature})'"
+            ");"
+        ).strip()
+        if not result:
+            errors.append(f"MISSING TEMPORAL FUNCTION: {function_name} (V48/V49)")
+
+    result = psql_fn(
+        "SELECT 1 FROM information_schema.triggers "
+        "WHERE event_object_schema='public' "
+        "  AND event_object_table='rows' "
+        "  AND trigger_name='trg_rows_canonical_ts';"
+    )
+    if not result:
+        errors.append("MISSING TRIGGER: rows.trg_rows_canonical_ts (V49)")
+
+    result = psql_fn(
+        "SELECT public.to_canonical_epoch_ms("
+        "'\"2025-05-15\"'::jsonb, 'date')::text;"
+    ).strip()
+    if result != "1747267200000":
+        errors.append(
+            "WRONG EPOCH NORMALIZATION: expected 1747267200000 for "
+            f"2025-05-15 UTC, got {result!r}"
+        )
+
+    # V50: ordinary RDS datetime columns remain timestamp-without-zone but
+    # their defaults state the UTC+0 convention explicitly.
+    result = psql_fn("SHOW timezone;").strip()
+    if result.upper() != "UTC":
+        errors.append(f"WRONG DATABASE TIMEZONE: expected UTC got {result!r} (V50)")
+
+    result = psql_fn(
+        "SELECT pg_get_expr(adbin, adrelid) "
+        "FROM pg_attrdef "
+        "WHERE adrelid='public.rows'::regclass "
+        "  AND adnum=(SELECT attnum FROM pg_attribute "
+        "             WHERE attrelid='public.rows'::regclass "
+        "               AND attname='created_at' AND NOT attisdropped);"
+    ).strip()
+    if "AT TIME ZONE 'UTC'" not in result:
+        errors.append("WRONG DEFAULT: public.rows.created_at is not explicit UTC (V50)")
+
+    # V51: per-table counter and allocator replace MAX(row_id)+1.
+    result = psql_fn(
+        "SELECT to_regclass('private.table_row_counters');"
+    ).strip()
+    if result != "private.table_row_counters":
+        errors.append("MISSING TABLE: private.table_row_counters (V51)")
+
+    result = psql_fn(
+        "SELECT prosecdef FROM pg_proc "
+        "WHERE oid='public.trg_set_row_id_fn()'::regprocedure;"
+    ).strip()
+    if result != "t":
+        errors.append("ROW ID ALLOCATOR IS NOT SECURITY DEFINER (V51)")
+
+    # V52 uses the caller's allowed-workspace set, not a row-correlated
+    # check_workspace_permission invocation inside the policy.
+    result = psql_fn(
+        "SELECT to_regprocedure('public.current_user_workspaces(character varying)');"
+    ).strip()
+    if not result:
+        errors.append("MISSING FUNCTION: current_user_workspaces (V52)")
+
+    result = psql_fn(
+        "SELECT qual FROM pg_policies "
+        "WHERE schemaname='public' AND tablename='rows' "
+        "  AND policyname='rows_read';"
+    ).strip()
+    if "current_user_workspaces" not in result:
+        errors.append("ROWS RLS IS NOT SET-BASED (V52)")
 
     # V33: workspace_members PK is (workspace_id, user_id, action) —
     # multiple rows per member, one per granted action.
@@ -380,14 +471,15 @@ def verify(psql_fn) -> list[str]:
     for old_function, signature in [
         ("create_row_data_index", "text, text, text, text"),
         ("drop_row_data_index", "text"),
+        ("_build_rd_idx_name", "text, text"),
     ]:
         result = psql_fn(
-            "SELECT has_function_privilege("
-            f"'app', 'public.{old_function}({signature})', 'EXECUTE'"
+            "SELECT to_regprocedure("
+            f"'public.{old_function}({signature})'"
             ");"
         ).strip()
-        if result != "f":
-            errors.append(f"BROAD DDL EXECUTE: app on {old_function} (V47)")
+        if result:
+            errors.append(f"FORBIDDEN LEGACY DDL FUNCTION: {old_function} (V49)")
 
     result = psql_fn(
         "SELECT has_function_privilege("
@@ -396,6 +488,17 @@ def verify(psql_fn) -> list[str]:
     ).strip()
     if result != "t":
         errors.append("MISSING EXECUTE: app on scoped index-name helper (V47)")
+
+    # V53 removes the scalar permission check from app sessions; RLS owns
+    # authorization and SECURITY DEFINER DDL helpers retain owner access.
+    result = psql_fn(
+        "SELECT has_function_privilege("
+        "'app', 'public.check_workspace_permission(uuid, uuid, character varying)', "
+        "'EXECUTE'"
+        ");"
+    ).strip()
+    if result != "f":
+        errors.append("APP CAN EXECUTE SCALAR PERMISSION CHECK (V53)")
 
     # V33: grant_workspace_action does the atomic multi-row grant/revoke.
     result = psql_fn(

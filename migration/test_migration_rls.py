@@ -63,6 +63,16 @@ def verify(psql_fn) -> list[str]:
         if not result:
             errors.append(f"MISSING POLICY: {table}.{policy}")
 
+    # V52 policy predicates must reference an uncorrelated, caller-scoped
+    # workspace set instead of calling the scalar check once per candidate row.
+    result = psql_fn(
+        "SELECT qual FROM pg_policies "
+        "WHERE schemaname='public' AND tablename='rows' "
+        "  AND policyname='rows_read';"
+    )
+    if "current_user_workspaces" not in result:
+        errors.append("RLS POLICY: rows_read is not workspace-set based (V52)")
+
     for func in ("check_workspace_permission", "grant_workspace_action"):
         result = psql_fn(f"SELECT 1 FROM pg_proc WHERE proname='{func}';")
         if not result:
@@ -281,11 +291,8 @@ def verify(psql_fn) -> list[str]:
             "RLS BEHAVIORAL: user A cannot DELETE in own workspace table_views"
         )
 
-    # V33: workspace_members is owner-only, even for SELECT. Both seeded
-    # users hold 'owner' on their own workspace, so this is a
-    # same-workspace-different-owner-only check: user A has no grant of
-    # any kind on workspace B, so this doubles as a membership-visibility
-    # isolation check too.
+    # V52 allows a member to read their own grants, while owners retain the
+    # full roster. User A owns workspace A and has no grant on workspace B.
     count = _as_app(
         psql_fn,
         _USER_A,
