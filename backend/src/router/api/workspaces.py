@@ -155,12 +155,17 @@ async def add_member(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Add a member to a workspace at the given access level (owner only)"""
+    """Add a member to a workspace at the given access level (owner only).
+
+    The duplicate check reads the roster, not a permission: `_require_owner`
+    has established the caller as an owner, so workspace_members_owner (V52)
+    exposes every member of this workspace to the query below.
+    """
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, repo)
     new_member = await _resolve_member_user(data, session)
-    if await repo.is_member(workspace.workspace_id, new_member.user_id):
+    if await repo.get_member_with_info(workspace.workspace_id, new_member.user_id) is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User is already a member")
     await repo.grant(workspace_id=workspace.workspace_id, user_id=new_member.user_id, level=data.level)
     return await repo.get_member_with_info(workspace.workspace_id, new_member.user_id)
@@ -174,7 +179,12 @@ async def update_member_role(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Update a member's access level (owner only). Blocks demoting the last owner."""
+    """Update a member's access level (owner only). Blocks demoting the last owner.
+
+    One roster read answers both questions about the target — that it is a
+    member at all, and whether it currently holds owner. Readable because the
+    caller is an owner (workspace_members_owner, V52).
+    """
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, repo)
@@ -185,9 +195,10 @@ async def update_member_role(
     except ValueError:
         pass
     target = await _resolve_member_user(member_data, session)
-    if not await repo.is_member(workspace.workspace_id, target.user_id):
+    target_member = await repo.get_member_with_info(workspace.workspace_id, target.user_id)
+    if target_member is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
-    if data.level != "owner" and await repo.is_owner(workspace.workspace_id, target.user_id):
+    if data.level != "owner" and target_member.level == "owner":
         if await repo.count_owners(workspace.workspace_id) <= 1:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot demote the last owner")
     await repo.grant(workspace.workspace_id, target.user_id, data.level)
@@ -201,7 +212,12 @@ async def remove_member(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Remove a member from a workspace (owner only). member_user_id can be UUID or user_name."""
+    """Remove a member from a workspace (owner only). member_user_id can be UUID or user_name.
+
+    One roster read answers both questions about the target — that it is a
+    member at all, and whether it currently holds owner. Readable because the
+    caller is an owner (workspace_members_owner, V52).
+    """
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, repo)
@@ -212,9 +228,10 @@ async def remove_member(
     except ValueError:
         pass
     member = await _resolve_member_user(member_data, session)
-    if not await repo.is_member(workspace.workspace_id, member.user_id):
+    target_member = await repo.get_member_with_info(workspace.workspace_id, member.user_id)
+    if target_member is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
-    if await repo.is_owner(workspace.workspace_id, member.user_id):
+    if target_member.level == "owner":
         if await repo.count_owners(workspace.workspace_id) <= 1:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove the last owner")
     await repo.remove_member(workspace_id=workspace.workspace_id, user_id=member.user_id)
