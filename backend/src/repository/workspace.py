@@ -37,21 +37,11 @@ class WorkspaceRepository:
     async def list_by_user(self, user_id: UUID) -> list[Workspace]:
         """Workspaces the user can read.
 
-        Filters via check_workspace_permission (SECURITY DEFINER)
-        instead of joining workspace_members directly: that table's RLS
-        is owner-only for every command including SELECT (V33), so a
-        JOIN against it under the caller's own RLS session would
-        silently drop every workspace they can merely read/write but
-        don't own.
+        No predicate of its own: the workspaces_read policy (V52) already
+        returns exactly the rows the caller may read.
         """
         await reapply_rls_context(self.session)
-        result = await self.session.execute(
-            select(Workspace).where(
-                text("check_workspace_permission(workspaces.workspace_id, CAST(:user_id AS uuid), 'read')").bindparams(
-                    user_id=str(user_id)
-                )
-            )
-        )
+        result = await self.session.execute(select(Workspace))
         return list(result.scalars().all())
 
     async def grant(self, workspace_id: UUID, user_id: UUID, level: str) -> None:
@@ -202,15 +192,20 @@ class WorkspaceRepository:
 
     async def get_first_owned_workspace(self, user_id: UUID) -> Workspace | None:
         """Return the first workspace the user owns, or any workspace they can
-        read. See list_by_user's docstring for why this filters via
-        check_workspace_permission rather than joining workspace_members."""
+        read.
+
+        The owner half joins workspace_members for the caller's own 'owner'
+        rows — permitted by workspace_members_self_read (V52). The read
+        fallback needs no predicate: workspaces_read has already filtered the
+        rows to what the caller may read.
+        """
         await reapply_rls_context(self.session)
         result = await self.session.execute(
             select(Workspace)
+            .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.workspace_id)
             .where(
-                text("check_workspace_permission(workspaces.workspace_id, CAST(:user_id AS uuid), 'owner')").bindparams(
-                    user_id=str(user_id)
-                )
+                WorkspaceMember.user_id == user_id,
+                WorkspaceMember.action == "owner",
             )
             .order_by(Workspace.created_at)
             .limit(1)
@@ -218,15 +213,6 @@ class WorkspaceRepository:
         workspace = result.scalar_one_or_none()
         if workspace:
             return workspace
-        # Fall back to any readable membership
-        result = await self.session.execute(
-            select(Workspace)
-            .where(
-                text("check_workspace_permission(workspaces.workspace_id, CAST(:user_id AS uuid), 'read')").bindparams(
-                    user_id=str(user_id)
-                )
-            )
-            .order_by(Workspace.created_at)
-            .limit(1)
-        )
+        # Fall back to any readable workspace
+        result = await self.session.execute(select(Workspace).order_by(Workspace.created_at).limit(1))
         return result.scalar_one_or_none()
