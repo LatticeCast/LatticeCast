@@ -107,58 +107,50 @@ class WorkspaceRepository:
                 return member
         return None
 
-    async def is_member(self, workspace_id: UUID, user_id: UUID) -> bool:
-        """Does this user hold at least 'read' on this workspace.
+    async def _has_action(self, workspace_id: UUID, user_id: UUID, action: str) -> bool:
+        """Does this member hold the given action row on this workspace.
 
-        Routed through check_workspace_permission (SECURITY DEFINER)
-        rather than a direct table query: workspace_members RLS is
-        owner-only for every command including SELECT (V33), so a plain
-        query would incorrectly return nothing for a non-owner checking
-        their own membership — RLS only asks "is the caller an owner of
-        this workspace", not "is this the caller's own row".
+        A plain workspace_members query: workspace_members_self_read (V52)
+        exposes the caller's own rows, and workspace_members_owner exposes
+        the full roster to an owner of that workspace. Every caller of the
+        four public checks below satisfies one of the two.
         """
         await reapply_rls_context(self.session)
         result = await self.session.execute(
-            text("SELECT check_workspace_permission(CAST(:ws AS uuid), CAST(:user_id AS uuid), 'read')").bindparams(
-                ws=str(workspace_id), user_id=str(user_id)
+            select(WorkspaceMember.action).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.user_id == user_id,
+                WorkspaceMember.action == action,
             )
         )
-        return bool(result.scalar_one())
+        return result.first() is not None
+
+    async def is_member(self, workspace_id: UUID, user_id: UUID) -> bool:
+        """Does this user hold at least 'read' on this workspace."""
+        return await self._has_action(workspace_id, user_id, "read")
 
     async def is_owner(self, workspace_id: UUID, user_id: UUID) -> bool:
-        """Same RLS-bypass reasoning as is_member — see its docstring."""
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
-            text("SELECT check_workspace_permission(CAST(:ws AS uuid), CAST(:user_id AS uuid), 'owner')").bindparams(
-                ws=str(workspace_id), user_id=str(user_id)
-            )
-        )
-        return bool(result.scalar_one())
+        """Does this user hold 'owner' on this workspace."""
+        return await self._has_action(workspace_id, user_id, "owner")
 
     async def can_write(self, workspace_id: UUID, user_id: UUID) -> bool:
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
-            text("SELECT check_workspace_permission(CAST(:ws AS uuid), CAST(:user_id AS uuid), 'write')").bindparams(
-                ws=str(workspace_id), user_id=str(user_id)
-            )
-        )
-        return bool(result.scalar_one())
+        """Does this user hold 'write' on this workspace."""
+        return await self._has_action(workspace_id, user_id, "write")
 
     async def get_user_level(self, workspace_id: UUID, user_id: UUID) -> str:
+        """This member's action rows reduced to a single displayed level.
+
+        One aggregate query; a user with no rows reads as "read", the same
+        default the three-branch permission CASE used to fall back to.
+        """
         await reapply_rls_context(self.session)
         result = await self.session.execute(
-            text(
-                """
-                SELECT CASE
-                    WHEN check_workspace_permission(CAST(:ws AS uuid), CAST(:user_id AS uuid), 'owner') THEN 'owner'
-                    WHEN check_workspace_permission(CAST(:ws AS uuid), CAST(:user_id AS uuid), 'write') THEN 'write'
-                    WHEN check_workspace_permission(CAST(:ws AS uuid), CAST(:user_id AS uuid), 'read') THEN 'read'
-                    ELSE NULL
-                END
-                """
-            ).bindparams(ws=str(workspace_id), user_id=str(user_id))
+            select(func.array_agg(WorkspaceMember.action)).where(
+                WorkspaceMember.workspace_id == workspace_id,
+                WorkspaceMember.user_id == user_id,
+            )
         )
-        return result.scalar_one() or "read"
+        return _highest_level(result.scalar_one() or [])
 
     async def count_owners(self, workspace_id: UUID) -> int:
         result = await self.session.execute(
