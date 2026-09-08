@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import ConfigDict
 from sqlmodel import Field, SQLModel
 
-ColumnType = Literal["text", "string", "number", "date", "select", "tags", "checkbox", "url", "blob"]
+ColumnType = Literal["text", "string", "number", "date", "datetime", "select", "tags", "checkbox", "url", "blob"]
 BlobKind = Literal["file", "image", "doc", "table"]
 
 
