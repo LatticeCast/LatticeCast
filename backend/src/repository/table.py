@@ -77,17 +77,23 @@ class TableRepository:
         )
         return result.scalar_one_or_none()
 
-    async def resolve_table_global(self, identifier: str, workspace_ids: list[UUID]) -> Table | None:
-        """Resolve a table by case-insensitive name across the given workspaces."""
-        if not workspace_ids:
-            return None
+    async def resolve_table_global(
+        self, identifier: str, workspace_ids: list[UUID] | None = None
+    ) -> Table | None:
+        """Resolve a table by case-insensitive name.
+
+        With `workspace_ids`, the search is scoped to those workspaces. With
+        None it spans every workspace the caller may read: the tables_read
+        policy is already that filter, so no workspace list has to be
+        assembled first just to hand it back as a WHERE clause.
+        """
         await reapply_rls_context(self.session)
-        result = await self.session.execute(
-            select(Table).where(
-                Table.workspace_id.in_(workspace_ids),
-                func.lower(Table.table_id) == identifier.lower(),
-            )
-        )
+        conditions = [func.lower(Table.table_id) == identifier.lower()]
+        if workspace_ids is not None:
+            if not workspace_ids:
+                return None
+            conditions.append(Table.workspace_id.in_(workspace_ids))
+        result = await self.session.execute(select(Table).where(*conditions))
         return result.scalars().first()
 
     async def list_by_workspace(self, workspace_id: UUID) -> list[Table]:
