@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.62.0 — 2026-09-09 (Hive verification reliability)
+
+- Updated the Agentic Hive skill with a programmatic pre-merge verification
+  gate, retry-safe PM status updates, and explicit commit-failure recovery.
+- Corrected skills discovery from story worktrees and initialized optional
+  story dependency state safely under `set -u`.
+
 ## v0.61.0 — 2026-09-09 (UTC temporal data and authorization hardening)
 
 - Made the PostgreSQL temporal-data contract explicit: ordinary RDS columns
