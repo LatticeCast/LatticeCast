@@ -468,10 +468,23 @@ def verify(psql_fn) -> list[str]:
         if result:
             errors.append(f"FORBIDDEN CALLER IDENTITY FUNCTION: {old_function} (V46)")
 
+    # _build_rd_idx_name(text, text) is deliberately NOT in this list. V49
+    # dropped it as dead surface and asserted here that it must not come back,
+    # but it is live: the current drop_row_data_index(uuid, text, text, text)
+    # drops TWO index names for a column -- the workspace-scoped one it now
+    # creates, and the unscoped one any database migrated before V47 still
+    # carries -- and it needs this two-argument helper to rebuild that older
+    # name. Without it, deleting any indexed column fails outright:
+    #
+    #     ERROR: function public._build_rd_idx_name(text, text) does not exist
+    #
+    # V49's "nothing reaches them" check used a query returning only the FIRST
+    # match per function body, which hid that second call; regexp_matches with
+    # the 'g' flag shows both. V55 restored the function, so this assertion
+    # would now fail the suite on a correct schema.
     for old_function, signature in [
         ("create_row_data_index", "text, text, text, text"),
         ("drop_row_data_index", "text"),
-        ("_build_rd_idx_name", "text, text"),
     ]:
         result = psql_fn(
             "SELECT to_regprocedure("
@@ -480,6 +493,21 @@ def verify(psql_fn) -> list[str]:
         ).strip()
         if result:
             errors.append(f"FORBIDDEN LEGACY DDL FUNCTION: {old_function} (V49)")
+
+    # The legacy helper must exist, and must NOT be reachable by app: its only
+    # caller is a SECURITY DEFINER function that runs as its owner (V55).
+    result = psql_fn(
+        "SELECT to_regprocedure('public._build_rd_idx_name(text, text)');"
+    ).strip()
+    if not result:
+        errors.append("MISSING LEGACY DDL HELPER: _build_rd_idx_name(text, text) (V55)")
+    result = psql_fn(
+        "SELECT has_function_privilege("
+        "'app', 'public._build_rd_idx_name(text, text)', 'EXECUTE'"
+        ");"
+    ).strip()
+    if result == "t":
+        errors.append("UNEXPECTED EXECUTE: app on legacy index-name helper (V55)")
 
     result = psql_fn(
         "SELECT has_function_privilege("

@@ -69,8 +69,19 @@ def test_admin_create_user(browser, admin_token, snapshot):
     workspaces = r.json()
     assert len(workspaces) == 1, f"expected 1 workspace, got {len(workspaces)}: {json.dumps(workspaces)}"
     ws = workspaces[0]
-    assert ws["workspace_name"] == TEST_EMAIL, (
-        f"workspace_name mismatch: got {ws['workspace_name']!r}, want {TEST_EMAIL!r}"
+    # The default workspace is named after the user's handle, not their email.
+    # V35 forbids dots in workspace_name because it becomes a URL path and an
+    # S3 key segment, and an email carries both '.' and '@' -- so
+    # create_user() names it from the slugified handle instead. Assert against
+    # the handle the API reports rather than re-deriving the slug here, so the
+    # test pins the contract and not a copy of _slugify.
+    handle = fetched["user_name"]
+    assert handle, "admin endpoint did not report a user_name"
+    assert ws["workspace_name"] == handle, (
+        f"workspace_name mismatch: got {ws['workspace_name']!r}, want the handle {handle!r}"
+    )
+    assert "." not in ws["workspace_name"], (
+        f"V35 forbids dots in workspace_name: {ws['workspace_name']!r}"
     )
     ws_id = ws["workspace_id"]
     print(f"    PASS: workspace_name={ws['workspace_name']} ws_id={ws_id}")
@@ -80,9 +91,12 @@ def test_admin_create_user(browser, admin_token, snapshot):
     r = api("GET", f"/api/v1/workspaces/{ws_id}/members", new_token)
     assert r.status_code == 200, f"list members: {r.status_code} {r.text[:200]}"
     members = r.json()
-    owner_entries = [m for m in members if m["role"] == "owner" and m["email"] == TEST_EMAIL]
+    # V33 replaced the members `role` column with one row per granted action
+    # and the API reports the highest as `level` (llm.arch.user.md). There is
+    # no `role` key on a member any more.
+    owner_entries = [m for m in members if m["level"] == "owner" and m["email"] == TEST_EMAIL]
     assert owner_entries, f"new user not found as owner in: {json.dumps(members)}"
-    print("    PASS: user has owner role")
+    print("    PASS: user has owner level")
 
     # Step 6: UI verify — new user can see their workspace page
     print("[6] UI: new user opens workspace page")

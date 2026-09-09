@@ -14,7 +14,7 @@ dependencies = [
     "python-jose",
     "passlib",
     "aioboto3",
-    "lattice-ql @ git+https://github.com/latticeCast/LatticeQL@v0.2.0",
+    "lattice-ql @ git+https://github.com/latticeCast/LatticeQL@0.3.5",
 ]
 
 [project.optional-dependencies]

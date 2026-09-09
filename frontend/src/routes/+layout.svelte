@@ -70,7 +70,9 @@
 	async function hydrateUserConfig(accessToken: string) {
 		try {
 			const me = await fetchMe(accessToken);
-			if (me?.config) hydrateFromServer(me.config);
+			// Always call it, config or not: it is what marks the settings store
+			// as safe to write back from (see settings.store.ts).
+			hydrateFromServer(me?.config);
 		} catch {
 			// best-effort — local cache stays in effect
 		}

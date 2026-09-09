@@ -98,7 +98,6 @@ async def create_workspace(
     workspace and read+write+owner rows atomically. It must bypass RLS at
     INSERT time because the creator is not yet a member.
     """
-    repo = WorkspaceRepository(session)
     if data.workspace_name.lower() in RESERVED_WORKSPACE_NAMES:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That workspace name is reserved")
     try:

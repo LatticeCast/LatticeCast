@@ -205,7 +205,7 @@ class TableViewRepository:
         view_order: list[int],
         updated_by: UUID,
     ) -> dict[str, Any]:
-        result = await self.session.execute(
+        await self.session.execute(
             sa_text(
                 "SELECT update_view_order(CAST(:ws AS uuid), :tid, "
                 "CAST(:order AS jsonb), CAST(:by AS uuid))"
@@ -227,7 +227,7 @@ class TableViewRepository:
         view_id: int | None,
         updated_by: UUID,
     ) -> dict[str, Any]:
-        result = await self.session.execute(
+        await self.session.execute(
             sa_text(
                 "SELECT update_default_view(CAST(:ws AS uuid), :tid, "
                 ":vid, CAST(:by AS uuid))"
@@ -249,7 +249,7 @@ class TableViewRepository:
         col_order: list[str],
         updated_by: UUID,
     ) -> dict[str, Any]:
-        result = await self.session.execute(
+        await self.session.execute(
             sa_text(
                 "SELECT update_col_order(CAST(:ws AS uuid), :tid, "
                 "CAST(:order AS jsonb), CAST(:by AS uuid))"
@@ -273,7 +273,7 @@ class TableViewRepository:
         options: dict[str, Any],
         created_by: UUID,
     ) -> dict[str, Any]:
-        result = await self.session.execute(
+        await self.session.execute(
             sa_text(
                 "SELECT add_column(CAST(:ws AS uuid), :tid, :name, :type, "
                 "CAST(:opts AS jsonb), CAST(:by AS uuid))"
@@ -300,7 +300,7 @@ class TableViewRepository:
     ) -> dict[str, Any]:
         # V13 update_column takes column_id as TEXT (not UUID) — it indexes
         # into the columns JSONB array by string match on column_id.
-        result = await self.session.execute(
+        await self.session.execute(
             sa_text(
                 "SELECT update_column(CAST(:ws AS uuid), :tid, "
                 ":cid, CAST(:patch AS jsonb), CAST(:by AS uuid))"
@@ -323,7 +323,7 @@ class TableViewRepository:
         column_id: str,
         deleted_by: UUID,
     ) -> dict[str, Any]:
-        result = await self.session.execute(
+        await self.session.execute(
             sa_text(
                 "SELECT delete_column(CAST(:ws AS uuid), :tid, "
                 ":cid, CAST(:by AS uuid))"

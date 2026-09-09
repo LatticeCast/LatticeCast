@@ -1,4 +1,5 @@
 # src/repository/workspace.py
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import func, select, text
@@ -6,6 +7,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.db import reapply_rls_context
 from models.workspace import Workspace, WorkspaceMember
+
+if TYPE_CHECKING:
+    # Imported for the annotations only; the runtime import stays inside the
+    # methods that build these, which is why ruff could not resolve the
+    # quoted forward references.
+    from models.workspace import MemberFullResponse
 
 _LEVEL_ORDER = ("read", "write", "owner")
 

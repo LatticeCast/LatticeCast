@@ -13,12 +13,11 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
-from core.db import get_login_session, get_session
+from core.db import get_login_session
 from middleware.auth import get_current_user, get_rls_session
 from middleware.token import create_access_token
-from models.user import User
+from models.user import User, UserPassword
 from models.user import UserInfo as UserInfoModel
-from models.user import UserPassword
 from repository.user import UserRepository, resolve_user_by_email
 from util.security import hash_password, verify_password
 

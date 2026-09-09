@@ -39,9 +39,11 @@ class DashboardRepository:
     ) -> list[dict[str, Any]]:
         """Execute a pre-compiled LatticeQL query and return rows as dicts.
 
-        For v0.24, LatticeQL inlines workspace_id at compile time (option 1),
-        so param_specs is normally empty and text(sql) is sufficient.
-        _build_params is reserved for future option-2 prepared-statement support.
+        param_specs is always empty today: compile_lql inlines $1 itself --
+        LatticeQL does not, contrary to what this docstring used to say -- and
+        rejects a query that still carries $2 or higher, because the names
+        behind those placeholders are not exposed by its API. _build_params is
+        kept for when they are.
         """
         DashboardRepository._build_params(param_specs, runtime_params)
         result = await session.execute(text(sql))

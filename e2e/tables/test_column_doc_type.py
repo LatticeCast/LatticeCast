@@ -147,8 +147,17 @@ def test_column_doc_type(authed_page, workspace, admin_token, snapshot):
     col_types = page.locator('#col-type option').all_text_contents()
     assert "doc" not in col_types, f"legacy doc type still offered: {col_types}"
     page.locator('#col-type').select_option('blob')
-    blob_kinds = page.locator('[data-testid="blob-kind-select"] option').all_text_contents()
-    assert blob_kinds == ["Document", "Table data", "Image", "File"]
+    # Assert the option VALUES, not their labels. The labels are display copy
+    # and moved once already -- 'File' became 'File / Binary' in 3cd0621,
+    # which broke this line without anything being wrong. The values are the
+    # contract: they are what select_option() below and BlobKind on the server
+    # both use.
+    blob_kinds = page.locator('[data-testid="blob-kind-select"] option').evaluate_all(
+        "opts => opts.map(o => o.value)"
+    )
+    assert blob_kinds == ["doc", "table", "image", "file"], f"blob kinds: {blob_kinds}"
+    labels = page.locator('[data-testid="blob-kind-select"] option').all_text_contents()
+    assert all(label.strip() for label in labels), f"a blob kind has no label: {labels}"
     page.locator('[data-testid="blob-kind-select"]').select_option('table')
     page.locator('[data-testid="add-column-name-input"]').fill('Import data')
     snap(page, "doc_col_01b_blob_category", snapshot)

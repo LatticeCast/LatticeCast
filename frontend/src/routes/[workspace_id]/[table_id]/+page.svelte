@@ -347,7 +347,6 @@
 				{tableId}
 				columns={$columns}
 				rows={$rows}
-				viewConfig={activeView}
 				onOpenExpand={(row) => s.openExpand(row)}
 			/>
 		{/if}

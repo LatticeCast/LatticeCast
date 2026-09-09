@@ -23,7 +23,7 @@ import time
 
 import pytest
 
-from e2e_base import BASE, api, login
+from e2e_base import BASE, api, login, make_login_info
 
 ADMIN_USER = "lattice"
 ADMIN_PATH = "/api/v1/admin/users"
@@ -118,15 +118,14 @@ def test_admin_only(browser, admin_token, test_user, request):
     # Step 9: UI pillar — browser-side fetch as non-admin → 403
     print("[9] UI: browser fetch /admin/users as non-admin → 403")
     ctx = browser.new_context(viewport={"width": 1280, "height": 900}, ignore_https_errors=True)
-    login_info = json.dumps({
-        "provider": "none",
-        "accessToken": user_token,
-        "userInfo": {"sub": user_token, "email": test_email, "name": user_name},
-        "role": "user",
-    })
-    ctx.add_init_script(
-        f"localStorage.setItem('loginInfo', JSON.stringify({json.dumps(login_info)}));"
-    )
+    # Build it with e2e_base's helper. Doing it by hand here double-encoded
+    # the value: json.dumps() on a string that was already JSON, wrapped in a
+    # further JSON.stringify(), so localStorage held a STRING containing JSON
+    # rather than the object. JSON.parse then returned that inner string,
+    # info.accessToken was undefined, and the fetch sent 'Bearer undefined' --
+    # a 401 that looked like an authorization bug in the product.
+    login_info = make_login_info(user_token, user_name, role="user")
+    ctx.add_init_script(f"localStorage.setItem('loginInfo', {json.dumps(login_info)});")
     page = ctx.new_page()
     try:
         page.goto(f"{BASE}/", wait_until="networkidle", timeout=15000)

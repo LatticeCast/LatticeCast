@@ -58,9 +58,12 @@ function normalizeAnnouncements(
 
 	return rows
 		.map((row) => {
-			const rowData =
+			// Annotate the narrowed shape: the guard proves it is a non-null
+			// object, but `object` carries no index signature, so every
+			// readCell() lookup below would type as never.
+			const rowData: Record<string, unknown> =
 				'row_data' in row && typeof row.row_data === 'object' && row.row_data !== null
-					? row.row_data
+					? (row.row_data as Record<string, unknown>)
 					: {};
 			const title = readCell(rowData, idByName.Title);
 			const description = readCell(rowData, idByName.Description);
@@ -72,9 +75,12 @@ function normalizeAnnouncements(
 		.filter((row) => row.type === 'app' || row.type === 'server');
 }
 
-function readCell(rowData: object, columnId: string | undefined): string | null {
+function readCell(
+	rowData: Record<string, unknown>,
+	columnId: string | undefined
+): string | null {
 	if (!columnId) return null;
-	const value = rowData[columnId as keyof typeof rowData];
+	const value = rowData[columnId];
 	return typeof value === 'string' && value.trim() ? value : null;
 }
 

@@ -52,6 +52,16 @@ export const settingsStore = writable<Settings>(loadSync());
 // from local edits so we only PATCH what the user actually changed.
 let serverState: Partial<Record<ServerKey, unknown>> = {};
 
+// Nothing may be pushed to the server before we have read from it once.
+// Without this the store's own defaults are indistinguishable from a user
+// edit: on a fresh browser loadSync() falls back to browserZone(), the
+// subscriber sees that differ from an empty serverState, and 250ms later it
+// PATCHes the browser's zone over whatever the user had configured -- while
+// hydrateFromServer is still waiting on GET /login/me. First write wins, and
+// it is the wrong one. darkMode hid this because its default, false, usually
+// matched the stored value already.
+let hydrated = false;
+
 let patchTimer: ReturnType<typeof setTimeout> | null = null;
 
 function schedulePatch() {
@@ -61,6 +71,7 @@ function schedulePatch() {
 
 async function flushPatch() {
 	patchTimer = null;
+	if (!hydrated) return;
 	const auth = get(authStore);
 	if (!auth?.accessToken) return;
 
@@ -106,17 +117,20 @@ if (browser) {
  * a PATCH. Call once after auth becomes valid.
  */
 export function hydrateFromServer(serverConfig: Record<string, unknown> | null | undefined) {
-	if (!serverConfig) return;
+	// Called even for a user with no config yet. The gate is "we have read
+	// from the server", not "the server had something to say" -- returning
+	// early here would leave `hydrated` false forever and the client could
+	// never save a setting at all.
 	serverState = {};
 	const patch: Partial<Settings> = {};
 
-	const incomingDark = serverConfig.darkMode;
+	const incomingDark = serverConfig?.darkMode;
 	if (typeof incomingDark === 'boolean') {
 		serverState.darkMode = incomingDark;
 		patch.darkMode = incomingDark;
 	}
 
-	const incomingZone = serverConfig.timezone;
+	const incomingZone = serverConfig?.timezone;
 	if (typeof incomingZone === 'string' && incomingZone) {
 		serverState.timezone = incomingZone;
 		patch.timezone = incomingZone;
@@ -125,6 +139,10 @@ export function hydrateFromServer(serverConfig: Record<string, unknown> | null |
 	if (Object.keys(patch).length > 0) {
 		settingsStore.update((s) => ({ ...s, ...patch }));
 	}
+
+	// Set last: the update above notifies the subscriber, and it must not
+	// schedule a patch for the values it has just been handed.
+	hydrated = true;
 }
 
 /** The zone every temporal cell is read and written through. */

@@ -22,15 +22,17 @@ _SCHEMA_TTL = 60  # seconds
 #   string   -> LatticeQL has only `text`
 #   checkbox -> it calls this `bool`
 #   blob     -> it calls this `doc`
-#   datetime -> it has no datetime; `date` is correct here because both types
-#               share one storage shape (epoch milliseconds, V48/V49) and
-#               LatticeQL only uses the kind to gate bucket()
+#
+# `datetime` passes through as itself from lattice-ql 0.3.0, which added it to
+# ColumnKind, let bucket() accept it, and taught codegen to read the cell as
+# epoch milliseconds instead of casting it to timestamptz. Against 0.2.0 it
+# had to be reported as `date`.
 _LQL_KIND_BY_COLUMN_TYPE: dict[str, str] = {
     "text": "text",
     "string": "text",
     "number": "number",
     "date": "date",
-    "datetime": "date",
+    "datetime": "datetime",
     "select": "select",
     "tags": "tags",
     "checkbox": "bool",
@@ -88,21 +90,15 @@ async def invalidate_schema_cache(workspace_id: str) -> None:
         pass
 
 
-_TABLE_SUBQ = re.compile(
-    r"table_id\s*=\s*\(SELECT\s+table_id\s+FROM\s+tables\s+"
-    r"WHERE\s+table_name\s*=\s*'([^']+)'\s+AND\s+workspace_id\s*=\s*'([^']+)'\)",
-    re.IGNORECASE,
-)
-
-
-def _fix_table_name(sql: str) -> str:
-    """LatticeQL generates table_name but LatticeCast uses table_id as the name.
-    Rewrite the subquery to a direct filter."""
-    return _TABLE_SUBQ.sub(r"table_id = '\1' AND workspace_id = '\2'", sql)
-
-
 def _inline_workspace(sql: str, workspace_id: str) -> str:
     return sql.replace("$1", f"'{workspace_id}'")
+
+
+# LatticeQL's contract: $1 is always workspace_id, and any further $N are the
+# query's own parameters in order of first appearance. We inline $1 and have
+# no way to bind the rest -- compile() returns only a string, and the names
+# behind $2.. live in Codegen._param_names, which is private.
+_REMAINING_PARAM = re.compile(r"\$([2-9]\d*)")
 
 
 async def compile_lql(lql: str, workspace_id: str, session: Any) -> tuple[str, list]:
@@ -111,4 +107,19 @@ async def compile_lql(lql: str, workspace_id: str, session: Any) -> tuple[str, l
         sql = _compile(lql, schema)
     except LatticeQLError as e:
         raise ValueError(str(e)) from e
-    return _fix_table_name(_inline_workspace(sql, workspace_id)), []
+    sql = _inline_workspace(sql, workspace_id)
+
+    # Fail here rather than hand PostgreSQL a query it cannot execute. An
+    # unbound placeholder used to reach the database and come back as
+    # 'there is no parameter $2' -- a 500 that reads like a server fault for
+    # what is really an unsupported query. Supporting parameters needs
+    # LatticeQL to expose the names behind them; reproducing its numbering on
+    # this side would couple us to its internals.
+    leftover = sorted({int(n) for n in _REMAINING_PARAM.findall(sql)})
+    if leftover:
+        placeholders = ", ".join(f"${n}" for n in leftover)
+        raise ValueError(
+            f"query parameters are not supported yet: {placeholders} left unbound"
+        )
+
+    return sql, []

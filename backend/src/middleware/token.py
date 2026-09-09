@@ -4,7 +4,7 @@ Token verification for OAuth providers.
 """
 
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from fastapi import Header, HTTPException, status
@@ -24,7 +24,7 @@ def create_access_token(user_id: str) -> tuple[str, int]:
     Returns (token, expires_in_seconds).
     """
     expires_delta = timedelta(minutes=settings.jwt_expire_minutes)
-    expire = datetime.now(timezone.utc) + expires_delta
+    expire = datetime.now(UTC) + expires_delta
     payload = {"sub": user_id, "user_id": user_id, "exp": expire}
     token = jwt.encode(payload, settings.jwt_secret_key, algorithm=LOCAL_ALGORITHM)
     return token, int(expires_delta.total_seconds())

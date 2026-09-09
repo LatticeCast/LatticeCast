@@ -83,7 +83,10 @@ def test_blob_cell_renders_and_downloads(authed_page, workspace, admin_token, sn
         raise AssertionError("Table view tab did not render") from error
     table_tab.click()
 
-    blob_button = page.get_by_test_id(f"blob-download-{row_id}-{column_id}")
+    # The grid's affordance was renamed blob-download -> blob-open in ef57edb
+    # (2026-08-21); one button now covers both doc-open and file-download and
+    # the title says which. This test was written against the older name.
+    blob_button = page.get_by_test_id(f"blob-open-{row_id}-{column_id}")
     try:
         blob_button.wait_for(state="visible", timeout=15_000)
     except PlaywrightTimeout as error:
