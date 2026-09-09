@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { Column, Row, ViewConfig } from '$lib/types/table';
-	import { getChoiceColor, formatDate } from './table.utils';
+	import { getChoiceColor } from './table.utils';
+	import { toDateInput } from '$lib/utils/temporal';
+	import { currentZone } from '$lib/stores/settings.store';
 	import {
 		type Granularity,
 		GRANULARITIES,
@@ -10,7 +12,8 @@
 		isToday,
 		getBarLeft,
 		getBarWidth,
-		getBarColorClasses
+		getBarColorClasses,
+		formatBarDate
 	} from './timeline.utils';
 	import { updateRow } from '$lib/backend/tables';
 	import { updateView } from '$lib/backend/views';
@@ -142,7 +145,7 @@
 		e.preventDefault();
 		const colId = handle === 'start' ? startColId! : endColId!;
 		const rawVal = row.row_data[colId];
-		const origDateStr = rawVal ? formatDate(String(rawVal)).slice(0, 10) : '';
+		const origDateStr = toDateInput(rawVal, currentZone());
 		dragState = { rowId: row.row_id, handle, startX: e.clientX, origDateStr, colId };
 		dragDeltaDays = 0;
 	}
@@ -415,9 +418,7 @@
 								)}px"
 								title="{labelCol
 									? String(row.row_data[labelCol.column_id] ?? '')
-									: ''} ({formatDate(String(startDate.toISOString().slice(0, 10)))} → {formatDate(
-									String(endDate.toISOString().slice(0, 10))
-								)})"
+									: ''} ({formatBarDate(startDate)} → {formatBarDate(endDate)})"
 								role="button"
 								tabindex="0"
 								onclick={() => onOpenExpand(row)}

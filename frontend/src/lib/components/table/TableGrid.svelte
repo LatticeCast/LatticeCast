@@ -8,7 +8,8 @@
 		getChoiceColor,
 		colorToStyle,
 		getTagValues,
-		formatDate,
+		formatCellDate,
+		isTemporalType,
 		formatBlobSize,
 		getBlobCellMetadata,
 		sortLabels
@@ -637,9 +638,9 @@
 												}}
 												autofocus
 											/>
-										{:else if col.type === 'date'}
+										{:else if isTemporalType(col.type)}
 											<input
-												type="date"
+												type={col.type === 'date' ? 'date' : 'datetime-local'}
 												class="w-full rounded border border-blue-400 bg-white px-2 py-1 text-sm text-gray-800 outline-none"
 												value={editValue}
 												oninput={(e) =>
@@ -872,9 +873,9 @@
 												</div>
 											{/if}
 										</div>
-									{:else if col.type === 'date'}
+									{:else if isTemporalType(col.type)}
 										{@const raw = row.row_data[col.column_id]}
-										<span class="font-mono text-sm">{raw ? formatDate(String(raw)) : ''}</span>
+										<span class="font-mono text-sm">{formatCellDate(raw, col.type)}</span>
 									{:else}
 										{@const cellVal = row.row_data[col.column_id]}
 										{#if col.name === 'Key'}

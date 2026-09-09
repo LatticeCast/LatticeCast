@@ -6,12 +6,26 @@ import type {
 	ColumnType,
 	Row
 } from '$lib/types/table';
+import {
+	formatTemporal,
+	fromInput,
+	temporalGroupKey,
+	toEpochMs,
+	type TemporalType
+} from '$lib/utils/temporal';
+import { currentZone } from '$lib/stores/settings.store';
+
+/** The column types whose cells hold an epoch-millisecond instant. */
+export function isTemporalType(type: ColumnType): type is TemporalType {
+	return type === 'date' || type === 'datetime';
+}
 
 export const COLUMN_TYPES = [
 	'text',
 	'string',
 	'number',
 	'date',
+	'datetime',
 	'select',
 	'tags',
 	'checkbox',
@@ -84,11 +98,16 @@ export function getItemKey(item: RenderItem): string {
 	return item.type + '-' + item.key;
 }
 
-export function getCellValue(row: { row_data: Record<string, unknown> }, colId: string): string {
+export function getCellValue(
+	row: { row_data: Record<string, unknown> },
+	colId: string,
+	colType?: ColumnType
+): string {
 	const val = row.row_data[colId];
 	if (val === null || val === undefined) return '';
 	if (typeof val === 'boolean') return val ? '✓' : '';
 	if (isBlobCellMetadata(val)) return val.filename;
+	if (colType && isTemporalType(colType)) return formatCellDate(val, colType);
 	return String(val);
 }
 
@@ -161,6 +180,7 @@ export function sortLabels(type: ColumnType): { asc: string; desc: string } {
 		case 'number':
 			return { asc: 'Ascending (1 → 9)', desc: 'Descending (9 → 1)' };
 		case 'date':
+		case 'datetime':
 			return { asc: 'Oldest first', desc: 'Newest first' };
 		case 'select':
 		case 'tags':
@@ -176,6 +196,7 @@ export function sortLabels(type: ColumnType): { asc: string; desc: string } {
 export function parseEditValue(editVal: string, colType: ColumnType): unknown {
 	if (colType === 'number') return editVal === '' ? null : Number(editVal);
 	if (colType === 'checkbox') return editVal === 'true';
+	if (isTemporalType(colType)) return fromInput(editVal, colType, currentZone());
 	if (editVal === '') return null;
 	return editVal;
 }
@@ -219,22 +240,16 @@ export function addTagToRowData(
 	return { ...rowData, [colId]: [...current, tag] };
 }
 
-export function formatDate(raw: string): string {
-	if (!raw) return '';
-	if (/^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?/.test(raw)) {
-		const normalized = raw.replace('T', ' ').replace(/(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/, '');
-		return normalized.length > 10 ? normalized.slice(0, 19) : normalized.slice(0, 10);
-	}
-	if (/^\d{14}$/.test(raw)) {
-		return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)} ${raw.slice(8, 10)}:${raw.slice(10, 12)}:${raw.slice(12, 14)}`;
-	}
-	if (/^\d{6}$/.test(raw)) {
-		return `20${raw.slice(0, 2)}-${raw.slice(2, 4)}-${raw.slice(4, 6)}`;
-	}
-	if (/^\d{8}$/.test(raw)) {
-		return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
-	}
-	return raw;
+/**
+ * Display text for a temporal cell, read in the user's configured zone.
+ *
+ * Replaces the old tolerant parser. That one accepted five shapes and passed
+ * anything else through unchanged, which is why an epoch-millisecond value
+ * rendered as the raw number 1798675200000 — thirteen digits matched none of
+ * its patterns and fell to `return raw`.
+ */
+export function formatCellDate(value: unknown, type: TemporalType = 'date'): string {
+	return formatTemporal(value, type, currentZone());
 }
 
 // ─── Filter / Sort / Group / Render ──────────────────────────────────────────
@@ -302,6 +317,22 @@ export function sortRows(
 			const cmp = getIdx(av) - getIdx(bv);
 			return dir === 'asc' ? cmp : -cmp;
 		}
+		if (sortCol && (isTemporalType(sortCol.type) || sortCol.type === 'number')) {
+			// Compare the instants. localeCompare with numeric:true happens to
+			// order equal-width epochs correctly, but not a negative one
+			// (pre-1970) against a positive, and not a 12-digit against a 13.
+			const an = sortCol.type === 'number' ? Number(av) : toEpochMs(av);
+			const bn = sortCol.type === 'number' ? Number(bv) : toEpochMs(bv);
+			const aMissing = an === null || an === undefined || Number.isNaN(an);
+			const bMissing = bn === null || bn === undefined || Number.isNaN(bn);
+			if (aMissing || bMissing) {
+				// Empty sorts last in both directions, so toggling never hides it.
+				const cmp = aMissing && bMissing ? 0 : aMissing ? 1 : -1;
+				return cmp;
+			}
+			const cmp = (an as number) - (bn as number);
+			return dir === 'asc' ? cmp : -cmp;
+		}
 		const as = av === null || av === undefined ? '' : String(av);
 		const bs = bv === null || bv === undefined ? '' : String(bv);
 		const cmp = as.localeCompare(bs, undefined, { numeric: true, sensitivity: 'base' });
@@ -312,9 +343,11 @@ export function sortRows(
 export function getGroupKey(row: Row, col: Column, granularity: 'month' | 'day' = 'month'): string {
 	const val = row.row_data[col.column_id];
 	if (val === null || val === undefined || val === '') return '(empty)';
-	if (col.type === 'date') {
-		const normalized = formatDate(String(val));
-		return granularity === 'month' ? normalized.slice(0, 7) : normalized.slice(0, 10);
+	if (isTemporalType(col.type)) {
+		// Bucket on the instant, in the reader's zone. The old code sliced the
+		// display string, which on an epoch number yielded '1798675200' as a
+		// "month".
+		return temporalGroupKey(val, granularity, currentZone()) || '(empty)';
 	}
 	return String(val);
 }
@@ -404,6 +437,9 @@ export function buildCSV(colList: Column[], rowList: Row[]): string {
 					const val = row.row_data[col.column_id];
 					if (val === null || val === undefined) return '';
 					if (Array.isArray(val)) return escapeCSV(val.join(','));
+					// Export the readable instant, not the epoch integer — a CSV
+					// full of 1798675200000 is not something a person can use.
+					if (isTemporalType(col.type)) return escapeCSV(formatCellDate(val, col.type));
 					return escapeCSV(String(val));
 				})
 				.join(',')
@@ -416,7 +452,10 @@ export function buildExportJSON(colList: Column[], rowList: Row[]): string {
 	const cols = colList;
 	const data = rowList.map((row) => {
 		const obj: Record<string, unknown> = {};
-		for (const col of cols) obj[col.name] = row.row_data[col.column_id] ?? null;
+		for (const col of cols) {
+			const val = row.row_data[col.column_id] ?? null;
+			obj[col.name] = val !== null && isTemporalType(col.type) ? formatCellDate(val, col.type) : val;
+		}
 		return obj;
 	});
 	return JSON.stringify(data, null, 2);

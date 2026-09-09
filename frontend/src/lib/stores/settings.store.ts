@@ -3,23 +3,34 @@
 import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { authStore } from '$lib/stores/auth.store';
+import { browserZone } from '$lib/utils/temporal';
 
 export type SpeechLang = 'zh-TW' | 'en-US' | 'ja-JP';
 
 export interface Settings {
 	// Server-backed — mirrored into public.user_info.config
 	darkMode: boolean;
+	// IANA zone name. Server times are UTC instants with no zone, so this is
+	// what every date and datetime cell is read and written through. It is
+	// per-user rather than per-device on purpose: the same board must read the
+	// same way on a laptop and on a phone in another country.
+	timezone: string;
 	// Local-only — single-device preferences
 	speechLang: SpeechLang;
 	notificationEnabled: boolean;
 	notificationIntervalMinutes: number;
 }
 
+/** Server-backed keys, in the shape `PATCH /login/me/config` expects. */
+const SERVER_KEYS = ['darkMode', 'timezone'] as const;
+type ServerKey = (typeof SERVER_KEYS)[number];
+
 const SAVE_FILE = 'settings.save';
 const PATCH_DEBOUNCE_MS = 250;
 
 const defaultSettings: Settings = {
 	darkMode: false,
+	timezone: browserZone(),
 	speechLang: 'zh-TW',
 	notificationEnabled: false,
 	notificationIntervalMinutes: 60
@@ -37,9 +48,9 @@ function loadSync(): Settings {
 
 export const settingsStore = writable<Settings>(loadSync());
 
-// Last-known server state of darkMode. Used to detect drift from local edits
-// so we only PATCH when the user actually toggles.
-let serverDarkMode: boolean | undefined;
+// Last-known server state of the server-backed keys. Used to detect drift
+// from local edits so we only PATCH what the user actually changed.
+let serverState: Partial<Record<ServerKey, unknown>> = {};
 
 let patchTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -54,7 +65,11 @@ async function flushPatch() {
 	if (!auth?.accessToken) return;
 
 	const current = get(settingsStore);
-	if (current.darkMode === serverDarkMode) return;
+	const drifted: Record<string, unknown> = {};
+	for (const key of SERVER_KEYS) {
+		if (current[key] !== serverState[key]) drifted[key] = current[key];
+	}
+	if (Object.keys(drifted).length === 0) return;
 
 	try {
 		const res = await fetch('/api/v1/login/me/config', {
@@ -63,11 +78,11 @@ async function flushPatch() {
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${auth.accessToken}`
 			},
-			body: JSON.stringify({ darkMode: current.darkMode })
+			body: JSON.stringify(drifted)
 		});
 		if (res.ok) {
 			const next = (await res.json()) as Record<string, unknown>;
-			serverDarkMode = typeof next.darkMode === 'boolean' ? next.darkMode : undefined;
+			for (const key of SERVER_KEYS) serverState[key] = next[key];
 		}
 	} catch {
 		// best-effort — the next change will retry
@@ -92,10 +107,27 @@ if (browser) {
  */
 export function hydrateFromServer(serverConfig: Record<string, unknown> | null | undefined) {
 	if (!serverConfig) return;
-	const incomingDark =
-		typeof serverConfig.darkMode === 'boolean' ? (serverConfig.darkMode as boolean) : undefined;
-	serverDarkMode = incomingDark;
-	if (incomingDark !== undefined) {
-		settingsStore.update((s) => ({ ...s, darkMode: incomingDark }));
+	serverState = {};
+	const patch: Partial<Settings> = {};
+
+	const incomingDark = serverConfig.darkMode;
+	if (typeof incomingDark === 'boolean') {
+		serverState.darkMode = incomingDark;
+		patch.darkMode = incomingDark;
 	}
+
+	const incomingZone = serverConfig.timezone;
+	if (typeof incomingZone === 'string' && incomingZone) {
+		serverState.timezone = incomingZone;
+		patch.timezone = incomingZone;
+	}
+
+	if (Object.keys(patch).length > 0) {
+		settingsStore.update((s) => ({ ...s, ...patch }));
+	}
+}
+
+/** The zone every temporal cell is read and written through. */
+export function currentZone(): string {
+	return get(settingsStore).timezone || browserZone();
 }

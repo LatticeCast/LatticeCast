@@ -1,15 +1,46 @@
+import { DateTime } from 'luxon';
 import type { Column, Row } from '$lib/types/table';
-import { getChoices, formatDate } from './table.utils';
+import { getChoices } from './table.utils';
+import { toEpochMs } from '$lib/utils/temporal';
+import { currentZone } from '$lib/stores/settings.store';
 
 export type Granularity = 'day' | 'week' | 'month';
 
 export const GRANULARITIES: Granularity[] = ['day', 'week', 'month'];
 
+/**
+ * A cell's instant as a Date whose LOCAL calendar fields are the ones the
+ * user's configured zone would show.
+ *
+ * Everything below this line does date arithmetic with the local getters
+ * (getFullYear/getMonth/getDate), so handing it a plain `new Date(ms)` would
+ * mix two zones: the instant would be read in the browser's zone while the
+ * column headers were built from the same getters. Shifting the fields once,
+ * here, makes the whole file agree on one zone without rewriting its
+ * arithmetic.
+ *
+ * The previous version parsed `formatDate(...).slice(0, 10)` — which on an
+ * epoch-millisecond value produced '1798675200', an invalid Date, so no bar
+ * rendered at all.
+ */
 export function parseTimelineDate(raw: unknown): Date | null {
-	if (!raw) return null;
-	const normalized = formatDate(String(raw));
-	const d = new Date(normalized.slice(0, 10));
-	return isNaN(d.getTime()) ? null : d;
+	const ms = toEpochMs(raw);
+	if (ms === null) return null;
+	const shifted = DateTime.fromMillis(ms, { zone: currentZone() }).setZone('local', {
+		keepLocalTime: true
+	});
+	return shifted.isValid ? shifted.toJSDate() : null;
+}
+
+/**
+ * `YYYY-MM-DD` from a Date produced by parseTimelineDate.
+ *
+ * Reads the LOCAL fields, because that is where parseTimelineDate put the
+ * user's zone. toISOString() would convert back to real UTC and land on the
+ * neighbouring day for anyone east or west of it.
+ */
+export function formatBarDate(d: Date): string {
+	return DateTime.fromJSDate(d).toFormat('yyyy-MM-dd');
 }
 
 export function generateTimeColumns(start: Date, end: Date, gran: Granularity): Date[] {

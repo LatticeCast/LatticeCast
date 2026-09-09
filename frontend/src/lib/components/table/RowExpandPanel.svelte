@@ -6,7 +6,8 @@
 		getChoiceColor,
 		colorToStyle,
 		getTagValues,
-		formatDate,
+		formatCellDate,
+		isTemporalType,
 		formatBlobSize,
 		getBlobCellMetadata,
 		applyEditToRowData,
@@ -389,10 +390,10 @@
 								{/if}
 							</button>
 						{/if}
-					{:else if col.type === 'date'}
+					{:else if isTemporalType(col.type)}
 						{#if editField === col.column_id}
 							<input
-								type="date"
+								type={col.type === 'date' ? 'date' : 'datetime-local'}
 								class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder} focus:ring-blue-500"
 								bind:value={editVal}
 								onblur={() => commitEdit(col)}
@@ -403,9 +404,7 @@
 								autofocus
 							/>
 						{:else}
-							{@const dateVal = localRow.row_data[col.column_id]
-								? formatDate(String(localRow.row_data[col.column_id]))
-								: ''}
+							{@const dateVal = formatCellDate(localRow.row_data[col.column_id], col.type)}
 							<button
 								class="flex min-h-[2.25rem] w-full items-center rounded-xl border px-3 py-2 text-left font-mono text-sm {T.inputBorder} hover:border-blue-400"
 								onclick={() => startEdit(col)}

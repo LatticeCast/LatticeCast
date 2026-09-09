@@ -4,7 +4,12 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { fetchTable, fetchRows, fetchDoc, saveDoc, createRow } from '$lib/backend/tables';
-	import { getChoiceColor, getTagValues, formatDate } from '$lib/components/table/table.utils';
+	import {
+		getChoiceColor,
+		getTagValues,
+		formatCellDate,
+		isTemporalType
+	} from '$lib/components/table/table.utils';
 	import { BRAND } from '$lib/UI/brand';
 	import type { Row, Table } from '$lib/types/table';
 	import { marked } from 'marked';
@@ -137,12 +142,12 @@
 									{tag}
 								</span>
 							{/each}
-						{:else if col.type === 'date'}
+						{:else if isTemporalType(col.type)}
 							<span
 								class="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs text-gray-600"
 							>
 								<span class="font-normal text-gray-400">{col.name}:</span>
-								{formatDate(String(val))}
+								{formatCellDate(val, col.type)}
 							</span>
 						{:else if col.type === 'url'}
 							<!-- skip URL badges — shown in doc or fields section -->

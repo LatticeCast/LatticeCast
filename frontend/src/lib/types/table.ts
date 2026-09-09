@@ -13,6 +13,7 @@ export type ColumnType =
 	| 'string'
 	| 'number'
 	| 'date'
+	| 'datetime'
 	| 'select'
 	| 'tags'
 	| 'checkbox'

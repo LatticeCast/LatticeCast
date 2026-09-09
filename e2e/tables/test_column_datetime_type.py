@@ -208,17 +208,23 @@ def test_datetime_column_type(authed_page, workspace, admin_token, snapshot):
     )
     print(f"[ok] UI: column header {DT_COL!r} rendered")
 
-    # The datetime cell itself must render the stored value. The frontend
-    # has no datetime renderer yet (story-54 keeps that in the frontend
-    # epic), so it falls through to the raw epoch-millisecond number --
-    # assert the cell carries the value rather than a specific format.
+    # The datetime cell must render a readable instant, never the stored
+    # integer. The exact text depends on the viewer's configured zone, so
+    # assert the SHAPE (YYYY-MM-DD HH:mm) and the absence of the raw number
+    # rather than one zone's answer.
     row_sel = f'[data-testid="grid-row-{row_id}"]'
     page.wait_for_selector(row_sel, state="visible", timeout=10000)
     page.wait_for_function(
-        f'document.querySelector({row_sel!r})?.innerText.includes("{DT_MS}")',
+        "sel => /\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}/.test("
+        "document.querySelector(sel)?.innerText ?? '')",
+        arg=row_sel,
         timeout=5000,
     )
-    print(f"[ok] UI: datetime cell renders the stored value {DT_MS}")
+    shown = page.inner_text(row_sel)
+    assert str(DT_MS) not in shown, (
+        f"datetime cell leaked the raw epoch value {DT_MS} into the UI: {shown!r}"
+    )
+    print("[ok] UI: datetime cell renders a formatted instant, not the epoch integer")
 
     snap(page, "dt_01_datetime_column", snapshot)
 
