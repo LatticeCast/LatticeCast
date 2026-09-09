@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.61.0 — 2026-09-09 (UTC temporal data and authorization hardening)
+
+- Made the PostgreSQL temporal-data contract explicit: ordinary RDS columns
+  use UTC `timestamp` values, while JSONB date and datetime cells use
+  epoch-millisecond numbers. Added normalization, validation, and timezone
+  round-trip coverage.
+- Replaced per-row workspace permission predicates with set-based RLS
+  policies, removed obsolete unsafe index-helper overloads, and made row ID
+  allocation atomic.
+- Added `datetime` support to the LatticeQL integration, including
+  epoch-millisecond-aware `bucket()` SQL generation.
+- Hardened workspace membership and authorization routes, mapping expected
+  PostgreSQL authorization failures to client errors rather than HTTP 500.
+- Restored the legacy index-name helper for existing migrations and expanded
+  table, auth, announcement, and timezone E2E coverage.
+
 ## v0.60.0 — 2026-09-05 (storage-backed blob cells)
 
 - Replaced legacy `doc` columns with one-file storage-backed `blob` cells:
