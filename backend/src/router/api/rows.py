@@ -9,6 +9,7 @@ from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from fastapi.responses import PlainTextResponse, StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
@@ -18,6 +19,7 @@ from models.row import Row, RowCreate, RowPut, RowResponse, RowUpdate
 from models.user import User
 from repository.row import RowRepository
 from repository.table_view import TableViewRepository
+from util.pg_errors import http_error_for
 
 from .tables._shared import _get_table_for_member
 
@@ -201,14 +203,19 @@ async def create_row(
     table = await _get_table_for_member(table_id, user, session)
 
     repo = RowRepository(session)
-    row = await repo.create(
-        workspace_id=table.workspace_id,
-        table_id=table.table_id,
-        row_data=data.row_data,
-        created_by=user.user_id,
-        updated_by=user.user_id,
-    )
-    return row
+    try:
+        # A raw INSERT still passes through trg_rows_canonical_ts (V49), so a
+        # bad timestamp is rejected here too, not only on patch/put.
+        return await repo.create(
+            workspace_id=table.workspace_id,
+            table_id=table.table_id,
+            row_data=data.row_data,
+            created_by=user.user_id,
+            updated_by=user.user_id,
+        )
+    except DBAPIError as exc:
+        await session.rollback()
+        raise (http_error_for(exc) or exc) from exc
 
 
 @router.get("/tables/{table_id}/rows", response_model=list[RowResponse])
@@ -276,7 +283,11 @@ async def patch_row(
     row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-    return await repo.patch_row(row=row, data=data, updated_by=user.user_id)
+    try:
+        return await repo.patch_row(row=row, data=data, updated_by=user.user_id)
+    except DBAPIError as exc:
+        await session.rollback()
+        raise (http_error_for(exc) or exc) from exc
 
 
 @router.put("/tables/{table_id}/rows/{row_id}", response_model=RowResponse)
@@ -293,7 +304,11 @@ async def put_row(
     row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-    return await repo.put_row(row=row, data=data, updated_by=user.user_id)
+    try:
+        return await repo.put_row(row=row, data=data, updated_by=user.user_id)
+    except DBAPIError as exc:
+        await session.rollback()
+        raise (http_error_for(exc) or exc) from exc
 
 
 @router.get("/tables/{table_id}/rows/{row_id}/doc", response_class=PlainTextResponse)
