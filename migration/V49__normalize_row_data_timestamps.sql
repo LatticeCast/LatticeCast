@@ -275,44 +275,6 @@ BEGIN
 END;
 $$;
 
--- ── Backfill existing cells ──────────────────────────────────────────────
--- Fail closed. If a legacy cell cannot be parsed, _parse_legacy_ts_ms
--- raises with the offending text and the whole migration aborts. That is
--- deliberate: silently coercing an unreadable value to NULL would
--- destroy data, and this project already has one data-destruction
--- incident on record (2026-05-15, see the db-sql skill).
-
-DO $$
-DECLARE
-    r RECORD;
-BEGIN
-    FOR r IN
-        SELECT table_data.workspace_id,
-               table_data.table_id,
-               column_data ->> 'column_id' AS column_id,
-               column_data ->> 'type'      AS col_type
-        FROM   public.tables AS table_data
-        CROSS JOIN LATERAL
-            jsonb_array_elements(table_data.config -> 'columns') AS column_data
-        WHERE  column_data ->> 'type' IN ('date', 'datetime')
-    LOOP
-        UPDATE public.rows
-        SET    row_data = jsonb_set(
-                   row_data,
-                   ARRAY[r.column_id],
-                   public.to_canonical_epoch_ms(
-                       row_data -> r.column_id,
-                       r.col_type
-                   ),
-                   TRUE
-               )
-        WHERE  workspace_id = r.workspace_id
-        AND    table_id     = r.table_id
-        AND    row_data ? r.column_id;
-    END LOOP;
-END;
-$$;
-
 -- ── The invariant belongs to the table, not to two functions ───────────
 -- patch_row_data and put_row_data are not the only way row_data is
 -- written. RowRepository.create() (repository/row.py:29-38) issues a
@@ -371,6 +333,46 @@ REVOKE ALL    ON
     FUNCTION public.trg_canonical_row_data_ts_fn() FROM public;
 GRANT EXECUTE ON
     FUNCTION public.trg_canonical_row_data_ts_fn() TO app, mgr;
+
+-- ── Backfill existing cells ──────────────────────────────────────────────
+-- The trigger is installed before the backfill.  RowRepository.create()
+-- bypasses patch_row_data()/put_row_data(), so installing it afterwards
+-- leaves a race in which a raw INSERT can reintroduce a legacy string before
+-- the epoch index is built.
+--
+-- Fail closed: an unparseable legacy cell aborts the whole migration rather
+-- than silently coercing data to NULL.
+
+DO $$
+DECLARE
+    r RECORD;
+BEGIN
+    FOR r IN
+        SELECT table_data.workspace_id,
+               table_data.table_id,
+               column_data ->> 'column_id' AS column_id,
+               column_data ->> 'type'      AS col_type
+        FROM   public.tables AS table_data
+        CROSS JOIN LATERAL
+            jsonb_array_elements(table_data.config -> 'columns') AS column_data
+        WHERE  column_data ->> 'type' IN ('date', 'datetime')
+    LOOP
+        UPDATE public.rows
+        SET    row_data = jsonb_set(
+                   row_data,
+                   ARRAY[r.column_id],
+                   public.to_canonical_epoch_ms(
+                       row_data -> r.column_id,
+                       r.col_type
+                   ),
+                   TRUE
+               )
+        WHERE  workspace_id = r.workspace_id
+        AND    table_id     = r.table_id
+        AND    row_data ? r.column_id;
+    END LOOP;
+END;
+$$;
 
 -- ── Rebuild existing date/datetime indexes onto the epoch integer ───────
 
