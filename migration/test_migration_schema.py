@@ -75,6 +75,29 @@ def verify(psql_fn) -> list[str]:
     """Run schema checks. Returns list of error strings (empty = pass)."""
     errors: list[str] = []
 
+    # V56: central SSO state is durable private data. In particular, sessions
+    # and grants must never inherit V31's UNLOGGED cache durability profile.
+    for relation in (
+        "sso_clients",
+        "sso_client_redirect_uris",
+        "sso_sessions",
+        "sso_authorization_codes",
+        "sso_refresh_tokens",
+    ):
+        result = psql_fn(
+            "SELECT relpersistence FROM pg_class "
+            "WHERE oid = "
+            f"'private.{relation}'::regclass;"
+        ).strip()
+        if result != "p":
+            errors.append(f"MISSING/UNLOGGED SSO TABLE: private.{relation} (V56)")
+
+    result = psql_fn(
+        "SELECT has_table_privilege('app', 'private.sso_sessions', 'SELECT');"
+    ).strip()
+    if result != "f":
+        errors.append("APP CAN READ CENTRAL SSO SESSIONS (V56)")
+
     # Check schemas exist
     schemas_raw = psql_fn(
         "SELECT schema_name FROM information_schema.schemata "

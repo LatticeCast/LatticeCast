@@ -123,6 +123,10 @@ class AppSettings(BaseSettings):
     jwt_secret_key: str = Field(default="", alias="JWT_SECRET_KEY", description="Signs self-issued JWTs")
     jwt_expire_minutes: int = Field(default=1440, alias="JWT_EXPIRE_MINUTES")
 
+    # Central SSO browser-session cookie. Keep Secure in every deployed
+    # environment; local HTTP compose explicitly sets this to false.
+    sso_cookie_secure: bool = Field(default=True, alias="SSO_COOKIE_SECURE")
+
     # Nested settings
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     google: GoogleOAuthSettings = Field(default_factory=GoogleOAuthSettings)

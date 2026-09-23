@@ -7,7 +7,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,7 @@ from middleware.token import create_access_token
 from models.user import User, UserPassword
 from models.user import UserInfo as UserInfoModel
 from repository.user import UserRepository, resolve_user_by_email
+from router.api.sso import create_browser_session, set_browser_session_cookie
 from util.security import hash_password, verify_password
 
 router = APIRouter(prefix="/login", tags=["auth"])
@@ -103,6 +104,7 @@ class MeResponse(BaseModel):
 )
 async def password_login(
     request: PasswordLoginRequest,
+    response: Response,
     login_session: AsyncSession = Depends(get_login_session),
 ) -> TokenResponse:
     """Username+password login. Resolves the user by user_name or email and
@@ -139,6 +141,8 @@ async def password_login(
     name = info.user_name if info else ident
 
     access_token, expires_in = create_access_token(str(user.user_id))
+    sso_token, sso_max_age = await create_browser_session(login_session, user.user_id, "password")
+    set_browser_session_cookie(response, sso_token, sso_max_age)
 
     return TokenResponse(
         access_token=access_token,
