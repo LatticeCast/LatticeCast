@@ -9,6 +9,7 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from __version__ import __version__
 from config.settings import settings
 from config.storage import ensure_bucket_exists
 from core.db import close_db, init_db
@@ -96,7 +97,7 @@ A `blob` column holds exactly one object. Its `options.kind` is a picker/renderi
 
 Use the **rows** tag for the exact upload, download, document, and delete contracts. Legacy `/doc` and `/col-doc` routes remain for compatibility; new clients should use addressed blob routes.
     """,
-    version="0.62.0",
+    version=__version__,
     contact={
         "name": "Lattice Cast Team",
         "url": "https://lattice-cast.posetmage.com",

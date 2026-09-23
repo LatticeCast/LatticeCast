@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.63.0 — 2026-09-24 (SSO issuer and safe epoch indexes)
+
+- Added the first-party SSO issuer: registered clients, short-lived one-time
+  authorization codes, browser PKCE, confidential App handoff, and central
+  browser-session revocation.
+- Added V57 safe epoch-millisecond index expressions without modifying the
+  already-applied V49 migration.
+
 ## v0.62.0 — 2026-09-09 (Hive verification reliability)
 
 - Updated the Agentic Hive skill with a programmatic pre-merge verification
