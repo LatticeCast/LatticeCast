@@ -13,7 +13,7 @@ from typing import Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import UUID
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -55,6 +55,16 @@ def _redirect_with_code(uri: str, code: str, state: str | None) -> str:
     if state is not None:
         query.append(("state", state))
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), ""))
+
+
+def _redirect_with_handoff(uri: str, ticket: str) -> str:
+    parts = urlsplit(uri)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, f"handoff={ticket}"))
+
+
+def _origin(uri: str) -> str:
+    parts = urlsplit(uri)
+    return f"{parts.scheme}://{parts.netloc}"
 
 
 async def create_browser_session(session: AsyncSession, user_id: UUID, auth_method: str) -> tuple[str, int]:
@@ -107,6 +117,22 @@ async def _registered_client(session: AsyncSession, client_id: str, redirect_uri
     return dict(row)
 
 
+async def _default_client(session: AsyncSession, client_id: str) -> dict:
+    result = await session.execute(
+        text(
+            "SELECT c.client_id, c.client_kind, c.client_secret_hash, r.redirect_uri "
+            "FROM private.sso_clients c "
+            "JOIN private.sso_client_redirect_uris r USING (client_id) "
+            "WHERE c.client_id = :client_id AND c.is_active AND r.is_default"
+        ),
+        {"client_id": client_id},
+    )
+    row = result.mappings().one_or_none()
+    if not row:
+        raise HTTPException(status_code=400, detail="Unknown client_id or no default redirect_uri")
+    return dict(row)
+
+
 async def _issue_code(
     session: AsyncSession,
     *,
@@ -115,6 +141,7 @@ async def _issue_code(
     redirect_uri: str,
     session_token: str | None,
     code_challenge: str | None,
+    flow_type: str = "authorization_code",
 ) -> str:
     raw_code = secrets.token_urlsafe(32)
     session_id = None
@@ -127,8 +154,8 @@ async def _issue_code(
     await session.execute(
         text(
             "INSERT INTO private.sso_authorization_codes "
-            "(code_hash, client_id, user_id, session_id, redirect_uri, code_challenge, code_challenge_method, expires_at) "
-            "VALUES (:code_hash, :client_id, :user_id, :session_id, :redirect_uri, :code_challenge, :method, :expires_at)"
+            "(code_hash, client_id, user_id, session_id, redirect_uri, code_challenge, code_challenge_method, flow_type, expires_at) "
+            "VALUES (:code_hash, :client_id, :user_id, :session_id, :redirect_uri, :code_challenge, :method, :flow_type, :expires_at)"
         ),
         {
             "code_hash": _hash(raw_code),
@@ -138,6 +165,7 @@ async def _issue_code(
             "redirect_uri": redirect_uri,
             "code_challenge": code_challenge,
             "method": "S256" if code_challenge else None,
+            "flow_type": flow_type,
             "expires_at": _now() + CODE_TTL,
         },
     )
@@ -162,12 +190,16 @@ class TokenResponse(BaseModel):
 
 class HandoffRequest(BaseModel):
     client_id: str = Field(min_length=1, max_length=128)
-    redirect_uri: str = Field(min_length=1, max_length=2048)
 
 
 class HandoffResponse(BaseModel):
-    redirect_url: str
+    launch_url: str
     expires_in: int
+
+
+class BrowserTokenRequest(BaseModel):
+    handoff_ticket: str = Field(min_length=20, max_length=512)
+    client_id: str = Field(min_length=1, max_length=128)
 
 
 class ClientCreateRequest(BaseModel):
@@ -223,10 +255,10 @@ async def create_client(
         for uri in request.redirect_uris:
             await session.execute(
                 text(
-                    "INSERT INTO private.sso_client_redirect_uris (client_id, redirect_uri) "
-                    "VALUES (:client_id, :redirect_uri)"
+                    "INSERT INTO private.sso_client_redirect_uris (client_id, redirect_uri, is_default) "
+                    "VALUES (:client_id, :redirect_uri, :is_default)"
                 ),
-                {"client_id": request.client_id, "redirect_uri": uri},
+                {"client_id": request.client_id, "redirect_uri": uri, "is_default": uri == request.redirect_uris[0]},
             )
         await session.commit()
     except IntegrityError as exc:
@@ -282,22 +314,81 @@ async def handoff(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_login_session),
 ) -> HandoffResponse:
-    """App bearer token → code for a confidential first-party web backend."""
-    client = await _registered_client(session, request.client_id, request.redirect_uri)
-    if client["client_kind"] != "confidential":
-        raise HTTPException(status_code=400, detail="Native handoff requires a confidential client")
+    """App bearer token → Lattice Cast launch URL for a public static client."""
+    client = await _default_client(session, request.client_id)
+    if client["client_kind"] != "public":
+        raise HTTPException(status_code=400, detail="Native handoff requires a public client")
     code = await _issue_code(
         session,
         user_id=user.user_id,
         client_id=request.client_id,
-        redirect_uri=request.redirect_uri,
+        redirect_uri=client["redirect_uri"],
         session_token=None,
         code_challenge=None,
+        flow_type="native_launch",
     )
     return HandoffResponse(
-        redirect_url=_redirect_with_code(request.redirect_uri, code, None),
+        launch_url=f"{settings.sso_issuer_url.rstrip('/')}/api/v1/sso/launch?ticket={code}",
         expires_in=int(CODE_TTL.total_seconds()),
     )
+
+
+@router.get("/launch", response_class=RedirectResponse, status_code=303)
+async def launch(ticket: str = Query(min_length=20, max_length=512), session: AsyncSession = Depends(get_login_session)) -> RedirectResponse:
+    """Consume an App launch ticket and redirect with a new fragment-only browser ticket."""
+    now = _now()
+    result = await session.execute(
+        text(
+            "UPDATE private.sso_authorization_codes SET consumed_at = :now "
+            "WHERE code_hash = :code_hash AND flow_type = 'native_launch' "
+            "AND consumed_at IS NULL AND expires_at > :now "
+            "RETURNING user_id, client_id, redirect_uri"
+        ),
+        {"now": now, "code_hash": _hash(ticket)},
+    )
+    launch_code = result.mappings().one_or_none()
+    if not launch_code:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail="Invalid, expired, or already-used launch ticket")
+    browser_ticket = await _issue_code(
+        session,
+        user_id=launch_code["user_id"],
+        client_id=launch_code["client_id"],
+        redirect_uri=launch_code["redirect_uri"],
+        session_token=None,
+        code_challenge=None,
+        flow_type="browser_exchange",
+    )
+    return RedirectResponse(_redirect_with_handoff(launch_code["redirect_uri"], browser_ticket), status_code=303)
+
+
+@router.post("/browser-token", response_model=TokenResponse)
+async def browser_token(
+    payload: BrowserTokenRequest,
+    request: Request,
+    session: AsyncSession = Depends(get_login_session),
+) -> TokenResponse:
+    """Atomically exchange a fragment-only native handoff ticket for a short-lived JWT."""
+    client = await _default_client(session, payload.client_id)
+    if request.headers.get("origin") != _origin(client["redirect_uri"]):
+        raise HTTPException(status_code=403, detail="Origin is not registered for this client")
+    now = _now()
+    result = await session.execute(
+        text(
+            "UPDATE private.sso_authorization_codes SET consumed_at = :now "
+            "WHERE code_hash = :code_hash AND flow_type = 'browser_exchange' "
+            "AND client_id = :client_id AND redirect_uri = :redirect_uri "
+            "AND consumed_at IS NULL AND expires_at > :now RETURNING user_id"
+        ),
+        {"now": now, "code_hash": _hash(payload.handoff_ticket), "client_id": payload.client_id, "redirect_uri": client["redirect_uri"]},
+    )
+    ticket = result.mappings().one_or_none()
+    if not ticket:
+        await session.rollback()
+        raise HTTPException(status_code=400, detail="Invalid, expired, or already-used browser ticket")
+    await session.commit()
+    access_token, expires_in = create_access_token(str(ticket["user_id"]), expires_minutes=5)
+    return TokenResponse(access_token=access_token, expires_in=expires_in, user_id=ticket["user_id"])
 
 
 @router.post("/token", response_model=TokenResponse)

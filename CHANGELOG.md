@@ -1,21 +1,24 @@
 # Changelog
 
-## v0.63.0 — 2026-09-24 (SSO issuer and safe epoch indexes)
+## 0.63 — 2026-09-24 (SSO issuer and safe epoch indexes)
 
 - Added the first-party SSO issuer: registered clients, short-lived one-time
   authorization codes, browser PKCE, confidential App handoff, and central
   browser-session revocation.
 - Added V57 safe epoch-millisecond index expressions without modifying the
   already-applied V49 migration.
+- Added V58 native handoff tickets: App-authenticated launch, database-owned
+  default callbacks, fragment-only browser tickets, exact-Origin exchange,
+  and short-lived browser JWTs without m-site serverless backends.
 
-## v0.62.0 — 2026-09-09 (Hive verification reliability)
+## 0.62 — 2026-09-09 (Hive verification reliability)
 
 - Updated the Agentic Hive skill with a programmatic pre-merge verification
   gate, retry-safe PM status updates, and explicit commit-failure recovery.
 - Corrected skills discovery from story worktrees and initialized optional
   story dependency state safely under `set -u`.
 
-## v0.61.0 — 2026-09-09 (UTC temporal data and authorization hardening)
+## 0.61 — 2026-09-09 (UTC temporal data and authorization hardening)
 
 - Made the PostgreSQL temporal-data contract explicit: ordinary RDS columns
   use UTC `timestamp` values, while JSONB date and datetime cells use
@@ -31,7 +34,7 @@
 - Restored the legacy index-name helper for existing migrations and expanded
   table, auth, announcement, and timezone E2E coverage.
 
-## v0.60.0 — 2026-09-05 (storage-backed blob cells)
+## 0.60 — 2026-09-05 (storage-backed blob cells)
 
 - Replaced legacy `doc` columns with one-file storage-backed `blob` cells:
   `doc`, `table`, `image`, and arbitrary `file`/binary content.
@@ -44,7 +47,7 @@
 - Compact LLM/PM/hive documentation and bump frontend, backend, E2E, and
   OpenAPI metadata to `0.60.0`.
 
-## v0.53 — 2026-05-27 (default_view restore + FK cascade)
+## 0.53 — 2026-05-27 (default_view restore + FK cascade)
 
 - Fix: `default_view` not restoring after navigation — async path now
   reads `get(defaultView)` store instead of stale cached object.
@@ -59,7 +62,7 @@
 - Store cleanup: `applySchema` single write path, `patchSchema` route
   simplified to `PATCH /tables/{tid}`.
 
-## v0.52 — 2026-05-25 (Root auth gate + layout split)
+## 0.52 — 2026-05-25 (Root auth gate + layout split)
 
 - Auth centralized in root `+layout.ts` — removed scattered per-page
   guards.
@@ -70,7 +73,7 @@
   `onFilterConditionEdited()`.
 - Pretty workspace URLs via `history.replaceState`.
 
-## v0.51 — 2026-05-25 (Workflow view)
+## 0.51 — 2026-05-25 (Workflow view)
 
 - Workflow view: rows render as SvelteFlow nodes, edges from
   `nexts`/`true_next`/`false_next`, graph selector filters by
@@ -81,7 +84,7 @@
 - V27: `_seed_workflow` template (9 columns + Workflow view).
 - `POST /tables/template/{kind}` replaces per-template endpoints.
 
-## v0.50 — 2026-05-25 (UV images + docker log rotation + ws-id testids)
+## 0.50 — 2026-05-25 (UV images + docker log rotation + ws-id testids)
 
 - Backend & e2e Dockerfiles rebased on the official
   `ghcr.io/astral-sh/uv` image; reproducible installs from `uv.lock`,
@@ -92,10 +95,10 @@
   `scalar_one_or_none`).
 - Sidebar workspace `data-testid` keyed on `workspace_id` so renames
   don't break selectors.
-- `developing-svelte` skill → v0.10.0 (BE-SSOT / FE-cache framing,
+- `developing-svelte` skill → 0.10.0 (BE-SSOT / FE-cache framing,
   e2e-first testing).
 
-## v0.49 — 2026-05-21 (table page load + e2e fixes)
+## 0.49 — 2026-05-21 (table page load + e2e fixes)
 
 ### Frontend — table page `+page.ts` load function
 
@@ -139,7 +142,7 @@
   `history.replaceState` navigation. Replaced with Playwright's
   `expect(page).to_have_url(re.compile(...))` which polls the URL.
 
-## v0.48 — 2026-05-21 (reduce $effect + default view fix)
+## 0.48 — 2026-05-21 (reduce $effect + default view fix)
 
 ### Frontend — reduce `$effect`, use `$derived` from SSOT stores
 
@@ -190,20 +193,20 @@
 
 ### Infrastructure
 
-- **claude-bot v0.35.3 — dead worker window detection.** Orchestrator
+- **claude-bot 0.35.3 — dead worker window detection.** Orchestrator
   `wait_finish()` checks every 30s if tmux worker windows still exist.
   If all workers died (watchdog kill, crash), resets stuck
   `in_progress`/`testing` tickets to `todo` immediately instead of
   burning the full 900s timeout.
 
-- **developing-svelte v0.8.0** — added e2e testing guidance, snapshot
+- **developing-svelte 0.8.0** — added e2e testing guidance, snapshot
   verification rules.
 
 - **e2e directory renamed** from `test-e2e/` to `e2e/`.
 
 - **Backend Dockerfile** — `UV_LINK_MODE=copy` for IPv6 compatibility.
 
-## v0.47 — 2026-05-20 (sidebar preload + data recovery)
+## 0.47 — 2026-05-20 (sidebar preload + data recovery)
 
 ### Performance — first-table-click latency removed
 
@@ -255,7 +258,7 @@
   `kanban-card-fields-btn` doesn't show after creating a kanban
   view (real UI bug, not flake).
 
-## v0.46 — 2026-05-17 (pytest migration + E2E fixes + Hide Fields removed)
+## 0.46 — 2026-05-17 (pytest migration + E2E fixes + Hide Fields removed)
 
 ### E2E Tests — pytest migration
 
@@ -303,7 +306,7 @@
 
 ---
 
-## v0.45 — 2026-05-17 (Merge table_schemas + FE store split + color unification)
+## 0.45 — 2026-05-17 (Merge table_schemas + FE store split + color unification)
 
 ### Database
 
@@ -338,7 +341,7 @@
 
 ---
 
-## v0.44 — 2026-05-17 (Dashboard view + row handler cleanup)
+## 0.44 — 2026-05-17 (Dashboard view + row handler cleanup)
 
 ### Frontend
 
@@ -374,7 +377,7 @@
 
 ---
 
-## v0.43 — 2026-05-17 (FE MVC refactor + BE table-create fix)
+## 0.43 — 2026-05-17 (FE MVC refactor + BE table-create fix)
 
 ### Frontend — MVC SSOT architecture
 
@@ -440,7 +443,7 @@
   detection (`wait_until="commit"` + `wait_for_url` instead of
   `networkidle`).
 
-## v0.42 — 2026-05-15 (date-index fix + modular e2e + docs catch-up)
+## 0.42 — 2026-05-15 (date-index fix + modular e2e + docs catch-up)
 
 ### Migration
 
@@ -464,7 +467,7 @@
   create/update/delete; `lattice_ql._build_schema`) now uses
   `get_tables_schema()` and reads `["columns"]`. One read shape — the
   full schema dict — instead of two near-duplicate methods. Removes
-  the last lingering v0.39-era surface from the BE.
+  the last lingering 0.39-era surface from the BE.
 
 ### E2E infrastructure
 
@@ -497,7 +500,7 @@
 ### Docs
 
 - **`llm.arch.auth.md`, `llm.arch.db.md`, `llm.root.md`, `llm.user.md`
-  caught up with v0.40 reality.** They still described the pre-squash
+  caught up with 0.40 reality.** They still described the pre-squash
   world (`auth.gdpr` + `public.user_info` split, `login_mgr` role,
   `search_path=auth` only, `widgets` instead of `blocks`,
   chart.js+svelte-chartjs instead of ECharts). All four now reflect:
@@ -507,7 +510,7 @@
   RLS shape per table, `search_path=public,auth,gdpr` on both engines,
   and the new `/me/config` + `/me/email` endpoints.
 
-## v0.41 — 2026-05-14 (post-squash bugfixes + e2e test)
+## 0.41 — 2026-05-14 (post-squash bugfixes + e2e test)
 
 ### Bugfixes caught via the new e2e suite
 
@@ -554,9 +557,9 @@
   Cosmetic — the user is created correctly. Switch to login_session
   for the response build.
 
-## v0.40 — 2026-05-14 (pre-AWS migration squash + schema rewrite)
+## 0.40 — 2026-05-14 (pre-AWS migration squash + schema rewrite)
 
-> **Major-version jump v0.3x → v0.4x.** Not incremental. The whole
+> **Major-version jump 0.3x → 0.4x.** Not incremental. The whole
 > migration history is replaced, BE models are rewritten, FE pivots
 > to a single-shape full-schema read pattern, and identifiers change
 > (`row_number` → `row_id`, `view_name` → `view_id`). This is the
@@ -671,7 +674,7 @@
   Cosmetic — the user is created correctly. Switch to login_session
   for the response build.
 
-## v0.32 — 2026-05-14
+## 0.32 — 2026-05-14
 
 ### Color UX overhaul
 - **Picker swapped to `vanilla-colorful` web component.** `<hex-color-picker>`
@@ -697,7 +700,7 @@
   vivid hex: hue 0-359, saturation 60-75%, lightness 55-65%. Replaces the
   cyclic 10-color preset list.
 
-## v0.31 — 2026-05-13
+## 0.31 — 2026-05-13
 
 ### Bug fixes
 - **`TableRepository.create()` 500 (root-cause patch).** The
@@ -714,7 +717,7 @@
   Now rolls back on the failure and sets `Sprint Board` as the default
   view.
 - **`Failed to fetch` / `Workspace not found` after table-router split.**
-  The post-v0.30 `tables.py` split left `crud.py` with empty path on
+  The post-0.30 `tables.py` split left `crud.py` with empty path on
   an empty-prefix router; FastAPI's auto-301-on-trailing-slash sent
   `/api/v1/tables` → `/api/v1/tables/`, and the browser dropped the
   Authorization header on redirect. Refactored: `crud.py` now declares
@@ -752,10 +755,10 @@
   shipped in task-263 is bad UX; the spec is a hue-bar + 2D S/L-square
   picker. First attempt TIMEOUTed on the bot; partial work is in
   `git stash`. Needs to be split (build standalone `ColorPicker.svelte`,
-  then wire into `ManageOptionsModal`) before retry. *(Resolved in v0.32
+  then wire into `ManageOptionsModal`) before retry. *(Resolved in 0.32
   via `vanilla-colorful` web component.)*
 
-## v0.30 — 2026-05-10
+## 0.30 — 2026-05-10
 
 ### User-facing features
 - **task-242 — edit own email.** New `PUT /api/v1/login/me/email`
@@ -829,7 +832,7 @@
   TIMEOUTed on the bot (1115-line and 993-line files are too big
   for one worker session). Partial work is in `git stash`.
 
-## v0.29 — 2026-05-08
+## 0.29 — 2026-05-08
 - **Per-table default view, server-side (V37).** Clicking a view now flags
   it as the table's default via a new `is_default boolean` column on
   `public.table_views`, enforced by a partial unique index
@@ -865,7 +868,7 @@
   `table_views_one_default` partial unique index. The previously-forbidden
   V34 entries for `is_default`/`table_views_one_default` are removed.
 
-## v0.28 — 2026-05-02
+## 0.28 — 2026-05-02
 - **Fix V34 trigger blocking table delete (V35).** The V34
   `trg_table_views_prevent_schema_delete` trigger refused to delete the
   `__schema__` row even when the deletion was a CASCADE from a parent
@@ -877,7 +880,7 @@
   after V34). Switched all 5 references to the new `$viewsStore` which
   the table-load flow populates. View tabs / switcher now show again.
 
-## v0.27 — 2026-05-02
+## 0.27 — 2026-05-02
 - **ECharts dashboard with JSON-described blocks.** Replaced
   `chart.js` + `svelte-chartjs` with Apache ECharts (`echarts ^5.6`).
   Each dashboard view's `config` is now `{layout, blocks}` where each
@@ -888,7 +891,7 @@
   - `kind='number'` — single big number with `field` + `format`.
   - `kind='list'` — plain HTML table with `columns: [{key, label}]`.
 - **New endpoint** — `POST /api/v1/tables/{tid}/views/{name}/blocks/{block_id}/query`.
-  Replaces the v0.24 `/widgets/{widget_id}/query` path; same response
+  Replaces the 0.24 `/widgets/{widget_id}/query` path; same response
   shape `{rows: [...]}`.
 - **Backend** — `models/view.py` adds discriminated block models
   (`ChartBlock` / `NumberBlock` / `ListBlock`). Dashboard router renames
@@ -902,7 +905,7 @@
   template's dashboard existed in the wild; it's regenerated by the new
   seeder.
 
-## v0.26 — 2026-05-01
+## 0.26 — 2026-05-01
 - **Simplify `table_views` (V34).** Drop V33's linked-list / `is_default` /
   `view_number` machinery. PK is now `(workspace_id, table_id, name)`.
   Single `type` column discriminates row purpose:
@@ -930,7 +933,7 @@
 - **Migration tests** updated for the new shape (PK, dropped columns,
   trigger names).
 
-## v0.25 — 2026-05-01
+## 0.25 — 2026-05-01
 - **`tables.views` JSONB → dedicated `public.table_views` table.** Every
   view is now a row with its own audit, locking, and indexing instead of
   living inside a JSONB array. Per-view invariants enforced in the
@@ -956,20 +959,20 @@
   local state instead of refetching. (FE client wiring is a follow-up.)
 - **LatticeQL → pure-Python git dep.** Switched `lattice-ql` from a
   vendored wheel (`/app/vendor/lattice_ql-0.3.0-...whl`) to a pinned
-  git install: `lattice-ql @ git+https://github.com/latticeCast/LatticeQL@v0.2.0`.
+  git install: `lattice-ql @ git+https://github.com/latticeCast/LatticeQL@0.2.0`.
   Upstream is pure Python (hatchling) — no Rust toolchain in the backend
   image anymore. Backend Dockerfile gained `git` apt for the install.
-  Backend adapter (`config/lattice_ql.py`) updated for the v0.2.0 API:
+  Backend adapter (`config/lattice_ql.py`) updated for the 0.2.0 API:
   `compile(lql, schema)` returns SQL string; adapter inlines `$1` as the
   workspace_id literal then runs the existing `_fix_table_name` rewrite.
 
-## v0.24 — 2026-04-30
+## 0.24 — 2026-04-30
 - **Dashboard view + CRM template**. New `dashboard` view type renders
   aggregates over rows via LatticeQL widget queries (number / bar / pie /
   line / list). New `POST /api/v1/tables/template/crm` seeds a CRM table
   with a default dashboard.
 - **LatticeQL integration**. Backend imports the `lattice-ql` Python
-  wheel from GitHub release (v0.3.3). New `config/lattice_ql.py` caches
+  wheel from GitHub release (0.3.3). New `config/lattice_ql.py` caches
   the per-workspace schema in Valkey (60s TTL).
 - New widget query endpoint:
   `POST /api/v1/tables/{tid}/views/{name}/widgets/{wid}/query`.
@@ -977,15 +980,15 @@
 - Backend Dockerfile is now multi-stage: Rust toolchain in builder, slim
   Python in runtime.
 
-## v0.23 — 2026-04-25
+## 0.23 — 2026-04-25
 - **Role rebalance: `login_mgr` is now register/delete-only** — all other auth lookups go through the `app` role. Affected routes: `get_current_user`, `POST /password`, `GET /me`, `add_member`, `list_users`, `get_user`, `update_user` all dropped `login_session`. `create_user`, `delete_user`, OAuth `/{provider}/token` kept it. Rationale: once logged in, every API call runs with `app` permissions — `login_mgr` is only for PII-writing boundaries (register/delete).
 - **Migration V32** — `GRANT SELECT ON auth.gdpr TO app` + `GRANT UPDATE (role) ON auth.users TO app` + default-privileges for future auth tables. Enables app to resolve users by email and admins to change user roles without `login_mgr`.
 - **Browser test script** — `browser/` entrypoint now accepts an optional URL argument for screenshots (easier ad-hoc snapshots without editing scripts).
 - **Skills — lint enforcement before commit**:
-  - `developing-programming` v0.9.0: all lint runs inside Docker containers (FE `docker compose exec frontend npm run lint`, BE `uv run ruff`, PG `migration --test-only`). Local host has no Node/Python/sqlfluff.
-  - `developing-svelte` v0.5.0: FE dev rule — `no-unused-vars` MUST be clean, `{@html}` must be sanitized, `// eslint-disable` is forbidden.
+  - `developing-programming` 0.9.0: all lint runs inside Docker containers (FE `docker compose exec frontend npm run lint`, BE `uv run ruff`, PG `migration --test-only`). Local host has no Node/Python/sqlfluff.
+  - `developing-svelte` 0.5.0: FE dev rule — `no-unused-vars` MUST be clean, `{@html}` must be sanitized, `// eslint-disable` is forbidden.
 
-## v0.22 — 2026-04-23
+## 0.22 — 2026-04-23
 - **FE auth simplified — one path, no build-time branch.** Dropped `VITE_AUTH_REQUIRED` from `vite.config.ts`; FE no longer reads `auth_required`. Login page always shows `user_name + password` inputs; OAuth (Authentik, Google) buttons kept as alternatives on the same card (code retained, not gated).
 - **New BE endpoint `POST /api/v1/login/password`** — accepts `{user_name, password}`. In `AUTH_REQUIRED=false` mode: ignores password, resolves user by user_name or email, returns the user_id UUID as `access_token`. In `AUTH_REQUIRED=true` mode: returns 501 (clients should use OAuth). Relaxed `UserInfo.email` in auth responses from `EmailStr` to `str` to accommodate non-email handles.
 - **Dead code removed** — `AppConfig` / `fetchAppConfig` in `frontend/src/lib/backend/auth.ts` (no callers).
@@ -994,7 +997,7 @@
   - `frontend/src/lib/auth/login.svelte.ts` — `loginState` runes + `submit()` orchestration.
   - `.svelte` file now UI-only with `data-testid` on every interactive element (`login-userid`, `login-password`, `login-start`, `login-error`, `login-authentik`, `login-google`).
 
-## v0.21 — 2026-04-15
+## 0.21 — 2026-04-15
 - **GDPR-aware user schema split** — three tables with role-gated access:
   - `auth.users` (user_id UUID PK, role) — identity core
   - `auth.gdpr` (user_id FK, email UNIQUE, legal_name) — **PII, login_mgr only**. app role cannot read/write.
@@ -1011,7 +1014,7 @@
 - **checksums.txt** regenerated (27 files; V20/V23/V28 removed, V10 rewritten).
 - **Skill `developing-db-sql` updated** — documents alignment enforcement.
 
-## v0.20 — 2026-04-15
+## 0.20 — 2026-04-15
 - Migration SQL now **must** pass SQLFluff lint — no more "warning only" bypass. `step_lint` returns False on violations, blocking the flow before any DB is touched.
 - `.sqlfluff` config: `max_line_length = 80`, strict defaults, `references.keywords` excluded (existing schema uses `name` / `role` / `email` as column names). `CREATE TABLE` column alignment is **enforced** via `align_within = create_table_statement` — `sqlfluff fix` auto-aligns.
 - Auto-fixed + manually split 300+ violations across all V*.sql — long lines wrapped to ≤80 char, `CHECK (...)` expressions split onto multiple lines, `ALTER TABLE ... CONSTRAINT` / `CREATE INDEX` broken at logical points.
@@ -1024,14 +1027,14 @@
 - DB-side checksum: `private.schema_migrations.checksum` column tracks applied file hashes. Mismatch between stored (DB) and current (disk) aborts apply — prevents tampered migrations from silently reapplying.
 - Fix `storage.py`: `get_user_prefix(user)` treated `user.user_id` as string (legacy email PK). Now handles UUID — `str(user.user_id).replace("-", "")[:20]`. Upload/download were crashing with `AttributeError: UUID has no attribute 'replace'`.
 
-## v0.19 — 2026-04-15
+## 0.19 — 2026-04-15
 - **Async-native S3: boto3 → aioboto3.** No more `asyncio.to_thread` wrappers — aioboto3 is native async, can never block the event loop even if a dev forgets to wrap a call.
 - `config/storage.py`: `get_s3_client()` (singleton sync) → `s3_client()` (async context manager). Usage: `async with s3_client() as s3: await s3.put_object(...)`.
 - `rows.py` + `storage.py`: rewrote all 13 S3 call sites to `async with s3_client() as s3: await s3.xxx(...)` pattern.
-- New skill `developing-fastapi` (v0.1.0): async-by-default rules, anti-patterns, Uvicorn worker guidance — documents the blob-blocking root cause.
+- New skill `developing-fastapi` (0.1.0): async-by-default rules, anti-patterns, Uvicorn worker guidance — documents the blob-blocking root cause.
 - `pyproject.toml`: dep `boto3` → `aioboto3`.
 
-## v0.18 — 2026-04-15
+## 0.18 — 2026-04-15
 - **Root cause fix: blocking S3/MinIO calls froze the entire event loop.** Single large upload/download made the whole backend appear dead — other users couldn't list tables or fetch data until the blob op finished.
 - Wrapped all boto3 calls in `asyncio.to_thread(...)` — both `rows.py` doc endpoints and `storage.py` file endpoints (put/get/list/head/delete).
 - Composite PK on `tables`: `(workspace_id, table_id)` — allows same table name in different workspaces (V29).
@@ -1040,16 +1043,16 @@
 - Uvicorn: `--workers 4` → single worker (async handles I/O concurrency, avoids race on auto-user-create).
 - V28: re-grant permissions on tables created by later migrations (V1's `GRANT ON ALL TABLES` only covered pre-existing tables).
 
-## v0.17 — 2026-04-14
+## 0.17 — 2026-04-14
 - Migration runner: lint (SQLFluff) → test (temp DB + schema/RLS verify) → apply
 - DBA credentials removed from `.env` — hardcoded in docker-compose only, backend never sees them
 - Backend no longer runs migrations — separate `migration` container with `--profile migration`
 - Migration files renamed to Flyway format (`V1__name.sql`)
 - Fixed migration ordering bugs: 0018/0020/0021 referenced columns from later migrations
 - Removed `setup-db.sh` — roles/schemas bootstrapped via `V1__bootstrap_roles.sql`
-- Removed Atlas dependency (lint is Pro-only since v0.38)
+- Removed Atlas dependency (lint is Pro-only since 0.38)
 
-## v0.16 — 2026-04-13
+## 0.16 — 2026-04-13
 - PG schema-based permission model: `public` (data), `auth` (users), `private` (internal)
 - PG native roles: `dba` (DDL all schemas), `app` (CRUD public, SELECT auth), `login_mgr` (CRUD auth)
 - Separate DB engines per role: dba for migrations, app for API, login_mgr for auth
@@ -1058,7 +1061,7 @@
 - PG native logging enabled (`log_statement=all`, connections/disconnections)
 - `init-roles.sh` for new DB setup, migration SQL for existing DBs
 
-## v0.15 — 2026-04-12
+## 0.15 — 2026-04-12
 - New column type `doc` — read-only cell, auto-creates MinIO .md on row insert (Layer 1)
 - PM template uses `type="doc"` instead of `type="url"` for Doc column
 - Fix: column dropdown menu hidden behind doc cell buttons (z-index stacking context)
@@ -1068,18 +1071,18 @@
 - Browser container: `network_mode: host` + `user: 1000:1000` for Playwright snapshots
 - Skills: all API paths updated `/api/` → `/api/v1/`
 
-## v0.14 — 2026-04-11
+## 0.14 — 2026-04-11
 - Fix: duplicate row on create — `session.add(detached)` caused second INSERT instead of UPDATE
 - Fix: Doc column cell paths migrated from UUID-based to string table_id (one-time script)
 
-## v0.13 — 2026-04-11
+## 0.13 — 2026-04-11
 - `table_id` is now string PK (= table name, always lowercase) — no more UUIDs for tables
 - API prefix changed from `/api/` to `/api/v1/`
 - Removed `table_name` column — `table_id` IS the name
 - Doc column is first column (position 0) in all templates
 - Default table template: Doc + Title + Description
 
-## v0.12 — 2026-04-09
+## 0.12 — 2026-04-09
 - Simplified naming: `workspace_name` (no display_id), `user_name` (unique)
 - Added `doc` column type — inline markdown editor backed by MinIO
 - `url` column: external links open new tab, internal paths navigate to `/{path}`
@@ -1089,7 +1092,7 @@
 - Add View: full-width panel overlay
 - PM template Status choices: todo, in_progress, testing, debugging, review, done, merged
 
-## v0.11 — 2026-04-07
+## 0.11 — 2026-04-07
 - `row_number` BIGSERIAL PK per table (replaces UUID `row_id`)
 - Composite PK `(table_id, row_number)`, auto-increment via PG trigger
 - UUID-based users: `user_id` UUID PK, `user_info` for display_id/email/name (GDPR)
@@ -1099,7 +1102,7 @@
 - Token resolution: UUID → display_id → email
 - Remove Key column — use `type-row_number` as ticket ID
 
-## v0.10 — 2026-04-05
+## 0.10 — 2026-04-05
 - Skills: claude-bot plan | prepare | running split
 - Skills: `pm_tools.sh` shared bash helpers
 - Skills: orchestrator pure rule-based (no LLM), worker bash infra + LLM code
@@ -1108,11 +1111,11 @@
 - Worker: bash handles PM+git, LLM only writes code
 - Architecture docs: `llm.arch.airtable.md` (Layer 1) + `llm.arch.pm.md` (Layer 2)
 
-## v0.9 — 2026-04-04
+## 0.9 — 2026-04-04
 - Perf: batch docs-exist endpoint (75 HEAD requests → 1 S3 list call)
 - Non-blocking doc flag loading — page renders immediately, doc icons appear async
 
-## v0.8 — 2026-04-03
+## 0.8 — 2026-04-03
 - Skills: auto-create test ticket per story in planning
 - Skills: test-tagged tickets run Playwright snapshot instead of unit tests
 - Skills: worker rule — continuously update ticket doc in MinIO as work journal
@@ -1121,7 +1124,7 @@
 - Default time rule: tickets without dates default to today
 - CLAUDE.md: skill version bump rule + submodule commit rule
 
-## v0.7 — 2026-04-01
+## 0.7 — 2026-04-01
 - Issue Detail View: full-page ticket at `/<workspace>/<table>/<row_id>`
 - Marked HTML rendering with edit/preview toggle
 - Breadcrumb navigation: user / workspace / project / key (clickable)
@@ -1132,7 +1135,7 @@
 - Dark mode: toggle in settings, dark class on html/body, dark sidebar/nav
 - QA: Playwright snapshot tests for all views (table, kanban, timeline, expand, detail, template)
 
-## v0.6 — 2026-03-30
+## 0.6 — 2026-03-30
 - Nginx reverse proxy: FE + BE on single port (13491)
 - OpenAPI docs moved under `/api/` prefix
 - Worker hierarchy: epic → story → issue branching (issue worktree from story branch)
@@ -1145,7 +1148,7 @@
 - `immutable_timestamp()` PG function for date column B-tree indexes
 - Ports from .env: NGX_PORT=13491, NGX_PORT=13492
 
-## v0.5 — 2026-03-29
+## 0.5 — 2026-03-29
 - Workspace-based multi-tenant architecture (workspaces, workspace_members, shared access)
 - Columns stored as JSONB in tables (no separate columns SQL table)
 - Row data in `row_data` JSONB with `created_by`/`updated_by` audit fields
@@ -1161,7 +1164,7 @@
 - Skills integration: developing-project-management, developing-programming with LatticeCast PM status updates
 - Auto-cascade: all children merged → parent auto-merged
 
-## v0.4 — 2026-03-22
+## 0.4 — 2026-03-22
 - Airtable-like flexible schema with JSONB rows
 - Table CRUD with columns (text, number, date, select, tags, checkbox, url)
 - Inline cell editing, column resize, sort/group/filter toolbar

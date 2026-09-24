@@ -126,6 +126,7 @@ class AppSettings(BaseSettings):
     # Central SSO browser-session cookie. Keep Secure in every deployed
     # environment; local HTTP compose explicitly sets this to false.
     sso_cookie_secure: bool = Field(default=True, alias="SSO_COOKIE_SECURE")
+    sso_issuer_url: str = Field(default="http://localhost:13491", alias="SSO_ISSUER_URL")
 
     # Nested settings
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)

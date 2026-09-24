@@ -18,12 +18,12 @@ ALGORITHM = "RS256"
 LOCAL_ALGORITHM = "HS256"
 
 
-def create_access_token(user_id: str) -> tuple[str, int]:
+def create_access_token(user_id: str, *, expires_minutes: int | None = None) -> tuple[str, int]:
     """Issue a self-signed JWT for the password-login flow.
 
     Returns (token, expires_in_seconds).
     """
-    expires_delta = timedelta(minutes=settings.jwt_expire_minutes)
+    expires_delta = timedelta(minutes=expires_minutes or settings.jwt_expire_minutes)
     expire = datetime.now(UTC) + expires_delta
     payload = {"sub": user_id, "user_id": user_id, "exp": expire}
     token = jwt.encode(payload, settings.jwt_secret_key, algorithm=LOCAL_ALGORITHM)
