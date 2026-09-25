@@ -1,8 +1,12 @@
 """Lattice Cast's first-party OAuth-style SSO issuer.
 
-Only registered first-party clients may use these endpoints.  Browser flows
-use authorization-code + PKCE; native App handoffs use a confidential client
-and are exchanged by that site's backend, never by its frontend.
+Only registered first-party clients may use these endpoints. Browser flows use
+authorization-code + PKCE. Native App handoffs are for registered *public*
+static clients: the App bearer token creates a short-lived launch ticket, and
+the redirected site atomically exchanges its fragment-only browser ticket for
+a short-lived JWT. That exchange binds the ticket to the registered client,
+default redirect URI, and exact Origin; it does not use a client secret or a
+site-specific backend.
 """
 
 import base64
