@@ -122,6 +122,7 @@ class AppSettings(BaseSettings):
     # Self-issued JWT (password-login flow — see middleware/token.py)
     jwt_secret_key: str = Field(default="", alias="JWT_SECRET_KEY", description="Signs self-issued JWTs")
     jwt_expire_minutes: int = Field(default=1440, alias="JWT_EXPIRE_MINUTES")
+    refresh_token_days: int = Field(default=30, alias="REFRESH_TOKEN_DAYS")
 
     # Central SSO browser-session cookie. Keep Secure in every deployed
     # environment; local HTTP compose explicitly sets this to false.

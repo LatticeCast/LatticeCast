@@ -98,6 +98,16 @@ def verify(psql_fn) -> list[str]:
     if result != "f":
         errors.append("APP CAN READ CENTRAL SSO SESSIONS (V56)")
 
+    # Password/App refresh-token families are central issuer state, not OAuth
+    # client grants. V59 therefore permits client_id to be NULL.
+    result = psql_fn(
+        "SELECT is_nullable FROM information_schema.columns "
+        "WHERE table_schema='private' AND table_name='sso_refresh_tokens' "
+        "AND column_name='client_id';"
+    ).strip()
+    if result != "YES":
+        errors.append("SSO REFRESH TOKEN CLIENT_ID MUST BE NULLABLE (V59)")
+
     # Check schemas exist
     schemas_raw = psql_fn(
         "SELECT schema_name FROM information_schema.schemata "

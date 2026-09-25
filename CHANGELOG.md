@@ -10,13 +10,13 @@
 - Added V58 native handoff tickets: App-authenticated launch, database-owned
   default callbacks, fragment-only browser tickets, exact-Origin exchange,
   and short-lived browser JWTs without m-site serverless backends.
+- Added rotating opaque refresh tokens for password/App login. PostgreSQL only
+  stores token hashes; refresh-token replay revokes the whole device family,
+  and logout revokes that family explicitly.
 
 ## 0.62 — 2026-09-09 (Hive verification reliability)
 
-- Updated the Agentic Hive skill with a programmatic pre-merge verification
-  gate, retry-safe PM status updates, and explicit commit-failure recovery.
-- Corrected skills discovery from story worktrees and initialized optional
-  story dependency state safely under `set -u`.
+- Improved Agentic Hive verification and story-worktree discovery reliability.
 
 ## 0.61 — 2026-09-09 (UTC temporal data and authorization hardening)
 

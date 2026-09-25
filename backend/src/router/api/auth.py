@@ -3,8 +3,11 @@
 Authentication API endpoints.
 """
 
+import hashlib
+import secrets
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path, Response
@@ -51,6 +54,18 @@ class PasswordLoginRequest(BaseModel):
     password: str = Field(..., description="User password")
 
 
+class RefreshTokenRequest(BaseModel):
+    """Exchange one opaque Lattice Cast refresh token for a new pair."""
+
+    refresh_token: str = Field(..., min_length=32, max_length=512, description="Opaque refresh token")
+
+
+class RefreshLogoutRequest(BaseModel):
+    """Revoke the refresh-token family held by this device."""
+
+    refresh_token: str = Field(..., min_length=32, max_length=512, description="Opaque refresh token")
+
+
 class UserInfo(BaseModel):
     """User info from OAuth provider"""
 
@@ -66,7 +81,7 @@ class TokenResponse(BaseModel):
     """Response from OAuth token exchange"""
 
     access_token: str = Field(..., description="OAuth access token")
-    refresh_token: str | None = Field(default=None, description="OAuth refresh token")
+    refresh_token: str | None = Field(default=None, description="Refresh token, when the login flow supports rotation")
     id_token: str | None = Field(default=None, description="OpenID Connect ID token")
     expires_in: int | None = Field(default=None, description="Token expiration in seconds")
     userinfo: UserInfo = Field(..., description="User profile information")
@@ -86,6 +101,72 @@ class MeResponse(BaseModel):
     config: dict[str, Any] = Field(
         default_factory=dict,
         description="Per-user UI config blob (darkMode, lastView per table, …)",
+    )
+
+
+def _utc_now() -> datetime:
+    """Return a naive UTC timestamp, matching the database TIMESTAMP convention."""
+    return datetime.now(UTC).replace(tzinfo=None)
+
+
+def _hash_refresh_token(refresh_token: str) -> str:
+    """Only a SHA-256 digest of an opaque refresh token is persisted."""
+    return hashlib.sha256(refresh_token.encode("utf-8")).hexdigest()
+
+
+async def _issue_refresh_token(
+    session: AsyncSession,
+    user_id: UUID,
+    *,
+    family_id: UUID | None = None,
+    session_id: UUID | None = None,
+    commit: bool = True,
+) -> str:
+    """Persist and return one opaque, rotating refresh token.
+
+    The raw token is deliberately returned only once.  It is never stored in
+    PostgreSQL, logs, or a user record.
+    """
+    refresh_token = secrets.token_urlsafe(48)
+    now = _utc_now()
+    await session.execute(
+        text(
+            """
+            INSERT INTO private.sso_refresh_tokens
+                (token_hash, family_id, client_id, user_id, session_id, issued_at, expires_at)
+            VALUES
+                (:token_hash, :family_id, NULL, :user_id, :session_id, :issued_at, :expires_at)
+            """
+        ),
+        {
+            "token_hash": _hash_refresh_token(refresh_token),
+            "family_id": family_id or uuid4(),
+            "user_id": user_id,
+            "session_id": session_id,
+            "issued_at": now,
+            "expires_at": now + timedelta(days=settings.refresh_token_days),
+        },
+    )
+    if commit:
+        await session.commit()
+    return refresh_token
+
+
+def _token_response(
+    user_id: UUID, info: UserInfoModel | None, fallback_email: str, refresh_token: str
+) -> TokenResponse:
+    access_token, expires_in = create_access_token(str(user_id))
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        id_token=None,
+        expires_in=expires_in,
+        userinfo=UserInfo(
+            sub=str(user_id),
+            email=info.email if info else fallback_email,
+            name=info.user_name if info else fallback_email,
+            picture=None,
+        ),
     )
 
 
@@ -137,25 +218,105 @@ async def password_login(
     if stored_pwd and not verify_password(request.password, stored_pwd.password_hash):
         raise HTTPException(status_code=401, detail="Wrong password")
 
-    email = info.email if info else ident
-    name = info.user_name if info else ident
-
-    access_token, expires_in = create_access_token(str(user.user_id))
     sso_token, sso_max_age = await create_browser_session(login_session, user.user_id, "password")
     set_browser_session_cookie(response, sso_token, sso_max_age)
+    refresh_token = await _issue_refresh_token(login_session, user.user_id)
+    return _token_response(user.user_id, info, ident, refresh_token)
 
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=None,
-        id_token=None,
-        expires_in=expires_in,
-        userinfo=UserInfo(
-            sub=str(user.user_id),
-            email=email,
-            name=name,
-            picture=None,
+
+@router.post(
+    "/refresh",
+    response_model=TokenResponse,
+    responses={401: {"model": HTTPErrorResponse, "description": "Invalid, expired, or already-used refresh token"}},
+)
+async def refresh_login(
+    request: RefreshTokenRequest,
+    login_session: AsyncSession = Depends(get_login_session),
+) -> TokenResponse:
+    """Atomically rotate an App refresh token.
+
+    A refresh token is single-use. Replaying an already-used token revokes its
+    complete family, which also invalidates the latest token issued to a stolen
+    device. The client must then perform password login again.
+    """
+    now = _utc_now()
+    token_hash = _hash_refresh_token(request.refresh_token)
+    rotated = await login_session.execute(
+        text(
+            """
+            UPDATE private.sso_refresh_tokens
+            SET revoked_at = :now, replaced_at = :now
+            WHERE token_hash = :token_hash
+              AND revoked_at IS NULL
+              AND expires_at > :now
+            RETURNING user_id, family_id, session_id
+            """
         ),
+        {"token_hash": token_hash, "now": now},
     )
+    token_row = rotated.mappings().one_or_none()
+    if not token_row:
+        # If this was a replay of an old member of a family, invalidate the
+        # family before returning. Unknown/expired values simply affect no row.
+        family = await login_session.execute(
+            text("SELECT family_id FROM private.sso_refresh_tokens WHERE token_hash = :token_hash"),
+            {"token_hash": token_hash},
+        )
+        family_id = family.scalar_one_or_none()
+        if family_id:
+            await login_session.execute(
+                text(
+                    """
+                    UPDATE private.sso_refresh_tokens
+                    SET revoked_at = COALESCE(revoked_at, :now)
+                    WHERE family_id = :family_id
+                    """
+                ),
+                {"family_id": family_id, "now": now},
+            )
+        await login_session.commit()
+        raise HTTPException(status_code=401, detail="Invalid, expired, or already-used refresh token")
+
+    refresh_token = await _issue_refresh_token(
+        login_session,
+        token_row["user_id"],
+        family_id=token_row["family_id"],
+        session_id=token_row["session_id"],
+        commit=False,
+    )
+    info_result = await login_session.execute(
+        select(UserInfoModel).where(UserInfoModel.user_id == token_row["user_id"])
+    )
+    info = info_result.scalar_one_or_none()
+    await login_session.commit()
+    return _token_response(token_row["user_id"], info, str(token_row["user_id"]), refresh_token)
+
+
+@router.post("/logout", status_code=204)
+async def logout_refresh_token(
+    request: RefreshLogoutRequest,
+    login_session: AsyncSession = Depends(get_login_session),
+) -> Response:
+    """Revoke all rotating refresh tokens belonging to the supplied device family."""
+    token_hash = _hash_refresh_token(request.refresh_token)
+    family = await login_session.execute(
+        text("SELECT family_id FROM private.sso_refresh_tokens WHERE token_hash = :token_hash"),
+        {"token_hash": token_hash},
+    )
+    family_id = family.scalar_one_or_none()
+    if family_id:
+        await login_session.execute(
+            text(
+                """
+                UPDATE private.sso_refresh_tokens
+                SET revoked_at = COALESCE(revoked_at, :now)
+                WHERE family_id = :family_id
+                """
+            ),
+            {"family_id": family_id, "now": _utc_now()},
+        )
+    await login_session.commit()
+    return Response(status_code=204)
 
 
 @router.get(
