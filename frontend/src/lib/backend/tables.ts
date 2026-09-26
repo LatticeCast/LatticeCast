@@ -6,7 +6,7 @@
 
 import { get } from 'svelte/store';
 import { authStore } from '$lib/stores/auth.store';
-import { authenticatedLatticeCast } from './client';
+import { authenticatedLatticeCast, latticeCast } from './client';
 import { BACKEND_URL } from './config';
 import { getAuthHeaders, getBearerHeader } from './http';
 import { applySchema } from '$lib/stores/table_schema.store';
@@ -241,18 +241,15 @@ export async function uploadBlobCell(
 	columnId: string,
 	file: File
 ): Promise<BlobCellMetadata> {
-	const headers = await getBearerHeader();
-	const form = new FormData();
-	form.set('file', file);
-	const response = await fetch(
-		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/blob/${columnId}`,
-		{ method: 'PUT', headers, body: form }
-	);
-	if (!response.ok) {
-		const detail = await response.text();
-		throw new Error(`Failed to upload file (${response.status}): ${detail || response.statusText}`);
-	}
-	const metadata: BlobCellMetadata = await response.json();
+	const accessToken = get(authStore)?.accessToken;
+	if (!accessToken) throw new Error('Not authenticated');
+	const metadata = await latticeCast.uploadTableBlob<BlobCellMetadata>(accessToken, {
+		tableId,
+		rowId: rowNumber,
+		columnId,
+		file,
+		fileName: file.name
+	});
 	rows.update((list) =>
 		list.map((row) =>
 			row.row_id === rowNumber
@@ -270,14 +267,15 @@ export async function downloadBlobCell(
 	columnId: string,
 	filename: string
 ): Promise<void> {
-	const headers = await getBearerHeader();
-	const response = await fetch(
-		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/blob/${columnId}`,
-		{ headers }
-	);
-	if (!response.ok) throw new Error(`Failed to download blob: ${response.statusText}`);
+	const accessToken = get(authStore)?.accessToken;
+	if (!accessToken) throw new Error('Not authenticated');
+	const blob = await latticeCast.downloadTableBlob(accessToken, {
+		tableId,
+		rowId: rowNumber,
+		columnId
+	});
 
-	const url = URL.createObjectURL(await response.blob());
+	const url = URL.createObjectURL(blob);
 	const link = document.createElement('a');
 	link.href = url;
 	link.download = filename;
