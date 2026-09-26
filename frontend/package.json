@@ -44,7 +44,7 @@
 		"vitest-browser-svelte": "^1.1.0"
 	},
 	"dependencies": {
-		"@latticecast/lattice-cast": "git+https://github.com/LatticeCast/lattice-cast.git#0.4.2",
+		"@latticecast/lattice-cast": "git+https://github.com/LatticeCast/lattice-cast.git#0.5.3",
 		"@tailwindcss/typography": "^0.5.19",
 		"@types/marked": "^5.0.2",
 		"@xyflow/svelte": "1.5.2",

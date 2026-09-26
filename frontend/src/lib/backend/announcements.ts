@@ -2,24 +2,17 @@
 //
 // Controller: load server-wide announcements and replace the shared cache.
 
-import { BACKEND_URL } from './config';
+import { latticeCast } from './client';
 import { setAnnouncements, type Announcement } from '$lib/stores/announcement.store';
 
 const ANNOUNCEMENTS_LQL =
 	'table("announcement") | filter((r)->{r.type in @["app","server"]}) | sort_desc("updated_at") | limit(20)';
 
 export async function fetchAnnouncements(): Promise<Announcement[]> {
-	const response = await fetch(`${BACKEND_URL}/api/v1/announcements/query`, {
+	const payload: unknown = await latticeCast.requestJson('/announcements/query', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ lql: ANNOUNCEMENTS_LQL })
+		body: { lql: ANNOUNCEMENTS_LQL }
 	});
-	if (!response.ok) {
-		const body = await response.json().catch(() => ({}));
-		throw new Error(body.detail || `Failed to fetch announcements: ${response.statusText}`);
-	}
-
-	const payload: unknown = await response.json();
 	if (!isAnnouncementResponse(payload)) throw new Error('Invalid announcement response');
 
 	const normalized = normalizeAnnouncements(payload.rows, payload.columns);
@@ -75,10 +68,7 @@ function normalizeAnnouncements(
 		.filter((row) => row.type === 'app' || row.type === 'server');
 }
 
-function readCell(
-	rowData: Record<string, unknown>,
-	columnId: string | undefined
-): string | null {
+function readCell(rowData: Record<string, unknown>, columnId: string | undefined): string | null {
 	if (!columnId) return null;
 	const value = rowData[columnId];
 	return typeof value === 'string' && value.trim() ? value : null;

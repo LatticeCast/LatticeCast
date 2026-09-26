@@ -1,11 +1,9 @@
 // lib/backend/auth.ts
 // Backend auth API calls
 
-import { BACKEND_URL } from './config';
-import { createLatticeCastClient, LatticeCastError } from '@latticecast/lattice-cast';
+import { LatticeCastError } from '@latticecast/lattice-cast';
 import type { AuthProvider } from '$lib/types/auth';
-
-const latticeCast = createLatticeCastClient({ backendDomain: BACKEND_URL });
+import { latticeCast } from './client';
 
 export interface TokenResponse {
 	access_token: string;
@@ -72,7 +70,9 @@ export async function fetchMe(accessToken: string): Promise<MeResponse | null> {
 export async function updateEmail(email: string, accessToken: string): Promise<MeResponse> {
 	try {
 		return await latticeCast.requestJson<MeResponse>('/login/me/email', {
-			method: 'PUT', accessToken, body: { email }
+			method: 'PUT',
+			accessToken,
+			body: { email }
 		});
 	} catch (error) {
 		if (error instanceof LatticeCastError && error.status === 409) {

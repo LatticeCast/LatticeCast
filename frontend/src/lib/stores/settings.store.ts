@@ -3,6 +3,7 @@
 import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { authStore } from '$lib/stores/auth.store';
+import { authenticatedLatticeCast } from '$lib/backend/client';
 import { browserZone } from '$lib/utils/temporal';
 
 export type SpeechLang = 'zh-TW' | 'en-US' | 'ja-JP';
@@ -72,8 +73,7 @@ function schedulePatch() {
 async function flushPatch() {
 	patchTimer = null;
 	if (!hydrated) return;
-	const auth = get(authStore);
-	if (!auth?.accessToken) return;
+	if (!get(authStore)?.accessToken) return;
 
 	const current = get(settingsStore);
 	const drifted: Record<string, unknown> = {};
@@ -83,18 +83,14 @@ async function flushPatch() {
 	if (Object.keys(drifted).length === 0) return;
 
 	try {
-		const res = await fetch('/api/v1/login/me/config', {
-			method: 'PATCH',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${auth.accessToken}`
-			},
-			body: JSON.stringify(drifted)
-		});
-		if (res.ok) {
-			const next = (await res.json()) as Record<string, unknown>;
-			for (const key of SERVER_KEYS) serverState[key] = next[key];
-		}
+		const next = await authenticatedLatticeCast.requestJson<Record<string, unknown>>(
+			'/login/me/config',
+			{
+				method: 'PATCH',
+				body: drifted
+			}
+		);
+		for (const key of SERVER_KEYS) serverState[key] = next[key];
 	} catch {
 		// best-effort — the next change will retry
 	}

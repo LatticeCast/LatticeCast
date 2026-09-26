@@ -1,7 +1,5 @@
-import { BACKEND_URL } from '$lib/backend/config';
+import { authenticatedLatticeCast } from '$lib/backend/client';
 import type { BlockRow } from '$lib/types/dashboard';
-import { authStore } from '$lib/stores/auth.store';
-import { get } from 'svelte/store';
 
 export async function fetchBlockRows(
 	tableId: string,
@@ -9,19 +7,9 @@ export async function fetchBlockRows(
 	blockId: string,
 	runtimeParams?: Record<string, unknown>
 ): Promise<BlockRow[]> {
-	const auth = get(authStore);
-	const r = await fetch(
-		`${BACKEND_URL}/api/v1/tables/${tableId}/views/${encodeURIComponent(viewName)}/blocks/${blockId}/query`,
-		{
-			method: 'POST',
-			headers: {
-				Authorization: `Bearer ${auth?.accessToken}`,
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({ params: runtimeParams ?? {} })
-		}
+	const j = await authenticatedLatticeCast.requestJson<{ rows: BlockRow[] }>(
+		`/tables/${tableId}/views/${encodeURIComponent(viewName)}/blocks/${blockId}/query`,
+		{ method: 'POST', body: { params: runtimeParams ?? {} } }
 	);
-	if (!r.ok) throw new Error(`Block query failed: ${r.status}`);
-	const j = await r.json();
 	return j.rows;
 }
