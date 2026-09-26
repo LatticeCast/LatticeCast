@@ -2,7 +2,10 @@
 // Backend auth API calls
 
 import { BACKEND_URL } from './config';
+import { createLatticeCastClient, LatticeCastError } from '@latticecast/lattice-cast';
 import type { AuthProvider } from '$lib/types/auth';
+
+const latticeCast = createLatticeCastClient({ backendDomain: BACKEND_URL });
 
 export interface TokenResponse {
 	access_token: string;
@@ -34,18 +37,7 @@ export interface MeResponse {
  * the password and returns the resolved user_id UUID as access_token.
  */
 export async function login(user_name: string, password: string): Promise<TokenResponse> {
-	const response = await fetch(`${BACKEND_URL}/api/v1/login/password`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ user_name, password })
-	});
-
-	if (!response.ok) {
-		const error = await response.json().catch(() => ({ detail: 'Login failed' }));
-		throw new Error(error.detail || 'Login failed');
-	}
-
-	return response.json();
+	return (await latticeCast.loginPassword(user_name, password)) as TokenResponse;
 }
 
 /**
@@ -57,59 +49,35 @@ export async function exchangeCodeViaBackend(
 	redirectUri: string,
 	codeVerifier: string
 ): Promise<TokenResponse> {
-	const response = await fetch(`${BACKEND_URL}/api/v1/login/${provider}/token`, {
+	return latticeCast.requestJson<TokenResponse>(`/login/${provider}/token`, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
+		body: {
 			code,
 			redirect_uri: redirectUri,
 			code_verifier: codeVerifier
-		})
+		}
 	});
-
-	if (!response.ok) {
-		const error = await response.json().catch(() => ({ detail: 'Token exchange failed' }));
-		throw new Error(error.detail || 'Token exchange failed');
-	}
-
-	return response.json();
 }
 
 /**
  * Get user info and role from backend /me endpoint.
  */
 export async function fetchMe(accessToken: string): Promise<MeResponse | null> {
-	const response = await fetch(`${BACKEND_URL}/api/v1/login/me`, {
-		headers: { Authorization: `Bearer ${accessToken}` }
-	});
-
-	if (!response.ok) {
-		return null;
-	}
-
-	return response.json();
+	return latticeCast.fetchMe<MeResponse>(accessToken);
 }
 
 /**
  * Update the current user's email. Throws on 409 with message "email already registered".
  */
 export async function updateEmail(email: string, accessToken: string): Promise<MeResponse> {
-	const response = await fetch(`${BACKEND_URL}/api/v1/login/me/email`, {
-		method: 'PUT',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${accessToken}`
-		},
-		body: JSON.stringify({ email })
-	});
-
-	if (response.status === 409) {
-		throw new Error('email already registered');
+	try {
+		return await latticeCast.requestJson<MeResponse>('/login/me/email', {
+			method: 'PUT', accessToken, body: { email }
+		});
+	} catch (error) {
+		if (error instanceof LatticeCastError && error.status === 409) {
+			throw new Error('email already registered');
+		}
+		throw error;
 	}
-	if (!response.ok) {
-		const error = await response.json().catch(() => ({ detail: 'Update failed' }));
-		throw new Error(error.detail || 'Update failed');
-	}
-
-	return response.json();
 }
