@@ -9,3 +9,6 @@ token -> middleware/token.py -> middleware/auth.py -> RLS session -> PostgreSQL 
 - Application role (`user`/`admin`) differs from workspace access (`read`/`write`/`owner`).
 - Keep normal data routes on the RLS engine; use the manager engine only for login/admin flows.
 - Password hashes stay in `gdpr.user_password`; never expose them through app-role reads.
+- `services/lc_auth.py` issues the locally signed LC access JWT, central browser
+  session, and rotating refresh token for both password login and first-party
+  SSO; request middleware only verifies credentials.

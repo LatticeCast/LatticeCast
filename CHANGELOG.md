@@ -1,6 +1,9 @@
 # Changelog
 
-## 0.64 — 2026-09-27 (cache-driven dashboard state)
+
+
+
+## 0.64 — 2026-09-27 (cache-driven dashboard state, unified LC credential issuance)
 
 - Moved Dashboard block queries into a backend controller and shared writable
   cache; Dashboard UI now renders derived cache state rather than keeping one
@@ -9,6 +12,9 @@
   gated the workflow context-menu listener to its visible lifetime.
 - Extracted the shared LatticeCast client into the
   `@latticecast/lattice-cast` frontend dependency.
+- Centralized issuance of locally signed LC access JWTs, browser SSO sessions,
+  and rotating refresh-token families in `services/lc_auth.py`; password login
+  and first-party SSO now share the same issuer.
 
 ## 0.63 — 2026-09-24 (SSO issuer and safe epoch indexes)
 

@@ -4,7 +4,6 @@ Token verification for OAuth providers.
 """
 
 import time
-from datetime import UTC, datetime, timedelta
 
 import httpx
 from fastapi import Header, HTTPException, status
@@ -12,26 +11,12 @@ from jose import ExpiredSignatureError, JWTError, jwt
 
 from config.settings import settings
 from middleware.jwks import get_jwks
+from services.lc_auth import LOCAL_ALGORITHM
 from util import logger
 
 ALGORITHM = "RS256"
-LOCAL_ALGORITHM = "HS256"
-
-
-def create_access_token(user_id: str, *, expires_minutes: int | None = None) -> tuple[str, int]:
-    """Issue a self-signed JWT for the password-login flow.
-
-    Returns (token, expires_in_seconds).
-    """
-    expires_delta = timedelta(minutes=expires_minutes or settings.jwt_expire_minutes)
-    expire = datetime.now(UTC) + expires_delta
-    payload = {"sub": user_id, "user_id": user_id, "exp": expire}
-    token = jwt.encode(payload, settings.jwt_secret_key, algorithm=LOCAL_ALGORITHM)
-    return token, int(expires_delta.total_seconds())
-
-
 def verify_local_token(token: str) -> dict:
-    """Verify a self-issued JWT (password-login flow)."""
+    """Verify a locally signed Lattice Cast access JWT."""
     return jwt.decode(token, settings.jwt_secret_key, algorithms=[LOCAL_ALGORITHM])
 
 
@@ -68,7 +53,7 @@ async def verify_bearer_token(
 ) -> dict:
     """
     Verify token from Authorization header.
-    Tries our own signed JWT (password-login) first, then Authentik JWT,
+    Tries a locally signed Lattice Cast JWT first, then Authentik JWT,
     then Google userinfo. Returns token payload with _provider field.
     """
     total_start = time.time()
@@ -82,7 +67,7 @@ async def verify_bearer_token(
     token = authorization.removeprefix("Bearer ").strip()
     expired = False
 
-    # Try our own JWT first (password-login flow)
+    # Try a locally signed Lattice Cast JWT first.
     try:
         logger.debug("Trying local token verification...")
         payload = verify_local_token(token)

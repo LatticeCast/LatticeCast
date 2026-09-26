@@ -1,11 +1,11 @@
 """
-Unit tests verifying that all remaining session.refresh() call sites operate on
-attached ORM instances (not detached), so they cannot raise
+Unit tests verifying that repository session.refresh() calls operate on attached
+ORM instances (not detached), so they cannot raise
 "Could not refresh instance <...> because this instance is not associated with this Session".
 
-Contrast with test_table_view_repo.py which verifies detached-safe paths do NOT
-call session.refresh() at all. Here every path SHOULD call refresh — the point is
-to document and protect the attachment invariant for each method.
+Raw SQL paths deliberately construct their result models from ``RETURNING`` or
+function mappings and therefore must *not* call ``session.refresh()``.  This
+file protects both sides of that contract.
 
 Run inside Docker:
     docker compose exec -T backend python -m pytest tests/test_session_refresh_attached.py -v
@@ -14,7 +14,7 @@ Run inside Docker:
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, call
 from uuid import uuid4
 
@@ -63,7 +63,6 @@ class TestWorkspaceRepositoryCreate:
             session = _make_session()
             call_order: list[str] = []
             session.add.side_effect = lambda _: call_order.append("add")
-            session.commit.side_effect = lambda: call_order.append("commit") or asyncio.coroutine(lambda: None)()
             session.commit = AsyncMock(side_effect=lambda: call_order.append("commit"))
             session.refresh = AsyncMock(side_effect=lambda _: call_order.append("refresh"))
             repo = WorkspaceRepository(session)
@@ -95,29 +94,43 @@ class TestWorkspaceRepositoryGrant:
         _run(_run_test())
 
 
-# ── TableRepository ───────────────────────────────────────────────────────────
+# ── Raw SQL repositories ──────────────────────────────────────────────────────
 
 
-class TestTableRepositoryCreate:
-    def test_refresh_called_once_after_commit(self):
-        """create() adds Table to session, commits, then refreshes — attached."""
+class TestTableRepositoryCreateFromTemplate:
+    def test_returns_mapping_without_refresh(self):
+        """The PG template function returns a row, rather than an attached ORM object."""
 
         async def _run_test():
             from repository.table import TableRepository
 
+            workspace_id = uuid4()
+            created_by = uuid4()
+            now = datetime.now(UTC).replace(tzinfo=None)
+            mapping_result = MagicMock()
+            mapping_result.mappings.return_value.one.return_value = {
+                "workspace_id": workspace_id,
+                "table_id": "my-table",
+                "created_at": now,
+                "updated_at": now,
+            }
             session = _make_session()
+            session.execute = AsyncMock(side_effect=[MagicMock(), mapping_result])
             repo = TableRepository(session)
-            table = await repo.create(uuid4(), "my-table")
+            table = await repo.create_from_template(workspace_id, "My-Table", "blank", created_by)
+
+            assert table.workspace_id == workspace_id
+            assert table.table_id == "my-table"
+            assert session.execute.await_count == 2
             session.commit.assert_called_once()
-            session.refresh.assert_called_once()
-            assert session.refresh.call_args == call(table)
+            session.refresh.assert_not_called()
 
         _run(_run_test())
 
 
 class TestTableRepositoryUpdate:
-    def test_refresh_called_on_orm_loaded_table(self):
-        """update() takes an ORM-loaded table, modifies, commits, then refreshes — attached."""
+    def test_returns_returning_mapping_without_refresh(self):
+        """Renames use UPDATE ... RETURNING, not mutation of the passed object."""
 
         async def _run_test():
             from models.table import Table
@@ -125,75 +138,44 @@ class TestTableRepositoryUpdate:
 
             workspace_id = uuid4()
             table = Table(workspace_id=workspace_id, table_id="old-name")
+            now = datetime.now(UTC).replace(tzinfo=None)
+            mapping_result = MagicMock()
+            mapping_result.mappings.return_value.one_or_none.return_value = {
+                "workspace_id": workspace_id,
+                "table_id": "new-name",
+                "created_at": now,
+                "updated_at": now,
+            }
 
             session = _make_session()
+            session.execute = AsyncMock(return_value=mapping_result)
             repo = TableRepository(session)
             result = await repo.update(table, "new-name")
 
             assert result.table_id == "new-name"
             session.commit.assert_called_once()
-            session.refresh.assert_called_once()
-            assert session.refresh.call_args == call(table)
+            session.refresh.assert_not_called()
 
         _run(_run_test())
 
 
-# ── UserRepository ────────────────────────────────────────────────────────────
+# ── User bootstrap ────────────────────────────────────────────────────────────
 
 
-class TestUserRepositoryUpdate:
-    def test_refresh_called_on_orm_loaded_user(self):
-        """update() takes an ORM-loaded user, modifies, commits, then refreshes — attached."""
-
-        async def _run_test():
-            from models.user import User
-            from repository.user import UserRepository
-
-            user = User(role="user")
-
-            session = _make_session()
-            repo = UserRepository(session)
-            result = await repo.update(user, role="admin")
-
-            assert result.role == "admin"
-            session.commit.assert_called_once()
-            session.refresh.assert_called_once()
-            assert session.refresh.call_args == call(user)
-
-        _run(_run_test())
-
-
-# ── GdprRepository ────────────────────────────────────────────────────────────
-
-
-class TestGdprRepositoryUpdateEmail:
-    def test_refresh_called_on_orm_loaded_gdpr(self):
-        """update_email() loads gdpr via ORM select, modifies, commits, then refreshes — attached."""
+class TestBootstrapUser:
+    def test_refreshes_the_user_added_to_login_session(self):
+        """bootstrap_user creates the User in login_session before refreshing it."""
 
         async def _run_test():
-            from models.user import Gdpr
-            from repository.user import GdprRepository
+            from repository.user import bootstrap_user
 
-            user_id = uuid4()
-            existing_gdpr = Gdpr(user_id=user_id, email="old@example.com")
+            login_session = _make_session()
+            app_session = _make_session()
+            result = await bootstrap_user(login_session, app_session, "person@example.com")
 
-            session = _make_session()
-
-            # First execute: get_by_email(new_email) → None (no conflict)
-            # Second execute: get_by_user_id(user_id) → existing_gdpr
-            no_conflict = MagicMock()
-            no_conflict.scalar_one_or_none.return_value = None
-            has_gdpr = MagicMock()
-            has_gdpr.scalar_one_or_none.return_value = existing_gdpr
-            session.execute = AsyncMock(side_effect=[no_conflict, has_gdpr])
-
-            repo = GdprRepository(session)
-            result = await repo.update_email(user_id, "new@example.com")
-
-            assert result.email == "new@example.com"
-            session.commit.assert_called_once()
-            session.refresh.assert_called_once()
-            assert session.refresh.call_args == call(existing_gdpr)
+            login_session.commit.assert_called_once()
+            login_session.refresh.assert_called_once_with(result)
+            assert any(args == call(result) for args in login_session.add.call_args_list)
 
         _run(_run_test())
 
@@ -202,8 +184,8 @@ class TestGdprRepositoryUpdateEmail:
 
 
 class TestRowRepositoryUpdate:
-    def test_refresh_called_on_orm_loaded_row(self):
-        """update() takes an ORM-loaded row (from get_by_number), commits, then refreshes — attached."""
+    def test_returns_pg_function_mapping_without_refresh(self):
+        """patch_row_data returns the updated row; the input row stays detached-safe."""
 
         async def _run_test():
             from models.row import Row, RowUpdate
@@ -216,16 +198,28 @@ class TestRowRepositoryUpdate:
                 row_id=1,
                 row_data={"title": "old"},
             )
+            now = datetime.now(UTC).replace(tzinfo=None)
+            mapping_result = MagicMock()
+            mapping_result.mappings.return_value.one_or_none.return_value = {
+                "workspace_id": workspace_id,
+                "table_id": "my-table",
+                "row_id": 1,
+                "row_data": {"title": "new"},
+                "created_by": None,
+                "updated_by": None,
+                "created_at": now,
+                "updated_at": now,
+            }
 
             session = _make_session()
+            session.execute = AsyncMock(return_value=mapping_result)
             repo = RowRepository(session)
             update = RowUpdate(row_data={"title": "new"})
             result = await repo.update(row=row, data=update, updated_by=uuid4())
 
             assert result.row_data["title"] == "new"
             session.commit.assert_called_once()
-            session.refresh.assert_called_once()
-            assert session.refresh.call_args == call(row)
+            session.refresh.assert_not_called()
 
         _run(_run_test())
 
@@ -236,7 +230,7 @@ class TestRowRepositoryUpdate:
             from repository.row import RowRepository
 
             workspace_id = uuid4()
-            now = datetime.utcnow()
+            now = datetime.now(UTC).replace(tzinfo=None)
 
             fake_row = {
                 "workspace_id": workspace_id,

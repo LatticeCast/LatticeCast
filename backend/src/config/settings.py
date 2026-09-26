@@ -119,8 +119,8 @@ class AppSettings(BaseSettings):
     NGX_PORT: int = Field(default=8000, alias="NGX_PORT")
     deploy_commit: str = Field(default="unknown", alias="DEPLOY_COMMIT")
 
-    # Self-issued JWT (password-login flow — see middleware/token.py)
-    jwt_secret_key: str = Field(default="", alias="JWT_SECRET_KEY", description="Signs self-issued JWTs")
+    # Locally signed Lattice Cast access JWTs (see services/lc_auth.py).
+    jwt_secret_key: str = Field(default="", alias="JWT_SECRET_KEY", description="Signs Lattice Cast access JWTs")
     jwt_expire_minutes: int = Field(default=1440, alias="JWT_EXPIRE_MINUTES")
     refresh_token_days: int = Field(default=30, alias="REFRESH_TOKEN_DAYS")
 

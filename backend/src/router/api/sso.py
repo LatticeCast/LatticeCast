@@ -27,14 +27,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.settings import settings
 from core.db import get_login_session
 from middleware.auth import get_current_user, require_admin
-from middleware.token import create_access_token
 from models.user import User
+from services.lc_auth import COOKIE_NAME, create_lc_access_token
 from util.security import hash_password, verify_password
 
 router = APIRouter(prefix="/sso", tags=["sso"])
 
-COOKIE_NAME = "lc_sso_session"
-SESSION_TTL = timedelta(days=30)
 CODE_TTL = timedelta(seconds=60)
 
 
@@ -69,39 +67,6 @@ def _redirect_with_handoff(uri: str, ticket: str) -> str:
 def _origin(uri: str) -> str:
     parts = urlsplit(uri)
     return f"{parts.scheme}://{parts.netloc}"
-
-
-async def create_browser_session(session: AsyncSession, user_id: UUID, auth_method: str) -> tuple[str, int]:
-    """Create an opaque central-session cookie; only its SHA-256 hash reaches PG."""
-    raw_token = secrets.token_urlsafe(48)
-    expires_at = _now() + SESSION_TTL
-    await session.execute(
-        text(
-            "INSERT INTO private.sso_sessions "
-            "(session_token_hash, user_id, auth_method, expires_at) "
-            "VALUES (:token_hash, :user_id, :auth_method, :expires_at)"
-        ),
-        {
-            "token_hash": _hash(raw_token),
-            "user_id": user_id,
-            "auth_method": auth_method,
-            "expires_at": expires_at,
-        },
-    )
-    await session.commit()
-    return raw_token, int(SESSION_TTL.total_seconds())
-
-
-def set_browser_session_cookie(response: Response, raw_token: str, max_age: int) -> None:
-    response.set_cookie(
-        key=COOKIE_NAME,
-        value=raw_token,
-        max_age=max_age,
-        httponly=True,
-        secure=settings.sso_cookie_secure,
-        samesite="lax",
-        path="/",
-    )
 
 
 async def _registered_client(session: AsyncSession, client_id: str, redirect_uri: str) -> dict:
@@ -391,7 +356,7 @@ async def browser_token(
         await session.rollback()
         raise HTTPException(status_code=400, detail="Invalid, expired, or already-used browser ticket")
     await session.commit()
-    access_token, expires_in = create_access_token(str(ticket["user_id"]), expires_minutes=5)
+    access_token, expires_in = create_lc_access_token(str(ticket["user_id"]), expires_minutes=5)
     return TokenResponse(access_token=access_token, expires_in=expires_in, user_id=ticket["user_id"])
 
 
@@ -430,7 +395,7 @@ async def token(request: TokenRequest, session: AsyncSession = Depends(get_login
         await session.rollback()
         raise HTTPException(status_code=400, detail="Public-client code is not PKCE bound")
     await session.commit()
-    access_token, expires_in = create_access_token(str(code["user_id"]))
+    access_token, expires_in = create_lc_access_token(str(code["user_id"]))
     return TokenResponse(access_token=access_token, expires_in=expires_in, user_id=code["user_id"])
 
 

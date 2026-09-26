@@ -3,11 +3,9 @@
 Authentication API endpoints.
 """
 
-import hashlib
-import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any, Literal
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path, Response
@@ -18,11 +16,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.settings import settings
 from core.db import get_login_session
 from middleware.auth import get_current_user, get_rls_session
-from middleware.token import create_access_token
 from models.user import User, UserPassword
 from models.user import UserInfo as UserInfoModel
 from repository.user import UserRepository, resolve_user_by_email
-from router.api.sso import create_browser_session, set_browser_session_cookie
+from services.lc_auth import (
+    create_browser_session,
+    create_lc_access_token,
+    hash_refresh_token,
+    issue_refresh_token,
+    set_browser_session_cookie,
+)
 from util.security import hash_password, verify_password
 
 router = APIRouter(prefix="/login", tags=["auth"])
@@ -109,53 +112,10 @@ def _utc_now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-def _hash_refresh_token(refresh_token: str) -> str:
-    """Only a SHA-256 digest of an opaque refresh token is persisted."""
-    return hashlib.sha256(refresh_token.encode("utf-8")).hexdigest()
-
-
-async def _issue_refresh_token(
-    session: AsyncSession,
-    user_id: UUID,
-    *,
-    family_id: UUID | None = None,
-    session_id: UUID | None = None,
-    commit: bool = True,
-) -> str:
-    """Persist and return one opaque, rotating refresh token.
-
-    The raw token is deliberately returned only once.  It is never stored in
-    PostgreSQL, logs, or a user record.
-    """
-    refresh_token = secrets.token_urlsafe(48)
-    now = _utc_now()
-    await session.execute(
-        text(
-            """
-            INSERT INTO private.sso_refresh_tokens
-                (token_hash, family_id, client_id, user_id, session_id, issued_at, expires_at)
-            VALUES
-                (:token_hash, :family_id, NULL, :user_id, :session_id, :issued_at, :expires_at)
-            """
-        ),
-        {
-            "token_hash": _hash_refresh_token(refresh_token),
-            "family_id": family_id or uuid4(),
-            "user_id": user_id,
-            "session_id": session_id,
-            "issued_at": now,
-            "expires_at": now + timedelta(days=settings.refresh_token_days),
-        },
-    )
-    if commit:
-        await session.commit()
-    return refresh_token
-
-
 def _token_response(
     user_id: UUID, info: UserInfoModel | None, fallback_email: str, refresh_token: str
 ) -> TokenResponse:
-    access_token, expires_in = create_access_token(str(user_id))
+    access_token, expires_in = create_lc_access_token(str(user_id))
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -189,7 +149,7 @@ async def password_login(
     login_session: AsyncSession = Depends(get_login_session),
 ) -> TokenResponse:
     """Username+password login. Resolves the user by user_name or email and
-    returns a self-signed JWT (see `middleware.token.create_access_token`)
+    returns a locally signed Lattice Cast access JWT
     as the access token.
 
     If the account has no row in gdpr.user_password, the supplied
@@ -220,7 +180,7 @@ async def password_login(
 
     sso_token, sso_max_age = await create_browser_session(login_session, user.user_id, "password")
     set_browser_session_cookie(response, sso_token, sso_max_age)
-    refresh_token = await _issue_refresh_token(login_session, user.user_id)
+    refresh_token = await issue_refresh_token(login_session, user.user_id)
     return _token_response(user.user_id, info, ident, refresh_token)
 
 
@@ -240,7 +200,7 @@ async def refresh_login(
     device. The client must then perform password login again.
     """
     now = _utc_now()
-    token_hash = _hash_refresh_token(request.refresh_token)
+    token_hash = hash_refresh_token(request.refresh_token)
     rotated = await login_session.execute(
         text(
             """
@@ -277,7 +237,7 @@ async def refresh_login(
         await login_session.commit()
         raise HTTPException(status_code=401, detail="Invalid, expired, or already-used refresh token")
 
-    refresh_token = await _issue_refresh_token(
+    refresh_token = await issue_refresh_token(
         login_session,
         token_row["user_id"],
         family_id=token_row["family_id"],
@@ -298,7 +258,7 @@ async def logout_refresh_token(
     login_session: AsyncSession = Depends(get_login_session),
 ) -> Response:
     """Revoke all rotating refresh tokens belonging to the supplied device family."""
-    token_hash = _hash_refresh_token(request.refresh_token)
+    token_hash = hash_refresh_token(request.refresh_token)
     family = await login_session.execute(
         text("SELECT family_id FROM private.sso_refresh_tokens WHERE token_hash = :token_hash"),
         {"token_hash": token_hash},
