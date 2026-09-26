@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { ListBlock, BlockRow } from '$lib/types/dashboard';
-	import { fetchBlockRows } from '$lib/api/dashboard';
+	import type { ListBlock } from '$lib/types/dashboard';
+	import { dashboardBlockKey, dashboardBlocks } from '$lib/stores/dashboard.store';
 	import { T } from '$lib/UI/theme.svelte';
 
 	let {
@@ -15,22 +15,9 @@
 		blockId: string;
 	} = $props();
 
-	let rows = $state<BlockRow[]>([]);
-	let error = $state<string | null>(null);
-	let status = $state<'loading' | 'loaded'>('loading');
-
-	$effect(() => {
-		fetchBlockRows(tableId, viewName, blockId)
-			.then((r: BlockRow[]) => {
-				rows = r;
-			})
-			.catch((e: Error) => {
-				error = e.message;
-			})
-			.finally(() => {
-				status = 'loaded';
-			});
-	});
+	const cacheKey = $derived(dashboardBlockKey(tableId, viewName, blockId));
+	const result = $derived($dashboardBlocks[cacheKey] ?? { rows: [], status: 'idle', error: null });
+	const rows = $derived(result.rows);
 
 	let cols = $derived(
 		block.columns.length > 0
@@ -39,10 +26,10 @@
 	);
 </script>
 
-<div class="flex h-full flex-col gap-2" data-testid="block-list" data-status={status}>
+<div class="flex h-full flex-col gap-2" data-testid="block-list" data-status={result.status}>
 	<span class="text-sm font-medium {T.body} opacity-70">{block.title}</span>
-	{#if error}
-		<span class="text-sm text-red-500" data-testid="block-error">{error}</span>
+	{#if result.error}
+		<span class="text-sm text-red-500" data-testid="block-error">{result.error}</span>
 	{:else}
 		<div class="overflow-auto">
 			<table class="w-full text-sm {T.body}" data-testid="list-table">
@@ -65,7 +52,7 @@
 					{/each}
 				</tbody>
 			</table>
-			{#if rows.length === 0 && status === 'loaded'}
+			{#if rows.length === 0 && result.status === 'loaded'}
 				<p class="py-4 text-center text-sm opacity-50" data-testid="list-empty">No data</p>
 			{/if}
 		</div>

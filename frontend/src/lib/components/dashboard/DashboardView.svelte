@@ -3,6 +3,7 @@
 	import Block from './blocks/Block.svelte';
 	import { T } from '$lib/UI/theme.svelte';
 	import { updateView } from '$lib/backend/views';
+	import { fetchDashboardBlockRows } from '$lib/backend/dashboard';
 
 	let { view, tableId }: { view: DashboardViewType & { view_id: number }; tableId: string } =
 		$props();
@@ -14,6 +15,14 @@
 	let jsonText = $state('');
 	let saveError = $state<string | null>(null);
 	let saving = $state(false);
+
+	// One fetch trigger for the dashboard. Individual blocks only derive their
+	// shared cache entry, so remounting a block cannot create a second request.
+	$effect(() => {
+		for (const blockId of Object.keys(blocks)) {
+			void fetchDashboardBlockRows(tableId, view.name, blockId).catch(() => {});
+		}
+	});
 
 	function startEdit() {
 		jsonText = JSON.stringify(view.config ?? { layout: [], blocks: {} }, null, 2);

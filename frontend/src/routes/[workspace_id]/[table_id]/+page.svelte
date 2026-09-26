@@ -81,7 +81,10 @@
 
 	let loading = $state(true);
 
-	async function handleOpenDocCell(row: import('$lib/types/table').Row, col: import('$lib/types/table').Column) {
+	async function handleOpenDocCell(
+		row: import('$lib/types/table').Row,
+		col: import('$lib/types/table').Column
+	) {
 		const cell = row.row_data[col.column_id];
 		const hasBlob = typeof cell === 'object' && cell !== null && 'key' in cell;
 
@@ -315,7 +318,7 @@
 				onAddRowInGroup={(key, col) => s.handleAddRowInGroup(key, col)}
 				onToggleCollapseGroup={(key) => s.toggleCollapseGroup(key)}
 				onManageOptions={(col) => (s.managingOptionsCol = col)}
-		onOpenDocCell={(row, col) => void handleOpenDocCell(row, col)}
+				onOpenDocCell={(row, col) => void handleOpenDocCell(row, col)}
 			/>
 		{:else if activeView.type === 'kanban'}
 			<KanbanBoard
@@ -385,7 +388,6 @@
 		columns={$columns}
 		onClose={() => (s.expandedRow = null)}
 		onUpdateRow={(id, data) => s.handleUpdateRow(id, data)}
-		onRefreshRows={(tid) => s.handleRefreshRows(tid)}
 		{tableId}
 		workspaceId={wsId}
 		onOpenDocCell={(row, col) => {

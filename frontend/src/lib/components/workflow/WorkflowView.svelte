@@ -165,6 +165,7 @@
 	}
 
 	$effect(() => {
+		if (!ctxMenu.show) return;
 		window.addEventListener('click', handleWindowClick);
 		return () => window.removeEventListener('click', handleWindowClick);
 	});
