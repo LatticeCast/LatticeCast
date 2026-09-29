@@ -81,7 +81,7 @@ def test_pm_template_structure(authed_page, workspace, admin_token, snapshot):
             f"column '{name}': expected type '{expected_type}', got '{actual_type}'"
         )
 
-    assert col_map["Doc"].get("options", {}).get("kind") == "doc"
+    assert col_map["Doc"].get("options", {}).get("kind") == "text"
 
     # Verify select column choices
     type_opts = col_map["Type"].get("options", {})

@@ -240,10 +240,21 @@ def apply_migrations(dsn: str) -> None:
 
     sql_files = sorted(MIGRATION_DIR.glob("V*.sql"),
                        key=lambda f: int(re.match(r'V(\d+)__', f.name).group(1)))
+    current_names = {sql_file.name for sql_file in sql_files}
 
     # Report current DB state
     cur.execute("SELECT filename FROM private.schema_migrations ORDER BY filename")
     applied = {r[0] for r in cur.fetchall()}
+    unknown_applied = sorted(applied - current_names)
+    if unknown_applied:
+        cur.close()
+        conn.close()
+        raise RuntimeError(
+            "❌ Refusing to migrate a database with unknown applied migrations:\n"
+            + "\n".join(f"   {filename}" for filename in unknown_applied)
+            + "\nRestore the matching migration source or rebuild this disposable database; "
+              "do not apply a different migration history on top of it."
+        )
     current_ver = max(
         (int(re.match(r'V(\d+)__', n).group(1)) for n in applied),
         default=0,

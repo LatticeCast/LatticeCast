@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.65 — 2026-09-30 (generic blob cells)
+
+- Removed all document-specific blob routes and client helpers. Blob content is
+  addressed only by table, row, and column IDs through one generic API.
+- Renamed the text editor hint from `doc` to `text` for plain text, Markdown,
+  and CSV; V63 migrates existing schemas and future template output.
+
 ## 0.64 — 2026-09-27 (cache-driven dashboard state, unified LC credential issuance)
 
 - Moved Dashboard block queries into a backend controller and shared writable

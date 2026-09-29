@@ -3,7 +3,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { fetchTable, fetchRows, fetchDoc, saveDoc, createRow } from '$lib/backend/tables';
+	import { fetchTable, fetchRows, createRow } from '$lib/backend/tables';
 	import {
 		getChoiceColor,
 		getTagValues,
@@ -12,7 +12,6 @@
 	} from '$lib/components/table/table.utils';
 	import { BRAND } from '$lib/UI/brand';
 	import type { Row, Table } from '$lib/types/table';
-	import { marked } from 'marked';
 	import CreateTicketModal from '$lib/components/table/CreateTicketModal.svelte';
 
 	const tableId = $derived($page.params.table_id ?? '');
@@ -21,11 +20,7 @@
 
 	let table = $state<Table | null>(null);
 	let row = $state<Row | null>(null);
-	let docContent = $state('');
 	let loading = $state(true);
-	let docLoading = $state(false);
-	let docSaving = $state(false);
-	let editingDoc = $state(false);
 	let error = $state<string | null>(null);
 	let showCreateTicket = $state(false);
 
@@ -34,8 +29,6 @@
 	const badgeCols = $derived(
 		sortedCols.filter((c) => ['select', 'tags', 'text', 'number', 'date', 'url'].includes(c.type))
 	);
-
-	const docPreview = $derived(marked(docContent) as string);
 
 	const isTicketTable = $derived(!!table?.columns.find((c) => c.name === 'Key'));
 
@@ -51,28 +44,12 @@
 				error = 'Row not found';
 				return;
 			}
-			// Fetch doc
-			docLoading = true;
-			docContent = await fetchDoc(tableId, rowNumberParam);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load';
 		} finally {
 			loading = false;
-			docLoading = false;
 		}
 	});
-
-	async function handleDocBlur() {
-		if (docSaving) return;
-		docSaving = true;
-		try {
-			await saveDoc(tableId, rowNumberParam, docContent);
-		} catch {
-			// best-effort
-		} finally {
-			docSaving = false;
-		}
-	}
 
 	async function handleCreateTicket(rowData: Record<string, unknown>) {
 		showCreateTicket = false;
@@ -163,52 +140,6 @@
 				{/each}
 			</div>
 
-			<!-- Doc section -->
-			<div class="rounded-xl border border-gray-200 bg-white shadow-sm">
-				<div class="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-					<span class="text-sm font-medium text-gray-700">
-						Doc
-						{#if docSaving}<span class="ml-2 text-xs text-gray-400">saving…</span>{/if}
-					</span>
-					<div class="flex items-center gap-2">
-						<a
-							data-testid="row-detail-edit-doc-link"
-							href="/{workspaceId}/{tableId}/{rowNumberParam}/doc"
-							class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-100"
-							>Edit doc ↗</a
-						>
-						<button
-							onclick={() => (editingDoc = !editingDoc)}
-							class="rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-600 transition hover:bg-gray-50 hover:text-gray-900"
-						>
-							{editingDoc ? 'Preview' : 'Edit'}
-						</button>
-					</div>
-				</div>
-
-				{#if docLoading}
-					<div class="flex h-40 items-center justify-center text-sm text-gray-400">Loading…</div>
-				{:else if editingDoc}
-					<textarea
-						class="min-h-[400px] w-full resize-none border-none px-5 py-4 font-mono text-sm text-gray-800 outline-none"
-						placeholder="Write markdown here…"
-						bind:value={docContent}
-						onblur={handleDocBlur}
-					></textarea>
-				{:else if docContent}
-					<div class="prose prose-sm max-w-none px-5 py-4 text-gray-800">
-						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-						{@html docPreview}
-					</div>
-				{:else}
-					<div class="px-5 py-8 text-center text-sm text-gray-400">
-						No doc yet.
-						<button onclick={() => (editingDoc = true)} class="ml-1 text-blue-500 hover:underline"
-							>Start writing</button
-						>
-					</div>
-				{/if}
-			</div>
 		</div>
 	{/if}
 </div>

@@ -37,7 +37,6 @@ _LQL_KIND_BY_COLUMN_TYPE: dict[str, str] = {
     "tags": "tags",
     "checkbox": "bool",
     "url": "url",
-    "blob": "doc",
 }
 
 

@@ -8,8 +8,8 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     # auth.users
     ("auth", "users", "user_id", "uuid"),
     ("auth", "users", "role", "character varying"),
-    ("auth", "users", "created_at", "timestamp"),
-    ("auth", "users", "updated_at", "timestamp"),
+    ("auth", "users", "created_at", "timestamp with time zone"),
+    ("auth", "users", "updated_at", "timestamp with time zone"),
     # gdpr.user_info — PII that can remove easily
     ("gdpr", "user_info", "user_id", "uuid"),
     ("gdpr", "user_info", "email", "character varying"),
@@ -18,8 +18,8 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     # public.workspaces
     ("public", "workspaces", "workspace_id", "uuid"),
     ("public", "workspaces", "workspace_name", "character varying"),
-    ("public", "workspaces", "created_at", "timestamp"),
-    ("public", "workspaces", "updated_at", "timestamp"),
+    ("public", "workspaces", "created_at", "timestamp with time zone"),
+    ("public", "workspaces", "updated_at", "timestamp with time zone"),
     # public.workspace_members (V33: role → multi-row action grant)
     ("public", "workspace_members", "workspace_id", "uuid"),
     ("public", "workspace_members", "user_id", "uuid"),
@@ -30,8 +30,8 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "tables", "config", "jsonb"),
     ("public", "tables", "created_by", "uuid"),
     ("public", "tables", "updated_by", "uuid"),
-    ("public", "tables", "created_at", "timestamp"),
-    ("public", "tables", "updated_at", "timestamp"),
+    ("public", "tables", "created_at", "timestamp with time zone"),
+    ("public", "tables", "updated_at", "timestamp with time zone"),
     # public.rows
     ("public", "rows", "workspace_id", "uuid"),
     ("public", "rows", "table_id", "character varying"), 
@@ -39,8 +39,8 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "rows", "row_data", "jsonb"),
     ("public", "rows", "created_by", "uuid"),
     ("public", "rows", "updated_by", "uuid"),
-    ("public", "rows", "created_at", "timestamp"),
-    ("public", "rows", "updated_at", "timestamp"),
+    ("public", "rows", "created_at", "timestamp with time zone"),
+    ("public", "rows", "updated_at", "timestamp with time zone"),
     # public.table_views
     ("public", "table_views", "workspace_id", "uuid"),
     ("public", "table_views", "table_id", "character varying"),
@@ -48,8 +48,8 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "table_views", "config", "jsonb"),
     ("public", "table_views", "created_by", "uuid"),
     ("public", "table_views", "updated_by", "uuid"),
-    ("public", "table_views", "created_at", "timestamp"),
-    ("public", "table_views", "updated_at", "timestamp"),
+    ("public", "table_views", "created_at", "timestamp with time zone"),
+    ("public", "table_views", "updated_at", "timestamp with time zone"),
 ]
 
 # Columns that must NOT exist after the squash.
@@ -345,22 +345,33 @@ def verify(psql_fn) -> list[str]:
             f"2025-05-15 UTC, got {result!r}"
         )
 
-    # V50: ordinary RDS datetime columns remain timestamp-without-zone but
-    # their defaults state the UTC+0 convention explicitly.
+    # V60: all persisted application instants carry their UTC offset.
     result = psql_fn("SHOW timezone;").strip()
     if result.upper() != "UTC":
         errors.append(f"WRONG DATABASE TIMEZONE: expected UTC got {result!r} (V50)")
 
     result = psql_fn(
-        "SELECT pg_get_expr(adbin, adrelid) "
-        "FROM pg_attrdef "
-        "WHERE adrelid='public.rows'::regclass "
-        "  AND adnum=(SELECT attnum FROM pg_attribute "
-        "             WHERE attrelid='public.rows'::regclass "
-        "               AND attname='created_at' AND NOT attisdropped);"
+        "SELECT count(*) FROM information_schema.columns "
+        "WHERE table_schema NOT IN ('pg_catalog', 'information_schema') "
+        "AND data_type = 'timestamp without time zone';"
     ).strip()
-    if "AT TIME ZONE 'UTC'" not in result:
-        errors.append("WRONG DEFAULT: public.rows.created_at is not explicit UTC (V50)")
+    if result != "0":
+        errors.append(f"TEMPORAL TYPE WITHOUT ZONE: {result} column(s) remain (V60)")
+
+    result = psql_fn(
+        "SELECT pg_typeof(created_at)::text = 'timestamp with time zone' "
+        "FROM public.rows LIMIT 1;"
+    ).strip()
+    if result and result != "t":
+        errors.append("WRONG TEMPORAL TYPE: public.rows.created_at is not timestamptz (V60)")
+
+    result = psql_fn(
+        "SELECT pg_get_functiondef("
+        "'public.create_workspace(character varying)'::regprocedure) "
+        "~ 'v_now[[:space:]]+TIMESTAMPTZ';"
+    ).strip()
+    if result != "t":
+        errors.append("WORKSPACE CREATE RESPONSE LOSES TIMESTAMPTZ OFFSET (V61)")
 
     # V51: per-table counter and allocator replace MAX(row_id)+1.
     result = psql_fn(

@@ -41,11 +41,11 @@ export const BLOB_KIND_OPTIONS: ReadonlyArray<{
 	accept?: string;
 }> = [
 	{
-		value: 'doc',
-		label: 'Document',
-		description: 'Markdown, text, Word documents',
+		value: 'text',
+		label: 'Text',
+		description: 'Plain text, Markdown, or CSV',
 		accept:
-			'.md,.txt,.doc,.docx,text/markdown,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+			'.md,.txt,.csv,text/markdown,text/plain,text/csv'
 	},
 	{
 		value: 'table',

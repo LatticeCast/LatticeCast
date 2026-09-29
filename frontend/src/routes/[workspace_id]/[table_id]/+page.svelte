@@ -9,7 +9,7 @@
 	import { rows } from '$lib/stores/table_rows.store';
 
 	// Controller
-	import { patchSchema, fetchRows, saveDocCell } from '$lib/backend/tables';
+	import { patchSchema, fetchRows } from '$lib/backend/tables';
 	import {
 		currentWorkspaceId,
 		currentTableId,
@@ -40,7 +40,7 @@
 	import ImportPreviewModal from '$lib/components/table/ImportPreviewModal.svelte';
 	import ManageOptionsModal from '$lib/components/table/ManageOptionsModal.svelte';
 	import CreateTicketModal from '$lib/components/table/CreateTicketModal.svelte';
-	import DocCellEditor from '$lib/components/table/DocCellEditor.svelte';
+	import TextCellEditor from '$lib/components/table/TextCellEditor.svelte';
 	import DashboardView from '$lib/components/dashboard/DashboardView.svelte';
 	import type { DashboardView as DashboardViewType } from '$lib/types/dashboard';
 	import WorkflowView from '$lib/components/workflow/WorkflowView.svelte';
@@ -81,23 +81,11 @@
 
 	let loading = $state(true);
 
-	async function handleOpenDocCell(
+	async function handleOpenTextCell(
 		row: import('$lib/types/table').Row,
 		col: import('$lib/types/table').Column
 	) {
-		const cell = row.row_data[col.column_id];
-		const hasBlob = typeof cell === 'object' && cell !== null && 'key' in cell;
-
-		if (!hasBlob) {
-			try {
-				await saveDocCell(tableId, row.row_id, col.column_id, `# ${col.name}.md\n`);
-			} catch (err) {
-				error.set(err instanceof Error ? err.message : 'Failed to create document');
-				return;
-			}
-		}
-
-		s.docCellState = { row, col };
+		s.textCellState = { row, col };
 	}
 
 	$effect(() => {
@@ -151,7 +139,6 @@
 					const initView = candidates.find((v) => v.view_id === targetViewId);
 					if (initView) s.applyViewConfig(initView);
 
-					s.loadDocFlags(tableParam).catch(() => {});
 					loading = false;
 				});
 			} catch (e) {
@@ -318,7 +305,7 @@
 				onAddRowInGroup={(key, col) => s.handleAddRowInGroup(key, col)}
 				onToggleCollapseGroup={(key) => s.toggleCollapseGroup(key)}
 				onManageOptions={(col) => (s.managingOptionsCol = col)}
-				onOpenDocCell={(row, col) => void handleOpenDocCell(row, col)}
+				onOpenTextCell={(row, col) => void handleOpenTextCell(row, col)}
 			/>
 		{:else if activeView.type === 'kanban'}
 			<KanbanBoard
@@ -390,19 +377,15 @@
 		onUpdateRow={(id, data) => s.handleUpdateRow(id, data)}
 		{tableId}
 		workspaceId={wsId}
-		onOpenDocCell={(row, col) => {
-			s.expandedRow = null;
-			void handleOpenDocCell(row, col);
-		}}
 	/>
 {/if}
 
-{#if s.docCellState}
-	<DocCellEditor
-		row={s.docCellState.row}
-		column={s.docCellState.col}
+{#if s.textCellState}
+	<TextCellEditor
+		row={s.textCellState.row}
+		column={s.textCellState.col}
 		{tableId}
-		onClose={() => (s.docCellState = null)}
+		onClose={() => (s.textCellState = null)}
 	/>
 {/if}
 

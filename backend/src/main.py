@@ -90,12 +90,12 @@ A `blob` column holds exactly one object. Its `options.kind` is a picker/renderi
 | --- | --- | --- |
 | `file` | any file or binary (ZIP, PDF, etc.) | generic blob upload |
 | `image` | image file | generic blob upload |
+| `text` | plain text, Markdown, CSV | generic blob upload |
 | `table` | CSV, XLSX, JSONL | generic blob upload |
-| `doc` | Markdown text | doc blob route |
 
 `accept` is a browser file-picker hint; the generic blob API stores one arbitrary uploaded file and preserves its MIME type. Blob metadata is returned in `row_data[column_id]`; bodies are downloaded from the addressed blob endpoint.
 
-Use the **rows** tag for the exact upload, download, document, and delete contracts. Legacy `/doc` and `/col-doc` routes remain for compatibility; new clients should use addressed blob routes.
+Use the **rows** tag for the exact upload, download, and delete contracts. Every blob is addressed by its table, row, and column ID.
     """,
     version=__version__,
     contact={

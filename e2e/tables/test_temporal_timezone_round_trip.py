@@ -1,8 +1,8 @@
 """E2E: a temporal cell round-trips through the user's configured timezone.
 
-Server times are epoch milliseconds in UTC with no zone (V48-V55). The
-frontend is the only place a timezone exists, and the zone it uses comes from
-the user's config, not the browser. So:
+Only row_data date/datetime cells are epoch milliseconds in UTC; RDS columns
+are TIMESTAMPTZ (V60). The frontend renders those cells in the user's chosen
+zone, not the browser's. So:
 
   write   the picked calendar day is read IN that zone -> the instant that
           day begins there  (offset applied in reverse)

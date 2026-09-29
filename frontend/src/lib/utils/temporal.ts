@@ -1,8 +1,8 @@
 // src/lib/utils/temporal.ts
 //
-// Server times are epoch milliseconds in UTC and carry no zone (V48-V54).
-// The frontend is the only place a timezone exists, and the zone it uses is
-// the one in the user's config — not the browser's, so the same board reads
+// Only row_data date/datetime cells are epoch milliseconds in UTC. RDS
+// timestamp columns are TIMESTAMPTZ instants. The frontend reads row_data in
+// the user's configured zone — not the browser's — so the same board reads
 // the same way on a laptop and a phone in another country.
 //
 // `date` and `datetime` are one storage shape: an integer instant with no

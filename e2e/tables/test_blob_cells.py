@@ -1,9 +1,7 @@
 """Blob-cell API integration contract.
 
-This test deliberately stays API-only: blob cells have no user-facing rendering
-in this story. It proves that file metadata is server-managed and that both
-explicit doc-blob routes and the legacy row-doc compatibility routes address
-the same stored document.
+This test deliberately stays API-only. It proves that every blob cell uses the
+same explicit table/row/column endpoint and server-managed metadata.
 """
 
 from __future__ import annotations
@@ -22,7 +20,7 @@ def _column_id(schema: dict, name: str) -> str:
 
 
 def test_blob_cells_round_trip(admin_token, workspace):
-    """Files replace atomically; docs round-trip through both API contracts."""
+    """Files and text replace atomically through the same blob contract."""
     ws_id, _ws_name = workspace
     table_id = f"blob-cells-{int(time.time() * 1000) % 10_000_000}"
 
@@ -43,7 +41,7 @@ def test_blob_cells_round_trip(admin_token, workspace):
         "POST",
         f"/api/v1/tables/{table_id}/columns",
         admin_token,
-        json={"name": "Notes", "type": "blob", "options": {"kind": "doc", "accept": "text/markdown,.md"}},
+        json={"name": "Notes", "type": "blob", "options": {"kind": "text", "accept": "text/markdown,.md"}},
     )
     assert response.status_code == 201, f"create doc blob column: {response.status_code} {response.text[:200]}"
     doc_column_id = _column_id(response.json(), "Notes")
@@ -89,39 +87,19 @@ def test_blob_cells_round_trip(admin_token, workspace):
     assert response.status_code == 200, f"download replacement file: {response.status_code} {response.text[:200]}"
     assert response.content == replacement_file
 
-    document = "# Blob document\n\nStored in an addressed cell.\n"
+    text_content = "# Blob text\n\nStored in an addressed cell.\n"
     response = requests.put(
-        f"{BASE}/api/v1/tables/{table_id}/rows/{row_id}/blob/{doc_column_id}/doc",
-        headers={"Authorization": f"Bearer {admin_token}", "Content-Type": "text/plain"},
-        data=document.encode(),
+        f"{BASE}/api/v1/tables/{table_id}/rows/{row_id}/blob/{doc_column_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={"file": ("notes.md", text_content.encode(), "text/markdown")},
         timeout=15,
     )
-    assert response.status_code == 200, f"write doc blob: {response.status_code} {response.text[:200]}"
-    assert response.json()["filename"] == "Notes.md"
+    assert response.status_code == 200, f"write text blob: {response.status_code} {response.text[:200]}"
+    assert response.json()["filename"] == "notes.md"
 
-    response = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}/blob/{doc_column_id}/doc", admin_token)
-    assert response.status_code == 200, f"read addressed doc blob: {response.status_code} {response.text[:200]}"
-    assert response.text == document
-
-    compatibility_document = "# Compatibility document\n\nStored in the table default doc cell.\n"
-    response = requests.put(
-        f"{BASE}/api/v1/tables/{table_id}/rows/{row_id}/doc",
-        headers={"Authorization": f"Bearer {admin_token}", "Content-Type": "text/plain"},
-        data=compatibility_document.encode(),
-        timeout=15,
-    )
-    assert response.status_code == 200, f"write compatibility doc: {response.status_code} {response.text[:200]}"
-    assert response.text == compatibility_document
-
-    response = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}/doc", admin_token)
-    assert response.status_code == 200, f"read compatibility doc: {response.status_code} {response.text[:200]}"
-    assert response.text == compatibility_document
-
-    response = api(
-        "GET", f"/api/v1/tables/{table_id}/rows/{row_id}/blob/{default_doc_column_id}/doc", admin_token
-    )
-    assert response.status_code == 200, f"read addressed compatibility doc: {response.status_code} {response.text[:200]}"
-    assert response.text == compatibility_document
+    response = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}/blob/{doc_column_id}", admin_token)
+    assert response.status_code == 200, f"read addressed text blob: {response.status_code} {response.text[:200]}"
+    assert response.content == text_content.encode()
 
     response = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", admin_token)
     assert response.status_code == 200, f"read row metadata: {response.status_code} {response.text[:200]}"
@@ -129,7 +107,7 @@ def test_blob_cells_round_trip(admin_token, workspace):
     assert row_data[file_column_id]["filename"] == "archive.zip"
     assert row_data[doc_column_id] == {
         "key": f"{ws_id}/{table_id}/rows/{row_id}/blobs/{doc_column_id}",
-        "filename": "Notes.md",
+        "filename": "notes.md",
         "content_type": "text/markdown",
-        "size": len(document.encode()),
+        "size": len(text_content.encode()),
     }

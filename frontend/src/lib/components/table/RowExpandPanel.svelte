@@ -15,9 +15,8 @@
 		removeTagFromRowData,
 		addTagToRowData
 	} from './table.utils';
-	import { downloadBlobCell, fetchDoc, uploadBlobCell } from '$lib/backend/tables';
+	import { downloadBlobCell, uploadBlobCell } from '$lib/backend/tables';
 	import { rows } from '$lib/stores/table_rows.store';
-	import { marked } from 'marked';
 
 	let {
 		row,
@@ -26,7 +25,6 @@
 		onUpdateRow,
 		tableId,
 		workspaceId,
-		onOpenDocCell
 	}: {
 		row: Row;
 		columns: Column[];
@@ -34,39 +32,15 @@
 		onUpdateRow: (rowNumber: number, data: Record<string, unknown>) => Promise<void>;
 		tableId: string;
 		workspaceId: string;
-		onOpenDocCell?: (row: Row, col: Column) => void;
 	} = $props();
 
 	let editField = $state<string | null>(null);
 	let editVal = $state('');
 	let tagsPopup = $state<string | null>(null);
-	let activeTab = $state<'fields' | 'doc'>('fields');
-	let docContent = $state('');
-	let docLoading = $state(false);
-	let docLoaded = $state(false);
-	let docEditing = $state(false);
-	let docSaving = $state(false);
 
 	// The selected row may be replaced by an authoritative controller response.
 	// Derive it from the shared cache instead of maintaining an optimistic copy.
 	const currentRow = $derived($rows.find((candidate) => candidate.row_id === row.row_id) ?? row);
-
-	$effect(() => {
-		if (activeTab === 'doc' && !docLoaded && !docLoading) {
-			docLoading = true;
-			fetchDoc(tableId, row.row_id)
-				.then((content) => {
-					docContent = content;
-				})
-				.catch(() => {})
-				.finally(() => {
-					docLoading = false;
-					docLoaded = true;
-				});
-		}
-	});
-
-	const docPreview = $derived(marked(docContent) as string);
 
 	const sortedCols = $derived(columns);
 
@@ -128,10 +102,7 @@
 
 <!-- Slide-out panel -->
 <div
-	class="fixed top-0 right-0 z-50 flex h-full w-full flex-col shadow-2xl {T.cardBg} {activeTab ===
-	'doc'
-		? 'max-w-4xl'
-		: 'max-w-md'}"
+	class="fixed top-0 right-0 z-50 flex h-full w-full max-w-md flex-col shadow-2xl {T.cardBg}"
 	role="dialog"
 	aria-modal="true"
 	aria-label="Row details"
@@ -164,74 +135,8 @@
 		</div>
 	</div>
 
-	<!-- Tabs -->
-	<div class="flex border-b {T.border}">
-		<button
-			data-testid="row-panel-tab-fields"
-			class="px-5 py-2.5 text-sm font-medium transition {activeTab === 'fields'
-				? 'border-b-2 border-blue-600 text-blue-600'
-				: `${T.muted} hover:${T.body}`}"
-			onclick={() => (activeTab = 'fields')}
-		>
-			Fields
-		</button>
-	</div>
-
-	{#if activeTab === 'doc'}
-		<!-- Doc tab — split view -->
-		<div class="flex flex-1 flex-col overflow-hidden">
-			<div class="flex items-center justify-between border-b px-4 py-2 {T.cardBorder}">
-				<span class="text-xs {T.muted}">Markdown {docSaving ? '· saving…' : ''}</span>
-				<a
-					data-testid="row-panel-doc-full-editor-link"
-					href="/{workspaceId}/{tableId}/{row.row_id}/doc"
-					class="text-xs text-blue-500 transition hover:underline">Edit full doc ↗</a
-				>
-			</div>
-			{#if docLoading || !docLoaded}
-				<div class="flex flex-1 items-center justify-center text-sm {T.muted}">Loading…</div>
-			{:else if !docContent && !docEditing}
-				<!-- Empty state -->
-				<div class="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-12">
-					<svg class="h-12 w-12 {T.faint}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="1.5"
-							d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-						/>
-					</svg>
-					<p class="text-sm {T.muted}">No doc yet for this row.</p>
-					<button
-						data-testid="row-panel-doc-start-btn"
-						onclick={() => (docEditing = true)}
-						class="rounded-lg px-4 py-2 text-sm font-medium text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-900/20"
-					>
-						Start writing →
-					</button>
-				</div>
-			{:else}
-				<div class="flex flex-1 divide-x overflow-hidden {T.divide}">
-					<!-- Editor pane -->
-					<textarea
-						data-testid="row-panel-doc-textarea"
-						class="flex-1 resize-none border-none px-5 py-4 font-mono text-sm outline-none {T.cardBg} {T.body}"
-						placeholder="Write markdown here…"
-						bind:value={docContent}
-					></textarea>
-					<!-- Preview pane -->
-					<div
-						class="prose prose-sm max-w-none flex-1 overflow-y-auto px-5 py-4 text-sm {T.body} {T.proseDark}"
-					>
-						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-						{@html docPreview}
-					</div>
-				</div>
-			{/if}
-		</div>
-	{:else}
-		<!-- Fields list -->
-		<div class="flex-1 overflow-y-auto px-6 py-4">
+	<!-- Fields list -->
+	<div class="flex-1 overflow-y-auto px-6 py-4">
 			{#each sortedCols as col (col.column_id)}
 				<div class="mb-5">
 					<label class="mb-1 block text-xs font-semibold tracking-wide uppercase {T.muted}">
@@ -420,21 +325,6 @@
 								{/if}
 							</button>
 						{/if}
-					{:else if col.type === 'blob' && col.options?.kind === 'doc'}
-						{@const blob = getBlobCellMetadata(currentRow, col.column_id)}
-						<button
-							class="flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm transition {T.inputBorder} {T.link} hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-							onclick={() => onOpenDocCell?.(currentRow, col)}
-						>
-							<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-								<path
-									fill-rule="evenodd"
-									d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z"
-									clip-rule="evenodd"
-								/>
-							</svg>
-							<span class="min-w-0 truncate">{blob?.filename ?? '+'}</span>
-						</button>
 					{:else if col.type === 'blob'}
 						{@const blob = getBlobCellMetadata(currentRow, col.column_id)}
 						{#if blob}
@@ -499,6 +389,5 @@
 					{/if}
 				</div>
 			{/each}
-		</div>
-	{/if}
+	</div>
 </div>

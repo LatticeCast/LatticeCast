@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Column, Row } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
-	import { fetchDocCell, saveDocCell } from '$lib/backend/tables';
+	import { fetchBlobCell, uploadBlobCell } from '$lib/backend/tables';
 	import { marked } from 'marked';
 	import Portal from '$lib/components/Portal.svelte';
 
@@ -26,10 +26,10 @@
 
 	$effect(() => {
 		docLoading = true;
-		fetchDocCell(tableId, row.row_id, column.column_id)
-			.then((content) => {
-				docContent = content;
-				docEditing = Boolean(content);
+		fetchBlobCell(tableId, row.row_id, column.column_id)
+			.then(async (blob) => {
+				docContent = blob ? await blob.text() : '';
+				docEditing = Boolean(docContent);
 			})
 			.catch(() => {})
 			.finally(() => {
@@ -43,7 +43,12 @@
 		docSaving = true;
 		saveError = '';
 		try {
-			await saveDocCell(tableId, row.row_id, column.column_id, docContent);
+			await uploadBlobCell(
+				tableId,
+				row.row_id,
+				column.column_id,
+				new File([docContent], `${column.name}.md`, { type: 'text/markdown;charset=utf-8' })
+			);
 		} catch (err) {
 			saveError = err instanceof Error ? err.message : 'Failed to save document';
 		} finally {

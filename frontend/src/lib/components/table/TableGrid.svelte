@@ -63,7 +63,7 @@
 		onAddRowInGroup,
 		onToggleCollapseGroup,
 		onManageOptions,
-		onOpenDocCell,
+		onOpenTextCell,
 		addingColumn = false,
 		scrollToRowId = null,
 		scrollToColTrigger = 0
@@ -112,7 +112,7 @@
 		onAddRowInGroup: (key: string, col: Column) => void;
 		onToggleCollapseGroup: (key: string) => void;
 		onManageOptions: (col: Column) => void;
-		onOpenDocCell: (row: Row, col: Column) => void;
+		onOpenTextCell: (row: Row, col: Column) => void;
 		addingColumn?: boolean;
 		scrollToRowId?: number | null;
 		scrollToColTrigger?: number;
@@ -695,14 +695,14 @@
 													: 'translate-x-1'}"
 											></span>
 										</button>
-									{:else if col.type === 'blob' && col.options?.kind === 'doc'}
+									{:else if col.type === 'blob' && col.options?.kind === 'text'}
 										{@const blob = getBlobCellMetadata(row, col.column_id)}
 										<button
 											data-testid="doc-open-{row.row_id}-{col.column_id}"
 											class="flex items-center gap-1.5 rounded px-2 py-1 text-xs transition hover:bg-blue-50 hover:text-blue-700"
 											onclick={(e) => {
 												e.stopPropagation();
-												onOpenDocCell(row, col);
+												onOpenTextCell(row, col);
 											}}
 										>
 											<svg
@@ -725,12 +725,12 @@
 												type="button"
 												data-testid="blob-open-{row.row_id}-{col.column_id}"
 												class="flex max-w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition hover:bg-blue-50 hover:text-blue-700"
-												title={col.options?.kind === 'doc'
+											title={col.options?.kind === 'text'
 													? `Open ${blob.filename}`
 													: `Download ${blob.filename}`}
 												onclick={(e) => {
 													e.stopPropagation();
-													if (col.options?.kind === 'doc') onOpenDocCell(row, col);
+													if (col.options?.kind === 'text') onOpenTextCell(row, col);
 													else void handleBlobDownload(row, col, blob.filename);
 												}}
 											>
@@ -751,7 +751,7 @@
 												<span class="min-w-0 truncate text-blue-600">{blob.filename}</span>
 												<span class="shrink-0 {T.muted}">{formatBlobSize(blob.size)}</span>
 											</button>
-										{:else if col.options?.kind === 'doc'}
+										{:else if col.options?.kind === 'text'}
 											<button
 												type="button"
 												data-testid="blob-create-{row.row_id}-{col.column_id}"
@@ -759,7 +759,7 @@
 												title="Create markdown document"
 												onclick={(e) => {
 													e.stopPropagation();
-													onOpenDocCell(row, col);
+													onOpenTextCell(row, col);
 												}}>+</button
 											>
 										{:else}

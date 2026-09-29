@@ -10,5 +10,5 @@ PostgreSQL owns identity, workspace authorization, table schemas, rows, views, a
 - Row writes must use the PG mutation functions. Blob metadata uses `update_blob_cell`; ordinary patch/put must not mutate blob columns.
 - A `BEFORE INSERT OR UPDATE OF row_data` trigger canonicalises `date`/`datetime` cells to epoch-millisecond integers and rejects the unparseable, so the invariant survives a raw `INSERT`.
 - `row_id` comes from an atomic counter row in `private.table_row_counters`, never `MAX(row_id)+1`. Numbers are monotonic per table and never reused.
-- Stored times are UTC+0 with no zone: `TIMESTAMP` columns, defaults `now() AT TIME ZONE 'UTC'`, database `timezone` pinned to UTC.
+- Every persisted RDS instant is `TIMESTAMPTZ`; defaults use `CURRENT_TIMESTAMP`. Only `rows.row_data` date/datetime cells use epoch-millisecond JSON numbers.
 - Never edit an applied migration; add a new one and refresh `checksums.txt`.

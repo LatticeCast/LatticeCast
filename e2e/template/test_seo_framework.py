@@ -21,6 +21,7 @@ from __future__ import annotations
 import time
 
 import pytest
+import requests
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 from e2e_base import BASE, api, seed_login_info
@@ -69,6 +70,7 @@ def test_seo_framework(browser, admin_token):
         # The blank template has a 'Title' column (text). Use it as the
         # article-name slot so we have a known column_id to write into.
         title_col_id = next(c["column_id"] for c in table["columns"] if c["name"] == "Title")
+        text_col_id = next(c["column_id"] for c in table["columns"] if c["name"] == "Doc")
 
         # ── 3. UPLOAD 3 article rows ───────────────────────────────────────────
         created_row_ids: list[int] = []
@@ -79,9 +81,13 @@ def test_seo_framework(browser, admin_token):
                 f"create row {slug!r}: {r.status_code} {r.text[:200]}"
             row = r.json()
             created_row_ids.append(row["row_id"])
-            # Each row also gets a doc (markdown body uploaded to MinIO)
-            d = api("PUT", f"/api/v1/tables/{TABLE_ID}/rows/{row['row_id']}/doc", token,
-                    data=body)
+            # Each row gets text through the same addressed blob endpoint.
+            d = requests.put(
+                f"{BASE}/api/v1/tables/{TABLE_ID}/rows/{row['row_id']}/blob/{text_col_id}",
+                headers={"Authorization": f"Bearer {token}"},
+                files={"file": (f"{slug}.md", body.encode(), "text/markdown")},
+                timeout=15,
+            )
             assert d.status_code in (200, 201), \
                 f"upload doc for row {row['row_id']}: {d.status_code} {d.text[:200]}"
             print(f"[ok] CREATE row {row['row_id']} {slug!r} + doc ({len(body)}B)")
@@ -103,12 +109,12 @@ def test_seo_framework(browser, admin_token):
             want_slug = expected_by_id[rid][0]
             assert got_slug == want_slug, \
                 f"row {rid} title: got {got_slug!r} want {want_slug!r}"
-            d = api("GET", f"/api/v1/tables/{TABLE_ID}/rows/{rid}/doc", token)
-            assert d.status_code == 200, f"GET doc {rid}: {d.status_code}"
+            d = api("GET", f"/api/v1/tables/{TABLE_ID}/rows/{rid}/blob/{text_col_id}", token)
+            assert d.status_code == 200, f"GET text blob {rid}: {d.status_code}"
             want_body = expected_by_id[rid][1]
             assert d.text == want_body, \
-                f"doc {rid}: got {d.text[:80]!r} want {want_body[:80]!r}"
-            print(f"[ok] READ row {rid} ({got_slug!r}) + doc match")
+                f"text blob {rid}: got {d.text[:80]!r} want {want_body[:80]!r}"
+            print(f"[ok] READ row {rid} ({got_slug!r}) + text blob match")
 
         # ── 5. UI assert via remote Playwright ────────────────────────────────
         page = browser.new_page(viewport={"width": 1280, "height": 800})

@@ -9,7 +9,7 @@ from pydantic import ConfigDict
 from sqlmodel import Field, SQLModel
 
 ColumnType = Literal["text", "string", "number", "date", "datetime", "select", "tags", "checkbox", "url", "blob"]
-BlobKind = Literal["file", "image", "doc", "table"]
+BlobKind = Literal["file", "image", "text", "table"]
 
 
 class ColumnOptions(SQLModel):
@@ -27,7 +27,7 @@ class ColumnOptions(SQLModel):
     width: int | None = None
     kind: BlobKind | None = Field(
         default=None,
-        description="Blob UI hint: file=any binary, image=image, doc=Markdown, table=CSV/XLSX/JSONL.",
+        description="Blob UI hint: file=any binary, image=image, text=plain/Markdown/CSV, table=tabular data.",
     )
     accept: str | None = Field(
         default=None,

@@ -11,8 +11,8 @@ export type SpeechLang = 'zh-TW' | 'en-US' | 'ja-JP';
 export interface Settings {
 	// Server-backed — mirrored into public.user_info.config
 	darkMode: boolean;
-	// IANA zone name. Server times are UTC instants with no zone, so this is
-	// what every date and datetime cell is read and written through. It is
+	// IANA zone name. RDS times are UTC TIMESTAMPTZ instants; row date/datetime
+	// cells are epoch-ms values read and written through this zone. It is
 	// per-user rather than per-device on purpose: the same board must read the
 	// same way on a laptop and on a phone in another country.
 	timezone: string;

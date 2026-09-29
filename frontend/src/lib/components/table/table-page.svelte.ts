@@ -18,8 +18,7 @@ import {
 	updateRow,
 	fetchRows,
 	fetchTable,
-	patchSchema,
-	batchDocsExist
+	patchSchema
 } from '$lib/backend/tables';
 import { createView, updateView, deleteView } from '$lib/backend/views';
 
@@ -67,7 +66,7 @@ class TablePageStore {
 	createTicketInitialData = $state<Record<string, unknown>>({});
 	deletingRowId = $state<number | null>(null);
 	expandedRow = $state<Row | null>(null);
-	docCellState = $state<{ row: Row; col: Column } | null>(null);
+	textCellState = $state<{ row: Row; col: Column } | null>(null);
 	showAddColumn = $state(false);
 	renamingColId = $state<string | null>(null);
 	renameValue = $state('');
@@ -158,7 +157,7 @@ class TablePageStore {
 		this.createTicketInitialData = {};
 		this.deletingRowId = null;
 		this.expandedRow = null;
-		this.docCellState = null;
+		this.textCellState = null;
 		this.showAddColumn = false;
 		this.renamingColId = null;
 		this.renameValue = '';
@@ -274,15 +273,8 @@ class TablePageStore {
 		await updateRow(this.tableId, row.row_id, { row_data: data });
 	}
 
-	async loadDocFlags(tableId: string) {
-		const docSet = await batchDocsExist(tableId);
-		this.rowsWithDocs.clear();
-		for (const rowNumber of docSet) this.rowsWithDocs.add(String(rowNumber));
-	}
-
 	async handleRefreshRows(tableId: string) {
 		await fetchRows(tableId);
-		this.loadDocFlags(tableId).catch(() => {});
 	}
 
 	// ─── Cell edit handlers ────────────────────────────────────────────────────

@@ -5,10 +5,9 @@
 // .svelte View just calls these functions — stores auto-update → UI re-renders.
 
 import { get } from 'svelte/store';
+import { LatticeCastError } from '@latticecast/lattice-cast';
 import { authStore } from '$lib/stores/auth.store';
 import { authenticatedLatticeCast, latticeCast } from './client';
-import { BACKEND_URL } from './config';
-import { getAuthHeaders, getBearerHeader } from './http';
 import { applySchema } from '$lib/stores/table_schema.store';
 import { rows } from '$lib/stores/table_rows.store';
 import { tables, currentTableId } from '$lib/stores/table_schemas.store';
@@ -160,78 +159,22 @@ export async function deleteRow(tableId: string, rowNumber: number): Promise<voi
 	rows.update((r) => r.filter((row) => row.row_id !== rowNumber));
 }
 
-// ─── Docs ─────────────────────────────────────────────────────────────────────
+// ─── Blob cells ───────────────────────────────────────────────────────────────
 
-/** Read the legacy default document attached to a row. */
-export async function fetchDoc(tableId: string, rowNumber: number): Promise<string> {
-	const headers = await getBearerHeader();
-	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/doc`, {
-		headers
-	});
-	if (!response.ok) throw new Error(`Failed to fetch doc: ${response.statusText}`);
-	return response.text();
-}
-
-/** Read a document from one explicitly selected blob cell. */
-export async function fetchDocCell(
+/** Fetch the original bytes from one explicitly selected blob cell. */
+export async function fetchBlobCell(
 	tableId: string,
 	rowNumber: number,
 	columnId: string
-): Promise<string> {
-	const headers = await getBearerHeader();
-	const response = await fetch(
-		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/blob/${columnId}/doc`,
-		{ headers }
-	);
-	if (!response.ok) throw new Error(`Failed to fetch doc: ${response.statusText}`);
-	return response.text();
-}
-
-/** Save the legacy default document attached to a row. */
-export async function saveDoc(
-	tableId: string,
-	rowNumber: number,
-	content: string
-): Promise<string> {
-	const headers = await getBearerHeader();
-	const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/doc`, {
-		method: 'PUT',
-		headers: { ...headers, 'Content-Type': 'text/plain' },
-		body: content
-	});
-	if (!response.ok) throw new Error(`Failed to save doc: ${response.statusText}`);
-	return response.text();
-}
-
-/** Save a document into one explicitly selected blob cell. */
-export async function saveDocCell(
-	tableId: string,
-	rowNumber: number,
-	columnId: string,
-	content: string
-): Promise<BlobCellMetadata> {
-	const headers = await getBearerHeader();
-	const response = await fetch(
-		`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/blob/${columnId}/doc`,
-		{
-			method: 'PUT',
-			headers: { ...headers, 'Content-Type': 'text/plain' },
-			body: content
-		}
-	);
-	if (!response.ok) {
-		const detail = await response.text();
-		throw new Error(`Failed to save doc (${response.status}): ${detail || response.statusText}`);
+): Promise<Blob | null> {
+	const accessToken = get(authStore)?.accessToken;
+	if (!accessToken) throw new Error('Not authenticated');
+	try {
+		return await latticeCast.downloadTableBlob(accessToken, { tableId, rowId: rowNumber, columnId });
+	} catch (error) {
+		if (error instanceof LatticeCastError && error.status === 404) return null;
+		throw error;
 	}
-	const metadata: BlobCellMetadata = await response.json();
-	rows.update((list) =>
-		list.map((row) =>
-			row.row_id === rowNumber
-				? { ...row, row_data: { ...row.row_data, [columnId]: metadata } }
-				: row
-		)
-	);
-	return metadata;
 }
 
 /** Upload one arbitrary file into an explicitly selected blob cell. */
@@ -239,7 +182,8 @@ export async function uploadBlobCell(
 	tableId: string,
 	rowNumber: number,
 	columnId: string,
-	file: File
+	file: Blob,
+	fileName = file instanceof File ? file.name : 'blob'
 ): Promise<BlobCellMetadata> {
 	const accessToken = get(authStore)?.accessToken;
 	if (!accessToken) throw new Error('Not authenticated');
@@ -248,7 +192,7 @@ export async function uploadBlobCell(
 		rowId: rowNumber,
 		columnId,
 		file,
-		fileName: file.name
+		fileName
 	});
 	rows.update((list) =>
 		list.map((row) =>
@@ -284,35 +228,6 @@ export async function downloadBlobCell(
 	link.click();
 	link.remove();
 	window.setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
-export async function checkDocExists(tableId: string, rowNumber: number): Promise<boolean> {
-	const auth = get(authStore);
-	if (!auth?.accessToken) return false;
-	try {
-		const response = await fetch(`${BACKEND_URL}/api/v1/tables/${tableId}/rows/${rowNumber}/doc`, {
-			method: 'HEAD',
-			headers: { Authorization: `Bearer ${auth.accessToken}` }
-		});
-		if (!response.ok) return false;
-		const length = response.headers.get('content-length');
-		return length !== null && parseInt(length, 10) > 0;
-	} catch {
-		return false;
-	}
-}
-
-export async function batchDocsExist(tableId: string): Promise<Set<number>> {
-	const auth = get(authStore);
-	if (!auth?.accessToken) return new Set();
-	try {
-		const data = await authenticatedLatticeCast.requestJson<{ row_ids: number[] }>(
-			`/tables/${tableId}/docs-exist`
-		);
-		return new Set(data.row_ids as number[]);
-	} catch {
-		return new Set();
-	}
 }
 
 // ─── Templates ────────────────────────────────────────────────────────────────

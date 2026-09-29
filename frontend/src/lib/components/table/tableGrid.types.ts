@@ -46,7 +46,7 @@ export interface TableGridProps {
 	onAddRowInGroup: (key: string, col: Column) => void;
 	onToggleCollapseGroup: (key: string) => void;
 	onManageOptions: (col: Column) => void;
-	onOpenDocCell: (row: Row, col: Column) => void;
+	onOpenTextCell: (row: Row, col: Column) => void;
 	addingColumn?: boolean;
 	scrollToRowId?: number | null;
 	scrollToColTrigger?: number;

@@ -79,7 +79,7 @@ def test_crm_template_columns(crm_table, admin_token):
             f"column '{name}': expected type '{expected_type}', got '{actual_type}'"
         )
 
-    assert col_map["Doc"].get("options", {}).get("kind") == "doc"
+    assert col_map["Doc"].get("options", {}).get("kind") == "text"
 
     stage_opts = col_map["Stage"].get("options", {})
     stage_values = [ch["value"] for ch in stage_opts.get("choices", [])]

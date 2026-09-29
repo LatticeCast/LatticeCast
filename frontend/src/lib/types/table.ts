@@ -21,7 +21,7 @@ export type ColumnType =
 	| 'blob';
 
 /** The rendering/picker hint for a single-file blob column. */
-export type BlobKind = 'file' | 'image' | 'doc' | 'table';
+export type BlobKind = 'file' | 'image' | 'text' | 'table';
 
 /**
  * The storage metadata persisted as the value of one blob column cell.
