@@ -1,8 +1,5 @@
 # Changelog
 
-
-
-
 ## 0.64 — 2026-09-27 (cache-driven dashboard state, unified LC credential issuance)
 
 - Moved Dashboard block queries into a backend controller and shared writable
