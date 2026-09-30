@@ -10,6 +10,9 @@ always working in ./.tmp/ don't /tmp/
 
 always working in tmux session LatticeCast that we can do pair programming ex: docker compose
 
+All `git commit` commands MUST run inside a tmux session. Never commit from a
+direct shell.
+
 if touch migration sql, ALWAYS need load skill sql
 
 ## Rules
