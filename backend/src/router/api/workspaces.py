@@ -1,6 +1,6 @@
 # src/router/api/workspaces.py
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -279,7 +279,7 @@ async def update_workspace(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A workspace with that name already exists")
 
     workspace.workspace_name = data.workspace_name
-    workspace.updated_at = datetime.utcnow()
+    workspace.updated_at = datetime.now(UTC)
     session.add(workspace)
     await session.commit()
     await session.refresh(workspace)  # refreshes attached instance — safe

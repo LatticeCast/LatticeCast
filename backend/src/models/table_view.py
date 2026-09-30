@@ -9,7 +9,7 @@
 #
 # This mirrors how columns identify themselves: by column_id (UUID),
 # with name + type + options stored alongside.
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -46,8 +46,8 @@ class TableView(SQLModel, table=True):
     )
     created_by: UUID | None = Field(default=None, foreign_key="auth.users.user_id")
     updated_by: UUID | None = Field(default=None, foreign_key="auth.users.user_id")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @property
     def name(self) -> str:

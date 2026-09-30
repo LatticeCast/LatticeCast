@@ -1,5 +1,5 @@
 # src/models/row.py
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -33,8 +33,8 @@ class Row(SQLModel, table=True):
     updated_by: UUID | None = Field(
         default=None, foreign_key="auth.users.user_id", description="UUID of user who last updated the row"
     )
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
-    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Creation timestamp")
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Last update timestamp")
 
 
 class RowCreate(SQLModel):

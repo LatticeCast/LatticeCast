@@ -108,8 +108,8 @@ class MeResponse(BaseModel):
 
 
 def _utc_now() -> datetime:
-    """Return a naive UTC timestamp, matching the database TIMESTAMP convention."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    """Return a timezone-aware UTC instant for TIMESTAMPTZ persistence."""
+    return datetime.now(UTC)
 
 
 def _token_response(

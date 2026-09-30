@@ -41,8 +41,8 @@ def _hash(value: str) -> str:
 
 
 def _now() -> datetime:
-    """UTC, represented as the project's TIMESTAMP WITHOUT TIME ZONE contract."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    """Return a timezone-aware UTC instant for TIMESTAMPTZ persistence."""
+    return datetime.now(UTC)
 
 
 def _pkce_challenge(verifier: str) -> str:

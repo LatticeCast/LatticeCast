@@ -1,5 +1,5 @@
 # src/models/workspace.py
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID, uuid4
 
@@ -15,8 +15,8 @@ class Workspace(SQLModel, table=True):
 
     workspace_id: UUID = Field(default_factory=uuid4, primary_key=True, description="UUID primary key")
     workspace_name: str = Field(description="Workspace display name")
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Creation timestamp")
-    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update timestamp")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Creation timestamp")
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Last update timestamp")
 
 
 class WorkspaceMember(SQLModel, table=True):

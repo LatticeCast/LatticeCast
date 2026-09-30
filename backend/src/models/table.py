@@ -1,7 +1,7 @@
 # src/models/table.py
 # V34: Table is identity-only. Columns moved to the __schema__ row in
 # public.table_views; views moved to user-named rows in the same table.
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
@@ -58,8 +58,8 @@ class Table(SQLModel, table=True):
         description="Workspace UUID (composite PK)",
     )
     table_id: str = Field(primary_key=True, description="Table name (composite PK)")
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class TableCreate(SQLModel):

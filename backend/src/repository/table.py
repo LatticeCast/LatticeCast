@@ -4,7 +4,7 @@
 # touches public.rows, not table_views.
 import hashlib
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select, text
@@ -103,7 +103,7 @@ class TableRepository:
 
     async def update(self, table: Table, table_id: str) -> Table:
         next_table_id = table_id.lower()
-        next_updated_at = datetime.utcnow()
+        next_updated_at = datetime.now(UTC)
         result = await self.session.execute(
             text("""
                 UPDATE tables

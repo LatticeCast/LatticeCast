@@ -23,8 +23,8 @@ SESSION_TTL = timedelta(days=30)
 
 
 def _utc_now() -> datetime:
-    """Return a naive UTC timestamp for the project's TIMESTAMP convention."""
-    return datetime.now(UTC).replace(tzinfo=None)
+    """Return a timezone-aware UTC instant for TIMESTAMPTZ persistence."""
+    return datetime.now(UTC)
 
 
 def hash_refresh_token(refresh_token: str) -> str:
