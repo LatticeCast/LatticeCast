@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ -z "${TMUX:-}" ]]; then
+    echo "[pre-commit] Refusing commit: run git commit inside a tmux session."
+    exit 1
+fi
+
 echo "[pre-commit] Backend lint"
 docker compose exec -T backend uv run ruff check src tests
 
