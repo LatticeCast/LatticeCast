@@ -1,13 +1,13 @@
 # Changelog
 
-## 0.65.2 — 2026-09-30
+## 0.66 — 2026-09-30
 
 - Enforced that all commits run from a tmux session before lint and migration
   verification begin.
 - Updated backend timestamp writes and expiry comparisons to use timezone-aware
   UTC values with the V60 `TIMESTAMPTZ` database contract.
 
-## 0.65.0 — 2026-09-30 (generic blob cells)
+## 0.65 — 2026-09-30 (generic blob cells)
 
 - Converted persisted application instants to `TIMESTAMPTZ` and set PostgreSQL
   to UTC (V60). JSONB `date`/`datetime` cells remain epoch-millisecond numbers;
