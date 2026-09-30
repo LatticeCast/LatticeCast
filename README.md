@@ -20,7 +20,7 @@ Self-hosted Airtable + Jira. Flexible tables with JSONB, customizable views (Tab
 - **Views** — Table (spreadsheet), Kanban (drag-and-drop), Timeline/Gantt (date bars), all customizable
 - **PM Template** — Jira-like project management with epic/story/task/bug hierarchy, auto-generated ticket keys
 - **Per-column Indexes** — auto-managed PG B-tree (number/date) and GIN (select/tags) indexes
-- **Ticket Docs** — each ticket has a markdown doc in MinIO with auto-generated templates and hierarchy links
+- **Ticket Notes** — each ticket can hold one Markdown/text blob in MinIO, edited through the shared blob-cell UI
 - **Auto-cascade** — all children merged → parent auto-merged
 - **Import/Export** — CSV, JSON, templates
 - **OAuth** — Google, Authentik with PKCE
@@ -32,7 +32,7 @@ workspaces       → multi-user (workspace_id = owner email)
 workspace_members → membership + role
 tables           → columns JSONB + views JSONB
 rows             → row_data JSONB + created_by/updated_by
-MinIO            → ticket docs as {user}/{workspace}/{table}/{row}.md
+MinIO            → addressed one-file blob cells at {workspace}/{table}/rows/{row}/blobs/{column}
 ```
 
 ## Tech Stack
@@ -71,7 +71,7 @@ docker compose up -d
 3. Developer picks ticket → branch → implement → test → merge
 4. Status auto-updates: todo → in_progress → testing → review → merged
 5. All children merged → parent auto-merged
-6. Ticket docs in MinIO track specs/notes per ticket
+6. Ticket text blobs in MinIO track specs/notes per ticket
 ```
 
 ## Views

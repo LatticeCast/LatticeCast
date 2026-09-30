@@ -170,7 +170,11 @@ export async function fetchBlobCell(
 	const accessToken = get(authStore)?.accessToken;
 	if (!accessToken) throw new Error('Not authenticated');
 	try {
-		return await latticeCast.downloadTableBlob(accessToken, { tableId, rowId: rowNumber, columnId });
+		return await latticeCast.downloadTableBlob(accessToken, {
+			tableId,
+			rowId: rowNumber,
+			columnId
+		});
 	} catch (error) {
 		if (error instanceof LatticeCastError && error.status === 404) return null;
 		throw error;

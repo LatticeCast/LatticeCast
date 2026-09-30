@@ -97,7 +97,7 @@ services:
       POSTGRES_PASSWORD: dba_pws
       POSTGRES_APP_PASSWORD: ${POSTGRES_APP_PASSWORD}
       POSTGRES_MGR_PASSWORD: ${POSTGRES_MGR_PASSWORD}
-      TEST_NETWORK: latticecast_app-network
+      TEST_NETWORK: lattice-cast_app-network
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./migration:/jetbase

@@ -44,8 +44,7 @@ export const BLOB_KIND_OPTIONS: ReadonlyArray<{
 		value: 'text',
 		label: 'Text',
 		description: 'Plain text, Markdown, or CSV',
-		accept:
-			'.md,.txt,.csv,text/markdown,text/plain,text/csv'
+		accept: '.md,.txt,.csv,text/markdown,text/plain,text/csv'
 	},
 	{
 		value: 'table',
@@ -55,7 +54,11 @@ export const BLOB_KIND_OPTIONS: ReadonlyArray<{
 			'.csv,.xlsx,.jsonl,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/x-ndjson,application/jsonl'
 	},
 	{ value: 'image', label: 'Image', description: 'Any image file', accept: 'image/*' },
-	{ value: 'file', label: 'File / Binary', description: 'Any single file, including ZIP and other binary data' }
+	{
+		value: 'file',
+		label: 'File / Binary',
+		description: 'Any single file, including ZIP and other binary data'
+	}
 ];
 
 export interface FilterCondition {
@@ -454,7 +457,8 @@ export function buildExportJSON(colList: Column[], rowList: Row[]): string {
 		const obj: Record<string, unknown> = {};
 		for (const col of cols) {
 			const val = row.row_data[col.column_id] ?? null;
-			obj[col.name] = val !== null && isTemporalType(col.type) ? formatCellDate(val, col.type) : val;
+			obj[col.name] =
+				val !== null && isTemporalType(col.type) ? formatCellDate(val, col.type) : val;
 		}
 		return obj;
 	});

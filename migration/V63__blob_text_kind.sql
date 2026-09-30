@@ -9,12 +9,12 @@ SET config = jsonb_set(
     (
         SELECT jsonb_agg(
             CASE
-                WHEN column_data ->> 'type' = 'blob'
-                     AND column_data -> 'options' ->> 'kind' = 'doc'
-                THEN jsonb_set(column_data, '{options,kind}', '"text"'::JSONB)
-                ELSE column_data
+                WHEN entry.column_data ->> 'type' = 'blob'
+                     AND entry.column_data -> 'options' ->> 'kind' = 'doc'
+                THEN jsonb_set(entry.column_data, '{options,kind}', '"text"'::JSONB)
+                ELSE entry.column_data
             END
-            ORDER BY ordinality
+            ORDER BY entry.ordinality
         )
         FROM jsonb_array_elements(table_data.config -> 'columns')
             WITH ORDINALITY AS entry(column_data, ordinality)
@@ -23,8 +23,8 @@ SET config = jsonb_set(
 WHERE EXISTS (
     SELECT 1
     FROM jsonb_array_elements(table_data.config -> 'columns') AS entry(column_data)
-    WHERE column_data ->> 'type' = 'blob'
-      AND column_data -> 'options' ->> 'kind' = 'doc'
+    WHERE entry.column_data ->> 'type' = 'blob'
+      AND entry.column_data -> 'options' ->> 'kind' = 'doc'
 );
 
 CREATE OR REPLACE FUNCTION public.create_table_from_template(

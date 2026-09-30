@@ -716,8 +716,8 @@
 													clip-rule="evenodd"
 												/>
 											</svg>
-										<span class="min-w-0 truncate text-blue-600">{blob?.filename ?? '+'}</span>
-									</button>
+											<span class="min-w-0 truncate text-blue-600">{blob?.filename ?? '+'}</span>
+										</button>
 									{:else if col.type === 'blob'}
 										{@const blob = getBlobCellMetadata(row, col.column_id)}
 										{#if blob}
@@ -725,7 +725,7 @@
 												type="button"
 												data-testid="blob-open-{row.row_id}-{col.column_id}"
 												class="flex max-w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition hover:bg-blue-50 hover:text-blue-700"
-											title={col.options?.kind === 'text'
+												title={col.options?.kind === 'text'
 													? `Open ${blob.filename}`
 													: `Download ${blob.filename}`}
 												onclick={(e) => {

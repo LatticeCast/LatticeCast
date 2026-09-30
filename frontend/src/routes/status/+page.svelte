@@ -10,6 +10,6 @@
 	<section class="mx-auto max-w-xl rounded-xl bg-white p-6 shadow-sm">
 		<h1 class="text-xl font-semibold">LatticeCast frontend</h1>
 		<p class="mt-3 text-sm text-gray-600">Deploy commit</p>
-		<code class="mt-1 block break-all rounded bg-gray-100 px-3 py-2 text-sm">{commit}</code>
+		<code class="mt-1 block rounded bg-gray-100 px-3 py-2 text-sm break-all">{commit}</code>
 	</section>
 </main>

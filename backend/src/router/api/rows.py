@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.settings import settings
 from config.storage import s3_client
 from middleware.auth import get_current_user, get_rls_session
-from models.row import Row, RowCreate, RowPut, RowResponse, RowUpdate
+from models.row import RowCreate, RowPut, RowResponse, RowUpdate
 from models.user import User
 from repository.row import RowRepository
 from repository.table_view import TableViewRepository

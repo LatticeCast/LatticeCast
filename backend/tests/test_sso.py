@@ -1,4 +1,3 @@
-import base64
 import hashlib
 
 from router.api.sso import _hash, _pkce_challenge, _redirect_with_code, _valid_redirect_uri

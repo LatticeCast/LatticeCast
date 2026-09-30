@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "[pre-commit] Backend lint"
+docker compose exec -T backend uv run ruff check src tests
+
+echo "[pre-commit] Frontend lint"
+docker compose exec -T frontend npm run lint:check
+
+echo "[pre-commit] Migration lint and fresh-database verification"
+docker compose --profile migration run --rm --entrypoint python \
+    migration migrate.py --test-only

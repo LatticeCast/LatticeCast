@@ -1,6 +1,12 @@
 <script lang="ts">
 	import type { Column, Row, ViewConfig } from '$lib/types/table';
-	import { getChoices, getChoiceColor, getTagValues, formatCellDate, isTemporalType } from './table.utils';
+	import {
+		getChoices,
+		getChoiceColor,
+		getTagValues,
+		formatCellDate,
+		isTemporalType
+	} from './table.utils';
 	import { updateRow } from '$lib/backend/tables';
 	import { updateView } from '$lib/backend/views';
 	import { T } from '$lib/UI/theme.svelte';

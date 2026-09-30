@@ -359,6 +359,27 @@ def run(cmd: list[str], check: bool = True, capture: bool = False) -> subprocess
     return subprocess.run(cmd, check=check, capture_output=capture, text=True)
 
 
+def test_container_host() -> str:
+    """Return the temporary PostgreSQL container's address on its Docker network.
+
+    Docker's embedded DNS is not consistently available to a one-off Compose
+    container on every Docker implementation.  Inspecting the container keeps
+    the migration runner on the isolated test network without depending on DNS.
+    """
+    result = run(
+        [
+            "docker", "inspect", "--format",
+            "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+            TEST_CONTAINER,
+        ],
+        capture=True,
+    )
+    host = result.stdout.strip()
+    if not host:
+        raise RuntimeError("Temporary PostgreSQL container has no network address")
+    return host
+
+
 def psql_query(sql: str) -> str:
     """Run SQL against the test container."""
     result = run(
@@ -430,7 +451,7 @@ def step_test() -> bool:
 
     try:
         print("  Starting temp PostgreSQL…")
-        pg_host = os.environ.get("TEST_PG_HOST", TEST_CONTAINER)
+        configured_host = os.environ.get("TEST_PG_HOST")
         pg_port = os.environ.get("TEST_PG_PORT", "5432")
         run_args = [
             "docker", "run", "--rm", "--detach",
@@ -439,12 +460,14 @@ def step_test() -> bool:
             "--env", f"POSTGRES_PASSWORD={DBA_PASSWORD}",
             "--env", f"POSTGRES_DB={TEST_DB}",
         ]
-        if pg_host == "localhost":
+        if configured_host == "localhost":
             run_args += ["--publish", f"{pg_port}:5432"]
         else:
             run_args += ["--network", os.environ.get("TEST_NETWORK", "bridge")]
         run_args.append(PG_IMAGE)
         run(run_args)
+
+        pg_host = configured_host or test_container_host()
 
         # Wait for ready — retry actual connection, not just pg_isready
         test_dsn = f"postgresql://{DBA_USER}:{DBA_PASSWORD}@{pg_host}:{pg_port}/{TEST_DB}"

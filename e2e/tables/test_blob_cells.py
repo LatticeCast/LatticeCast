@@ -43,7 +43,7 @@ def test_blob_cells_round_trip(admin_token, workspace):
         admin_token,
         json={"name": "Notes", "type": "blob", "options": {"kind": "text", "accept": "text/markdown,.md"}},
     )
-    assert response.status_code == 201, f"create doc blob column: {response.status_code} {response.text[:200]}"
+    assert response.status_code == 201, f"create text blob column: {response.status_code} {response.text[:200]}"
     doc_column_id = _column_id(response.json(), "Notes")
 
     response = api("POST", f"/api/v1/tables/{table_id}/rows", admin_token, json={"row_data": {}})

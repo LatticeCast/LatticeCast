@@ -2,10 +2,15 @@
 
 ## 0.65 — 2026-09-30 (generic blob cells)
 
+- Converted persisted application instants to `TIMESTAMPTZ` and set PostgreSQL
+  to UTC (V60). JSONB `date`/`datetime` cells remain epoch-millisecond numbers;
+  the frontend owns timezone presentation.
 - Removed all document-specific blob routes and client helpers. Blob content is
   addressed only by table, row, and column IDs through one generic API.
 - Renamed the text editor hint from `doc` to `text` for plain text, Markdown,
   and CSV; V63 migrates existing schemas and future template output.
+- Text blobs now start empty; v65 no longer generates ticket-specific Markdown
+  templates or hierarchy links.
 
 ## 0.64 — 2026-09-27 (cache-driven dashboard state, unified LC credential issuance)
 
