@@ -1,9 +1,8 @@
 // lib/backend/auth.ts
 // Backend auth API calls
 
-import { LatticeCastError } from '@latticecast/lattice-cast';
 import type { AuthProvider } from '$lib/types/auth';
-import { latticeCast } from './client';
+import { BackendApiError, requestJson } from './client';
 
 export interface TokenResponse {
 	access_token: string;
@@ -35,7 +34,10 @@ export interface MeResponse {
  * the password and returns the resolved user_id UUID as access_token.
  */
 export async function login(user_name: string, password: string): Promise<TokenResponse> {
-	return (await latticeCast.loginPassword(user_name, password)) as TokenResponse;
+	return requestJson<TokenResponse>('/login/password', {
+		method: 'POST',
+		body: { user_name, password }
+	});
 }
 
 /**
@@ -47,7 +49,7 @@ export async function exchangeCodeViaBackend(
 	redirectUri: string,
 	codeVerifier: string
 ): Promise<TokenResponse> {
-	return latticeCast.requestJson<TokenResponse>(`/login/${provider}/token`, {
+	return requestJson<TokenResponse>(`/login/${provider}/token`, {
 		method: 'POST',
 		body: {
 			code,
@@ -61,7 +63,7 @@ export async function exchangeCodeViaBackend(
  * Get user info and role from backend /me endpoint.
  */
 export async function fetchMe(accessToken: string): Promise<MeResponse | null> {
-	return latticeCast.fetchMe<MeResponse>(accessToken);
+	return requestJson<MeResponse>('/login/me', { accessToken });
 }
 
 /**
@@ -69,13 +71,13 @@ export async function fetchMe(accessToken: string): Promise<MeResponse | null> {
  */
 export async function updateEmail(email: string, accessToken: string): Promise<MeResponse> {
 	try {
-		return await latticeCast.requestJson<MeResponse>('/login/me/email', {
+		return await requestJson<MeResponse>('/login/me/email', {
 			method: 'PUT',
 			accessToken,
 			body: { email }
 		});
 	} catch (error) {
-		if (error instanceof LatticeCastError && error.status === 409) {
+		if (error instanceof BackendApiError && error.status === 409) {
 			throw new Error('email already registered');
 		}
 		throw error;

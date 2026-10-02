@@ -1,8 +1,7 @@
 // lib/backend/storage.ts
 // Storage API client for persisting JSON data to backend
 
-import { LatticeCastError } from '@latticecast/lattice-cast';
-import { authenticatedLatticeCast } from './client';
+import { BackendApiError, authenticatedRequestJson } from './client';
 import { BACKEND_URL } from './config';
 import { getBearerHeader } from './http';
 
@@ -11,9 +10,9 @@ import { getBearerHeader } from './http';
  */
 export async function loadJson<T>(path: string): Promise<T | null> {
 	try {
-		return await authenticatedLatticeCast.requestJson<T>(`/storage/file/${path}`);
+		return await authenticatedRequestJson<T>(`/storage/file/${path}`);
 	} catch (error) {
-		if (error instanceof LatticeCastError && error.status === 404) return null;
+		if (error instanceof BackendApiError && error.status === 404) return null;
 		console.error(`[Storage] Failed to load ${path}:`, error);
 		return null;
 	}

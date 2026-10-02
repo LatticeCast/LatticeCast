@@ -3,7 +3,7 @@
 // Controller: workspace + members CRUD → API call + menu store update.
 
 import { get } from 'svelte/store';
-import { authenticatedLatticeCast } from './client';
+import { authenticatedRequestJson } from './client';
 import { workspaces, currentWorkspaceId, tables } from '$lib/stores/table_schemas.store';
 import {
 	deleteWorkspaceMember,
@@ -30,13 +30,13 @@ export interface AddMember {
 // ─── Workspaces ───────────────────────────────────────────────────────────────
 
 export async function fetchWorkspaces(): Promise<Workspace[]> {
-	const result = await authenticatedLatticeCast.requestJson<Workspace[]>('/workspaces');
+	const result = await authenticatedRequestJson<Workspace[]>('/workspaces');
 	workspaces.set(result);
 	return result;
 }
 
 export async function createWorkspace(data: CreateWorkspace): Promise<Workspace> {
-	const ws = await authenticatedLatticeCast.requestJson<Workspace>('/workspaces', {
+	const ws = await authenticatedRequestJson<Workspace>('/workspaces', {
 		method: 'POST',
 		body: data
 	});
@@ -51,7 +51,7 @@ export async function updateWorkspace(
 	workspaceId: string,
 	data: UpdateWorkspace
 ): Promise<Workspace> {
-	const ws = await authenticatedLatticeCast.requestJson<Workspace>(`/workspaces/${workspaceId}`, {
+	const ws = await authenticatedRequestJson<Workspace>(`/workspaces/${workspaceId}`, {
 		method: 'PUT',
 		body: data
 	});
@@ -60,7 +60,7 @@ export async function updateWorkspace(
 }
 
 export async function deleteWorkspace(workspaceId: string): Promise<void> {
-	await authenticatedLatticeCast.requestJson<void>(`/workspaces/${workspaceId}`, {
+	await authenticatedRequestJson<void>(`/workspaces/${workspaceId}`, {
 		method: 'DELETE'
 	});
 	workspaces.update((list) => list.filter((w) => w.workspace_id !== workspaceId));
@@ -73,7 +73,7 @@ export async function deleteWorkspace(workspaceId: string): Promise<void> {
 // ─── Members ──────────────────────────────────────────────────────────────────
 
 export async function fetchMembers(workspaceId: string): Promise<WorkspaceMemberFull[]> {
-	const result = await authenticatedLatticeCast.requestJson<WorkspaceMemberFull[]>(
+	const result = await authenticatedRequestJson<WorkspaceMemberFull[]>(
 		`/workspaces/${workspaceId}/members`
 	);
 	setWorkspaceMembers(workspaceId, result);
@@ -84,7 +84,7 @@ export async function addMember(
 	workspaceId: string,
 	data: AddMember
 ): Promise<WorkspaceMemberFull> {
-	const member = await authenticatedLatticeCast.requestJson<WorkspaceMemberFull>(
+	const member = await authenticatedRequestJson<WorkspaceMemberFull>(
 		`/workspaces/${workspaceId}/members`,
 		{ method: 'POST', body: data }
 	);
@@ -97,7 +97,7 @@ export async function updateMemberLevel(
 	userId: string,
 	level: WorkspaceAccessLevel
 ): Promise<WorkspaceMemberFull> {
-	const member = await authenticatedLatticeCast.requestJson<WorkspaceMemberFull>(
+	const member = await authenticatedRequestJson<WorkspaceMemberFull>(
 		`/workspaces/${workspaceId}/members/${userId}`,
 		{ method: 'PUT', body: { level } }
 	);
@@ -106,7 +106,7 @@ export async function updateMemberLevel(
 }
 
 export async function removeMember(workspaceId: string, userId: string): Promise<void> {
-	await authenticatedLatticeCast.requestJson<void>(`/workspaces/${workspaceId}/members/${userId}`, {
+	await authenticatedRequestJson<void>(`/workspaces/${workspaceId}/members/${userId}`, {
 		method: 'DELETE'
 	});
 	deleteWorkspaceMember(workspaceId, userId);

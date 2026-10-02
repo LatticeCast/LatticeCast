@@ -3,7 +3,7 @@
 import { writable, get } from 'svelte/store';
 import { browser } from '$app/environment';
 import { authStore } from '$lib/stores/auth.store';
-import { authenticatedLatticeCast } from '$lib/backend/client';
+import { authenticatedRequestJson } from '$lib/backend/client';
 import { browserZone } from '$lib/utils/temporal';
 
 export type SpeechLang = 'zh-TW' | 'en-US' | 'ja-JP';
@@ -83,13 +83,10 @@ async function flushPatch() {
 	if (Object.keys(drifted).length === 0) return;
 
 	try {
-		const next = await authenticatedLatticeCast.requestJson<Record<string, unknown>>(
-			'/login/me/config',
-			{
-				method: 'PATCH',
-				body: drifted
-			}
-		);
+		const next = await authenticatedRequestJson<Record<string, unknown>>('/login/me/config', {
+			method: 'PATCH',
+			body: drifted
+		});
 		for (const key of SERVER_KEYS) serverState[key] = next[key];
 	} catch {
 		// best-effort — the next change will retry

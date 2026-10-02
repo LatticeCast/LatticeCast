@@ -2,14 +2,14 @@
 //
 // Controller: load server-wide announcements and replace the shared cache.
 
-import { latticeCast } from './client';
+import { requestJson } from './client';
 import { setAnnouncements, type Announcement } from '$lib/stores/announcement.store';
 
 const ANNOUNCEMENTS_LQL =
 	'table("announcement") | filter((r)->{r.type in @["app","server"]}) | sort_desc("updated_at") | limit(20)';
 
 export async function fetchAnnouncements(): Promise<Announcement[]> {
-	const payload: unknown = await latticeCast.requestJson('/announcements/query', {
+	const payload: unknown = await requestJson('/announcements/query', {
 		method: 'POST',
 		body: { lql: ANNOUNCEMENTS_LQL }
 	});

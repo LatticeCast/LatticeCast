@@ -1,6 +1,6 @@
 // Controller: dashboard block query → backend response → shared cache.
 
-import { authenticatedLatticeCast } from './client';
+import { authenticatedRequestJson } from './client';
 import {
 	dashboardBlockKey,
 	setDashboardBlockError,
@@ -23,7 +23,7 @@ export async function fetchDashboardBlockRows(
 	latestRequestByBlock.set(key, requestId);
 	setDashboardBlockLoading(key);
 	try {
-		const payload = await authenticatedLatticeCast.requestJson<{ rows: BlockRow[] }>(
+		const payload = await authenticatedRequestJson<{ rows: BlockRow[] }>(
 			`/tables/${tableId}/views/${encodeURIComponent(viewName)}/blocks/${blockId}/query`,
 			{ method: 'POST', body: { params: runtimeParams ?? {} } }
 		);

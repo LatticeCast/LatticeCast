@@ -5,9 +5,7 @@
 // .svelte View just calls these functions — stores auto-update → UI re-renders.
 
 import { get } from 'svelte/store';
-import { LatticeCastError } from '@latticecast/lattice-cast';
-import { authStore } from '$lib/stores/auth.store';
-import { authenticatedLatticeCast, latticeCast } from './client';
+import { BackendApiError, authenticatedRequestBlob, authenticatedRequestJson } from './client';
 import { applySchema } from '$lib/stores/table_schema.store';
 import { rows } from '$lib/stores/table_rows.store';
 import { tables, currentTableId } from '$lib/stores/table_schemas.store';
@@ -27,14 +25,14 @@ import type {
 // ─── Table CRUD ───────────────────────────────────────────────────────────────
 
 export async function fetchTables(): Promise<Table[]> {
-	const result = await authenticatedLatticeCast.requestJson<Table[]>('/tables');
+	const result = await authenticatedRequestJson<Table[]>('/tables');
 	tables.set(result);
 	return result;
 }
 
 export async function fetchTable(tableId: string, workspaceId?: string): Promise<Table> {
 	const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
-	const table = await authenticatedLatticeCast.requestJson<Table>(`/tables/${tableId}${qs}`);
+	const table = await authenticatedRequestJson<Table>(`/tables/${tableId}${qs}`);
 	currentTableId.set(table.table_id);
 	tables.update((list) => {
 		const idx = list.findIndex((t) => t.table_id === table.table_id);
@@ -45,7 +43,7 @@ export async function fetchTable(tableId: string, workspaceId?: string): Promise
 }
 
 export async function createTable(data: CreateTable): Promise<Table> {
-	const table = await authenticatedLatticeCast.requestJson<Table>('/tables', {
+	const table = await authenticatedRequestJson<Table>('/tables', {
 		method: 'POST',
 		body: data
 	});
@@ -54,7 +52,7 @@ export async function createTable(data: CreateTable): Promise<Table> {
 }
 
 export async function updateTable(tableId: string, data: UpdateTable): Promise<Table> {
-	const table = await authenticatedLatticeCast.requestJson<Table>(`/tables/${tableId}`, {
+	const table = await authenticatedRequestJson<Table>(`/tables/${tableId}`, {
 		method: 'PUT',
 		body: data
 	});
@@ -63,7 +61,7 @@ export async function updateTable(tableId: string, data: UpdateTable): Promise<T
 }
 
 export async function deleteTable(tableId: string): Promise<void> {
-	await authenticatedLatticeCast.requestJson<void>(`/tables/${tableId}`, { method: 'DELETE' });
+	await authenticatedRequestJson<void>(`/tables/${tableId}`, { method: 'DELETE' });
 	tables.update((list) => list.filter((t) => t.table_id !== tableId));
 	if (get(currentTableId) === tableId) currentTableId.set(null);
 }
@@ -71,13 +69,10 @@ export async function deleteTable(tableId: string): Promise<void> {
 // ─── Columns — mutations return full TableSchema → applySchema ────────────────
 
 export async function createColumn(tableId: string, data: CreateColumn): Promise<TableSchema> {
-	const schema = await authenticatedLatticeCast.requestJson<TableSchema>(
-		`/tables/${tableId}/columns`,
-		{
-			method: 'POST',
-			body: data
-		}
-	);
+	const schema = await authenticatedRequestJson<TableSchema>(`/tables/${tableId}/columns`, {
+		method: 'POST',
+		body: data
+	});
 	applySchema(schema);
 	return schema;
 }
@@ -87,7 +82,7 @@ export async function updateColumn(
 	columnId: string,
 	data: UpdateColumn
 ): Promise<TableSchema> {
-	const schema = await authenticatedLatticeCast.requestJson<TableSchema>(
+	const schema = await authenticatedRequestJson<TableSchema>(
 		`/tables/${tableId}/columns/${columnId}`,
 		{
 			method: 'PATCH',
@@ -99,7 +94,7 @@ export async function updateColumn(
 }
 
 export async function deleteColumn(tableId: string, columnId: string): Promise<TableSchema> {
-	const schema = await authenticatedLatticeCast.requestJson<TableSchema>(
+	const schema = await authenticatedRequestJson<TableSchema>(
 		`/tables/${tableId}/columns/${columnId}`,
 		{
 			method: 'DELETE'
@@ -113,7 +108,7 @@ export async function patchSchema(
 	tableId: string,
 	data: { view_order?: number[]; default_view?: number; col_order?: string[] }
 ): Promise<TableSchema> {
-	const schema = await authenticatedLatticeCast.requestJson<TableSchema>(`/tables/${tableId}`, {
+	const schema = await authenticatedRequestJson<TableSchema>(`/tables/${tableId}`, {
 		method: 'PATCH',
 		body: data
 	});
@@ -124,7 +119,7 @@ export async function patchSchema(
 // ─── Rows — mutations update rows store ───────────────────────────────────────
 
 export async function fetchRows(tableId: string, offset = 0, limit = 100): Promise<Row[]> {
-	const result = await authenticatedLatticeCast.requestJson<Row[]>(
+	const result = await authenticatedRequestJson<Row[]>(
 		`/tables/${tableId}/rows?offset=${offset}&limit=${limit}`
 	);
 	rows.set(result);
@@ -132,7 +127,7 @@ export async function fetchRows(tableId: string, offset = 0, limit = 100): Promi
 }
 
 export async function createRow(tableId: string, data: CreateRow): Promise<Row> {
-	const row = await authenticatedLatticeCast.requestJson<Row>(`/tables/${tableId}/rows`, {
+	const row = await authenticatedRequestJson<Row>(`/tables/${tableId}/rows`, {
 		method: 'POST',
 		body: data
 	});
@@ -141,19 +136,16 @@ export async function createRow(tableId: string, data: CreateRow): Promise<Row> 
 }
 
 export async function updateRow(tableId: string, rowNumber: number, data: UpdateRow): Promise<Row> {
-	const row = await authenticatedLatticeCast.requestJson<Row>(
-		`/tables/${tableId}/rows/${rowNumber}`,
-		{
-			method: 'PUT',
-			body: data
-		}
-	);
+	const row = await authenticatedRequestJson<Row>(`/tables/${tableId}/rows/${rowNumber}`, {
+		method: 'PUT',
+		body: data
+	});
 	rows.update((r) => r.map((existing) => (existing.row_id === rowNumber ? row : existing)));
 	return row;
 }
 
 export async function deleteRow(tableId: string, rowNumber: number): Promise<void> {
-	await authenticatedLatticeCast.requestJson<void>(`/tables/${tableId}/rows/${rowNumber}`, {
+	await authenticatedRequestJson<void>(`/tables/${tableId}/rows/${rowNumber}`, {
 		method: 'DELETE'
 	});
 	rows.update((r) => r.filter((row) => row.row_id !== rowNumber));
@@ -167,16 +159,10 @@ export async function fetchBlobCell(
 	rowNumber: number,
 	columnId: string
 ): Promise<Blob | null> {
-	const accessToken = get(authStore)?.accessToken;
-	if (!accessToken) throw new Error('Not authenticated');
 	try {
-		return await latticeCast.downloadTableBlob(accessToken, {
-			tableId,
-			rowId: rowNumber,
-			columnId
-		});
+		return await authenticatedRequestBlob(`/tables/${tableId}/rows/${rowNumber}/blob/${columnId}`);
 	} catch (error) {
-		if (error instanceof LatticeCastError && error.status === 404) return null;
+		if (error instanceof BackendApiError && error.status === 404) return null;
 		throw error;
 	}
 }
@@ -189,15 +175,12 @@ export async function uploadBlobCell(
 	file: Blob,
 	fileName = file instanceof File ? file.name : 'blob'
 ): Promise<BlobCellMetadata> {
-	const accessToken = get(authStore)?.accessToken;
-	if (!accessToken) throw new Error('Not authenticated');
-	const metadata = await latticeCast.uploadTableBlob<BlobCellMetadata>(accessToken, {
-		tableId,
-		rowId: rowNumber,
-		columnId,
-		file,
-		fileName
-	});
+	const formData = new FormData();
+	formData.append('file', file, fileName);
+	const metadata = await authenticatedRequestJson<BlobCellMetadata>(
+		`/tables/${tableId}/rows/${rowNumber}/blob/${columnId}`,
+		{ method: 'PUT', body: formData }
+	);
 	rows.update((list) =>
 		list.map((row) =>
 			row.row_id === rowNumber
@@ -215,13 +198,9 @@ export async function downloadBlobCell(
 	columnId: string,
 	filename: string
 ): Promise<void> {
-	const accessToken = get(authStore)?.accessToken;
-	if (!accessToken) throw new Error('Not authenticated');
-	const blob = await latticeCast.downloadTableBlob(accessToken, {
-		tableId,
-		rowId: rowNumber,
-		columnId
-	});
+	const blob = await authenticatedRequestBlob(
+		`/tables/${tableId}/rows/${rowNumber}/blob/${columnId}`
+	);
 
 	const url = URL.createObjectURL(blob);
 	const link = document.createElement('a');
@@ -241,7 +220,7 @@ export async function createFromTemplate(
 	table_id: string,
 	workspaceId: string
 ): Promise<Table> {
-	const table = await authenticatedLatticeCast.requestJson<Table>(
+	const table = await authenticatedRequestJson<Table>(
 		`/tables/template/${encodeURIComponent(kind)}`,
 		{ method: 'POST', body: { table_id, workspace_id: workspaceId } }
 	);
