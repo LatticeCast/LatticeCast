@@ -1,12 +1,12 @@
-# minio-service.yaml
+# blob-service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: minio
+  name: blob
   namespace: lattice-cast
 spec:
   selector:
-    app: minio
+    app: blob
   ports:
     - name: api
       protocol: TCP

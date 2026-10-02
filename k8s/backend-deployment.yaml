@@ -51,17 +51,17 @@ spec:
                   name: jwt-secret
                   key: JWT_SECRET_KEY
 
-            # MinIO from secret
-            - name: MINIO_ACCESS_KEY
+            # RustFS blob storage credentials
+            - name: BLOB_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: minio-secret
-                  key: MINIO_ACCESS_KEY
-            - name: MINIO_SECRET_KEY
+                  name: blob-secret
+                  key: BLOB_ACCESS_KEY
+            - name: BLOB_SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: minio-secret
-                  key: MINIO_SECRET_KEY
+                  name: blob-secret
+                  key: BLOB_SECRET_KEY
 
             # OAuth from secret
             - name: GOOGLE_CLIENT_ID

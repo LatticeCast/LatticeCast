@@ -53,7 +53,7 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      minio:
+      blob:
         condition: service_healthy
     networks:
       - shared-network
@@ -108,18 +108,34 @@ services:
     networks:
       - app-network
 
-  minio:
-    image: minio/minio:latest
+  blob:
+    image: rustfs/rustfs:latest
     volumes:
-      - .minio_data:/data
-    env_file:
-      - .env
-    command: server /data --console-address ":9001"
+      - blob_data:/data/blob0
+    environment:
+      RUSTFS_VOLUMES: /data/blob0
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_ACCESS_KEY: ${BLOB_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${BLOB_SECRET_KEY}
+    depends_on:
+      blob-permissions:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - app-network
+
+  # RustFS runs as UID 10001. Set its managed volume ownership before startup.
+  blob-permissions:
+    image: alpine:3.22
+    volumes:
+      - blob_data:/data
+    command: ["sh", "-ec", "chown -R 10001:10001 /data"]
+    restart: "no"
     networks:
       - app-network
 
@@ -186,3 +202,4 @@ networks:
 
 volumes:
   db_data:
+  blob_data:

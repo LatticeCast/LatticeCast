@@ -6,6 +6,7 @@
 	import { page, navigating } from '$app/stores';
 	import { authStore, logout } from '$lib/stores/auth.store';
 	import { browser } from '$app/environment';
+	import { onMount } from 'svelte';
 	import {
 		workspaces,
 		tablesByWorkspace,
@@ -35,27 +36,10 @@
 		for (const ws of $workspaces) {
 			if ($tablesByWorkspace[ws.workspace_id]?.length) expandedWorkspaces.add(ws.workspace_id);
 		}
+		prettifyCurrentWorkspaceUrl();
 	}
 
-	$effect(() => {
-		if ($authStore?.accessToken) {
-			refreshSidebar();
-			hydrateUserConfig($authStore.accessToken);
-		} else {
-			resetSidebar();
-			expandedWorkspaces.clear();
-		}
-	});
-
-	$effect(() => {
-		fetchAnnouncements().catch(() => {
-			// Announcements are best-effort; the shared layout remains usable without them.
-			setAnnouncements([]);
-		});
-	});
-
-	// Cosmetic: replace UUID in URL bar with workspace_name
-	$effect(() => {
+	function prettifyCurrentWorkspaceUrl() {
 		if (!browser) return;
 		const wsId = $page.params.workspace_id;
 		if (!wsId || !isUuid(wsId)) return;
@@ -65,6 +49,26 @@
 		if (newPathname !== $page.url.pathname) {
 			history.replaceState(history.state, '', newPathname + $page.url.search);
 		}
+	}
+
+	// Store subscription and initial announcement request are integrations with
+	// external state. Keeping them in onMount avoids reactive effects that
+	// accidentally re-fetch when unrelated render dependencies change.
+	onMount(() => {
+		void fetchAnnouncements().catch(() => {
+			// Announcements are best-effort; the shared layout remains usable without them.
+			setAnnouncements([]);
+		});
+
+		return authStore.subscribe((auth) => {
+			if (auth?.accessToken) {
+				void refreshSidebar();
+				void hydrateUserConfig(auth.accessToken);
+				return;
+			}
+			resetSidebar();
+			expandedWorkspaces.clear();
+		});
 	});
 
 	async function hydrateUserConfig(accessToken: string) {
@@ -89,6 +93,7 @@
 	}
 
 	afterNavigate(({ from }) => {
+		prettifyCurrentWorkspaceUrl();
 		if (!from || !$authStore?.accessToken) return;
 		const wsId = $page.params.workspace_id;
 		if (!wsId) return;
@@ -135,8 +140,9 @@
 	</div>
 </div>
 
-<CreateWorkspaceModal
-	show={showCreateWorkspace}
-	onClose={() => (showCreateWorkspace = false)}
-	onCreated={onWorkspaceCreated}
-/>
+{#if showCreateWorkspace}
+	<CreateWorkspaceModal
+		onClose={() => (showCreateWorkspace = false)}
+		onCreated={onWorkspaceCreated}
+	/>
+{/if}

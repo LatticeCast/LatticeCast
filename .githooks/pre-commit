@@ -12,6 +12,10 @@ docker compose exec -T backend uv run ruff check src tests
 echo "[pre-commit] Frontend lint"
 docker compose exec -T frontend npm run lint:check
 
-echo "[pre-commit] Migration lint and fresh-database verification"
+echo "[pre-commit] SQL migration lint"
+docker compose --profile migration run --rm --entrypoint python \
+    migration linter.py
+
+echo "[pre-commit] Fresh-database migration verification"
 docker compose --profile migration run --rm --entrypoint python \
     migration migrate.py --test-only

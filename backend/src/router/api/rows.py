@@ -213,7 +213,7 @@ async def put_blob_cell(
     try:
         async with s3_client() as s3:
             await s3.put_object(
-                Bucket=settings.minio.bucket,
+                Bucket=settings.blob.bucket,
                 Key=metadata.key,
                 Body=content,
                 ContentType=metadata.content_type,
@@ -251,7 +251,7 @@ async def get_blob_cell(
 
     try:
         async with s3_client() as s3:
-            response = await s3.get_object(Bucket=settings.minio.bucket, Key=metadata["key"])
+            response = await s3.get_object(Bucket=settings.blob.bucket, Key=metadata["key"])
             content = await response["Body"].read()
     except ClientError as e:
         if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
@@ -292,7 +292,7 @@ async def delete_blob_cell(
 
     try:
         async with s3_client() as s3:
-            await s3.delete_object(Bucket=settings.minio.bucket, Key=metadata["key"])
+            await s3.delete_object(Bucket=settings.blob.bucket, Key=metadata["key"])
     except ClientError as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
 
@@ -312,16 +312,16 @@ async def delete_row(
     row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-    # Delete MinIO objects for storage-backed columns (best-effort).
+    # Delete blob objects for storage-backed columns (best-effort).
     columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
     storage_cols = [c for c in columns if c.get("type") == "blob"]
     for storage_col in storage_cols:
         cell_value = row.row_data.get(storage_col["column_id"])
-        minio_key = cell_value.get("key") if isinstance(cell_value, dict) else cell_value
-        if minio_key:
+        blob_key = cell_value.get("key") if isinstance(cell_value, dict) else cell_value
+        if blob_key:
             try:
                 async with s3_client() as s3:
-                    await s3.delete_object(Bucket=settings.minio.bucket, Key=str(minio_key))
+                    await s3.delete_object(Bucket=settings.blob.bucket, Key=str(blob_key))
             except Exception:
                 pass
     await repo.delete(row=row)

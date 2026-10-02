@@ -60,11 +60,12 @@
 	</div>
 </div>
 
-<CreateWorkspaceModal
-	show={showCreateWorkspace}
-	onClose={() => (showCreateWorkspace = false)}
-	onCreated={(ws) => {
-		showCreateWorkspace = false;
-		goto(`/${encodeURIComponent(ws.workspace_name)}/`);
-	}}
-/>
+{#if showCreateWorkspace}
+	<CreateWorkspaceModal
+		onClose={() => (showCreateWorkspace = false)}
+		onCreated={(ws) => {
+			showCreateWorkspace = false;
+			goto(`/${encodeURIComponent(ws.workspace_name)}/`);
+		}}
+	/>
+{/if}

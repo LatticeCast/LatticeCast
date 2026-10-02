@@ -1,0 +1,55 @@
+# blob-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blob-deployment
+  namespace: lattice-cast
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blob
+  template:
+    metadata:
+      labels:
+        app: blob
+    spec:
+      initContainers:
+      - name: blob-permissions
+        image: alpine:3.22
+        command: ["sh", "-ec", "chown -R 10001:10001 /data"]
+        volumeMounts:
+        - name: blob-data
+          mountPath: /data
+      containers:
+      - name: blob
+        image: rustfs/rustfs:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9000
+        - containerPort: 9001
+        env:
+        - name: RUSTFS_VOLUMES
+          value: /data/blob0
+        - name: RUSTFS_ADDRESS
+          value: 0.0.0.0:9000
+        - name: RUSTFS_CONSOLE_ADDRESS
+          value: 0.0.0.0:9001
+        - name: RUSTFS_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: blob-secret
+              key: BLOB_ACCESS_KEY
+        - name: RUSTFS_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: blob-secret
+              key: BLOB_SECRET_KEY
+        volumeMounts:
+        - name: blob-data
+          mountPath: /data/blob0
+      volumes:
+      - name: blob-data
+        hostPath:
+          path: /home/posetmage/HDD/Download/Github/LatticeMage/LatticeCast/.blob/
+          type: DirectoryOrCreate

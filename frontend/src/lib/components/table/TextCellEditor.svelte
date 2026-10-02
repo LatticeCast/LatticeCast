@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { Column, Row } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
 	import { fetchBlobCell, uploadBlobCell } from '$lib/backend/tables';
@@ -24,7 +25,9 @@
 	let docEditing = $state(false);
 	let saveError = $state('');
 
-	$effect(() => {
+	// The parent keys this editor by cell identity, so a new cell gets a new
+	// component instance. Fetch once on mount rather than reacting to props.
+	onMount(() => {
 		docLoading = true;
 		fetchBlobCell(tableId, row.row_id, column.column_id)
 			.then(async (blob) => {

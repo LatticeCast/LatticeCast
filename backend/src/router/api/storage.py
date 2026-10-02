@@ -104,7 +104,7 @@ async def list_files(
     - Admin: lists all files or files under specified prefix
     - User: lists only files under user's UUID prefix
     """
-    bucket = settings.minio.bucket
+    bucket = settings.blob.bucket
 
     # Build full prefix
     full_prefix = get_full_path(user, prefix)
@@ -163,7 +163,7 @@ async def download_file(
     - Admin: can download any file
     - User: can only download files under their UUID prefix
     """
-    bucket = settings.minio.bucket
+    bucket = settings.blob.bucket
     full_path = get_full_path(user, path)
 
     try:
@@ -201,7 +201,7 @@ async def upload_file(
     - Admin: can upload to any path
     - User: uploads are prefixed with user's UUID
     """
-    bucket = settings.minio.bucket
+    bucket = settings.blob.bucket
     full_path = get_full_path(user, path)
 
     try:
@@ -237,7 +237,7 @@ async def delete_file(
     - Admin: can delete any file
     - User: can only delete files under their UUID prefix
     """
-    bucket = settings.minio.bucket
+    bucket = settings.blob.bucket
     full_path = get_full_path(user, path)
 
     try:
@@ -270,7 +270,7 @@ async def admin_list_all_files(
     """
     Admin: List all files in storage with full paths.
     """
-    bucket = settings.minio.bucket
+    bucket = settings.blob.bucket
 
     try:
         list_prefix = normalize_path(prefix)

@@ -4,7 +4,8 @@
 .ruff_cache/
 
 .browser/
-.minio/
+.blob/
+/.m*data/
 .pg/
 .valkey/
 
@@ -37,7 +38,6 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 .tmp/
-.minio_data/
 
 *.png
 *.patch

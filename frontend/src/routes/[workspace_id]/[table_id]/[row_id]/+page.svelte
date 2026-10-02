@@ -143,9 +143,8 @@
 	{/if}
 </div>
 
-{#if table}
+{#if table && showCreateTicket}
 	<CreateTicketModal
-		show={showCreateTicket}
 		columns={table.columns}
 		onClose={() => (showCreateTicket = false)}
 		onSubmit={handleCreateTicket}

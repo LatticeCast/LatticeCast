@@ -1,7 +1,7 @@
 # src/config/storage.py
 """
 S3-compatible storage client using aioboto3 (async-native).
-Works with MinIO and any S3-compatible storage.
+Works with RustFS and any S3-compatible storage.
 
 Usage:
     async with s3_client() as s3:
@@ -26,12 +26,12 @@ def s3_client():
         async with s3_client() as s3:
             await s3.put_object(Bucket=..., Key=..., Body=...)
     """
-    endpoint_url = f"{'https' if settings.minio.secure else 'http'}://{settings.minio.endpoint}"
+    endpoint_url = f"{'https' if settings.blob.secure else 'http'}://{settings.blob.endpoint}"
     return _session.client(
         "s3",
         endpoint_url=endpoint_url,
-        aws_access_key_id=settings.minio.access_key,
-        aws_secret_access_key=settings.minio.secret_key,
+        aws_access_key_id=settings.blob.access_key,
+        aws_secret_access_key=settings.blob.secret_key,
         config=AioConfig(signature_version="s3v4"),
         region_name="us-east-1",
     )
@@ -39,7 +39,7 @@ def s3_client():
 
 async def ensure_bucket_exists():
     """Ensure the default bucket exists, create if not."""
-    bucket = settings.minio.bucket
+    bucket = settings.blob.bucket
 
     async with s3_client() as s3:
         try:

@@ -71,13 +71,6 @@
 	let tableSaving = $state(false);
 	let tableSettingsError = $state('');
 
-	// Track last visited workspace in localStorage
-	$effect(() => {
-		const ws = activeWorkspace;
-		if (!ws || typeof localStorage === 'undefined') return;
-		localStorage.setItem('lastWorkspace', ws.workspace_name);
-	});
-
 	onMount(async () => {
 		currentTableId.set(null);
 		await loadData();
@@ -90,11 +83,17 @@
 		error = '';
 		try {
 			await initSidebar();
+			rememberActiveWorkspace();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load data';
 		} finally {
 			loading = false;
 		}
+	}
+
+	function rememberActiveWorkspace() {
+		if (!activeWorkspace || typeof localStorage === 'undefined') return;
+		localStorage.setItem('lastWorkspace', activeWorkspace.workspace_name);
 	}
 
 	function openWsSettings(ws: Workspace, e: MouseEvent) {
@@ -463,14 +462,15 @@
 </div>
 
 <!-- Create Workspace Modal -->
-<CreateWorkspaceModal
-	show={showCreateWorkspace}
-	onClose={() => (showCreateWorkspace = false)}
-	onCreated={(ws) => {
-		showCreateWorkspace = false;
-		goto(`/${encodeURIComponent(ws.workspace_name)}/`);
-	}}
-/>
+{#if showCreateWorkspace}
+	<CreateWorkspaceModal
+		onClose={() => (showCreateWorkspace = false)}
+		onCreated={(ws) => {
+			showCreateWorkspace = false;
+			goto(`/${encodeURIComponent(ws.workspace_name)}/`);
+		}}
+	/>
+{/if}
 
 <!-- Table Settings Dialog -->
 {#if tableSettingsTarget}

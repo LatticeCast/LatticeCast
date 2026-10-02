@@ -1,7 +1,7 @@
 # Development
 
 ```bash
-docker compose up -d db minio
+docker compose up -d db blob
 docker compose --profile migration run --rm migration
 docker compose up -d
 docker compose exec frontend npm run check

@@ -58,18 +58,18 @@ def user_uuid(client, tokens):
 
 
 class TestStorageHealth:
-    def test_settings_includes_minio(self, client):
-        """Test /settings includes MinIO configuration"""
+    def test_settings_includes_blob(self, client):
+        """Test /settings includes blob storage configuration"""
         resp = client.get("/status")
         assert resp.status_code == 200
 
         resp = client.get("/settings")
         assert resp.status_code == 200
         data = resp.json()
-        assert "minio_endpoint" in data
-        assert "minio_bucket" in data
-        print(f"✓ MinIO endpoint: {data['minio_endpoint']}")
-        print(f"✓ MinIO bucket: {data['minio_bucket']}")
+        assert "blob_endpoint" in data
+        assert "blob_bucket" in data
+        print(f"✓ Blob endpoint: {data['blob_endpoint']}")
+        print(f"✓ Blob bucket: {data['blob_bucket']}")
 
 
 class TestAdminStorage:
@@ -296,8 +296,8 @@ def run_all_tests():
 
     resp = client.get("/settings")
     data = resp.json()
-    print(f"✓ MinIO endpoint: {data.get('minio_endpoint', 'N/A')}")
-    print(f"✓ MinIO bucket: {data.get('minio_bucket', 'N/A')}")
+    print(f"✓ Blob endpoint: {data.get('blob_endpoint', 'N/A')}")
+    print(f"✓ Blob bucket: {data.get('blob_bucket', 'N/A')}")
 
     # Ensure user exists
     print("\n--- Setup ---")

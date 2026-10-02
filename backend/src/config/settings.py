@@ -98,12 +98,12 @@ class AuthentikSettings(BaseSettings):
         return f"{self.url}/application/o/{self.application_slug}/"
 
 
-class MinioSettings(BaseSettings):
-    """MinIO S3-compatible storage configuration"""
+class BlobSettings(BaseSettings):
+    """S3-compatible blob storage configuration."""
 
-    model_config = SettingsConfigDict(env_prefix="MINIO_")
+    model_config = SettingsConfigDict(env_prefix="BLOB_")
 
-    endpoint: str = Field(..., description="MinIO endpoint (host:port)")
+    endpoint: str = Field(..., description="Blob endpoint (host:port)")
     access_key: str = Field(..., description="Access key")
     secret_key: str = Field(..., description="Secret key")
     bucket: str = Field(..., description="Default bucket name")
@@ -133,7 +133,7 @@ class AppSettings(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     google: GoogleOAuthSettings = Field(default_factory=GoogleOAuthSettings)
     authentik: AuthentikSettings = Field(default_factory=AuthentikSettings)
-    minio: MinioSettings = Field(default_factory=MinioSettings)
+    blob: BlobSettings = Field(default_factory=BlobSettings)
 
     @model_validator(mode="after")
     def validate_jwt_secret(self) -> "AppSettings":

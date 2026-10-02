@@ -49,12 +49,12 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠ JWKS pre-cache failed: {e}")
 
-    # Initialize MinIO bucket
+    # Initialize the RustFS blob bucket.
     try:
         await ensure_bucket_exists()
-        print("✓ MinIO storage ready")
+        print("✓ Blob storage ready")
     except Exception as e:
-        print(f"⚠ MinIO initialization failed: {e}")
+        print(f"⚠ Blob storage initialization failed: {e}")
 
     yield
 
@@ -216,8 +216,8 @@ class SettingsInfoResponse(BaseModel):
 
     debug_mode: bool
     database_host: str
-    minio_endpoint: str
-    minio_bucket: str
+    blob_endpoint: str
+    blob_bucket: str
     cors_origins: list[str]
 
 
@@ -228,8 +228,8 @@ async def get_settings_info() -> SettingsInfoResponse:
     return SettingsInfoResponse(
         debug_mode=settings.debug_mode,
         database_host=db_host,
-        minio_endpoint=settings.minio.endpoint,
-        minio_bucket=settings.minio.bucket,
+        blob_endpoint=settings.blob.endpoint,
+        blob_bucket=settings.blob.bucket,
         cors_origins=settings.cors_origins,
     )
 

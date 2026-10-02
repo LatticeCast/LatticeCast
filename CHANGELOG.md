@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.67 — 2026-10-03
+
+- Replaced MinIO with RustFS for S3-compatible blob storage.
+- Standardized storage configuration and runtime terminology on `blob`.
+- Reduced unnecessary frontend reactive effects and verified the full E2E suite.
+
 ## 0.66 — 2026-09-30
 
 - Enforced that all commits run from a tmux session before lint and migration

@@ -381,12 +381,14 @@
 {/if}
 
 {#if s.textCellState}
-	<TextCellEditor
-		row={s.textCellState.row}
-		column={s.textCellState.col}
-		{tableId}
-		onClose={() => (s.textCellState = null)}
-	/>
+	{#key `${s.textCellState.row.row_id}:${s.textCellState.col.column_id}`}
+		<TextCellEditor
+			row={s.textCellState.row}
+			column={s.textCellState.col}
+			{tableId}
+			onClose={() => (s.textCellState = null)}
+		/>
+	{/key}
 {/if}
 
 <ImportTemplateModal
@@ -414,10 +416,11 @@
 	/>
 {/if}
 
-<CreateTicketModal
-	show={s.showCreateTicket}
-	columns={$columns}
-	initialData={s.createTicketInitialData}
-	onClose={() => (s.showCreateTicket = false)}
-	onSubmit={(data) => s.handleCreateTicket(data)}
-/>
+{#if s.showCreateTicket}
+	<CreateTicketModal
+		columns={$columns}
+		initialData={s.createTicketInitialData}
+		onClose={() => (s.showCreateTicket = false)}
+		onSubmit={(data) => s.handleCreateTicket(data)}
+	/>
+{/if}
