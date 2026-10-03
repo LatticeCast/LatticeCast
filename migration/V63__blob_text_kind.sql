@@ -1,6 +1,13 @@
 -- `kind` is a frontend editor/picker hint only.  The blob API never branches
 -- on it.  Rename the old misleading `doc` hint to `text` (plain text,
 -- Markdown, or CSV) in persisted schemas and in future template output.
+--
+-- This changes no column name.  Some legacy configurations predate V39 and
+-- already contain duplicate normalized names; the V39 trigger must not block
+-- this otherwise-independent metadata rewrite.  Migrations run one file per
+-- transaction, so a failure rolls back both the UPDATE and trigger state.
+
+ALTER TABLE public.tables DISABLE TRIGGER trg_tables_validate_column_names;
 
 UPDATE public.tables AS table_data
 SET config = jsonb_set(
@@ -26,6 +33,8 @@ WHERE EXISTS (
     WHERE entry.column_data ->> 'type' = 'blob'
       AND entry.column_data -> 'options' ->> 'kind' = 'doc'
 );
+
+ALTER TABLE public.tables ENABLE TRIGGER trg_tables_validate_column_names;
 
 CREATE OR REPLACE FUNCTION public.create_table_from_template(
     p_workspace_id UUID,
