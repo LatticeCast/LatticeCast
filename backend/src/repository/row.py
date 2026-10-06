@@ -73,14 +73,6 @@ class RowRepository:
         result = await self.session.execute(statement)
         return list(result.scalars().all())
 
-    async def update(self, row: Row, data: RowUpdate, updated_by: UUID | None = None) -> Row:
-        """Backward-compatible alias for a partial row-data mutation."""
-        return await self.patch_row(row, data, updated_by)
-
-    async def update_row(self, row: Row, data: RowUpdate, updated_by: UUID | None = None) -> Row:
-        """Backward-compatible alias for ``patch_row``."""
-        return await self.patch_row(row, data, updated_by)
-
     async def patch_row(self, row: Row, data: RowUpdate, updated_by: UUID | None = None) -> Row:
         """Pass a partial non-blob patch directly to PostgreSQL."""
         result = await self.session.execute(
@@ -160,10 +152,6 @@ class RowRepository:
             raise RuntimeError("Row disappeared during blob update")
         return self._row_from_mapping(updated)
 
-    async def remove_cell(self, row: Row, column_id: str, updated_by: UUID | None = None) -> Row:
-        """Clear system-managed blob metadata through its dedicated PG function."""
-        return await self.update_blob(row, column_id, {}, updated_by)
-
     @staticmethod
     def _row_from_mapping(updated: Any) -> Row:
         return Row(
@@ -180,14 +168,6 @@ class RowRepository:
     async def delete(self, row: Row) -> None:
         await self.session.delete(row)
         await self.session.commit()
-
-    async def count_by_table(self, workspace_id: UUID, table_id: str) -> int:
-        """Return total number of rows in a table."""
-        from sqlalchemy import func
-
-        statement = select(func.count()).where(Row.workspace_id == workspace_id, Row.table_id == table_id)
-        result = await self.session.execute(statement)
-        return result.scalar_one()
 
     async def filter_by_jsonb(
         self, workspace_id: UUID, table_id: str, contains: dict[str, Any], offset: int = 0, limit: int = 100

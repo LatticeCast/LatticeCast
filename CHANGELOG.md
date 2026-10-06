@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.68 — 2026-10-06
+
+- Removed obsolete backend compatibility aliases, stale table-view tests, and
+  superseded frontend table-grid components after their current implementations
+  were verified.
+- Added `make e2e` to start the browser and E2E services and run the complete
+  Playwright-backed test suite.
+
 ## 0.67 — 2026-10-03
 
 - Replaced MinIO with RustFS for S3-compatible blob storage.

@@ -215,7 +215,7 @@ class TestRowRepositoryUpdate:
             session.execute = AsyncMock(return_value=mapping_result)
             repo = RowRepository(session)
             update = RowUpdate(row_data={"title": "new"})
-            result = await repo.update(row=row, data=update, updated_by=uuid4())
+            result = await repo.patch_row(row=row, data=update, updated_by=uuid4())
 
             assert result.row_data["title"] == "new"
             session.commit.assert_called_once()

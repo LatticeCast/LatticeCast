@@ -19,3 +19,5 @@ docker compose --profile migration run --rm --entrypoint python \
 echo "[pre-commit] Fresh-database migration verification"
 docker compose --profile migration run --rm --entrypoint python \
     migration migrate.py --test-only
+
+make e2e

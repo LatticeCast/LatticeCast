@@ -20,10 +20,6 @@ app_session_factory: sessionmaker | None = None
 login_engine: AsyncEngine | None = None
 login_session_factory: sessionmaker | None = None
 
-# Backward-compat alias — callers importing `engine` still work
-engine: AsyncEngine | None = None
-async_session_factory: sessionmaker | None = None
-
 
 # --------------------------------------------------
 # INIT DB
@@ -50,7 +46,6 @@ async def init_db():
     v40: gdpr schema holds user_info (PII + handle + config). Both
     engines need it on search_path so unqualified joins work.
     """
-    global engine, async_session_factory
     global app_engine, app_session_factory
     global login_engine, login_session_factory
 
@@ -72,10 +67,6 @@ async def init_db():
             # Test connection
             async with app_engine.begin() as conn:
                 await conn.run_sync(lambda _: None)
-
-            # Backward-compat aliases
-            engine = app_engine
-            async_session_factory = app_session_factory
 
             print("✅ Connected to PostgreSQL")
             return app_engine
@@ -130,10 +121,10 @@ async def reapply_rls_context(session: AsyncSession) -> None:
 
 async def close_db():
     """Dispose all SQLAlchemy engines."""
-    global engine, app_engine, login_engine
+    global app_engine, login_engine
 
     for eng in [app_engine, login_engine]:
         if eng:
             await eng.dispose()
-    app_engine = login_engine = engine = None
+    app_engine = login_engine = None
     print("✅ Database engines closed")

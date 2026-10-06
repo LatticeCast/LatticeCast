@@ -90,20 +90,3 @@ async def get_rls_session(
     """
     await set_rls_context(session, str(user.user_id))
     yield session
-
-
-async def require_user(
-    user: User = Depends(get_current_user),
-) -> User:
-    """
-    Middleware: Require user to have 'user' role (active subscription).
-    """
-    if user.role != "user":
-        logger.warn(f"User access denied for: {user.user_id} (role={user.role})")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Active subscription required",
-        )
-
-    logger.debug(f"User access granted: {user.user_id}")
-    return user

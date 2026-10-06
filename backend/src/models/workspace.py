@@ -80,26 +80,6 @@ class MemberCreate(SQLModel):
     )
 
 
-class MemberResponse(SQLModel):
-    """Workspace member response schema"""
-
-    workspace_id: UUID = Field(..., description="Workspace UUID")
-    user_id: UUID = Field(..., description="User UUID")
-    level: ActionType = Field(..., description="Access level (highest of the member's granted actions)")
-
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "workspace_id": "00000000-0000-0000-0000-000000000000",
-                    "user_id": "00000000-0000-0000-0000-000000000000",
-                    "level": "owner",
-                }
-            ]
-        }
-    }
-
-
 class MemberFullResponse(SQLModel):
     """Workspace member response with user_name and email joined from auth tables"""
 

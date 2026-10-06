@@ -3,7 +3,6 @@ import re
 from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.user import User, UserInfo
@@ -103,26 +102,3 @@ async def bootstrap_user(
     await login_session.refresh(user)
     _ = app_session  # kept for API compatibility; not used in bootstrap
     return user
-
-
-async def upsert_user_info(
-    session: AsyncSession,
-    user_id: UUID,
-    email: str,
-    user_name: str | None = None,
-) -> UserInfo:
-    """Idempotent upsert on gdpr.user_info — used by auth flow when a
-    user logs in via SSO and we don't yet know their PII row."""
-    handle = user_name or _slugify(email)
-    stmt = (
-        pg_insert(UserInfo)
-        .values(user_id=user_id, email=email, user_name=handle)
-        .on_conflict_do_update(
-            index_elements=[UserInfo.user_id],
-            set_={"email": email},
-        )
-    )
-    await session.execute(stmt)
-    await session.commit()
-    result = await session.execute(select(UserInfo).where(UserInfo.user_id == user_id))
-    return result.scalar_one()

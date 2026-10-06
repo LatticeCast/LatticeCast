@@ -59,24 +59,6 @@ class TableRepository:
             updated_at=row["updated_at"],
         )
 
-    async def get_by_id(self, workspace_id: UUID, table_id: str) -> Table | None:
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
-            select(Table).where(Table.workspace_id == workspace_id, Table.table_id == table_id)
-        )
-        return result.scalar_one_or_none()
-
-    async def resolve_table(self, workspace_id: UUID, identifier: str) -> Table | None:
-        """Resolve a table by table_id (case-insensitive) within a workspace."""
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
-            select(Table).where(
-                Table.workspace_id == workspace_id,
-                func.lower(Table.table_id) == identifier.lower(),
-            )
-        )
-        return result.scalar_one_or_none()
-
     async def resolve_table_global(
         self, identifier: str, workspace_ids: list[UUID] | None = None
     ) -> Table | None:
