@@ -108,3 +108,135 @@ def test_blob_cell_renders_and_downloads(authed_page, workspace, admin_token, sn
     )
     assert response.status_code == 200, f"read downloaded blob: {response.status_code} {response.text[:200]}"
     assert response.content == payload
+
+
+def test_image_blob_opens_preview_then_downloads(authed_page, workspace, admin_token, snapshot):
+    """An image cell opens an in-app preview; download remains available there."""
+    page = authed_page
+    ws_id, _ws_name = workspace
+    table_id = f"image-preview-{int(time.time() * 1000) % 10_000_000}"
+    filename = "preview.svg"
+    payload = b'''<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120">
+<rect width="240" height="120" fill="#2563eb"/><text x="24" y="72" fill="white">Image preview</text></svg>'''
+
+    response = api(
+        "POST",
+        "/api/v1/tables",
+        admin_token,
+        json={"table_id": table_id, "workspace_id": ws_id},
+    )
+    assert response.status_code == 201, f"create table: {response.status_code} {response.text[:200]}"
+
+    response = api(
+        "POST",
+        f"/api/v1/tables/{table_id}/columns",
+        admin_token,
+        json={"name": "Cover", "type": "blob", "options": {"kind": "image"}},
+    )
+    assert response.status_code == 201, f"create image column: {response.status_code} {response.text[:200]}"
+    column_id = _column_id(response.json(), "Cover")
+
+    response = api(
+        "POST",
+        f"/api/v1/tables/{table_id}/views",
+        admin_token,
+        json={"name": "Table", "type": "table", "config": {}},
+    )
+    assert response.status_code == 201, f"create table view: {response.status_code} {response.text[:200]}"
+
+    response = api("POST", f"/api/v1/tables/{table_id}/rows", admin_token, json={"row_data": {}})
+    assert response.status_code == 201, f"create row: {response.status_code} {response.text[:200]}"
+    row_id = response.json()["row_id"]
+
+    response = requests.put(
+        f"{BASE}/api/v1/tables/{table_id}/rows/{row_id}/blob/{column_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={"file": (filename, payload, "image/svg+xml")},
+        timeout=15,
+    )
+    assert response.status_code == 200, f"upload image: {response.status_code} {response.text[:200]}"
+
+    page.goto(f"{BASE}/", wait_until="domcontentloaded")
+    page.goto(f"{BASE}/{ws_id}/{table_id}", wait_until="domcontentloaded")
+    table_tab = page.get_by_test_id("view-tab-Table")
+    table_tab.wait_for(state="visible", timeout=15_000)
+    table_tab.click()
+
+    image_button = page.get_by_test_id(f"blob-open-{row_id}-{column_id}")
+    image_button.wait_for(state="visible", timeout=15_000)
+    assert image_button.get_attribute("title") == f"Preview {filename}"
+    image_button.click()
+
+    preview = page.get_by_test_id("image-preview-dialog")
+    preview.wait_for(state="visible", timeout=15_000)
+    assert preview.get_by_role("img", name=filename).is_visible()
+
+    if snapshot:
+        page.screenshot(path="/output/image_blob_preview.png", full_page=True)
+
+    with page.expect_download(timeout=15_000) as download_info:
+        page.get_by_test_id("image-preview-download").click()
+    download = download_info.value
+    assert download.suggested_filename == filename
+    assert download.failure() is None
+
+
+def test_text_blob_preview_keeps_download(authed_page, workspace, admin_token):
+    """The text editor preview keeps the saved document downloadable."""
+    page = authed_page
+    ws_id, _ws_name = workspace
+    table_id = f"text-preview-{int(time.time() * 1000) % 10_000_000}"
+    filename = "meeting-notes.md"
+    payload = b"# Decisions\n\nShip image previews.\n"
+
+    response = api(
+        "POST",
+        "/api/v1/tables",
+        admin_token,
+        json={"table_id": table_id, "workspace_id": ws_id},
+    )
+    assert response.status_code == 201, f"create table: {response.status_code} {response.text[:200]}"
+
+    response = api(
+        "POST",
+        f"/api/v1/tables/{table_id}/columns",
+        admin_token,
+        json={"name": "Notes", "type": "blob", "options": {"kind": "text"}},
+    )
+    assert response.status_code == 201, f"create text column: {response.status_code} {response.text[:200]}"
+    column_id = _column_id(response.json(), "Notes")
+
+    response = api(
+        "POST",
+        f"/api/v1/tables/{table_id}/views",
+        admin_token,
+        json={"name": "Table", "type": "table", "config": {}},
+    )
+    assert response.status_code == 201, f"create table view: {response.status_code} {response.text[:200]}"
+
+    response = api("POST", f"/api/v1/tables/{table_id}/rows", admin_token, json={"row_data": {}})
+    assert response.status_code == 201, f"create row: {response.status_code} {response.text[:200]}"
+    row_id = response.json()["row_id"]
+
+    response = requests.put(
+        f"{BASE}/api/v1/tables/{table_id}/rows/{row_id}/blob/{column_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={"file": (filename, payload, "text/markdown")},
+        timeout=15,
+    )
+    assert response.status_code == 200, f"upload text: {response.status_code} {response.text[:200]}"
+
+    page.goto(f"{BASE}/", wait_until="domcontentloaded")
+    page.goto(f"{BASE}/{ws_id}/{table_id}", wait_until="domcontentloaded")
+    table_tab = page.get_by_test_id("view-tab-Table")
+    table_tab.wait_for(state="visible", timeout=15_000)
+    table_tab.click()
+    page.get_by_test_id(f"doc-open-{row_id}-{column_id}").click()
+
+    editor = page.get_by_test_id("doc-cell-editor")
+    editor.wait_for(state="visible", timeout=15_000)
+    with page.expect_download(timeout=15_000) as download_info:
+        page.get_by_test_id("doc-cell-editor-download").click()
+    download = download_info.value
+    assert download.suggested_filename == filename
+    assert download.failure() is None

@@ -10,12 +10,13 @@
 		isTemporalType,
 		formatBlobSize,
 		getBlobCellMetadata,
+		getColumnTypeLabel,
 		applyEditToRowData,
 		toggleCheckboxInRowData,
 		removeTagFromRowData,
 		addTagToRowData
 	} from './table.utils';
-	import { downloadBlobCell, uploadBlobCell } from '$lib/backend/tables';
+	import { downloadBlobCell, fetchBlobCell, uploadBlobCell } from '$lib/backend/tables';
 	import { rows } from '$lib/stores/table_rows.store';
 
 	let {
@@ -37,6 +38,7 @@
 	let editField = $state<string | null>(null);
 	let editVal = $state('');
 	let tagsPopup = $state<string | null>(null);
+	let imagePreview = $state<{ url: string; filename: string; column: Column } | null>(null);
 
 	// The selected row may be replaced by an authoritative controller response.
 	// Derive it from the shared cache instead of maintaining an optimistic copy.
@@ -80,6 +82,22 @@
 		} catch {
 			// The descriptor in the row store is still valid; the user can retry the download.
 		}
+	}
+
+	async function openImagePreview(col: Column, filename: string) {
+		try {
+			const blob = await fetchBlobCell(tableId, currentRow.row_id, col.column_id);
+			if (!blob) return;
+			if (imagePreview) URL.revokeObjectURL(imagePreview.url);
+			imagePreview = { url: URL.createObjectURL(blob), filename, column: col };
+		} catch {
+			// The descriptor remains authoritative; a later click can retry the preview request.
+		}
+	}
+
+	function closeImagePreview() {
+		if (imagePreview) URL.revokeObjectURL(imagePreview.url);
+		imagePreview = null;
 	}
 
 	function chooseBlobFile(col: Column) {
@@ -141,7 +159,8 @@
 			<div class="mb-5">
 				<label class="mb-1 block text-xs font-semibold tracking-wide uppercase {T.muted}">
 					{col.name}
-					<span class="ml-1 font-normal text-gray-300 normal-case">({col.type})</span>
+					<span class="ml-1 font-normal text-gray-300 normal-case">({getColumnTypeLabel(col)})</span
+					>
 				</label>
 
 				{#if col.type === 'checkbox'}
@@ -330,10 +349,15 @@
 					{#if blob}
 						<button
 							type="button"
-							data-testid="row-panel-blob-download-{col.column_id}"
+							data-testid="row-panel-blob-open-{col.column_id}"
 							class="flex min-h-[2.25rem] w-full items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm transition {T.inputBorder} hover:border-blue-400"
-							title="Download {blob.filename}"
-							onclick={() => void handleBlobDownload(col, blob.filename)}
+							title={col.options?.kind === 'image'
+								? `Preview ${blob.filename}`
+								: `Download ${blob.filename}`}
+							onclick={() =>
+								col.options?.kind === 'image'
+									? void openImagePreview(col, blob.filename)
+									: void handleBlobDownload(col, blob.filename)}
 						>
 							<svg
 								class="h-4 w-4 shrink-0 text-blue-500"
@@ -391,3 +415,42 @@
 		{/each}
 	</div>
 </div>
+
+{#if imagePreview}
+	{@const preview = imagePreview}
+	<div
+		class="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
+		onclick={(event) => {
+			if (event.target === event.currentTarget) closeImagePreview();
+		}}
+		role="dialog"
+		aria-modal="true"
+		aria-label="Image preview"
+		data-testid="row-panel-image-preview-dialog"
+	>
+		<div class="relative flex max-h-full max-w-5xl flex-col rounded-2xl {T.cardBg} p-3 shadow-2xl">
+			<button
+				type="button"
+				class="absolute top-5 right-5 z-10 rounded-full bg-black/60 px-3 py-1 text-lg text-white hover:bg-black/80"
+				onclick={closeImagePreview}
+				aria-label="Close image preview">×</button
+			>
+			<img
+				src={imagePreview.url}
+				alt={imagePreview.filename}
+				class="max-h-[80vh] max-w-full rounded-xl object-contain"
+			/>
+			<div class="flex items-center justify-between gap-4 px-2 pt-2">
+				<p class="min-w-0 truncate text-sm {T.secondary}">{imagePreview.filename}</p>
+				<button
+					type="button"
+					data-testid="row-panel-image-preview-download"
+					class="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+					onclick={() => void handleBlobDownload(preview.column, preview.filename)}
+				>
+					Download
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}

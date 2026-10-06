@@ -61,6 +61,11 @@ export const BLOB_KIND_OPTIONS: ReadonlyArray<{
 	}
 ];
 
+/** Display the concrete content type for blob columns instead of the storage implementation. */
+export function getColumnTypeLabel(column: Pick<Column, 'type' | 'options'>): string {
+	return column.type === 'blob' ? (column.options?.kind ?? 'file') : column.type;
+}
+
 export interface FilterCondition {
 	id: string;
 	colId: string;

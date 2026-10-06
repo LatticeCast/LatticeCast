@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { Column, ColumnChoice } from '$lib/types/table';
-	import { getChoices, colorToStyle } from './table.utils';
+	import { getChoices, colorToStyle, getColumnTypeLabel } from './table.utils';
 
 	// vanilla-colorful registers a custom element via `customElements.define()`,
 	// which only exists in the browser. Import client-side only.
@@ -132,7 +132,7 @@
 	<div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
 		<h2 class="mb-1 text-lg font-bold text-gray-800">Manage Options</h2>
 		<p class="mb-4 text-sm text-gray-500">
-			{col.name} <span class="text-gray-400">({col.type})</span>
+			{col.name} <span class="text-gray-400">({getColumnTypeLabel(col)})</span>
 		</p>
 
 		<!-- Existing choices -->

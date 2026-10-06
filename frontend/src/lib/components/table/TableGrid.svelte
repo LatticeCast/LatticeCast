@@ -12,9 +12,10 @@
 		isTemporalType,
 		formatBlobSize,
 		getBlobCellMetadata,
+		getColumnTypeLabel,
 		sortLabels
 	} from './table.utils';
-	import { downloadBlobCell, uploadBlobCell } from '$lib/backend/tables';
+	import { downloadBlobCell, fetchBlobCell, uploadBlobCell } from '$lib/backend/tables';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { createDragReorder } from './dragReorder.svelte';
 
@@ -140,6 +141,29 @@
 		}
 	}
 
+	let imagePreview = $state<{
+		url: string;
+		filename: string;
+		row: Row;
+		column: Column;
+	} | null>(null);
+
+	async function openImagePreview(row: Row, col: Column, filename: string) {
+		try {
+			const blob = await fetchBlobCell(row.table_id, row.row_id, col.column_id);
+			if (!blob) return;
+			if (imagePreview) URL.revokeObjectURL(imagePreview.url);
+			imagePreview = { url: URL.createObjectURL(blob), filename, row, column: col };
+		} catch {
+			// Keep the metadata authoritative; a later click can retry the preview request.
+		}
+	}
+
+	function closeImagePreview() {
+		if (imagePreview) URL.revokeObjectURL(imagePreview.url);
+		imagePreview = null;
+	}
+
 	function chooseBlobFile(row: Row, col: Column) {
 		const input = document.createElement('input');
 		input.type = 'file';
@@ -249,7 +273,7 @@
 									>
 										{col.name}
 										<span class="ml-1 text-xs font-normal text-gray-400 normal-case"
-											>({col.type})</span
+											>({getColumnTypeLabel(col)})</span
 										>
 									</button>
 									<svg
@@ -727,10 +751,14 @@
 												class="flex max-w-full items-center gap-1.5 rounded px-2 py-1 text-left text-xs transition hover:bg-blue-50 hover:text-blue-700"
 												title={col.options?.kind === 'text'
 													? `Open ${blob.filename}`
-													: `Download ${blob.filename}`}
+													: col.options?.kind === 'image'
+														? `Preview ${blob.filename}`
+														: `Download ${blob.filename}`}
 												onclick={(e) => {
 													e.stopPropagation();
 													if (col.options?.kind === 'text') onOpenTextCell(row, col);
+													else if (col.options?.kind === 'image')
+														void openImagePreview(row, col, blob.filename);
 													else void handleBlobDownload(row, col, blob.filename);
 												}}
 											>
@@ -741,12 +769,21 @@
 													viewBox="0 0 24 24"
 													aria-hidden="true"
 												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"
-													/>
+													{#if col.options?.kind === 'image'}
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M4 16l4-4 3 3 5-6 4 5M5 20h14a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v14a1 1 0 001 1z"
+														/>
+													{:else}
+														<path
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"
+														/>
+													{/if}
 												</svg>
 												<span class="min-w-0 truncate text-blue-600">{blob.filename}</span>
 												<span class="shrink-0 {T.muted}">{formatBlobSize(blob.size)}</span>
@@ -974,6 +1011,45 @@
 		</table>
 	{/if}
 </div>
+
+{#if imagePreview}
+	{@const preview = imagePreview}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
+		onclick={(event) => {
+			if (event.target === event.currentTarget) closeImagePreview();
+		}}
+		role="dialog"
+		aria-modal="true"
+		aria-label="Image preview"
+		data-testid="image-preview-dialog"
+	>
+		<div class="relative flex max-h-full max-w-5xl flex-col rounded-2xl {T.cardBg} p-3 shadow-2xl">
+			<button
+				type="button"
+				class="absolute top-5 right-5 z-10 rounded-full bg-black/60 px-3 py-1 text-lg text-white hover:bg-black/80"
+				onclick={closeImagePreview}
+				aria-label="Close image preview">×</button
+			>
+			<img
+				src={imagePreview.url}
+				alt={imagePreview.filename}
+				class="max-h-[80vh] max-w-full rounded-xl object-contain"
+			/>
+			<div class="flex items-center justify-between gap-4 px-2 pt-2">
+				<p class="min-w-0 truncate text-sm {T.secondary}">{imagePreview.filename}</p>
+				<button
+					type="button"
+					data-testid="image-preview-download"
+					class="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+					onclick={() => void handleBlobDownload(preview.row, preview.column, preview.filename)}
+				>
+					Download
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	th[data-drag-over='true'] {

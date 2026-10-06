@@ -75,14 +75,14 @@
 					bind:value={newColType}
 				>
 					{#each COLUMN_TYPES as t (t)}
-						<option value={t}>{t}</option>
+						<option value={t}>{t === 'blob' ? newBlobKind : t}</option>
 					{/each}
 				</select>
 			</div>
 			{#if newColType === 'blob'}
 				<div class="mb-6">
 					<label class="mb-1 block text-sm font-medium text-gray-600" for="blob-kind"
-						>Blob category</label
+						>Content type</label
 					>
 					<select
 						id="blob-kind"

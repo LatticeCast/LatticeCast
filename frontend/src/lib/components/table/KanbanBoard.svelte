@@ -5,7 +5,8 @@
 		getChoiceColor,
 		getTagValues,
 		formatCellDate,
-		isTemporalType
+		isTemporalType,
+		getColumnTypeLabel
 	} from './table.utils';
 	import { updateRow } from '$lib/backend/tables';
 	import { updateView } from '$lib/backend/views';
@@ -275,7 +276,7 @@
 							onchange={() => toggleCardField(col.column_id)}
 						/>
 						<span class="text-sm {T.secondary}">{col.name}</span>
-						<span class="ml-auto text-xs text-gray-400">{col.type}</span>
+						<span class="ml-auto text-xs text-gray-400">{getColumnTypeLabel(col)}</span>
 					</label>
 				{/each}
 			</div>

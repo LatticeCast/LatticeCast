@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import type { Column, Row } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
-	import { fetchBlobCell, uploadBlobCell } from '$lib/backend/tables';
+	import { downloadBlobCell, fetchBlobCell, uploadBlobCell } from '$lib/backend/tables';
+	import { getBlobCellMetadata } from './table.utils';
 	import { marked } from 'marked';
 	import Portal from '$lib/components/Portal.svelte';
 
@@ -56,6 +57,15 @@
 			saveError = err instanceof Error ? err.message : 'Failed to save document';
 		} finally {
 			docSaving = false;
+		}
+	}
+
+	async function handleDownload() {
+		try {
+			const filename = getBlobCellMetadata(row, column.column_id)?.filename ?? `${column.name}.md`;
+			await downloadBlobCell(tableId, row.row_id, column.column_id, filename);
+		} catch {
+			// The persisted document remains available for a later retry.
 		}
 	}
 
@@ -161,6 +171,15 @@
 			<button class="rounded-lg px-4 py-2 text-sm {T.muted} hover:bg-gray-100" onclick={onClose}
 				>Cancel</button
 			>
+			<button
+				type="button"
+				data-testid="doc-cell-editor-download"
+				class="rounded-lg px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50"
+				onclick={() => void handleDownload()}
+				disabled={docLoading || !docLoaded}
+			>
+				Download
+			</button>
 			<button
 				data-testid="doc-cell-editor-save"
 				class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
