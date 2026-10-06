@@ -7,17 +7,17 @@ if [[ -z "${TMUX:-}" ]]; then
 fi
 
 echo "[pre-commit] Backend lint"
-docker compose exec -T backend uv run ruff check src tests
+make lint-be
 
 echo "[pre-commit] Frontend lint"
-docker compose exec -T frontend npm run lint:check
+make lint-fe
 
 echo "[pre-commit] SQL migration lint"
-docker compose --profile migration run --rm --entrypoint python \
-    migration linter.py
+make lint-db
 
 echo "[pre-commit] Fresh-database migration verification"
 docker compose --profile migration run --rm --entrypoint python \
     migration migrate.py --test-only
 
+echo "[pre-commit] End-to-end tests"
 make e2e
