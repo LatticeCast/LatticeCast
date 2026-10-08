@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import requests
 
@@ -108,8 +108,10 @@ def test_row_and_blob_mutations_use_separate_endpoints(admin_token, workspace):
     )
     assert response.status_code == 200, f"upload blob: {response.status_code} {response.text[:200]}"
     metadata = response.json()
+    assert metadata["key"].startswith(f"{workspace_id}/{table_id}/rows/{row_id}/blobs/{blob_column_id}/")
+    assert UUID(metadata["key"].rsplit("/", 1)[1]).hex == metadata["key"].rsplit("/", 1)[1]
     assert metadata == {
-        "key": f"{workspace_id}/{table_id}/rows/{row_id}/blobs/{blob_column_id}",
+        "key": metadata["key"],
         "filename": "attachment.txt",
         "content_type": "text/plain",
         "size": len(payload),

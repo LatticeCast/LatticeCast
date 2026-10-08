@@ -4,7 +4,7 @@
 	import { T } from '$lib/UI/theme.svelte';
 	import { downloadBlobCell, fetchBlobCell, uploadBlobCell } from '$lib/backend/tables';
 	import { getBlobCellMetadata } from './table.utils';
-	import { marked } from 'marked';
+	import { markdownPreview } from '$lib/utils/markdown';
 	import Portal from '$lib/components/Portal.svelte';
 
 	let {
@@ -68,8 +68,6 @@
 			// The persisted document remains available for a later retry.
 		}
 	}
-
-	const docPreview = $derived(marked(docContent) as string);
 </script>
 
 <Portal>
@@ -155,11 +153,10 @@
 				></textarea>
 				<!-- Preview pane -->
 				<div
+					data-testid="doc-cell-editor-preview"
+					use:markdownPreview={docContent}
 					class="prose prose-sm max-w-none flex-1 overflow-y-auto px-5 py-4 text-sm {T.body} {T.proseDark}"
-				>
-					<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-					{@html docPreview}
-				</div>
+				></div>
 			</div>
 		{/if}
 		<div class="flex justify-end gap-2 border-t px-5 py-3 {T.border}">

@@ -22,10 +22,12 @@ class RowRepository:
         created_by: UUID | None = None,
         updated_by: UUID | None = None,
     ) -> Row:
+        await self.session.execute(
+            text("SELECT public._validate_row_data_mutation(:ws, :tid, CAST(:data AS jsonb))"),
+            {"ws": str(workspace_id), "tid": table_id, "data": json.dumps(row_data or {})},
+        )
         # Use raw INSERT + RETURNING because PG trigger sets row_id
         # and SQLAlchemy can't track the PK change from 0 → actual value
-        from sqlalchemy import text
-
         result = await self.session.execute(
             text("""
                 INSERT INTO rows (workspace_id, table_id, row_data, created_by, updated_by)
@@ -54,10 +56,30 @@ class RowRepository:
         )
 
     async def get_by_number(self, workspace_id: UUID, table_id: str, row_id: int) -> Row | None:
-        result = await self.session.execute(
-            select(Row).where(Row.workspace_id == workspace_id, Row.table_id == table_id, Row.row_id == row_id)
-        )
+        statement = select(Row).where(Row.workspace_id == workspace_id, Row.table_id == table_id, Row.row_id == row_id)
+        result = await self.session.execute(statement.execution_options(populate_existing=True))
         return result.scalar_one_or_none()
+
+    async def lock_for_write(self, workspace_id: UUID, table_id: str, row_id: int) -> Row:
+        """RLS must authorize UPDATE before any external storage side effect.
+
+        The no-op UPDATE acquires a transaction-scoped row lock and applies
+        the write policy, unlike SELECT FOR UPDATE which only checks read.
+        """
+        from fastapi import HTTPException
+
+        result = await self.session.execute(
+            text("""
+                UPDATE public.rows SET row_data = row_data
+                WHERE workspace_id = :ws AND table_id = :tid AND row_id = :rid
+                RETURNING *
+            """),
+            {"ws": str(workspace_id), "tid": table_id, "rid": row_id},
+        )
+        row = result.mappings().one_or_none()
+        if row is None:
+            raise HTTPException(status_code=403, detail="Row write permission required")
+        return self._row_from_mapping(row)
 
     async def list_by_table(
         self, workspace_id: UUID, table_id: str, offset: int = 0, limit: int = 100, sort: str = "desc"
@@ -124,7 +146,13 @@ class RowRepository:
         return self._row_from_mapping(updated)
 
     async def update_blob(
-        self, row: Row, column_id: str, metadata: dict[str, Any], updated_by: UUID | None = None
+        self,
+        row: Row,
+        column_id: str,
+        metadata: dict[str, Any],
+        updated_by: UUID | None = None,
+        *,
+        commit: bool = True,
     ) -> Row:
         """Write metadata for exactly one blob cell through PostgreSQL."""
         result = await self.session.execute(
@@ -146,7 +174,8 @@ class RowRepository:
                 "metadata": json.dumps(metadata),
             },
         )
-        await self.session.commit()
+        if commit:
+            await self.session.commit()
         updated = result.mappings().one_or_none()
         if updated is None:
             raise RuntimeError("Row disappeared during blob update")

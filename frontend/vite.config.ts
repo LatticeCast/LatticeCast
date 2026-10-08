@@ -2,6 +2,7 @@
 /// <reference types="vitest" />
 
 import { projectBaseWithSlash } from './myconfig.js';
+import { version } from './package.json';
 
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vitest/config';
@@ -48,6 +49,7 @@ export default defineConfig(({ mode }) => {
 			allowedHosts
 		},
 		define: {
+			'import.meta.env.VITE_APP_VERSION': JSON.stringify(version),
 			'import.meta.env.VITE_BACKEND_URL': JSON.stringify(backendUrl),
 
 			// Authentik OAuth

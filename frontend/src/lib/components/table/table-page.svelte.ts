@@ -292,7 +292,9 @@ class TablePageStore {
 		const newData = applyEditToRowData(row.row_data, col.column_id, this.editValue, col.type);
 		error.set(null);
 		try {
-			await updateRow(this.tableId, row.row_id, { row_data: newData });
+			await updateRow(this.tableId, row.row_id, {
+				row_data: { [col.column_id]: newData[col.column_id] }
+			});
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
 		}
@@ -304,7 +306,9 @@ class TablePageStore {
 		const newData = toggleCheckboxInRowData(row.row_data, col.column_id);
 		error.set(null);
 		try {
-			await updateRow(this.tableId, row.row_id, { row_data: newData });
+			await updateRow(this.tableId, row.row_id, {
+				row_data: { [col.column_id]: newData[col.column_id] }
+			});
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
 		}
@@ -315,7 +319,9 @@ class TablePageStore {
 		if (!row) return;
 		const newData = removeTagFromRowData(row.row_data, col.column_id, tag);
 		try {
-			await updateRow(this.tableId, row.row_id, { row_data: newData });
+			await updateRow(this.tableId, row.row_id, {
+				row_data: { [col.column_id]: newData[col.column_id] }
+			});
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');
 		}
@@ -328,7 +334,9 @@ class TablePageStore {
 		if (newData === row.row_data) return;
 		this.tagsPopupCell = null;
 		try {
-			await updateRow(this.tableId, row.row_id, { row_data: newData });
+			await updateRow(this.tableId, row.row_id, {
+				row_data: { [col.column_id]: newData[col.column_id] }
+			});
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to update tags');
 		}

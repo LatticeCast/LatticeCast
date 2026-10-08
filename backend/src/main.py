@@ -3,7 +3,7 @@
 import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -25,6 +25,7 @@ from router.api.storage import router as api_storage_router
 from router.api.table_schemas import router as api_table_schemas_router
 from router.api.tables import router as api_tables_router
 from router.api.workspaces import router as api_workspaces_router
+from services.blob_objects import cleanup_loop
 
 # --------------------------------------------------
 # Lifespan (Startup / Shutdown)
@@ -56,7 +57,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠ Blob storage initialization failed: {e}")
 
-    yield
+    cleanup_task = asyncio.create_task(cleanup_loop())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cleanup_task
 
     # Shutdown
     print("🛑 Shutting down services...")
@@ -178,6 +185,7 @@ class StatusResponse(BaseModel):
     status: str
     db: str
     commit: str
+    version: str
 
 
 @api_router.get("/status", response_model=StatusResponse, tags=["health"])
@@ -186,6 +194,7 @@ async def status() -> StatusResponse:
         status="ok",
         db="ok",  # DB is checked via healthcheck
         commit=settings.deploy_commit,
+        version=__version__,
     )
 
 

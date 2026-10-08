@@ -1,7 +1,7 @@
 {
 	"name": "lattice-cast",
 	"private": true,
-	"version": "0.68.0",
+	"version": "0.69.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
@@ -48,6 +48,7 @@
 		"@tailwindcss/typography": "^0.5.19",
 		"@types/marked": "^5.0.2",
 		"@xyflow/svelte": "1.5.2",
+		"dompurify": "^3.4.16",
 		"echarts": "^5.6.0",
 		"luxon": "^3.7.2",
 		"marked": "^17.0.5",

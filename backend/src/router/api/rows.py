@@ -3,11 +3,13 @@
 from io import BytesIO
 from typing import Annotated
 from urllib.parse import quote
+from uuid import uuid4
 
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +20,7 @@ from models.row import RowCreate, RowPut, RowResponse, RowUpdate
 from models.user import User
 from repository.row import RowRepository
 from repository.table_view import TableViewRepository
+from services.blob_objects import register_upload
 from util.pg_errors import http_error_for
 
 from .tables._shared import _get_table_for_member
@@ -199,29 +202,48 @@ async def put_blob_cell(
     table = await _get_table_for_member(table_id, user, session)
     await _get_blob_column(table, column_id, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-
     content = await file.read()
     metadata = BlobCellMetadata(
-        key=_blob_storage_key(str(table.workspace_id), table.table_id, row.row_id, column_id),
+        key=f"{_blob_storage_key(str(table.workspace_id), table.table_id, row_id, column_id)}/{uuid4().hex}",
         filename=file.filename or "blob",
         content_type=file.content_type or "application/octet-stream",
         size=len(content),
     )
+    pending_key = (
+        f"{_blob_storage_key(str(table.workspace_id), table.table_id, row_id, column_id)}/.pending/{uuid4().hex}"
+    )
     try:
+        row = await repo.lock_for_write(table.workspace_id, table.table_id, row_id)
+        for key in (pending_key, metadata.key):
+            await session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": key})
+            await register_upload(table, row_id, column_id, key, str(user.user_id))
+        # DB validates and stages the pointer before S3. It is invisible to
+        # other readers until the object exists and the transaction commits.
+        await repo.update_blob(row, column_id, metadata.model_dump(), updated_by=user.user_id, commit=False)
         async with s3_client() as s3:
             await s3.put_object(
                 Bucket=settings.blob.bucket,
-                Key=metadata.key,
+                Key=pending_key,
                 Body=content,
                 ContentType=metadata.content_type,
             )
+            # S3 has no atomic rename: promote only a completed temporary
+            # upload, leaving the previously committed object untouched.
+            await s3.copy_object(
+                Bucket=settings.blob.bucket,
+                Key=metadata.key,
+                CopySource={"Bucket": settings.blob.bucket, "Key": pending_key},
+            )
+        await session.commit()
     except ClientError as e:
+        await session.rollback()
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
-
-    await repo.update_blob(row, column_id, metadata.model_dump(), updated_by=user.user_id)
+    except DBAPIError as exc:
+        await session.rollback()
+        raise (http_error_for(exc) or exc) from exc
+    except BaseException:
+        await session.rollback()
+        raise
     return metadata
 
 
@@ -242,12 +264,39 @@ async def get_blob_cell(
     """Download the file currently stored in a blob column cell."""
     table = await _get_table_for_member(table_id, user, session)
     await _get_blob_column(table, column_id, session)
-    row = await RowRepository(session).get_by_number(table.workspace_id, table.table_id, row_id)
+    repo = RowRepository(session)
+    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-    metadata = row.row_data.get(column_id)
-    if not isinstance(metadata, dict) or not isinstance(metadata.get("key"), str):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blob not found")
+    for _ in range(4):
+        metadata = row.row_data.get(column_id)
+        if not isinstance(metadata, dict) or not isinstance(metadata.get("key"), str):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blob not found")
+        ownership = await session.execute(
+            text("SELECT public.blob_object_belongs_to_cell(:key, :ws, :tid, :rid, :cid)"),
+            {
+                "key": metadata["key"],
+                "ws": str(table.workspace_id),
+                "tid": table.table_id,
+                "rid": row_id,
+                "cid": column_id,
+            },
+        )
+        if not ownership.scalar_one():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blob not found")
+        # Protect the selected immutable version from GC, without locking the
+        # row: readers can keep using the committed old version during upload.
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock_shared(hashtextextended(:key, 0))"), {"key": metadata["key"]}
+        )
+        current = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
+        if current is None:
+            raise HTTPException(status_code=404, detail="Row not found")
+        if current.row_data.get(column_id) == metadata:
+            break
+        row = current
+    else:
+        raise HTTPException(status_code=409, detail="Blob changed during download; retry")
 
     try:
         async with s3_client() as s3:
@@ -283,19 +332,13 @@ async def delete_blob_cell(
     table = await _get_table_for_member(table_id, user, session)
     await _get_blob_column(table, column_id, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
+    row = await repo.lock_for_write(table.workspace_id, table.table_id, row_id)
     metadata = row.row_data.get(column_id)
     if not isinstance(metadata, dict) or not isinstance(metadata.get("key"), str):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blob not found")
 
-    try:
-        async with s3_client() as s3:
-            await s3.delete_object(Bucket=settings.blob.bucket, Key=metadata["key"])
-    except ClientError as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Storage error") from e
-
+    # Removing the DB reference atomically queues the owned object for cleanup.
+    # Storage failures cannot leave a live cell pointing at deleted bytes.
     await repo.update_blob(row, column_id, {}, updated_by=user.user_id)
 
 
@@ -309,19 +352,5 @@ async def delete_row(
     """Delete a row by row_id (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
-    if not row:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
-    # Delete blob objects for storage-backed columns (best-effort).
-    columns = (await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id))["columns"]
-    storage_cols = [c for c in columns if c.get("type") == "blob"]
-    for storage_col in storage_cols:
-        cell_value = row.row_data.get(storage_col["column_id"])
-        blob_key = cell_value.get("key") if isinstance(cell_value, dict) else cell_value
-        if blob_key:
-            try:
-                async with s3_client() as s3:
-                    await s3.delete_object(Bucket=settings.blob.bucket, Key=str(blob_key))
-            except Exception:
-                pass
+    row = await repo.lock_for_write(table.workspace_id, table.table_id, row_id)
     await repo.delete(row=row)

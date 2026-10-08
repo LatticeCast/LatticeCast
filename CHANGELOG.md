@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.69 — 2026-10-08
+
+- Expose frontend and backend version and deploy commit through public status JSON.
+- Separate ordinary row PATCH updates from addressed blob mutations, so rows
+  with attachments and documents remain editable.
+- Sanitize Markdown previews with DOMPurify before inserting HTML.
+- Authorize blob writes through PostgreSQL RLS before touching object storage.
+- Publish completed temporary uploads as immutable versions, commit their DB
+  references, and recover failed uploads and retired objects with durable cleanup.
+- Track blob cell ownership to reject forged object keys and preserve attachments
+  when columns or tables are renamed.
+
 ## 0.68 — 2026-10-06
 
 - Removed obsolete backend compatibility aliases, stale table-view tests, and

@@ -21,3 +21,7 @@ docker compose --profile migration run --rm --entrypoint python \
 
 echo "[pre-commit] End-to-end tests"
 make e2e
+
+# Include formatter/linter fixes only after every verification succeeds.
+echo "[pre-commit] Stage verified changes"
+git add .

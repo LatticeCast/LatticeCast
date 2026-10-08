@@ -7,6 +7,7 @@ same explicit table/row/column endpoint and server-managed metadata.
 from __future__ import annotations
 
 import time
+from uuid import UUID
 
 import requests
 
@@ -64,7 +65,8 @@ def test_blob_cells_round_trip(admin_token, workspace):
     assert first_metadata["filename"] == "first.txt"
     assert first_metadata["content_type"] == "text/plain"
     assert first_metadata["size"] == len(first_file)
-    assert first_metadata["key"].endswith(f"/rows/{row_id}/blobs/{file_column_id}")
+    assert first_metadata["key"].startswith(f"{ws_id}/{table_id}/rows/{row_id}/blobs/{file_column_id}/")
+    assert UUID(first_metadata["key"].rsplit("/", 1)[1]).hex == first_metadata["key"].rsplit("/", 1)[1]
 
     response = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}/blob/{file_column_id}", admin_token)
     assert response.status_code == 200, f"download first file: {response.status_code} {response.text[:200]}"
@@ -82,6 +84,7 @@ def test_blob_cells_round_trip(admin_token, workspace):
     assert response.json()["filename"] == "archive.zip"
     assert response.json()["content_type"] == "application/zip"
     assert response.json()["size"] == len(replacement_file)
+    assert response.json()["key"] != first_metadata["key"]
 
     response = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}/blob/{file_column_id}", admin_token)
     assert response.status_code == 200, f"download replacement file: {response.status_code} {response.text[:200]}"
@@ -96,6 +99,9 @@ def test_blob_cells_round_trip(admin_token, workspace):
     )
     assert response.status_code == 200, f"write text blob: {response.status_code} {response.text[:200]}"
     assert response.json()["filename"] == "notes.md"
+    doc_metadata = response.json()
+    assert doc_metadata["key"].startswith(f"{ws_id}/{table_id}/rows/{row_id}/blobs/{doc_column_id}/")
+    assert UUID(doc_metadata["key"].rsplit("/", 1)[1]).hex == doc_metadata["key"].rsplit("/", 1)[1]
 
     response = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}/blob/{doc_column_id}", admin_token)
     assert response.status_code == 200, f"read addressed text blob: {response.status_code} {response.text[:200]}"
@@ -106,7 +112,7 @@ def test_blob_cells_round_trip(admin_token, workspace):
     row_data = response.json()["row_data"]
     assert row_data[file_column_id]["filename"] == "archive.zip"
     assert row_data[doc_column_id] == {
-        "key": f"{ws_id}/{table_id}/rows/{row_id}/blobs/{doc_column_id}",
+        "key": doc_metadata["key"],
         "filename": "notes.md",
         "content_type": "text/markdown",
         "size": len(text_content.encode()),

@@ -6,7 +6,7 @@
 
 import { get } from 'svelte/store';
 import { BackendApiError, authenticatedRequestBlob, authenticatedRequestJson } from './client';
-import { applySchema } from '$lib/stores/table_schema.store';
+import { applySchema, columns } from '$lib/stores/table_schema.store';
 import { rows } from '$lib/stores/table_rows.store';
 import { tables, currentTableId } from '$lib/stores/table_schemas.store';
 import type {
@@ -118,6 +118,18 @@ export async function patchSchema(
 
 // ─── Rows — mutations update rows store ───────────────────────────────────────
 
+/** Blob descriptors can only be changed through the addressed blob API. */
+function nonBlobRowData(data: Record<string, unknown>): Record<string, unknown> {
+	const blobColumns = new Set(
+		get(columns)
+			.filter((column) => column.type === 'blob')
+			.map((column) => column.column_id)
+	);
+	return Object.fromEntries(
+		Object.entries(data).filter(([columnId]) => !blobColumns.has(columnId))
+	);
+}
+
 export async function fetchRows(tableId: string, offset = 0, limit = 100): Promise<Row[]> {
 	const result = await authenticatedRequestJson<Row[]>(
 		`/tables/${tableId}/rows?offset=${offset}&limit=${limit}`
@@ -129,7 +141,7 @@ export async function fetchRows(tableId: string, offset = 0, limit = 100): Promi
 export async function createRow(tableId: string, data: CreateRow): Promise<Row> {
 	const row = await authenticatedRequestJson<Row>(`/tables/${tableId}/rows`, {
 		method: 'POST',
-		body: data
+		body: { ...data, row_data: nonBlobRowData(data.row_data ?? {}) }
 	});
 	rows.update((r) => [...r, row]);
 	return row;
@@ -137,8 +149,8 @@ export async function createRow(tableId: string, data: CreateRow): Promise<Row> 
 
 export async function updateRow(tableId: string, rowNumber: number, data: UpdateRow): Promise<Row> {
 	const row = await authenticatedRequestJson<Row>(`/tables/${tableId}/rows/${rowNumber}`, {
-		method: 'PUT',
-		body: data
+		method: 'PATCH',
+		body: { ...data, row_data: nonBlobRowData(data.row_data) }
 	});
 	rows.update((r) => r.map((existing) => (existing.row_id === rowNumber ? row : existing)));
 	return row;

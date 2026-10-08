@@ -7,6 +7,7 @@ metadata after navigation and gives the user a working download action.
 from __future__ import annotations
 
 import time
+from uuid import UUID
 
 import requests
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
@@ -64,11 +65,14 @@ def test_blob_cell_renders_and_downloads(authed_page, workspace, admin_token, sn
         timeout=15,
     )
     assert response.status_code == 200, f"upload blob: {response.status_code} {response.text[:200]}"
+    metadata = response.json()
+    assert metadata["key"].startswith(f"{ws_id}/{table_id}/rows/{row_id}/blobs/{column_id}/")
+    assert UUID(metadata["key"].rsplit("/", 1)[1]).hex == metadata["key"].rsplit("/", 1)[1]
 
     response = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", admin_token)
     assert response.status_code == 200, f"read row: {response.status_code} {response.text[:200]}"
     assert response.json()["row_data"][column_id] == {
-        "key": f"{ws_id}/{table_id}/rows/{row_id}/blobs/{column_id}",
+        "key": metadata["key"],
         "filename": filename,
         "content_type": "text/plain",
         "size": len(payload),
