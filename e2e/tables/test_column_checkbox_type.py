@@ -136,7 +136,7 @@ def test_checkbox_toggle(authed_page, workspace, admin_token, snapshot):
     snap(page, "chk_02_initial_false", snapshot)
 
     # ── step 4: Click checkbox → toggles to true ───────────────────────
-    with page.expect_response(lambda r: "/api/v1/tables/" in r.url and r.request.method == "PUT") as resp_info:
+    with page.expect_response(lambda r: "/api/v1/tables/" in r.url and "/rows/" in r.url and r.request.method == "PATCH") as resp_info:
         page.click(chk_sel)
     resp_info.value
 
@@ -160,7 +160,7 @@ def test_checkbox_toggle(authed_page, workspace, admin_token, snapshot):
     print("[ok] API: checkbox=True confirmed after toggle")
 
     # ── step 6: Click again → toggles back to false ────────────────────
-    with page.expect_response(lambda r: "/api/v1/tables/" in r.url and r.request.method == "PUT") as resp_info:
+    with page.expect_response(lambda r: "/api/v1/tables/" in r.url and "/rows/" in r.url and r.request.method == "PATCH") as resp_info:
         page.click(chk_sel)
     resp_info.value
 
@@ -183,7 +183,7 @@ def test_checkbox_toggle(authed_page, workspace, admin_token, snapshot):
     print("[ok] API: checkbox=False confirmed after 2nd toggle")
 
     # ── step 8: Durability — toggle to true, navigate away and back ────
-    with page.expect_response(lambda r: "/api/v1/tables/" in r.url and r.request.method == "PUT") as resp_info:
+    with page.expect_response(lambda r: "/api/v1/tables/" in r.url and "/rows/" in r.url and r.request.method == "PATCH") as resp_info:
         page.click(chk_sel)
     resp_info.value
 

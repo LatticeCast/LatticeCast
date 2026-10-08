@@ -43,6 +43,10 @@ def test_blob_write_denial_and_forged_creation(admin_token, workspace):
         assert result.status_code == 200 and result.content == b"original bytes"
         result = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", admin_token)
         assert result.json()["row_data"][column_id] == original
+        result = api("DELETE", f"/api/v1/tables/{table_id}/rows/{row_id}", admin_token)
+        assert result.status_code == 204, result.text
+        assert api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", admin_token).status_code == 404
+        assert api("GET", cell, admin_token).status_code == 404
     finally:
         result = api("DELETE", f"/api/v1/workspaces/{ws_id}/members/{user_id}", admin_token)
         assert result.status_code == 204, result.text

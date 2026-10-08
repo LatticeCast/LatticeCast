@@ -167,7 +167,7 @@ def test_tags_add_remove(authed_page, workspace, admin_token, snapshot):
         pytest.fail("'bug' choice not visible in tags popup")
 
     with page.expect_response(
-        lambda resp: f"/api/v1/tables/{table_id}/rows/" in resp.url and resp.request.method == "PUT",
+        lambda resp: f"/api/v1/tables/{table_id}/rows/" in resp.url and resp.request.method == "PATCH",
         timeout=10000,
     ):
         page.click(choice_bug_sel)
@@ -207,7 +207,7 @@ def test_tags_add_remove(authed_page, workspace, admin_token, snapshot):
         pytest.fail("'feature' choice not visible in tags popup")
 
     with page.expect_response(
-        lambda resp: f"/api/v1/tables/{table_id}/rows/" in resp.url and resp.request.method == "PUT",
+        lambda resp: f"/api/v1/tables/{table_id}/rows/" in resp.url and resp.request.method == "PATCH",
         timeout=10000,
     ):
         page.click(choice_feat_sel)
@@ -238,7 +238,7 @@ def test_tags_add_remove(authed_page, workspace, admin_token, snapshot):
         pytest.fail("'bug' remove (x) button not visible")
 
     with page.expect_response(
-        lambda resp: f"/api/v1/tables/{table_id}/rows/" in resp.url and resp.request.method == "PUT",
+        lambda resp: f"/api/v1/tables/{table_id}/rows/" in resp.url and resp.request.method == "PATCH",
         timeout=10000,
     ):
         page.click(remove_bug_sel)

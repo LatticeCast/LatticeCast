@@ -6,7 +6,7 @@ Scenario:
   3. Navigate to the Sprint Board kanban view.
   4. Verify the card appears in the "todo" lane.
   5. Drag the card to the "in_progress" lane.
-  6. Wait for PUT /rows/{row_id} to fire and resolve.
+  6. Wait for PATCH /rows/{row_id} to fire and resolve.
   7. API verify: row's Status field = "in_progress".
   8. UI verify: card appears in "in_progress" lane; absent from "todo" lane.
   9. Navigate away and back.
@@ -134,7 +134,7 @@ def test_kanban_drag_card(authed_page, pm_table, admin_token, snapshot):
     with page.expect_response(
         lambda resp: (
             f"/api/v1/tables/{table_id}/rows/{row_id}" in resp.url
-            and resp.request.method == "PUT"
+            and resp.request.method == "PATCH"
         ),
         timeout=15000,
     ):

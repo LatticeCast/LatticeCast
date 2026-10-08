@@ -20,7 +20,9 @@ docker compose --profile migration run --rm --entrypoint python \
     migration migrate.py --test-only
 
 echo "[pre-commit] End-to-end tests"
-make e2e
+# The commit gate must always run the complete suite, regardless of any
+# focused-test arguments used during development.
+make e2e E2E_PYTEST_ARGS='--tb=short -q'
 
 # Include formatter/linter fixes only after every verification succeeds.
 echo "[pre-commit] Stage verified changes"

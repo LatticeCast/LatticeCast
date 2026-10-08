@@ -69,17 +69,21 @@ class RowRepository:
         from fastapi import HTTPException
 
         result = await self.session.execute(
-            text("""
+            select(Row)
+            .from_statement(
+                text("""
                 UPDATE public.rows SET row_data = row_data
                 WHERE workspace_id = :ws AND table_id = :tid AND row_id = :rid
                 RETURNING *
-            """),
+            """)
+            )
+            .execution_options(populate_existing=True),
             {"ws": str(workspace_id), "tid": table_id, "rid": row_id},
         )
-        row = result.mappings().one_or_none()
+        row = result.scalar_one_or_none()
         if row is None:
             raise HTTPException(status_code=403, detail="Row write permission required")
-        return self._row_from_mapping(row)
+        return row
 
     async def list_by_table(
         self, workspace_id: UUID, table_id: str, offset: int = 0, limit: int = 100, sort: str = "desc"

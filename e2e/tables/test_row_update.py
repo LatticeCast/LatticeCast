@@ -148,7 +148,7 @@ def test_row_update(authed_page, admin_token, snapshot):
 
         input_loc.fill("Bob")
         with page.expect_response(
-            lambda resp: "/rows/" in resp.url and resp.request.method == "PUT",
+            lambda resp: "/rows/" in resp.url and resp.request.method == "PATCH",
             timeout=10000,
         ):
             input_loc.press("Enter")
@@ -172,7 +172,7 @@ def test_row_update(authed_page, admin_token, snapshot):
             pytest.fail("Select dropdown did not appear after clicking select cell")
 
         with page.expect_response(
-            lambda resp: "/rows/" in resp.url and resp.request.method == "PUT",
+            lambda resp: "/rows/" in resp.url and resp.request.method == "PATCH",
             timeout=10000,
         ):
             select_loc.select_option("done")
@@ -195,7 +195,7 @@ def test_row_update(authed_page, admin_token, snapshot):
             pytest.fail("Checkbox button not visible")
 
         with page.expect_response(
-            lambda resp: "/rows/" in resp.url and resp.request.method == "PUT",
+            lambda resp: "/rows/" in resp.url and resp.request.method == "PATCH",
             timeout=10000,
         ):
             checkbox_btn.click()
@@ -220,7 +220,7 @@ def test_row_update(authed_page, admin_token, snapshot):
 
         date_input.fill("2026-12-31")
         with page.expect_response(
-            lambda resp: "/rows/" in resp.url and resp.request.method == "PUT",
+            lambda resp: "/rows/" in resp.url and resp.request.method == "PATCH",
             timeout=10000,
         ):
             date_input.press("Enter")
