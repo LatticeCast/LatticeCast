@@ -10,6 +10,7 @@ dependencies = [
     "pydantic[email]",
     "pydantic-settings",
     "sqlmodel",          # pulls sqlalchemy + pydantic
+    "sqlalchemy[asyncio]", # async engine requires greenlet at runtime
     "asyncpg",
     "python-jose",
     "passlib",
