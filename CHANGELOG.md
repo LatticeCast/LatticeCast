@@ -1,6 +1,11 @@
 # Changelog
 
-## v0.69 — 2026-10-08
+## 0.69.2 — 2026-10-10
+
+- Synchronize frontend, backend, E2E package versions and lockfiles to 0.69.2.
+- Update deployment status version assertions for this release.
+
+## 0.69 — 2026-10-08
 
 - Expose frontend and backend version and deploy commit through public status JSON.
 - Separate ordinary row PATCH updates from addressed blob mutations, so rows
@@ -42,7 +47,7 @@
   addressed only by table, row, and column IDs through one generic API.
 - Renamed the text editor hint from `doc` to `text` for plain text, Markdown,
   and CSV; V63 migrates existing schemas and future template output.
-- Text blobs now start empty; v0.65.0 no longer generates ticket-specific Markdown
+- Text blobs now start empty; 0.65.0 no longer generates ticket-specific Markdown
   templates or hierarchy links.
 
 ## 0.64 — 2026-09-27 (cache-driven dashboard state, unified LC credential issuance)

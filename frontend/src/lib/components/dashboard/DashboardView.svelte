@@ -84,7 +84,7 @@
 		</div>
 	{:else}
 		<!--
-		  V0.27.2: positions are honored via inline `grid-column` / `grid-row`.
+		  0.27.2: positions are honored via inline `grid-column` / `grid-row`.
 		  Tailwind v4 purges dynamic class names like `col-span-{item.w}`, so we
 		  cannot interpolate Tailwind classes from layout values at runtime.
 		  Inline styles with explicit grid-column/grid-row lines are the fix.
