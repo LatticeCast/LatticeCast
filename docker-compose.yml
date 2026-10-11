@@ -8,6 +8,14 @@ services:
     environment:
       LISTEN_PORT: ${NGX_PORT}
       NGX_PORT: ${NGX_PORT}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:$${NGX_PORT}/api/v1/status && wget -q -O /dev/null http://127.0.0.1:$${NGX_PORT}/status
+      interval: 2s
+      timeout: 10s
+      retries: 30
+      start_period: 5s
     depends_on:
       - frontend
       - backend
@@ -27,6 +35,16 @@ services:
     networks:
       - shared-network
     command: npm run dev
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:'+process.env.NGX_PORT+'/status').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 2s
+      timeout: 10s
+      retries: 30
+      start_period: 5s
     tty: true
     stdin_open: true
     volumes:
@@ -45,6 +63,16 @@ services:
       - .env
     environment:
       POSTGRES_URL: db:5432
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ['NGX_PORT']+'/api/v1/status', timeout=5)
+      interval: 2s
+      timeout: 10s
+      retries: 30
+      start_period: 5s
     logging:
       driver: json-file
       options:

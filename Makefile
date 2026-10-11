@@ -18,6 +18,9 @@ lint-db:
 # Start the remote Chromium and E2E runner required by the test suite.
 e2e-up:
 	$(COMPOSE) --profile test up -d browser e2e
+	# Backend workers do not reload bind-mounted source; test the current checkout.
+	$(COMPOSE) restart backend frontend lattice-cast
+	$(COMPOSE) up -d --wait --wait-timeout 120 backend frontend lattice-cast
 
 # Run the complete Playwright-backed E2E suite. Override E2E_PYTEST_ARGS as needed.
 e2e: e2e-up

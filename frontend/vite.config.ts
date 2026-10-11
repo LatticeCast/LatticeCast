@@ -13,15 +13,17 @@ import { sveltekit } from '@sveltejs/kit/vite';
 // nginx can proxy_pass http://backend:${NGX_PORT} / http://frontend:${NGX_PORT}.
 const ngxPort = process.env.NGX_PORT ?? '13491';
 
+const deployOrigin = process.env.VITE_DEPLOY_ORIGIN;
+
 // Same origin via nginx — use the nginx URL in dev, prod domain in prod.
 const backendUrls = {
 	development: `http://localhost:${ngxPort}`,
-	production: 'https://lattice-cast.posetmage.com'
+	production: deployOrigin ?? 'https://lattice-cast.posetmage.com'
 } as const;
 
 const frontendUrls = {
 	development: `http://localhost:${ngxPort}`,
-	production: 'https://lattice-cast.posetmage.com'
+	production: deployOrigin ?? 'https://lattice-cast.posetmage.com'
 } as const;
 
 type BackendUrlMode = keyof typeof backendUrls;

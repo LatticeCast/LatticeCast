@@ -1,6 +1,7 @@
 # src/main.py
 
 import asyncio
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, suppress
@@ -136,6 +137,7 @@ Use the **rows** tag for the exact upload, download, and delete contracts. Every
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=os.getenv("CORS_ORIGIN_REGEX") or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
