@@ -16,21 +16,9 @@
 		return { class: 'bg-gray-100 text-gray-800 border-gray-200', label: 'Unregistered' };
 	};
 
-	const getProviderBadgeColor = (provider: string) => {
-		const colors: Record<string, string> = {
-			authentik: 'bg-blue-100 text-blue-800 border-blue-200',
-			google: 'bg-red-100 text-red-800 border-red-200',
-			microsoft: 'bg-sky-100 text-sky-800 border-sky-200',
-			local: 'bg-green-100 text-green-800 border-green-200'
-		};
-		return colors[provider] || 'bg-gray-100 text-gray-800 border-gray-200';
-	};
-
 	// Environment config for debugging
 	const envConfig = {
-		backendUrl: import.meta.env.VITE_BACKEND_URL,
-		googleClientId: import.meta.env.VITE_GOOGLE_CLIENT_ID ? '✓ Set' : '✗ Missing',
-		googleRedirectUri: import.meta.env.VITE_GOOGLE_REDIRECT_URI
+		backendUrl: import.meta.env.VITE_BACKEND_URL
 	};
 
 	const roleBadge = $derived(getRoleBadge($authStore?.role));
@@ -47,9 +35,9 @@
 					</span>
 					{#if $authStore?.provider}
 						<span
-							class={`rounded-full border px-3 py-1 text-sm font-semibold ${getProviderBadgeColor($authStore.provider)}`}
+							class="rounded-full border border-green-200 bg-green-100 px-3 py-1 text-sm font-semibold text-green-800"
 						>
-							{$authStore.provider.charAt(0).toUpperCase() + $authStore.provider.slice(1)}
+							LC local
 						</span>
 					{/if}
 				</div>
@@ -127,8 +115,6 @@
 					<h3 class="mb-2 font-semibold text-orange-900">Environment Config</h3>
 					<div class="space-y-1 text-sm">
 						<p><span class="font-medium">Backend URL:</span> {envConfig.backendUrl}</p>
-						<p><span class="font-medium">Google Client ID:</span> {envConfig.googleClientId}</p>
-						<p><span class="font-medium">Google Redirect:</span> {envConfig.googleRedirectUri}</p>
 					</div>
 				</div>
 

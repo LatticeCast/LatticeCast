@@ -23,7 +23,7 @@ Self-hosted Airtable + Jira. Flexible tables with JSONB, customizable views (Tab
 - **Ticket Notes** — each ticket can hold one Markdown/text blob in RustFS, edited through the shared blob-cell UI
 - **Auto-cascade** — all children merged → parent auto-merged
 - **Import/Export** — CSV, JSON, templates
-- **OAuth** — Google, Authentik with PKCE
+- **Authentication** — LC-local JWTs, password login, and first-party SSO
 
 ## Data Model
 
@@ -44,7 +44,7 @@ RustFS           → addressed one-file blob cells at {workspace}/{table}/rows/{
 | Database | PostgreSQL 18, JSONB + auto-managed indexes |
 | Cache | PostgreSQL UNLOGGED table (`private.cache`) |
 | Storage | RustFS (S3-compatible) — ticket docs |
-| Auth | Google OAuth, Authentik |
+| Auth | LC-local JWT, password login, first-party SSO |
 
 ## Quick Start
 

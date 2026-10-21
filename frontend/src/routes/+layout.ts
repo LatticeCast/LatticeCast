@@ -6,7 +6,7 @@ import type { LayoutLoad } from './$types';
 export const ssr = false;
 
 // Routes reachable while logged out. Everything else requires a session.
-const PUBLIC_PREFIXES = ['/login', '/callback'];
+const PUBLIC_PREFIXES = ['/login'];
 
 // Single auth gate for the whole app. authStore hydrates synchronously from
 // localStorage on import, so this is reliable on hard refresh too. Individual

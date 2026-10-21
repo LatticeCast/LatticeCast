@@ -6,7 +6,6 @@ metadata:
   namespace: lattice-cast
 data:
   DEBUG_MODE: "1"
-  AUTHENTIK_URL: "https://authentik.posetmage.com"
   BLOB_ENDPOINT: "blob:9000"
   BLOB_BUCKET: "lattice-cast"
   BLOB_SECURE: "false"

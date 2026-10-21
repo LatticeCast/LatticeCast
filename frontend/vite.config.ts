@@ -21,17 +21,11 @@ const backendUrls = {
 	production: deployOrigin ?? 'https://lattice-cast.posetmage.com'
 } as const;
 
-const frontendUrls = {
-	development: `http://localhost:${ngxPort}`,
-	production: deployOrigin ?? 'https://lattice-cast.posetmage.com'
-} as const;
-
 type BackendUrlMode = keyof typeof backendUrls;
 
 export default defineConfig(({ mode }) => {
 	const safeMode = mode as BackendUrlMode;
 	const backendUrl = backendUrls[safeMode] ?? backendUrls.production;
-	const frontendUrl = frontendUrls[safeMode] ?? frontendUrls.production;
 
 	const isProduction = mode === 'production';
 
@@ -52,18 +46,7 @@ export default defineConfig(({ mode }) => {
 		},
 		define: {
 			'import.meta.env.VITE_APP_VERSION': JSON.stringify(version),
-			'import.meta.env.VITE_BACKEND_URL': JSON.stringify(backendUrl),
-
-			// Authentik OAuth
-			'import.meta.env.VITE_AUTHENTIK_URL': JSON.stringify(process.env.AUTHENTIK_URL),
-			'import.meta.env.VITE_AUTHENTIK_CLIENT_ID': JSON.stringify(process.env.AUTHENTIK_CLIENT_ID),
-			'import.meta.env.VITE_AUTHENTIK_REDIRECT_URI': JSON.stringify(
-				`${frontendUrl}/callback/authentik`
-			),
-
-			// Google OAuth
-			'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify(process.env.GOOGLE_CLIENT_ID),
-			'import.meta.env.VITE_GOOGLE_REDIRECT_URI': JSON.stringify(`${frontendUrl}/callback/google`)
+			'import.meta.env.VITE_BACKEND_URL': JSON.stringify(backendUrl)
 		},
 		test: {
 			workspace: [

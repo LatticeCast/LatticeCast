@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.70 — 2026-10-21
+
+- Accept only LC-local JWTs; reject invalid or expired credentials with 401
+  without external provider fallback or JWKS requests.
+- Remove retired Authentik/Google login routes, UI, callbacks, and configuration;
+  preserve password login and first-party LC SSO.
+- Restart the local proxy after its upstream services to avoid stale routing in E2E.
+- Synchronize frontend, backend, and E2E versions and lockfiles to 0.70.0.
+
 ## 0.69.2 — 2026-10-10
 
 - Synchronize frontend, backend, E2E package versions and lockfiles to 0.69.2.

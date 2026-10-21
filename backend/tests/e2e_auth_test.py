@@ -4,9 +4,9 @@ E2E Authentication Tests for Lattice Cast Backend
 Usage:
     1. Create a tokens.json file in the same directory with:
        {
-           "admin": "ya29...",      // posetmage@gmail.com (admin)
-           "user": "ya29...",       // homunmage@gmail.com (to be added as user)
-           "unregistered": "ya29..."  // latticemage@gmail.com (not in DB)
+           "admin": "<LC-local JWT>",      // admin account
+           "user": "<LC-local JWT>",       // registered user account
+           "unregistered": "<LC-local JWT>"  // unregistered account
        }
     2. Run: python -m pytest tests/e2e_auth_test.py -v
        Or:  python tests/e2e_auth_test.py
@@ -60,7 +60,7 @@ class TestAdminAuth:
         assert resp.status_code == 200
         data = resp.json()
         assert data["role"] == "admin"
-        assert data["provider"] == "google"
+        assert data["provider"] == "none"
         assert "email" in data
         print(f"✓ Admin: {data['email']} (role={data['role']})")
 

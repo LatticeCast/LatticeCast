@@ -1,6 +1,9 @@
 # Authentication
 
-Bearer tokens may be local JWT, Google, or Authentik. Token verification resolves an existing `auth.users` identity; it does not create one.
+Bearer tokens must be LC-local JWTs signed with `JWT_SECRET_KEY` using HS256.
+Invalid or expired tokens return 401 immediately; verification never falls back
+to an external identity provider or performs JWKS/userinfo network requests.
+Token verification resolves an existing `auth.users` identity; it does not create one.
 
 ```text
 token -> middleware/token.py -> middleware/auth.py -> RLS session -> PostgreSQL policy

@@ -1,7 +1,6 @@
 // lib/backend/auth.ts
 // Backend auth API calls
 
-import type { AuthProvider } from '$lib/types/auth';
 import { BackendApiError, requestJson } from './client';
 
 export interface TokenResponse {
@@ -23,39 +22,19 @@ export interface MeResponse {
 	email: string;
 	name?: string;
 	picture?: string;
-	provider: 'google' | 'authentik' | 'none';
+	provider: 'none';
 	role?: string;
 	user_name?: string;
 	config?: Record<string, unknown>;
 }
 
 /**
- * Username + password login. In AUTH_REQUIRED=false mode the backend ignores
- * the password and returns the resolved user_id UUID as access_token.
+ * Username + password login; the backend issues an LC-local access JWT.
  */
 export async function login(user_name: string, password: string): Promise<TokenResponse> {
 	return requestJson<TokenResponse>('/login/password', {
 		method: 'POST',
 		body: { user_name, password }
-	});
-}
-
-/**
- * Exchange auth code for tokens via backend.
- */
-export async function exchangeCodeViaBackend(
-	provider: AuthProvider,
-	code: string,
-	redirectUri: string,
-	codeVerifier: string
-): Promise<TokenResponse> {
-	return requestJson<TokenResponse>(`/login/${provider}/token`, {
-		method: 'POST',
-		body: {
-			code,
-			redirect_uri: redirectUri,
-			code_verifier: codeVerifier
-		}
 	});
 }
 

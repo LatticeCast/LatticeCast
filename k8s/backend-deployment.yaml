@@ -63,28 +63,6 @@ spec:
                   name: blob-secret
                   key: BLOB_SECRET_KEY
 
-            # OAuth from secret
-            - name: GOOGLE_CLIENT_ID
-              valueFrom:
-                secretKeyRef:
-                  name: oauth-secret
-                  key: GOOGLE_CLIENT_ID
-            - name: GOOGLE_CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: oauth-secret
-                  key: GOOGLE_CLIENT_SECRET
-            - name: AUTHENTIK_CLIENT_ID
-              valueFrom:
-                secretKeyRef:
-                  name: oauth-secret
-                  key: AUTHENTIK_CLIENT_ID
-            - name: AUTHENTIK_URL
-              valueFrom:
-                secretKeyRef:
-                  name: oauth-secret
-                  key: AUTHENTIK_URL
-
             # Database URL (composed from secrets)
             - name: POSTGRES_URL
               value: "db:5432"

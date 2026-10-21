@@ -1,6 +1,6 @@
 // src/lib/types/auth.ts
 
-export type AuthProvider = 'authentik' | 'google' | 'none';
+export type AuthProvider = 'none';
 
 export interface UserInfo {
 	sub: string;
@@ -17,12 +17,4 @@ export interface LoginInfo {
 	expiresAt?: number;
 	userInfo?: UserInfo;
 	role?: string;
-}
-
-export interface OAuthProviderConfig {
-	name: AuthProvider;
-	authorizeUrl: string;
-	clientId: string;
-	redirectUri: string;
-	scope: string;
 }

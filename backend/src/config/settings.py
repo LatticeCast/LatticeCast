@@ -59,45 +59,6 @@ class DatabaseSettings(BaseSettings):
         return f"postgresql+asyncpg://mgr_user:{self.mgr_password}@{host}:{port}/{self.db}"
 
 
-class GoogleOAuthSettings(BaseSettings):
-    """Google OAuth configuration"""
-
-    model_config = SettingsConfigDict(env_prefix="GOOGLE_")
-
-    client_id: str = Field(default="")
-    client_secret: str = Field(default="")
-    token_url: str = Field(default="https://oauth2.googleapis.com/token")
-    userinfo_url: str = Field(default="https://www.googleapis.com/oauth2/v3/userinfo")
-    jwks_url: str = Field(default="https://www.googleapis.com/oauth2/v3/certs")
-    issuer: str = Field(default="https://accounts.google.com")
-
-
-class AuthentikSettings(BaseSettings):
-    """Authentik OAuth configuration"""
-
-    model_config = SettingsConfigDict(env_prefix="AUTHENTIK_")
-
-    url: str = Field(default="https://authentik.posetmage.com")
-    client_id: str = Field(default="")
-    application_slug: str = Field(default="lattice-cast")
-
-    @property
-    def token_url(self) -> str:
-        return f"{self.url}/application/o/token/"
-
-    @property
-    def userinfo_url(self) -> str:
-        return f"{self.url}/application/o/userinfo/"
-
-    @property
-    def jwks_url(self) -> str:
-        return f"{self.url}/application/o/{self.application_slug}/jwks/"
-
-    @property
-    def issuer(self) -> str:
-        return f"{self.url}/application/o/{self.application_slug}/"
-
-
 class BlobSettings(BaseSettings):
     """S3-compatible blob storage configuration."""
 
@@ -131,8 +92,6 @@ class AppSettings(BaseSettings):
 
     # Nested settings
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
-    google: GoogleOAuthSettings = Field(default_factory=GoogleOAuthSettings)
-    authentik: AuthentikSettings = Field(default_factory=AuthentikSettings)
     blob: BlobSettings = Field(default_factory=BlobSettings)
 
     @model_validator(mode="after")

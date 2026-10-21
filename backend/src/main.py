@@ -14,7 +14,6 @@ from __version__ import __version__
 from config.settings import settings
 from config.storage import ensure_bucket_exists
 from core.db import close_db, init_db
-from middleware.jwks import get_jwks
 from router.api.admin.announcements import router as admin_announcements_router
 from router.api.admin.users import router as admin_users_router
 from router.api.announcements import router as api_announcements_router
@@ -43,13 +42,6 @@ async def lifespan(app: FastAPI):
     # Initialize database
     await init_db()
     print("✓ Database initialized")
-
-    # Pre-warm JWKS cache
-    try:
-        await get_jwks()
-        print("✓ JWKS pre-cached")
-    except Exception as e:
-        print(f"⚠ JWKS pre-cache failed: {e}")
 
     # Initialize the RustFS blob bucket.
     try:
@@ -114,7 +106,7 @@ Use the **rows** tag for the exact upload, download, and delete contracts. Every
         "name": "MIT",
     },
     openapi_tags=[
-        {"name": "auth", "description": "Authentication endpoints (Google/Authentik OAuth)"},
+        {"name": "auth", "description": "LC-local JWT authentication and password login"},
         {"name": "workspaces", "description": "Workspace lifecycle and RLS-backed member access."},
         {"name": "tables", "description": "Generic table, column, schema, template, and view operations."},
         {
