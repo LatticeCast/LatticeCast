@@ -57,7 +57,7 @@ def verify(psql_fn) -> list[str]:
         "CROSS JOIN LATERAL jsonb_array_elements(t.config -> 'columns') "
         "  WITH ORDINALITY AS c(column_data, ordinality) "
         f"WHERE t.workspace_id = '{_ANNOUNCEMENT_WORKSPACE_ID}'::uuid "
-        "  AND t.table_id = 'announcement';"
+        "  AND t.table_name = 'announcement';"
     ).strip()
     expected_columns = (
         "Title:text,Description:text,Type:select,"
@@ -99,7 +99,10 @@ def verify(psql_fn) -> list[str]:
         "|| '|' || COALESCE(max(config ->> 'type'), '') "
         "FROM public.table_views "
         f"WHERE workspace_id = '{_ANNOUNCEMENT_WORKSPACE_ID}'::uuid "
-        "  AND table_id = 'announcement';"
+        "  AND table_id = ("
+        "      SELECT table_id FROM public.tables"
+        f"      WHERE workspace_id = '{_ANNOUNCEMENT_WORKSPACE_ID}'::uuid"
+        "        AND table_name = 'announcement');"
     ).strip()
     if view != "1|announcement|table":
         errors.append(

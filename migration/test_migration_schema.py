@@ -24,9 +24,10 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "workspace_members", "workspace_id", "uuid"),
     ("public", "workspace_members", "user_id", "uuid"),
     ("public", "workspace_members", "action", "character varying"),
-    # public.tables (V23: merged table_schemas into tables)
+    # public.tables (V23: merged table_schemas into tables; V67: BIGINT identity)
+    ("public", "tables", "table_id", "bigint"),
     ("public", "tables", "workspace_id", "uuid"),
-    ("public", "tables", "table_id", "character varying"),
+    ("public", "tables", "table_name", "text"),
     ("public", "tables", "config", "jsonb"),
     ("public", "tables", "created_by", "uuid"),
     ("public", "tables", "updated_by", "uuid"),
@@ -34,7 +35,7 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "tables", "updated_at", "timestamp with time zone"),
     # public.rows
     ("public", "rows", "workspace_id", "uuid"),
-    ("public", "rows", "table_id", "character varying"), 
+    ("public", "rows", "table_id", "bigint"),
     ("public", "rows", "row_id", "bigint"),
     ("public", "rows", "row_data", "jsonb"),
     ("public", "rows", "created_by", "uuid"),
@@ -43,7 +44,7 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "rows", "updated_at", "timestamp with time zone"),
     # public.table_views
     ("public", "table_views", "workspace_id", "uuid"),
-    ("public", "table_views", "table_id", "character varying"),
+    ("public", "table_views", "table_id", "bigint"),
     ("public", "table_views", "view_id", "bigint"),
     ("public", "table_views", "config", "jsonb"),
     ("public", "table_views", "created_by", "uuid"),
@@ -62,7 +63,6 @@ FORBIDDEN_COLUMNS: list[tuple[str, str, str]] = [
     ("auth", "gdpr", "legal_name"),          # dropped — not in v40 schema
     ("public", "workspaces", "display_id"),
     ("public", "tables", "name"),
-    ("public", "tables", "table_name"),
     ("public", "tables", "columns"),         # in tables.config JSONB now
     ("public", "table_views", "name"),       # in config jsonb now
     ("public", "table_views", "type"),       # in config jsonb now
@@ -248,7 +248,7 @@ def verify(psql_fn) -> list[str]:
     # constraints are validated, so they cover existing and future rows.
     for relation, constraint in [
         ("public.workspaces", "workspaces_workspace_name_no_dot"),
-        ("public.tables", "tables_table_id_no_dot"),
+        ("public.tables", "tables_table_name_no_dot"),
     ]:
         result = psql_fn(
             "SELECT convalidated FROM pg_constraint "
@@ -479,7 +479,7 @@ def verify(psql_fn) -> list[str]:
     # Both public V45 functions invoke this SECURITY INVOKER helper.
     result = psql_fn(
         "SELECT has_function_privilege("
-        "'app', 'public._validate_row_data_mutation(uuid, varchar, jsonb)', 'EXECUTE'"
+        "'app', 'public._validate_row_data_mutation(uuid, bigint, jsonb)', 'EXECUTE'"
         ");"
     ).strip()
     if result != "t":
@@ -512,20 +512,11 @@ def verify(psql_fn) -> list[str]:
         if result:
             errors.append(f"FORBIDDEN CALLER IDENTITY FUNCTION: {old_function} (V46)")
 
-    # _build_rd_idx_name(text, text) is deliberately NOT in this list. V49
-    # dropped it as dead surface and asserted here that it must not come back,
-    # but it is live: the current drop_row_data_index(uuid, text, text, text)
-    # drops TWO index names for a column -- the workspace-scoped one it now
-    # creates, and the unscoped one any database migrated before V47 still
-    # carries -- and it needs this two-argument helper to rebuild that older
-    # name. Without it, deleting any indexed column fails outright:
-    #
-    #     ERROR: function public._build_rd_idx_name(text, text) does not exist
-    #
-    # V49's "nothing reaches them" check used a query returning only the FIRST
-    # match per function body, which hid that second call; regexp_matches with
-    # the 'g' flag shows both. V55 restored the function, so this assertion
-    # would now fail the suite on a correct schema.
+    # _build_rd_idx_name(text, text) is gone with the VARCHAR identity. It
+    # existed only so drop_row_data_index could also remove the unscoped index
+    # names written by databases migrated before V47; those indexes live on the
+    # archived rows_old now, and the new rows table never had them. V69 drops
+    # the helper and this suite keeps it from coming back.
     for old_function, signature in [
         ("create_row_data_index", "text, text, text, text"),
         ("drop_row_data_index", "text"),
@@ -538,24 +529,23 @@ def verify(psql_fn) -> list[str]:
         if result:
             errors.append(f"FORBIDDEN LEGACY DDL FUNCTION: {old_function} (V49)")
 
-    # The legacy helper must exist, and must NOT be reachable by app: its only
-    # caller is a SECURITY DEFINER function that runs as its owner (V55).
     result = psql_fn(
         "SELECT to_regprocedure('public._build_rd_idx_name(text, text)');"
     ).strip()
-    if not result:
-        errors.append("MISSING LEGACY DDL HELPER: _build_rd_idx_name(text, text) (V55)")
+    if result:
+        errors.append(
+            "FORBIDDEN LEGACY DDL HELPER: _build_rd_idx_name(text, text) (V69)"
+        )
+
     result = psql_fn(
-        "SELECT has_function_privilege("
-        "'app', 'public._build_rd_idx_name(text, text)', 'EXECUTE'"
-        ");"
+        "SELECT to_regprocedure('public._build_rd_idx_name(bigint, text)');"
     ).strip()
-    if result == "t":
-        errors.append("UNEXPECTED EXECUTE: app on legacy index-name helper (V55)")
+    if not result:
+        errors.append("MISSING DDL HELPER: _build_rd_idx_name(bigint, text) (V69)")
 
     result = psql_fn(
         "SELECT has_function_privilege("
-        "'app', 'public._build_rd_idx_name(uuid, text, text)', 'EXECUTE'"
+        "'app', 'public._build_rd_idx_name(uuid, bigint, text)', 'EXECUTE'"
         ");"
     ).strip()
     if result != "t":
@@ -594,7 +584,7 @@ def verify(psql_fn) -> list[str]:
         "ON CONFLICT (workspace_id) DO NOTHING; "
         "DO $$ "
         "BEGIN "
-        "  INSERT INTO public.tables (workspace_id, table_id, config) "
+        "  INSERT INTO public.tables (workspace_id, table_name, config) "
         "  VALUES ("
         "    '39000000-0000-0000-0000-000000000001'::uuid, "
         "    'duplicate_column_names', "

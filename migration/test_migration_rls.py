@@ -102,10 +102,10 @@ def verify(psql_fn) -> list[str]:
         f"('{_WS_B}'::uuid,'{_USER_B}'::uuid,'write'),"
         f"('{_WS_B}'::uuid,'{_USER_B}'::uuid,'owner') "
         f"ON CONFLICT (workspace_id, user_id, action) DO NOTHING; "
-        f"INSERT INTO public.tables (workspace_id, table_id) VALUES "
+        f"INSERT INTO public.tables (workspace_id, table_name) VALUES "
         f"('{_WS_A}'::uuid,'tv_rls_tbl_a'),"
         f"('{_WS_B}'::uuid,'tv_rls_tbl_b') "
-        f"ON CONFLICT (workspace_id, table_id) DO NOTHING"
+        f"ON CONFLICT (workspace_id, table_name) DO NOTHING"
     )
 
     # V46: sidebar identity comes only from app.current_user_id. User A owns
@@ -189,7 +189,9 @@ def verify(psql_fn) -> list[str]:
         "BEGIN "
         "PERFORM public.create_row_data_index("
         f"'{_WS_B}'::UUID, 'idx_rd_222222222222_tvrlstblb_000000000000', "
-        "'tv_rls_tbl_b', '00000000-0000-0000-0000-000000000000', 'text'); "
+        "(SELECT table_id FROM public.tables "
+        f"WHERE workspace_id = '{_WS_B}'::UUID AND table_name = 'tv_rls_tbl_b'), "
+        "'00000000-0000-0000-0000-000000000000', 'text'); "
         "RAISE EXCEPTION 'cross-workspace index creation succeeded'; "
         "EXCEPTION WHEN insufficient_privilege THEN NULL; END; END $$; "
         "SELECT 1;",
@@ -234,7 +236,9 @@ def verify(psql_fn) -> list[str]:
         _USER_A,
         f"INSERT INTO public.table_views "
         f"(workspace_id, table_id, config) "
-        f"VALUES ('{_WS_A}'::uuid,'tv_rls_tbl_a',"
+        f"VALUES ('{_WS_A}'::uuid,"
+        f"(SELECT table_id FROM public.tables "
+        f"WHERE workspace_id='{_WS_A}'::uuid AND table_name='tv_rls_tbl_a'),"
         f"""'{{"name":"{_test_name}","type":"kanban"}}'::jsonb);""",
     )
     count = _as_app(
