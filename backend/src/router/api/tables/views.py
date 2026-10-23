@@ -46,7 +46,7 @@ async def get_view(
 ) -> dict[str, Any]:
     table = await _get_table_for_member(table_id, user, session)
     view = await TableViewRepository(session).get_by_id(
-        table.workspace_id, table.table_id, view_id
+        table.table_id, view_id
     )
     if not view:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
@@ -93,7 +93,7 @@ async def update_view(
     these into the row's config JSONB."""
     table = await _get_table_for_member(table_id, user, session)
     view_repo = TableViewRepository(session)
-    view = await view_repo.get_by_id(table.workspace_id, table.table_id, view_id)
+    view = await view_repo.get_by_id(table.table_id, view_id)
     if not view:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
 
@@ -123,7 +123,7 @@ async def delete_view(
 ) -> dict[str, Any]:
     table = await _get_table_for_member(table_id, user, session)
     view_repo = TableViewRepository(session)
-    view = await view_repo.get_by_id(table.workspace_id, table.table_id, view_id)
+    view = await view_repo.get_by_id(table.table_id, view_id)
     if not view:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
     return await view_repo.delete_view(

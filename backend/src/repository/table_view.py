@@ -1,9 +1,10 @@
 # src/repository/table_view.py
 #
 # v40: public.table_views holds user-view rows. PK is
-# (workspace_id, table_id, view_id BIGINT). Display name + view type
-# live in the `config` JSONB. PG functions V14 own atomic CRUD; this
-# repo is a thin pass-through.
+# (table_id, view_id BIGINT). The workspace belongs to the parent table,
+# so a view does not carry a copy. Display name + view type live in the
+# `config` JSONB. PG functions V14 own atomic CRUD; this repo is a thin
+# pass-through.
 
 import json
 from typing import Any
@@ -23,7 +24,7 @@ class TableViewRepository:
 
     # ── Row access ────────────────────────────────────────────────────────
 
-    async def list_all(self, workspace_id: UUID, table_id: int) -> list[TableView]:
+    async def list_all(self, table_id: int) -> list[TableView]:
         await reapply_rls_context(self.session)
         # populate_existing=True forces SA to overwrite any cached
         # TableView instances in the identity map with fresh DB rows.
@@ -32,43 +33,36 @@ class TableViewRepository:
         # — leading to PUT /views/{vid} responses with the OLD config.
         result = await self.session.execute(
             select(TableView).where(
-                TableView.workspace_id == workspace_id,
                 TableView.table_id == table_id,
             ).execution_options(populate_existing=True)
         )
         return list(result.scalars().all())
 
-    async def get_by_id(
-        self, workspace_id: UUID, table_id: int, view_id: int
-    ) -> TableView | None:
+    async def get_by_id(self, table_id: int, view_id: int) -> TableView | None:
         await reapply_rls_context(self.session)
         result = await self.session.execute(
             select(TableView).where(
-                TableView.workspace_id == workspace_id,
                 TableView.table_id == table_id,
                 TableView.view_id == view_id,
             ).execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
 
-    async def get_by_name(
-        self, workspace_id: UUID, table_id: int, name: str
-    ) -> TableView | None:
+    async def get_by_name(self, table_id: int, name: str) -> TableView | None:
         await reapply_rls_context(self.session)
         result = await self.session.execute(
             sa_text(
                 "SELECT * FROM table_views "
-                "WHERE workspace_id = CAST(:ws AS uuid) AND table_id = :tid "
+                "WHERE table_id = :tid "
                 "AND config->>'name' = :name LIMIT 1"
             ),
-            {"ws": str(workspace_id), "tid": table_id, "name": name},
+            {"tid": table_id, "name": name},
         )
         row = result.first()
         if not row:
             return None
         mapping = row._mapping
         return TableView(
-            workspace_id=mapping["workspace_id"],
             table_id=mapping["table_id"],
             view_id=mapping["view_id"],
             config=mapping["config"],
@@ -177,7 +171,7 @@ class TableViewRepository:
         if row and isinstance(row[0], dict):
             cfg = row[0]
         view_order = cfg.get("view_order", []) or []
-        views_rows = await self.list_all(workspace_id, table_id)
+        views_rows = await self.list_all(table_id)
         by_id: dict[int, dict[str, Any]] = {
             v.view_id: {
                 "view_id": v.view_id,

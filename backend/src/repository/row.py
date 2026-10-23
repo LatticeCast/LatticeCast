@@ -11,6 +11,13 @@ from models.row import Row, RowPut, RowUpdate
 
 
 class RowRepository:
+    """Rows are addressed by (table_id, row_id).
+
+    ``workspace_id`` is still the caller's claim — the PostgreSQL functions
+    check it against the parent table before touching anything — but it is not
+    a column to filter on: the table owns that fact once.
+    """
+
     def __init__(self, session: AsyncSession):
         self.session = session
 
@@ -30,12 +37,11 @@ class RowRepository:
         # and SQLAlchemy can't track the PK change from 0 → actual value
         result = await self.session.execute(
             text("""
-                INSERT INTO rows (workspace_id, table_id, row_data, created_by, updated_by)
-                VALUES (:workspace_id, :table_id, CAST(:row_data AS jsonb), :created_by, :updated_by)
-                RETURNING workspace_id, table_id, row_id, row_data, created_by, updated_by, created_at, updated_at
+                INSERT INTO rows (table_id, row_data, created_by, updated_by)
+                VALUES (:table_id, CAST(:row_data AS jsonb), :created_by, :updated_by)
+                RETURNING table_id, row_id, row_data, created_by, updated_by, created_at, updated_at
             """),
             {
-                "workspace_id": str(workspace_id),
                 "table_id": table_id,
                 "row_data": json.dumps(row_data or {}),
                 "created_by": str(created_by) if created_by else None,
@@ -45,7 +51,6 @@ class RowRepository:
         await self.session.commit()
         r = result.mappings().one()
         return Row(
-            workspace_id=r["workspace_id"],
             table_id=r["table_id"],
             row_id=r["row_id"],
             row_data=r["row_data"],
@@ -55,12 +60,12 @@ class RowRepository:
             updated_at=r["updated_at"],
         )
 
-    async def get_by_number(self, workspace_id: UUID, table_id: int, row_id: int) -> Row | None:
-        statement = select(Row).where(Row.workspace_id == workspace_id, Row.table_id == table_id, Row.row_id == row_id)
+    async def get_by_number(self, table_id: int, row_id: int) -> Row | None:
+        statement = select(Row).where(Row.table_id == table_id, Row.row_id == row_id)
         result = await self.session.execute(statement.execution_options(populate_existing=True))
         return result.scalar_one_or_none()
 
-    async def lock_for_write(self, workspace_id: UUID, table_id: int, row_id: int) -> Row:
+    async def lock_for_write(self, table_id: int, row_id: int) -> Row:
         """RLS must authorize UPDATE before any external storage side effect.
 
         The no-op UPDATE acquires a transaction-scoped row lock and applies
@@ -73,12 +78,12 @@ class RowRepository:
             .from_statement(
                 text("""
                 UPDATE public.rows SET row_data = row_data
-                WHERE workspace_id = :ws AND table_id = :tid AND row_id = :rid
+                WHERE table_id = :tid AND row_id = :rid
                 RETURNING *
             """)
             )
             .execution_options(populate_existing=True),
-            {"ws": str(workspace_id), "tid": table_id, "rid": row_id},
+            {"tid": table_id, "rid": row_id},
         )
         row = result.scalar_one_or_none()
         if row is None:
@@ -86,20 +91,16 @@ class RowRepository:
         return row
 
     async def list_by_table(
-        self, workspace_id: UUID, table_id: int, offset: int = 0, limit: int = 100, sort: str = "desc"
+        self, table_id: int, offset: int = 0, limit: int = 100, sort: str = "desc"
     ) -> list[Row]:
         order = Row.row_id.desc() if sort == "desc" else Row.row_id.asc()
-        statement = (
-            select(Row)
-            .where(Row.workspace_id == workspace_id, Row.table_id == table_id)
-            .order_by(order)
-            .offset(offset)
-            .limit(limit)
-        )
+        statement = select(Row).where(Row.table_id == table_id).order_by(order).offset(offset).limit(limit)
         result = await self.session.execute(statement)
         return list(result.scalars().all())
 
-    async def patch_row(self, row: Row, data: RowUpdate, updated_by: UUID | None = None) -> Row:
+    async def patch_row(
+        self, workspace_id: UUID, row: Row, data: RowUpdate, updated_by: UUID | None = None
+    ) -> Row:
         """Pass a partial non-blob patch directly to PostgreSQL."""
         result = await self.session.execute(
             text("""
@@ -112,7 +113,7 @@ class RowRepository:
                 )
             """),
             {
-                "workspace_id": str(row.workspace_id),
+                "workspace_id": str(workspace_id),
                 "table_id": row.table_id,
                 "row_id": row.row_id,
                 "patch": json.dumps(data.row_data),
@@ -124,7 +125,7 @@ class RowRepository:
             raise RuntimeError("Row disappeared during update")
         return self._row_from_mapping(updated)
 
-    async def put_row(self, row: Row, data: RowPut, updated_by: UUID | None = None) -> Row:
+    async def put_row(self, workspace_id: UUID, row: Row, data: RowPut, updated_by: UUID | None = None) -> Row:
         """Pass complete non-blob row data directly to PostgreSQL."""
         result = await self.session.execute(
             text("""
@@ -137,7 +138,7 @@ class RowRepository:
                 )
             """),
             {
-                "workspace_id": str(row.workspace_id),
+                "workspace_id": str(workspace_id),
                 "table_id": row.table_id,
                 "row_id": row.row_id,
                 "data": json.dumps(data.row_data),
@@ -151,6 +152,7 @@ class RowRepository:
 
     async def update_blob(
         self,
+        workspace_id: UUID,
         row: Row,
         column_id: str,
         metadata: dict[str, Any],
@@ -171,7 +173,7 @@ class RowRepository:
                 )
             """),
             {
-                "workspace_id": str(row.workspace_id),
+                "workspace_id": str(workspace_id),
                 "table_id": row.table_id,
                 "row_id": row.row_id,
                 "column_id": column_id,
@@ -188,7 +190,6 @@ class RowRepository:
     @staticmethod
     def _row_from_mapping(updated: Any) -> Row:
         return Row(
-            workspace_id=updated["workspace_id"],
             table_id=updated["table_id"],
             row_id=updated["row_id"],
             row_data=updated["row_data"],
@@ -203,12 +204,12 @@ class RowRepository:
         await self.session.commit()
 
     async def filter_by_jsonb(
-        self, workspace_id: UUID, table_id: int, contains: dict[str, Any], offset: int = 0, limit: int = 100
+        self, table_id: int, contains: dict[str, Any], offset: int = 0, limit: int = 100
     ) -> list[Row]:
         """Filter rows where row_data @> contains (JSONB containment query using GIN index)."""
         statement = (
             select(Row)
-            .where(Row.workspace_id == workspace_id, Row.table_id == table_id)
+            .where(Row.table_id == table_id)
             .where(text("row_data @> cast(:contains as jsonb)").bindparams(contains=json.dumps(contains)))
             .order_by(Row.row_id)
             .offset(offset)

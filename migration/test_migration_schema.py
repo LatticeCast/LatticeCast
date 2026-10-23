@@ -33,8 +33,7 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "tables", "updated_by", "uuid"),
     ("public", "tables", "created_at", "timestamp with time zone"),
     ("public", "tables", "updated_at", "timestamp with time zone"),
-    # public.rows
-    ("public", "rows", "workspace_id", "uuid"),
+    # public.rows (V71: table-scoped; no workspace_id copy)
     ("public", "rows", "table_id", "bigint"),
     ("public", "rows", "row_id", "bigint"),
     ("public", "rows", "row_data", "jsonb"),
@@ -42,8 +41,7 @@ EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     ("public", "rows", "updated_by", "uuid"),
     ("public", "rows", "created_at", "timestamp with time zone"),
     ("public", "rows", "updated_at", "timestamp with time zone"),
-    # public.table_views
-    ("public", "table_views", "workspace_id", "uuid"),
+    # public.table_views (V71: table-scoped; no workspace_id copy)
     ("public", "table_views", "table_id", "bigint"),
     ("public", "table_views", "view_id", "bigint"),
     ("public", "table_views", "config", "jsonb"),
@@ -68,6 +66,11 @@ FORBIDDEN_COLUMNS: list[tuple[str, str, str]] = [
     ("public", "table_views", "type"),       # in config jsonb now
     ("public", "table_views", "is_default"), # default_view in tables.config
     ("public", "workspace_members", "role"), # V33: replaced by action
+    # V71: children are authorised by table_id, so the workspace copy is gone.
+    ("public", "rows", "workspace_id"),
+    ("public", "table_views", "workspace_id"),
+    ("private", "table_row_counters", "workspace_id"),
+    ("private", "blob_objects", "workspace_id"),
 ]
 
 
@@ -396,13 +399,23 @@ def verify(psql_fn) -> list[str]:
     if not result:
         errors.append("MISSING FUNCTION: current_user_workspaces (V52)")
 
+    # V71: children are authorised by the caller's legal table ids, resolved
+    # from the workspace grants, not by a workspace_id column on the child.
     result = psql_fn(
-        "SELECT qual FROM pg_policies "
-        "WHERE schemaname='public' AND tablename='rows' "
-        "  AND policyname='rows_read';"
+        "SELECT to_regprocedure('public.current_user_tables(character varying)');"
     ).strip()
-    if "current_user_workspaces" not in result:
-        errors.append("ROWS RLS IS NOT SET-BASED (V52)")
+    if not result:
+        errors.append("MISSING FUNCTION: current_user_tables (V71)")
+
+    for table in ("rows", "table_views"):
+        result = psql_fn(
+            "SELECT qual FROM pg_policies "
+            "WHERE schemaname='public' "
+            f"  AND tablename='{table}' "
+            f"  AND policyname='{table}_read';"
+        ).strip()
+        if "current_user_tables" not in result:
+            errors.append(f"{table.upper()} RLS IS NOT TABLE-SET BASED (V71)")
 
     # V33: workspace_members PK is (workspace_id, user_id, action) —
     # multiple rows per member, one per granted action.
@@ -652,8 +665,8 @@ def verify(psql_fn) -> list[str]:
             "FORBIDDEN UNIQUE still present: public.tables (workspace_id, table_id)"
         )
 
-    # V68: children are keyed by the identity alone -- workspace_id survives as a
-    # plain column for RLS (and is indexed), not as a key component.
+    # V68: children are keyed by the identity alone. V71 removed the redundant
+    # workspace_id column, so the primary key is the whole key.
     result = psql_fn(
         "SELECT string_agg(kcu.column_name, ',' "
         "  ORDER BY kcu.ordinal_position) "
@@ -678,17 +691,15 @@ def verify(psql_fn) -> list[str]:
             f"WRONG FK: blob_objects expected (table_id, row_id) got '{result.strip()}'"
         )
 
-    # The RLS predicates filter on workspace_id, which the identity PK no longer
-    # covers, so both child tables need their own index for it.
+    # V71: the child rows carry no workspace to filter on, and no workspace
+    # index is needed -- the (table_id, ...) primary key serves every lookup.
     for table in ("rows", "table_views"):
         result = psql_fn(
             "SELECT 1 FROM pg_indexes WHERE schemaname='public' "
             f"  AND tablename='{table}' "
-            f"  AND indexdef LIKE '%(workspace_id, table_id)%';"
+            f"  AND indexdef LIKE '%(workspace_id%';"
         )
-        if not result:
-            errors.append(
-                f"MISSING INDEX: public.{table} (workspace_id, table_id) for RLS"
-            )
+        if result:
+            errors.append(f"FORBIDDEN INDEX: public.{table} on workspace_id (V71)")
 
     return errors

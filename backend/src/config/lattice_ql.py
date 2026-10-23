@@ -94,15 +94,16 @@ async def invalidate_schema_cache(workspace_id: str) -> None:
         pass
 
 
-def _inline_workspace(sql: str, workspace_id: str) -> str:
-    return sql.replace("$1", f"'{workspace_id}'")
-
-
-# LatticeQL's contract: $1 is always workspace_id, and any further $N are the
-# query's own parameters in order of first appearance. We inline $1 and have
-# no way to bind the rest -- compile() returns only a string, and the names
-# behind $2.. live in Codegen._param_names, which is private.
-_REMAINING_PARAM = re.compile(r"\$([2-9]\d*)")
+# LatticeQL 0.5 binds no parameters of its own: a query names tables, the
+# compiler inlines their numeric identity, and the schema it compiled against
+# already scoped the query to this workspace. Any $N left in the text comes
+# from an unsupported `$param` reference, so fail here rather than hand
+# PostgreSQL a query it cannot execute. An unbound placeholder used to reach
+# the database and come back as 'there is no parameter $1' -- a 500 that reads
+# like a server fault for what is really an unsupported query. Supporting
+# parameters needs LatticeQL to expose the names behind them; reproducing its
+# numbering on this side would couple us to its internals.
+_UNBOUND_PARAM = re.compile(r"\$([1-9]\d*)")
 
 
 async def compile_lql(lql: str, workspace_id: str, session: Any) -> tuple[str, list]:
@@ -111,15 +112,8 @@ async def compile_lql(lql: str, workspace_id: str, session: Any) -> tuple[str, l
         sql = _compile(lql, schema)
     except LatticeQLError as e:
         raise ValueError(str(e)) from e
-    sql = _inline_workspace(sql, workspace_id)
 
-    # Fail here rather than hand PostgreSQL a query it cannot execute. An
-    # unbound placeholder used to reach the database and come back as
-    # 'there is no parameter $2' -- a 500 that reads like a server fault for
-    # what is really an unsupported query. Supporting parameters needs
-    # LatticeQL to expose the names behind them; reproducing its numbering on
-    # this side would couple us to its internals.
-    leftover = sorted({int(n) for n in _REMAINING_PARAM.findall(sql)})
+    leftover = sorted({int(n) for n in _UNBOUND_PARAM.findall(sql)})
     if leftover:
         placeholders = ", ".join(f"${n}" for n in leftover)
         raise ValueError(

@@ -193,16 +193,14 @@ class TestRowRepositoryUpdate:
 
             workspace_id = uuid4()
             row = Row(
-                workspace_id=workspace_id,
-                table_id="my-table",
+                table_id=7,
                 row_id=1,
                 row_data={"title": "old"},
             )
             now = datetime.now(UTC).replace(tzinfo=None)
             mapping_result = MagicMock()
             mapping_result.mappings.return_value.one_or_none.return_value = {
-                "workspace_id": workspace_id,
-                "table_id": "my-table",
+                "table_id": 7,
                 "row_id": 1,
                 "row_data": {"title": "new"},
                 "created_by": None,
@@ -215,7 +213,9 @@ class TestRowRepositoryUpdate:
             session.execute = AsyncMock(return_value=mapping_result)
             repo = RowRepository(session)
             update = RowUpdate(row_data={"title": "new"})
-            result = await repo.patch_row(row=row, data=update, updated_by=uuid4())
+            result = await repo.patch_row(
+                workspace_id=workspace_id, row=row, data=update, updated_by=uuid4()
+            )
 
             assert result.row_data["title"] == "new"
             session.commit.assert_called_once()
@@ -233,8 +233,7 @@ class TestRowRepositoryUpdate:
             now = datetime.now(UTC).replace(tzinfo=None)
 
             fake_row = {
-                "workspace_id": workspace_id,
-                "table_id": "my-table",
+                "table_id": 7,
                 "row_id": 42,
                 "row_data": {},
                 "created_by": None,
@@ -249,7 +248,7 @@ class TestRowRepositoryUpdate:
             session.execute = AsyncMock(return_value=mapping_result)
 
             repo = RowRepository(session)
-            result = await repo.create(workspace_id=workspace_id, table_id="my-table")
+            result = await repo.create(workspace_id=workspace_id, table_id=7)
 
             # The 2024 fix: raw INSERT, no session.refresh()
             session.refresh.assert_not_called()

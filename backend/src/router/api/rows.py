@@ -107,11 +107,9 @@ async def list_rows(
             contains = {}
         if contains:
             return await repo.filter_by_jsonb(
-                workspace_id=table.workspace_id, table_id=table.table_id, contains=contains, offset=offset, limit=limit
+                table.table_id, contains=contains, offset=offset, limit=limit
             )
-    return await repo.list_by_table(
-        workspace_id=table.workspace_id, table_id=table.table_id, offset=offset, limit=limit, sort=sort
-    )
+    return await repo.list_by_table(table.table_id, offset=offset, limit=limit, sort=sort)
 
 
 # --------------------------------------------------
@@ -129,7 +127,7 @@ async def get_row(
     """Get a single row by row_id (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
+    row = await repo.get_by_number(table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     return row
@@ -146,11 +144,11 @@ async def patch_row(
     """Merge partial non-blob row data by row_id."""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
+    row = await repo.get_by_number(table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     try:
-        return await repo.patch_row(row=row, data=data, updated_by=user.user_id)
+        return await repo.patch_row(workspace_id=table.workspace_id, row=row, data=data, updated_by=user.user_id)
     except DBAPIError as exc:
         await session.rollback()
         raise (http_error_for(exc) or exc) from exc
@@ -167,11 +165,11 @@ async def put_row(
     """Replace all non-blob row data by row_id; blob metadata is preserved."""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
+    row = await repo.get_by_number(table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     try:
-        return await repo.put_row(row=row, data=data, updated_by=user.user_id)
+        return await repo.put_row(workspace_id=table.workspace_id, row=row, data=data, updated_by=user.user_id)
     except DBAPIError as exc:
         await session.rollback()
         raise (http_error_for(exc) or exc) from exc
@@ -213,13 +211,15 @@ async def put_blob_cell(
         f"{_blob_storage_key(str(table.workspace_id), table.table_id, row_id, column_id)}/.pending/{uuid4().hex}"
     )
     try:
-        row = await repo.lock_for_write(table.workspace_id, table.table_id, row_id)
+        row = await repo.lock_for_write(table.table_id, row_id)
         for key in (pending_key, metadata.key):
             await session.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"), {"key": key})
             await register_upload(table, row_id, column_id, key, str(user.user_id))
         # DB validates and stages the pointer before S3. It is invisible to
         # other readers until the object exists and the transaction commits.
-        await repo.update_blob(row, column_id, metadata.model_dump(), updated_by=user.user_id, commit=False)
+        await repo.update_blob(
+            table.workspace_id, row, column_id, metadata.model_dump(), updated_by=user.user_id, commit=False
+        )
         async with s3_client() as s3:
             await s3.put_object(
                 Bucket=settings.blob.bucket,
@@ -265,7 +265,7 @@ async def get_blob_cell(
     table = await _get_table_for_member(table_id, user, session)
     await _get_blob_column(table, column_id, session)
     repo = RowRepository(session)
-    row = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
+    row = await repo.get_by_number(table.table_id, row_id)
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     for _ in range(4):
@@ -289,7 +289,7 @@ async def get_blob_cell(
         await session.execute(
             text("SELECT pg_advisory_xact_lock_shared(hashtextextended(:key, 0))"), {"key": metadata["key"]}
         )
-        current = await repo.get_by_number(table.workspace_id, table.table_id, row_id)
+        current = await repo.get_by_number(table.table_id, row_id)
         if current is None:
             raise HTTPException(status_code=404, detail="Row not found")
         if current.row_data.get(column_id) == metadata:
@@ -332,14 +332,14 @@ async def delete_blob_cell(
     table = await _get_table_for_member(table_id, user, session)
     await _get_blob_column(table, column_id, session)
     repo = RowRepository(session)
-    row = await repo.lock_for_write(table.workspace_id, table.table_id, row_id)
+    row = await repo.lock_for_write(table.table_id, row_id)
     metadata = row.row_data.get(column_id)
     if not isinstance(metadata, dict) or not isinstance(metadata.get("key"), str):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Blob not found")
 
     # Removing the DB reference atomically queues the owned object for cleanup.
     # Storage failures cannot leave a live cell pointing at deleted bytes.
-    await repo.update_blob(row, column_id, {}, updated_by=user.user_id)
+    await repo.update_blob(table.workspace_id, row, column_id, {}, updated_by=user.user_id)
 
 
 @router.delete("/tables/{table_id}/rows/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -352,5 +352,5 @@ async def delete_row(
     """Delete a row by row_id (user must be a workspace member)"""
     table = await _get_table_for_member(table_id, user, session)
     repo = RowRepository(session)
-    row = await repo.lock_for_write(table.workspace_id, table.table_id, row_id)
+    row = await repo.lock_for_write(table.table_id, row_id)
     await repo.delete(row=row)

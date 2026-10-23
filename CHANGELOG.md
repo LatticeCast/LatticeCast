@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.81 — 2026-10-23 (table-scoped child storage)
+
+- Drop `workspace_id` from `rows`, `table_views`, `private.table_row_counters`
+  and `private.blob_objects` (V71). Children are keyed and foreign-keyed by
+  `table_id`, so a row can no longer be stored under a workspace its table does
+  not belong to — the mismatch V68's single-column foreign key allowed.
+- Authorise children by table: RLS policies resolve the caller's legal table ids
+  from the workspace grants (`current_user_tables('read'|'write')`) instead of
+  comparing a workspace column on the child.
+- Resolve canonical-timestamp columns by `table_id`, so the row trigger no
+  longer reads a field the row does not have.
+- `migration/scripts/move_table_storage.py`: verify what was actually copied —
+  every archived row's data, ownership and timestamps, every view's config and
+  every counter — and roll back when any of it disagrees; converge to the
+  archive on re-run instead of double-inserting; drop the placeholder view V70
+  seeds when the archive has none; commit only after the checks pass.
+- Use LatticeQL 0.5.0: generated queries address rows by `table_id` alone, so
+  query parameters start at `$1` and the backend no longer inlines a workspace
+  literal.
+- ORM: `table_id`, `row_id` and `view_id` are `BIGINT`, so SQLAlchemy stops
+  down-casting them to `::INTEGER` and identities above int32 survive the round
+  trip; primary keys are the table-scoped keys.
+
 ## v0.80 — 2026-10-23
 
 - Give `public.tables` a BIGINT identity `table_id`; the old slug column becomes
@@ -11,6 +34,7 @@
   `migration/scripts/move_table_storage.py` (V66–V70).
 - Backend and frontend address tables by the numeric identity; create and rename
   speak `table_name`, and LatticeQL keeps resolving tables by name.
+- Use LatticeQL 0.4.0 for numeric table identities in generated queries.
 - Synchronize frontend, backend, and E2E versions and lockfiles to 0.80.0.
 
 ## v0.70 — 2026-10-21

@@ -63,15 +63,17 @@ def verify(psql_fn) -> list[str]:
         if not result:
             errors.append(f"MISSING POLICY: {table}.{policy}")
 
-    # V52 policy predicates must reference an uncorrelated, caller-scoped
-    # workspace set instead of calling the scalar check once per candidate row.
-    result = psql_fn(
-        "SELECT qual FROM pg_policies "
-        "WHERE schemaname='public' AND tablename='rows' "
-        "  AND policyname='rows_read';"
-    )
-    if "current_user_workspaces" not in result:
-        errors.append("RLS POLICY: rows_read is not workspace-set based (V52)")
+    # V71: child policies resolve the caller's legal table ids from the
+    # workspace grants instead of trusting a workspace_id on the child row.
+    for table in ("rows", "table_views"):
+        result = psql_fn(
+            "SELECT qual FROM pg_policies "
+            "WHERE schemaname='public' "
+            f"  AND tablename='{table}' "
+            f"  AND policyname='{table}_read';"
+        )
+        if "current_user_tables" not in result:
+            errors.append(f"RLS POLICY: {table}_read is not table-set based (V71)")
 
     for func in ("check_workspace_permission", "grant_workspace_action"):
         result = psql_fn(f"SELECT 1 FROM pg_proc WHERE proname='{func}';")
@@ -201,6 +203,18 @@ def verify(psql_fn) -> list[str]:
 
     # SELECT positive: user A can see own workspace tables row
     # (V23: table_schemas merged into tables — config lives here now)
+    tbl_a = psql_fn(
+        "SELECT table_id FROM public.tables "
+        f"WHERE workspace_id = '{_WS_A}'::uuid AND table_name = 'tv_rls_tbl_a';"
+    ).strip()
+    tbl_b = psql_fn(
+        "SELECT table_id FROM public.tables "
+        f"WHERE workspace_id = '{_WS_B}'::uuid AND table_name = 'tv_rls_tbl_b';"
+    ).strip()
+    if not (tbl_a.isdigit() and tbl_b.isdigit()):
+        errors.append("RLS SETUP: could not resolve the two table ids")
+        return errors
+
     count = _as_app(
         psql_fn,
         _USER_A,
@@ -212,12 +226,12 @@ def verify(psql_fn) -> list[str]:
             "RLS BEHAVIORAL: user A cannot SELECT from own workspace tables"
         )
 
-    # SELECT isolation: user A cannot see workspace B views
+    # SELECT isolation: user A cannot see workspace B views. V71 removed the
+    # workspace_id column, so isolation is addressed through the table id.
     count = _as_app(
         psql_fn,
         _USER_A,
-        f"SELECT COUNT(*) FROM public.table_views "
-        f"WHERE workspace_id = '{_WS_B}'::uuid;",
+        f"SELECT COUNT(*) FROM public.table_views WHERE table_id = {tbl_b};",
     )
     if count.isdigit() and int(count) > 0:
         errors.append(
@@ -235,17 +249,15 @@ def verify(psql_fn) -> list[str]:
         psql_fn,
         _USER_A,
         f"INSERT INTO public.table_views "
-        f"(workspace_id, table_id, config) "
-        f"VALUES ('{_WS_A}'::uuid,"
-        f"(SELECT table_id FROM public.tables "
-        f"WHERE workspace_id='{_WS_A}'::uuid AND table_name='tv_rls_tbl_a'),"
+        f"(table_id, config) "
+        f"VALUES ({tbl_a},"
         f"""'{{"name":"{_test_name}","type":"kanban"}}'::jsonb);""",
     )
     count = _as_app(
         psql_fn,
         _USER_A,
         f"SELECT COUNT(*) FROM public.table_views "
-        f"WHERE workspace_id='{_WS_A}'::uuid "
+        f"WHERE table_id = {tbl_a} "
         f"  AND config->>'name'='{_test_name}';",
     )
     if not count.isdigit() or int(count) != 1:
@@ -259,14 +271,14 @@ def verify(psql_fn) -> list[str]:
         _USER_A,
         f"""UPDATE public.table_views """
         f"""SET config = config || '{{"type":"timeline"}}'::jsonb """
-        f"""WHERE workspace_id='{_WS_A}'::uuid """
+        f"""WHERE table_id = {tbl_a} """
         f"""  AND config->>'name'='{_test_name}';""",
     )
     type_after = _as_app(
         psql_fn,
         _USER_A,
         f"SELECT 1 FROM public.table_views "
-        f"WHERE workspace_id='{_WS_A}'::uuid "
+        f"WHERE table_id = {tbl_a} "
         f"  AND config->>'name'='{_test_name}' "
         f"  AND config->>'type'='timeline';",
     )
@@ -280,19 +292,64 @@ def verify(psql_fn) -> list[str]:
         psql_fn,
         _USER_A,
         f"DELETE FROM public.table_views "
-        f"WHERE workspace_id='{_WS_A}'::uuid "
+        f"WHERE table_id = {tbl_a} "
         f"  AND config->>'name'='{_test_name}';",
     )
     count = _as_app(
         psql_fn,
         _USER_A,
         f"SELECT COUNT(*) FROM public.table_views "
-        f"WHERE workspace_id='{_WS_A}'::uuid "
+        f"WHERE table_id = {tbl_a} "
         f"  AND config->>'name'='{_test_name}';",
     )
     if count != "0":
         errors.append(
             "RLS BEHAVIORAL: user A cannot DELETE in own workspace table_views"
+        )
+
+    # V71 rows: the row carries no workspace, so the table id is the whole
+    # authority. A member of workspace A must be able to write its own table
+    # and be refused on another workspace's table.
+    _as_app(
+        psql_fn,
+        _USER_A,
+        f"INSERT INTO public.rows (table_id, row_data) "
+        f"VALUES ({tbl_a}, '{{\"probe\":true}}'::jsonb);",
+    )
+    own_rows = _as_app(
+        psql_fn,
+        _USER_A,
+        f"SELECT COUNT(*) FROM public.rows WHERE table_id = {tbl_a};",
+    )
+    if not own_rows.isdigit() or int(own_rows) != 1:
+        errors.append(
+            "RLS BEHAVIORAL: user A cannot INSERT/SELECT rows of own table (V71)"
+        )
+
+    foreign_rows = _as_app(
+        psql_fn,
+        _USER_A,
+        f"SELECT COUNT(*) FROM public.rows WHERE table_id = {tbl_b};",
+    )
+    if foreign_rows.isdigit() and int(foreign_rows) > 0:
+        errors.append(
+            "RLS BEHAVIORAL: user A can SELECT rows of workspace B (V71)"
+        )
+
+    foreign_write = _as_app(
+        psql_fn,
+        _USER_A,
+        "DO $$ BEGIN "
+        "BEGIN "
+        f"INSERT INTO public.rows (table_id, row_data) "
+        f"VALUES ({tbl_b}, '{{}}'::jsonb); "
+        "RAISE EXCEPTION 'cross-workspace row accepted'; "
+        "EXCEPTION WHEN insufficient_privilege THEN NULL; END; END $$; "
+        "SELECT 1;",
+    )
+    if foreign_write != "1":
+        errors.append(
+            "RLS BEHAVIORAL: user A can INSERT rows into workspace B (V71)"
         )
 
     # V52 allows a member to read their own grants, while owners retain the

@@ -6,6 +6,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import ConfigDict
+from sqlalchemy import BigInteger
 from sqlmodel import Field, SQLModel
 
 ColumnType = Literal["text", "string", "number", "date", "datetime", "select", "tags", "checkbox", "url", "blob"]
@@ -56,6 +57,7 @@ class Table(SQLModel, table=True):
     table_id: int | None = Field(
         default=None,
         primary_key=True,
+        sa_type=BigInteger,
         description="Database-assigned identity (BIGINT)",
     )
     workspace_id: UUID = Field(

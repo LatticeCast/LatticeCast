@@ -3,13 +3,16 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import JSON, ForeignKeyConstraint
+from sqlalchemy import JSON, BigInteger, ForeignKeyConstraint
 from sqlmodel import Field, SQLModel
 
 
 class Row(SQLModel, table=True):
-    """Row database model — PK is (workspace_id, table_id, row_id); table_id is
-    the parent's identity, so the FK is single-column."""
+    """Row database model — PK is (table_id, row_id).
+
+    The workspace is the parent table's; a row does not carry a second copy of
+    it, so the two values cannot disagree and RLS authorises on table_id.
+    """
 
     __tablename__ = "rows"
     __table_args__ = (
@@ -20,10 +23,14 @@ class Row(SQLModel, table=True):
         ),
     )
 
-    workspace_id: UUID = Field(primary_key=True, description="Workspace UUID (composite PK)")
-    table_id: int = Field(primary_key=True, description="Parent table identity (composite PK/FK)")
+    table_id: int = Field(
+        primary_key=True, sa_type=BigInteger, description="Parent table identity (composite PK/FK)"
+    )
     row_id: int = Field(
-        default=0, primary_key=True, description="Auto-increment row number per table (set by DB trigger)"
+        default=0,
+        primary_key=True,
+        sa_type=BigInteger,
+        description="Auto-increment row number per table (set by DB trigger)",
     )
     row_data: dict[str, Any] = Field(
         default_factory=dict, sa_type=JSON, description="Row data keyed by column UUID (JSONB)"
@@ -55,7 +62,6 @@ class RowPut(SQLModel):
 
 
 class RowResponse(SQLModel):
-    workspace_id: UUID = Field(..., description="Workspace UUID")
     table_id: int = Field(..., description="Parent table identity")
     row_id: int = Field(..., description="Auto-increment row number per table")
     row_data: dict[str, Any] = Field(..., description="Row data keyed by column UUID")

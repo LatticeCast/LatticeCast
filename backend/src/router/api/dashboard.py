@@ -34,7 +34,7 @@ async def query_block(
     table = await _get_table_for_member(table_id, user, session)
 
     view_repo = TableViewRepository(session)
-    view = await view_repo.get_by_name(table.workspace_id, table.table_id, view_name)
+    view = await view_repo.get_by_name(table.table_id, view_name)
     if not view:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="View not found")
     if view.type != "dashboard":

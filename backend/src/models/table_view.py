@@ -1,9 +1,9 @@
 # src/models/table_view.py
 #
 # v40: public.table_views holds user-view rows ONLY. View identity is the
-# composite PK (workspace_id, table_id, view_id BIGINT). view_id is
-# auto-assigned by a BEFORE INSERT trigger (V9 + V16). Display name and
-# view type live inside the `config` JSONB blob:
+# composite PK (table_id, view_id BIGINT). view_id is auto-assigned per table
+# by a BEFORE INSERT trigger (V9 + V16). Display name and view type live
+# inside the `config` JSONB blob:
 #
 #   {"name": "Sprint Board", "type": "kanban", "group_by": "...", ...}
 #
@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import Column, ForeignKeyConstraint
+from sqlalchemy import BigInteger, Column, ForeignKeyConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlmodel import Field, SQLModel
 
@@ -24,7 +24,8 @@ SCHEMA_VIEW_DISPLAY_NAME = "Schema"
 class TableView(SQLModel, table=True):
     """Row in public.table_views — user views only.
 
-    Identifier: view_id (BIGINT, auto-assigned per (workspace_id, table_id)).
+    Identifier: view_id (BIGINT, auto-assigned per table_id). The workspace is
+    the parent table's; a view does not carry a second copy of it.
     Display name and type live inside `config`, not as separate columns.
     """
 
@@ -37,9 +38,8 @@ class TableView(SQLModel, table=True):
         ),
     )
 
-    workspace_id: UUID = Field(primary_key=True)
-    table_id: int = Field(primary_key=True)
-    view_id: int = Field(default=0, primary_key=True)
+    table_id: int = Field(primary_key=True, sa_type=BigInteger)
+    view_id: int = Field(default=0, primary_key=True, sa_type=BigInteger)
     config: dict[str, Any] = Field(
         default_factory=dict,
         sa_column=Column("config", JSONB, nullable=False, server_default="{}"),
