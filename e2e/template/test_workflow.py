@@ -41,7 +41,7 @@ GRAPH_NAME_CHOICES = ["root"]
 def test_workflow_template_structure(authed_page, workspace, admin_token, snapshot):
     ws_id, ws_name = workspace
     suffix = int(time.time()) % 100000
-    table_name = f"wf-tpl-{suffix}"
+    table_id = f"wf-tpl-{suffix}"
 
     # ── Step 1: Create workflow template via API ─────────────────────────
     print("[1] POST /api/v1/tables/template/workflow")
@@ -49,11 +49,12 @@ def test_workflow_template_structure(authed_page, workspace, admin_token, snapsh
         "POST",
         "/api/v1/tables/template/workflow",
         admin_token,
-        json={"table_id": table_name, "workspace_id": ws_id},
+        json={"table_name": table_id, "workspace_id": ws_id},
     )
     assert r.status_code in (200, 201), (
         f"create workflow template: {r.status_code} {r.text[:300]}"
     )
+    table_id = str(r.json()["table_id"])
 
     data = r.json()
     columns = data.get("columns", [])
@@ -116,7 +117,7 @@ def test_workflow_template_structure(authed_page, workspace, admin_token, snapsh
     page = authed_page
 
     page.goto(
-        f"{BASE}/{ws_name}/{table_name}",
+        f"{BASE}/{ws_name}/{table_id}",
         wait_until="networkidle",
     )
     page.wait_for_selector(

@@ -75,8 +75,9 @@ def test_column_delete_propagates(authed_page, workspace, admin_token, snapshot)
 
     # ── setup: PM table + Table view + custom select column ───────────────
     r = api("POST", "/api/v1/tables/template/pm", token,
-            json={"table_id": table_id, "workspace_name": ws_name})
+            json={"table_name": table_id, "workspace_name": ws_name})
     assert r.status_code == 201, f"create PM table: {r.status_code} {r.text[:200]}"
+    table_id = str(r.json()["table_id"])
     print(f"[ok] PM table {table_id!r}")
 
     r = api("POST", f"/api/v1/tables/{table_id}/views", token,

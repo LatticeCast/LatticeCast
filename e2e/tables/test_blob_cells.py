@@ -25,8 +25,9 @@ def test_blob_cells_round_trip(admin_token, workspace):
     ws_id, _ws_name = workspace
     table_id = f"blob-cells-{int(time.time() * 1000) % 10_000_000}"
 
-    response = api("POST", "/api/v1/tables", admin_token, json={"table_id": table_id, "workspace_id": ws_id})
+    response = api("POST", "/api/v1/tables", admin_token, json={"table_name": table_id, "workspace_id": ws_id})
     assert response.status_code == 201, f"create table: {response.status_code} {response.text[:200]}"
+    table_id = str(response.json()["table_id"])
     default_doc_column_id = _column_id(response.json(), "Doc")
 
     response = api(

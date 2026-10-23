@@ -152,14 +152,14 @@ def test_workspace_table_create(authed_page, admin_token, snapshot):
     create_btn = page.get_by_test_id("create-table-submit")
     create_btn.click()
 
-    # Wait for the table card to appear
+    # The card's test id is the table identity, so find it by its label.
+    card = page.locator("[data-testid^='table-card-']", has_text=BLANK_TABLE_NAME).first
     try:
-        page.wait_for_selector(
-            f"[data-testid='table-card-{BLANK_TABLE_NAME}']", timeout=10000
-        )
+        card.wait_for(state="visible", timeout=10000)
     except PlaywrightTimeout:
         _snap(page, "t15_FAIL_blank_create", True)
         pytest.fail(f"'{BLANK_TABLE_NAME}' not in table list")
+    BLANK_TABLE_ID = (card.get_attribute("data-testid") or "").removeprefix("table-card-")
 
     print("    table card appeared")
 
@@ -168,11 +168,11 @@ def test_workspace_table_create(authed_page, admin_token, snapshot):
     # ── Step 4: Navigate to blank table and verify grid ───────────────────────
     print("[4] Navigate to blank table and verify grid")
 
-    table_btn = page.get_by_test_id(f"table-card-{BLANK_TABLE_NAME}")
+    table_btn = page.get_by_test_id(f"table-card-{BLANK_TABLE_ID}")
     table_btn.click()
     # SvelteKit client-side nav — wait for URL to include the table id
     try:
-        page.wait_for_url(f"**/{BLANK_TABLE_NAME}**", timeout=8000)
+        page.wait_for_url(f"**/{BLANK_TABLE_ID}**", timeout=8000)
     except PlaywrightTimeout:
         _snap(page, "t15_FAIL_blank_nav", True)
         pytest.fail(f"blank table nav failed: URL={page.url}")
@@ -214,15 +214,16 @@ def test_workspace_table_create(authed_page, admin_token, snapshot):
     pm_input = page.get_by_test_id("pm-template-name-input")
     pm_input.fill(PM_TABLE_NAME)
 
-    # PM create uses SvelteKit goto() — wait for URL to include PM table name
+    # PM create uses SvelteKit goto() — the URL carries the new identity
     page.get_by_test_id("pm-template-submit").click()
     try:
-        page.wait_for_url(f"**/{PM_TABLE_NAME}**", timeout=20000)
+        page.wait_for_url(lambda url: url.rstrip("/").rsplit("/", 1)[-1].isdigit(), timeout=20000)
     except PlaywrightTimeout:
         _snap(page, "t15_FAIL_pm_create_url", True)
         pytest.fail(f"PM table create failed: URL={page.url}")
 
-    print(f"    PM table created: {page.url}")
+    PM_TABLE_ID = page.url.rstrip("/").rsplit("/", 1)[-1]
+    print(f"    PM table created: {page.url} (id {PM_TABLE_ID})")
 
     _snap(page, "t15_07_after_pm_create", snapshot)
 
@@ -274,13 +275,13 @@ def test_workspace_table_create(authed_page, admin_token, snapshot):
     ws_btn = page.get_by_test_id(f"sidebar-workspace-{new_ws_id}")
     ws_btn.wait_for(state="visible", timeout=5000)
     # Expand if not already (table testids only render under expanded ws)
-    if not page.get_by_test_id(f"sidebar-table-{BLANK_TABLE_NAME}").count():
+    if not page.get_by_test_id(f"sidebar-table-{BLANK_TABLE_ID}").count():
         ws_btn.click()
 
     _snap(page, "t15_09_sidebar_expanded", snapshot)
 
-    blank_in_sidebar = page.get_by_test_id(f"sidebar-table-{BLANK_TABLE_NAME}").count()
-    pm_in_sidebar = page.get_by_test_id(f"sidebar-table-{PM_TABLE_NAME}").count()
+    blank_in_sidebar = page.get_by_test_id(f"sidebar-table-{BLANK_TABLE_ID}").count()
+    pm_in_sidebar = page.get_by_test_id(f"sidebar-table-{PM_TABLE_ID}").count()
 
     assert blank_in_sidebar > 0, f"'{BLANK_TABLE_NAME}' not found in sidebar"
     assert pm_in_sidebar > 0, f"'{PM_TABLE_NAME}' not found in sidebar"

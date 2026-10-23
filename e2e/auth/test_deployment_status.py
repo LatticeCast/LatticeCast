@@ -14,7 +14,7 @@ def test_deployment_status(page, snapshot):
     assert frontend.headers["content-type"].startswith("application/json")
     frontend_status = frontend.json()
     assert frontend_status["status"] == "ok"
-    assert frontend_status["version"] == "0.70.0"
+    assert frontend_status["version"] == "0.80.0"
     assert isinstance(frontend_status["commit"], str)
 
     backend = requests.get(f"{BASE}/api/v1/status", timeout=10)
@@ -22,7 +22,7 @@ def test_deployment_status(page, snapshot):
     backend_status = backend.json()
     assert backend_status["status"] == "ok"
     assert backend_status["db"] == "ok"
-    assert backend_status["version"] == "0.70.0"
+    assert backend_status["version"] == "0.80.0"
     assert isinstance(backend_status["commit"], str)
     spec = requests.get(f"{BASE}/api/v1/openapi.json", timeout=10)
     assert spec.status_code == 200

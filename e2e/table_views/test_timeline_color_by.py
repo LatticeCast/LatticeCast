@@ -67,6 +67,7 @@ def bar_classes(page, row_id: int) -> str:
 
 
 def test_timeline_color_by_persists(authed_page, workspace, admin_token, snapshot):
+    global TABLE_ID
     """color_by column change persists across navigation."""
     page = authed_page
     token = admin_token
@@ -74,8 +75,9 @@ def test_timeline_color_by_persists(authed_page, workspace, admin_token, snapsho
 
     # ── 1. Create blank table ────────────────────────────────────────────
     r = api("POST", "/api/v1/tables", token,
-            json={"table_id": TABLE_ID, "workspace_id": ws_id})
+            json={"table_name": TABLE_ID, "workspace_id": ws_id})
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+    TABLE_ID = str(r.json()["table_id"])
     print(f"[ok] table {TABLE_ID!r}")
 
     # ── 2. Add date columns ──────────────────────────────────────────────

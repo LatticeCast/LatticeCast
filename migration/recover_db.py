@@ -3,6 +3,12 @@
 recover_db.py — copy data from `db_backup` (old V42 schema) into fresh `db`
 (new squashed V1-V17 schema).
 
+DEPRECATED for anything past V65: this script targets the pre-V23 shape
+(`public.table_schemas`, `table_views.name/type`, and a VARCHAR table_id), so it
+cannot run against the current schema. It is kept as the historical record of the
+V42 squash only. For the V66 cutover, where tables gained a BIGINT identity, use
+`scripts/move_table_storage.py` instead — that is the supported data move.
+
 Run inside the backend container (has psycopg available):
 
     docker compose exec backend python3 /jetbase/recover_db.py [--dry-run]

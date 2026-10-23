@@ -11,7 +11,7 @@ import os
 import pytest
 from playwright.sync_api import sync_playwright
 
-from e2e_base import BASE, api, connect_browser, login, seed_login_info
+from e2e_base import BASE, api, connect_browser, create_template_table, login, seed_login_info
 
 
 def pytest_addoption(parser):
@@ -67,11 +67,6 @@ def workspace(admin_token):
 def pm_table(admin_token, workspace):
     ws_id, ws_name = workspace
     suffix = int(time.time() * 1000) % 10_000_000
-    table_id = f"pm-{suffix}"
-    r = api(
-        "POST", "/api/v1/tables/template/pm", admin_token,
-        json={"table_id": table_id, "workspace_name": ws_name},
-    )
-    assert r.status_code == 201, f"create PM table: {r.status_code} {r.text[:200]}"
-    schema = r.json()
-    yield table_id, ws_id, schema.get("columns", []), schema.get("views", [])
+    table_name = f"pm-{suffix}"
+    schema = create_template_table(admin_token, "pm", table_name, ws_name)
+    yield str(schema["table_id"]), ws_id, schema.get("columns", []), schema.get("views", [])

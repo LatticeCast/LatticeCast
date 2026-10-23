@@ -56,10 +56,11 @@ def test_sidebar_toggle_and_navigate(authed_page, admin_token, snapshot):
         ws_id = r.json()["workspace_id"]
 
         r = api("POST", "/api/v1/tables", admin_token, json={
-            "table_id": table_id,
+            "table_name": table_id,
             "workspace_id": ws_id,
         })
         assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+        table_id = str(r.json()["table_id"])
 
         # Also get another workspace name for cross-workspace nav test
         r = api("GET", "/api/v1/workspaces", admin_token)

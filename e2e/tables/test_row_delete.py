@@ -65,6 +65,7 @@ def switch_to_table_view(page) -> None:
 
 
 def test_row_delete_disappears_everywhere(authed_page, admin_token, workspace, snapshot):
+    global TABLE_ID
     """Delete row disappears from Table, Kanban, Timeline, and persists after navigation."""
     page = authed_page
     ws_id, ws_name = workspace
@@ -74,8 +75,9 @@ def test_row_delete_disappears_everywhere(authed_page, admin_token, workspace, s
 
     # ── Setup: PM table ───────────────────────────────────────────────────
     r = api("POST", "/api/v1/tables/template/pm", token,
-            json={"table_id": TABLE_ID, "workspace_name": ws_name})
+            json={"table_name": TABLE_ID, "workspace_name": ws_name})
     assert r.status_code == 201, f"create PM table: {r.status_code} {r.text[:200]}"
+    TABLE_ID = str(r.json()["table_id"])
     schema = r.json()
     columns = schema.get("columns", [])
     views = schema.get("views", [])

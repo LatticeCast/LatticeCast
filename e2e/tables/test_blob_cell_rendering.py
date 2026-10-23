@@ -33,9 +33,10 @@ def test_blob_cell_renders_and_downloads(authed_page, workspace, admin_token, sn
         "POST",
         "/api/v1/tables",
         admin_token,
-        json={"table_id": table_id, "workspace_id": ws_id},
+        json={"table_name": table_id, "workspace_id": ws_id},
     )
     assert response.status_code == 201, f"create table: {response.status_code} {response.text[:200]}"
+    table_id = str(response.json()["table_id"])
 
     response = api(
         "POST",
@@ -127,9 +128,10 @@ def test_image_blob_opens_preview_then_downloads(authed_page, workspace, admin_t
         "POST",
         "/api/v1/tables",
         admin_token,
-        json={"table_id": table_id, "workspace_id": ws_id},
+        json={"table_name": table_id, "workspace_id": ws_id},
     )
     assert response.status_code == 201, f"create table: {response.status_code} {response.text[:200]}"
+    table_id = str(response.json()["table_id"])
 
     response = api(
         "POST",
@@ -197,9 +199,10 @@ def test_text_blob_preview_keeps_download(authed_page, workspace, admin_token):
         "POST",
         "/api/v1/tables",
         admin_token,
-        json={"table_id": table_id, "workspace_id": ws_id},
+        json={"table_name": table_id, "workspace_id": ws_id},
     )
     assert response.status_code == 201, f"create table: {response.status_code} {response.text[:200]}"
+    table_id = str(response.json()["table_id"])
 
     response = api(
         "POST",

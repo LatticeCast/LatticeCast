@@ -68,8 +68,9 @@ def test_column_url_type(authed_page, admin_token, workspace, snapshot):
 
     # ── 2. Create blank table ──────────────────────────────────────────────
     r = api("POST", "/api/v1/tables", token,
-            json={"table_id": TABLE_ID, "workspace_id": ws_name})
+            json={"table_name": TABLE_ID, "workspace_id": ws_name})
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+    TABLE_ID = str(r.json()["table_id"])
     schema = r.json()
     print(f"[ok] table {TABLE_ID!r} (cols={len(schema['columns'])})")
 

@@ -91,8 +91,9 @@ def test_views_rename(authed_page, workspace, admin_token, snapshot):
     print(f"[ok] login {ADMIN_USER!r}")
 
     # ── Setup: blank table (no views by default — must create explicitly) ──────
-    r = api("POST", "/api/v1/tables", token, json={"table_id": table_id, "workspace_id": ws_name})
+    r = api("POST", "/api/v1/tables", token, json={"table_name": table_id, "workspace_id": ws_name})
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+    table_id = str(r.json()["table_id"])
     print(f"[ok] CREATE table {table_id!r}")
 
     # ── Create a table-type view explicitly ────────────────────────────────────

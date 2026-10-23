@@ -63,12 +63,14 @@ def get_cell_locator(page, row_id: int, col_index: int):
 
 
 def test_inline_edit(authed_page, workspace, admin_token, snapshot):
+    global TABLE_ID
     page = authed_page
     ws_id, ws_name = workspace
 
     # ── Setup: table ─────────────────────────────────────────────────────────
-    r = api("POST", "/api/v1/tables", admin_token, json={"table_id": TABLE_ID, "workspace_id": ws_name})
+    r = api("POST", "/api/v1/tables", admin_token, json={"table_name": TABLE_ID, "workspace_id": ws_name})
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+    TABLE_ID = str(r.json()["table_id"])
     print(f"[setup] table {TABLE_ID!r}")
 
     # ── Setup: columns (Name text, City text, Score number) ──────────────────

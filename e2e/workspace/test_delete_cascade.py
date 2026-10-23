@@ -46,8 +46,9 @@ def test_delete_workspace_cascades(browser, admin_token, snapshot):
     # ── Setup: create blank table ────────────────────────────────────────────
     print(f"[2] Setup: create table '{TABLE_ID}'")
     r = api("POST", "/api/v1/tables", token,
-            json={"table_id": TABLE_ID, "workspace_id": WS_NAME})
+            json={"table_name": TABLE_ID, "workspace_id": WS_NAME})
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+    TABLE_ID = str(r.json()["table_id"])
     table_data = r.json()
     columns = table_data.get("columns", [])
     text_col = next((c for c in columns if c["type"] in ("text", "string")), None)

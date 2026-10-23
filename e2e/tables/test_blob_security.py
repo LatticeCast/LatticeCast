@@ -8,8 +8,9 @@ from e2e_base import api, login
 def test_blob_write_denial_and_forged_creation(admin_token, workspace):
     ws_id, _ = workspace
     table_id = f"blob-sec-{uuid4().hex[:12]}"
-    result = api("POST", "/api/v1/tables", admin_token, json={"table_id": table_id, "workspace_id": ws_id})
+    result = api("POST", "/api/v1/tables", admin_token, json={"table_name": table_id, "workspace_id": ws_id})
     assert result.status_code == 201, result.text
+    table_id = str(result.json()["table_id"])
     result = api("POST", f"/api/v1/tables/{table_id}/columns", admin_token,
                  json={"name": "Attachment", "type": "blob", "options": {"kind": "file"}})
     assert result.status_code == 201, result.text

@@ -64,8 +64,9 @@ def test_timeline_groupby_persists(authed_page, workspace, admin_token, snapshot
 
     # ── 2. Create blank table ────────────────────────────────────────────────
     r = api("POST", "/api/v1/tables", token,
-            json={"table_id": TABLE_ID, "workspace_id": ws_id})
+            json={"table_name": TABLE_ID, "workspace_id": ws_id})
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+    TABLE_ID = str(r.json()["table_id"])
     print(f"[ok] table {TABLE_ID!r}")
 
     # ── 3. Add date + select columns ─────────────────────────────────────────

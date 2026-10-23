@@ -96,8 +96,9 @@ def test_views_default(browser, admin_token, snapshot) -> None:
     ws_id = str(r.json()["workspace_id"])
     print(f"[setup] workspace {WS_NAME!r} → id={ws_id}")
 
-    r = api("POST", "/api/v1/tables", token, json={"table_id": TABLE_ID, "workspace_id": ws_id})
+    r = api("POST", "/api/v1/tables", token, json={"table_name": TABLE_ID, "workspace_id": ws_id})
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+    TABLE_ID = str(r.json()["table_id"])
 
     r = api("POST", f"/api/v1/tables/{TABLE_ID}/views", token, json={"name": "Kanban", "type": "kanban"})
     assert r.status_code == 201, f"create Kanban view: {r.status_code} {r.text[:200]}"

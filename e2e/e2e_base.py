@@ -70,6 +70,36 @@ def api(method: str, path: str, token: str, **kw) -> requests.Response:
     )
 
 
+def create_blank_table(token: str, table_name: str, workspace: str) -> str:
+    """Create a blank table and return its identity, as text for URL building.
+
+    The API takes `table_name` and answers with the database-assigned `table_id`,
+    which is what every table-scoped path expects.
+    """
+    r = api(
+        "POST",
+        "/api/v1/tables",
+        token,
+        json={"table_name": table_name, "workspace_id": workspace},
+    )
+    assert r.status_code == 201, f"create table {table_name!r}: {r.status_code} {r.text[:200]}"
+    return str(r.json()["table_id"])
+
+
+def create_template_table(
+    token: str, kind: str, table_name: str, workspace_name: str
+) -> dict:
+    """Create a template table and return the created table body (numeric table_id)."""
+    r = api(
+        "POST",
+        f"/api/v1/tables/template/{kind}",
+        token,
+        json={"table_name": table_name, "workspace_name": workspace_name},
+    )
+    assert r.status_code == 201, f"create {kind} table {table_name!r}: {r.status_code} {r.text[:200]}"
+    return r.json()
+
+
 def make_login_info(token: str, user_name: str, role: str = "admin") -> str:
     """Build the JSON the FE stores at localStorage('loginInfo')."""
     return json.dumps({

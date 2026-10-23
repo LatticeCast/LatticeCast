@@ -194,7 +194,8 @@ def verify(psql_fn) -> list[str]:
             "MISSING RLS POLICY: public.table_views.table_views_read"
         )
 
-    # v40: PK is (workspace_id, table_id, view_id BIGINT)
+    # V69: PK is (table_id, view_id) — table_id is the identity, so workspace_id
+    # is a plain RLS column here, not a key component.
     result = psql_fn(
         "SELECT string_agg(kcu.column_name, ',' "
         "  ORDER BY kcu.ordinal_position) "
@@ -602,5 +603,92 @@ def verify(psql_fn) -> list[str]:
         errors.append(
             "COLUMN NAME VALIDATION: duplicate normalized names were accepted"
         )
+
+    # V67: PK is table_id (BIGINT identity); the old (workspace_id, table_id)
+    # composite is gone, as is the 409-by-name unique on the name column.
+    result = psql_fn(
+        "SELECT string_agg(kcu.column_name, ',' "
+        "  ORDER BY kcu.ordinal_position) "
+        "FROM information_schema.table_constraints tc "
+        "JOIN information_schema.key_column_usage kcu "
+        "  ON tc.constraint_name = kcu.constraint_name "
+        "  AND tc.table_schema = kcu.table_schema "
+        "WHERE tc.table_schema='public' "
+        "  AND tc.table_name='tables' "
+        "  AND tc.constraint_type='PRIMARY KEY';"
+    )
+    if result.strip() != "table_id":
+        errors.append(
+            f"WRONG PK: tables expected 'table_id' got '{result.strip()}'"
+        )
+
+    result = psql_fn(
+        "SELECT is_identity FROM information_schema.columns "
+        "WHERE table_schema='public' AND table_name='tables' "
+        "  AND column_name='table_id';"
+    )
+    if result.strip() != "YES":
+        errors.append(
+            "MISSING IDENTITY: public.tables.table_id is not GENERATED ALWAYS"
+        )
+
+    result = psql_fn(
+        "SELECT 1 FROM pg_constraint "
+        "WHERE conrelid='public.tables'::regclass AND contype='u' "
+        "  AND pg_get_constraintdef(oid) = 'UNIQUE (workspace_id, table_name)';"
+    )
+    if not result:
+        errors.append(
+            "MISSING UNIQUE: public.tables (workspace_id, table_name)"
+        )
+
+    result = psql_fn(
+        "SELECT 1 FROM pg_constraint "
+        "WHERE conrelid='public.tables'::regclass AND contype='u' "
+        "  AND pg_get_constraintdef(oid) LIKE '%(workspace_id, table_id)%';"
+    )
+    if result:
+        errors.append(
+            "FORBIDDEN UNIQUE still present: public.tables (workspace_id, table_id)"
+        )
+
+    # V68: children are keyed by the identity alone -- workspace_id survives as a
+    # plain column for RLS (and is indexed), not as a key component.
+    result = psql_fn(
+        "SELECT string_agg(kcu.column_name, ',' "
+        "  ORDER BY kcu.ordinal_position) "
+        "FROM information_schema.table_constraints tc "
+        "JOIN information_schema.key_column_usage kcu "
+        "  ON tc.constraint_name = kcu.constraint_name "
+        "  AND tc.table_schema = kcu.table_schema "
+        "WHERE tc.table_schema='public' AND tc.table_name='rows' "
+        "  AND tc.constraint_type='PRIMARY KEY';"
+    )
+    if result.strip() != "table_id,row_id":
+        errors.append(
+            f"WRONG PK: rows expected 'table_id,row_id' got '{result.strip()}'"
+        )
+
+    result = psql_fn(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+        "WHERE conrelid='private.blob_objects'::regclass AND contype='f';"
+    )
+    if "FOREIGN KEY (table_id, row_id) REFERENCES rows(table_id, row_id)" not in result:
+        errors.append(
+            f"WRONG FK: blob_objects expected (table_id, row_id) got '{result.strip()}'"
+        )
+
+    # The RLS predicates filter on workspace_id, which the identity PK no longer
+    # covers, so both child tables need their own index for it.
+    for table in ("rows", "table_views"):
+        result = psql_fn(
+            "SELECT 1 FROM pg_indexes WHERE schemaname='public' "
+            f"  AND tablename='{table}' "
+            f"  AND indexdef LIKE '%(workspace_id, table_id)%';"
+        )
+        if not result:
+            errors.append(
+                f"MISSING INDEX: public.{table} (workspace_id, table_id) for RLS"
+            )
 
     return errors

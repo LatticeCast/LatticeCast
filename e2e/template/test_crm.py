@@ -45,19 +45,20 @@ def crm_table(admin_token, workspace):
         "POST",
         "/api/v1/tables/template/crm",
         admin_token,
-        json={"table_id": table_name, "workspace_id": ws_id},
+        json={"table_name": table_name, "workspace_id": ws_id},
     )
     assert r.status_code in (200, 201), (
         f"create CRM template: {r.status_code} {r.text[:300]}"
     )
+    table_id = str(r.json()["table_id"])
 
     data = r.json()
-    yield ws_id, ws_name, table_name, data
+    yield ws_id, ws_name, table_id, data
 
 
 def test_crm_template_columns(crm_table, admin_token):
     """Step 2: Verify columns (API pillar)."""
-    _ws_id, _ws_name, _table_name, data = crm_table
+    _ws_id, _ws_name, table_id, data = crm_table
     columns = data.get("columns", [])
 
     print(f"[2] Verify columns: got {len(columns)}")
@@ -92,7 +93,7 @@ def test_crm_template_columns(crm_table, admin_token):
 
 def test_crm_template_views(crm_table, admin_token):
     """Step 3: Verify views (API pillar)."""
-    _ws_id, _ws_name, _table_name, data = crm_table
+    _ws_id, _ws_name, table_id, data = crm_table
     columns = data.get("columns", [])
     views = data.get("views", [])
 
@@ -165,7 +166,7 @@ def test_crm_template_views(crm_table, admin_token):
 
 def test_crm_template_ui(crm_table, authed_page, snapshot):
     """Steps 4-6: UI verification — view tabs + column headers."""
-    _ws_id, ws_name, table_name, data = crm_table
+    _ws_id, ws_name, table_id, data = crm_table
     columns = data.get("columns", [])
     expected_names = [name for name, _ in CRM_COLUMNS]
 
@@ -173,7 +174,7 @@ def test_crm_template_ui(crm_table, authed_page, snapshot):
 
     # ── Step 4: UI: navigate to CRM table ────────────────────────────────────
     print("[4] UI: navigate to CRM table")
-    page.goto(f"{BASE}/{ws_name}/{table_name}", wait_until="networkidle")
+    page.goto(f"{BASE}/{ws_name}/{table_id}", wait_until="networkidle")
 
     page.wait_for_selector("[data-testid='view-tab-Schema']", state="visible", timeout=10000)
 

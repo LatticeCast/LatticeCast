@@ -11,8 +11,9 @@ def test_document_row_edits_and_sanitized_preview(authed_page, admin_token, work
     page = authed_page
     ws_id, _ = workspace
     table_id = f"blob-edit-{uuid4().hex[:12]}"
-    result = api("POST", "/api/v1/tables", admin_token, json={"table_id": table_id, "workspace_id": ws_id})
+    result = api("POST", "/api/v1/tables", admin_token, json={"table_name": table_id, "workspace_id": ws_id})
     assert result.status_code == 201, result.text
+    table_id = str(result.json()["table_id"])
     columns = {}
     for name, kind, options in (("Label", "text", {}), ("Done", "checkbox", {}), ("Notes", "blob", {"kind": "text"})):
         result = api("POST", f"/api/v1/tables/{table_id}/columns", admin_token,

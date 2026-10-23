@@ -73,8 +73,9 @@ def test_temporal_timezone_round_trip(browser, workspace, admin_token, snapshot)
     table_id = f"tz-{int(time.time() * 1000) % 10_000_000}"
 
     # ── Setup: table + one date column and one datetime column ───────────
-    r = api("POST", "/api/v1/tables", token, json={"table_id": table_id, "workspace_id": ws_name})
+    r = api("POST", "/api/v1/tables", token, json={"table_name": table_id, "workspace_id": ws_name})
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+    table_id = str(r.json()["table_id"])
 
     col_ids: dict[str, str] = {}
     for name, col_type in ((DATE_COL, "date"), (DATETIME_COL, "datetime")):

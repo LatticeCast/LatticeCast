@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.80 — 2026-10-23
+
+- Give `public.tables` a BIGINT identity `table_id`; the old slug column becomes
+  `table_name` (display name), unique per workspace.
+- Re-key `rows` by `(table_id, row_id)` and `table_views` by `(table_id, view_id)`;
+  `blob_objects` references `(table_id, row_id)`. `workspace_id` stays a plain
+  redundant column for RLS and gets its own index.
+- Cut over by archiving the legacy tables to `*_old` and moving data with
+  `migration/scripts/move_table_storage.py` (V66–V70).
+- Backend and frontend address tables by the numeric identity; create and rename
+  speak `table_name`, and LatticeQL keeps resolving tables by name.
+- Synchronize frontend, backend, and E2E versions and lockfiles to 0.80.0.
+
 ## v0.70 — 2026-10-21
 
 - Accept only LC-local JWTs; reject invalid or expired credentials with 401

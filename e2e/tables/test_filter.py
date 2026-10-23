@@ -87,8 +87,9 @@ def test_view_table_filter(browser, admin_token, snapshot) -> None:
 
     try:
         # ── Setup: table ─────────────────────────────────────────────────────
-        r = api("POST", "/api/v1/tables", token, json={"table_id": TABLE_ID, "workspace_id": ws_name})
+        r = api("POST", "/api/v1/tables", token, json={"table_name": TABLE_ID, "workspace_id": ws_name})
         assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+        TABLE_ID = str(r.json()["table_id"])
         print(f"[setup] table {TABLE_ID!r}")
 
         # ── Setup: 2 text columns (Name, Status) ────────────────────────────

@@ -50,6 +50,7 @@ def goto_table(page, ws_id: str, table_id: str) -> None:
 
 
 def test_kanban_groupby_persists(authed_page, workspace, admin_token, snapshot):
+    global TABLE_ID
     """group_by change persists across navigation."""
     page = authed_page
     token = admin_token
@@ -57,8 +58,9 @@ def test_kanban_groupby_persists(authed_page, workspace, admin_token, snapshot):
 
     # ── 1. Create PM table — auto-creates Sprint Board (kanban, group_by=Status)
     r = api("POST", "/api/v1/tables/template/pm", token,
-            json={"table_id": TABLE_ID, "workspace_name": ws_name})
+            json={"table_name": TABLE_ID, "workspace_name": ws_name})
     assert r.status_code == 201, f"create PM table: {r.status_code} {r.text[:200]}"
+    TABLE_ID = str(r.json()["table_id"])
     schema = r.json()
     print(f"[ok] PM table {TABLE_ID!r} (cols={len(schema['columns'])})")
 

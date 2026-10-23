@@ -3,7 +3,7 @@
 Verifies:
   1. Click table settings gear → dialog opens with current name pre-filled.
   2. Clear input, type new name, click Save → PUT /tables/{old_id} fires.
-  3. API: GET /tables/{new_id} returns 200; GET /tables/{old_id} returns 404.
+  3. API: GET /tables/{id} still answers, now with the new table_name.
   4. UI: table card shows new name.
   5. Navigate to renamed table → grid renders.
   6. Conflict: rename to an existing table name → error shown in dialog.
@@ -36,18 +36,20 @@ def test_table_rename(authed_page, workspace, admin_token, snapshot) -> None:
     token = admin_token
     ws_id, ws_name = workspace
     _TS = int(time.time())
-    TABLE_A = f"rename-a-{_TS}"
-    TABLE_B = f"rename-b-{_TS}"
+    TABLE_A_NAME = f"rename-a-{_TS}"
+    TABLE_B_NAME = f"rename-b-{_TS}"
     NEW_NAME = f"renamed-{_TS}"
 
     # ── Setup: create two tables ─────────────────────────────────────────
     r = api("POST", "/api/v1/tables", token,
-            json={"table_id": TABLE_A, "workspace_id": ws_id})
+            json={"table_name": TABLE_A_NAME, "workspace_id": ws_id})
     assert r.status_code == 201, f"create table A: {r.status_code} {r.text[:200]}"
+    TABLE_A = str(r.json()["table_id"])
 
     r = api("POST", "/api/v1/tables", token,
-            json={"table_id": TABLE_B, "workspace_id": ws_id})
+            json={"table_name": TABLE_B_NAME, "workspace_id": ws_id})
     assert r.status_code == 201, f"create table B: {r.status_code} {r.text[:200]}"
+    TABLE_B = str(r.json()["table_id"])
     print(f"[setup] tables: {TABLE_A!r}, {TABLE_B!r}")
 
     # ── Step 1: Navigate to workspace, verify both cards visible ─────────
@@ -73,10 +75,10 @@ def test_table_rename(authed_page, workspace, admin_token, snapshot) -> None:
     rename_input.wait_for(state="visible", timeout=5000)
 
     pre_filled = rename_input.input_value()
-    assert pre_filled == TABLE_A, \
-        f"input pre-filled with {pre_filled!r}, expected {TABLE_A!r}"
+    assert pre_filled == TABLE_A_NAME, \
+        f"input pre-filled with {pre_filled!r}, expected {TABLE_A_NAME!r}"
     snap(page, "rename_02_dialog_open", snapshot)
-    print(f"[ok] dialog open, input pre-filled with {TABLE_A!r}")
+    print(f"[ok] dialog open, input pre-filled with {TABLE_A_NAME!r}")
 
     # ── Step 3: Rename TABLE_A → NEW_NAME, wait for PUT ──────────────────
     print(f"[3] Rename {TABLE_A!r} → {NEW_NAME!r}")
@@ -93,9 +95,11 @@ def test_table_rename(authed_page, workspace, admin_token, snapshot) -> None:
     put_resp = resp_info.value
     assert put_resp.status == 200, f"PUT returned {put_resp.status}"
     put_body = put_resp.json()
-    assert put_body["table_id"] == NEW_NAME, \
-        f"PUT response table_id={put_body['table_id']!r}, expected {NEW_NAME!r}"
-    print(f"[ok] PUT /tables/{TABLE_A} → 200, table_id={NEW_NAME!r}")
+    assert str(put_body["table_id"]) == TABLE_A, \
+        f"PUT response table_id={put_body['table_id']!r}, expected {TABLE_A!r}"
+    assert put_body["table_name"] == NEW_NAME, \
+        f"PUT response table_name={put_body['table_name']!r}, expected {NEW_NAME!r}"
+    print(f"[ok] PUT /tables/{TABLE_A} → 200, name={NEW_NAME!r}, id unchanged")
 
     # Dialog should close
     try:
@@ -107,36 +111,37 @@ def test_table_rename(authed_page, workspace, admin_token, snapshot) -> None:
     snap(page, "rename_03_after_rename", snapshot)
 
     # ── Step 4: API verify — new name exists, old name gone ──────────────
-    print("[4] API verify: new name exists, old name 404")
-    r = api("GET", f"/api/v1/tables/{NEW_NAME}", token)
-    assert r.status_code == 200, \
-        f"GET /tables/{NEW_NAME}: {r.status_code} {r.text[:200]}"
-
+    print("[4] API verify: identity kept, name changed, name paths rejected")
     r = api("GET", f"/api/v1/tables/{TABLE_A}", token)
-    assert r.status_code == 404, \
-        f"GET /tables/{TABLE_A} should be 404, got {r.status_code}"
-    print("[ok] API: new name 200, old name 404")
+    assert r.status_code == 200, \
+        f"GET /tables/{TABLE_A}: {r.status_code} {r.text[:200]}"
+    assert r.json()["table_name"] == NEW_NAME, \
+        f"table_name={r.json()['table_name']!r}, expected {NEW_NAME!r}"
+
+    r = api("GET", f"/api/v1/tables/{NEW_NAME}", token)
+    assert r.status_code == 422, \
+        f"GET /tables/{NEW_NAME} should be 422 (names are not ids), got {r.status_code}"
+    print("[ok] API: same id returns the new name; name path is not an identity")
 
     # ── Step 5: UI verify — card shows new name ──────────────────────────
     print("[5] UI verify: card and sidebar updated")
+    card = page.get_by_test_id(f"table-card-{TABLE_A}")
     try:
-        page.get_by_test_id(f"table-card-{NEW_NAME}").wait_for(
-            state="visible", timeout=8000
-        )
+        card.wait_for(state="visible", timeout=8000)
     except PlaywrightTimeout:
-        snap(page, "rename_FAIL_no_new_card", snapshot)
-        pytest.fail(f"table card {NEW_NAME!r} not visible after rename")
+        snap(page, "rename_FAIL_no_card", snapshot)
+        pytest.fail(f"table card {TABLE_A!r} not visible after rename")
 
-    assert page.get_by_test_id(f"table-card-{TABLE_A}").count() == 0, \
-        f"old table card {TABLE_A!r} still visible after rename"
-    print(f"[ok] UI: card {NEW_NAME!r} visible, old card gone")
+    assert NEW_NAME in (card.text_content() or ""), \
+        f"card {TABLE_A!r} still shows the old label: {card.text_content()!r}"
+    print(f"[ok] UI: card {TABLE_A!r} labelled {NEW_NAME!r}")
 
     # ── Step 6: Navigate to renamed table → grid renders ─────────────────
     print("[6] Navigate to renamed table, verify grid")
-    page.get_by_test_id(f"table-card-{NEW_NAME}").click()
+    card.click()
 
     try:
-        page.wait_for_url(f"**/{NEW_NAME}**", timeout=8000)
+        page.wait_for_url(f"**/{TABLE_A}**", timeout=8000)
     except PlaywrightTimeout:
         snap(page, "rename_FAIL_nav", snapshot)
         pytest.fail(f"navigation to renamed table failed: URL={page.url}")
@@ -188,6 +193,8 @@ def test_table_rename(authed_page, workspace, admin_token, snapshot) -> None:
     r = api("GET", f"/api/v1/tables/{TABLE_B}", token)
     assert r.status_code == 200, \
         f"TABLE_B should still exist: {r.status_code}"
-    print(f"[ok] API: {TABLE_B!r} unchanged after conflict")
+    assert r.json()["table_name"] == TABLE_B_NAME, \
+        f"TABLE_B name changed after the rejected rename: {r.json()['table_name']!r}"
+    print(f"[ok] API: {TABLE_B!r} keeps its name after the conflict")
 
     print("\n=== PASSED — test_table_rename ===")

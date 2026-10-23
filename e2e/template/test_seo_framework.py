@@ -40,6 +40,7 @@ READ_ORDER = (2, 1, 3)           # row_ids fetched in this sequence
 
 
 def test_seo_framework(browser, admin_token):
+    global TABLE_ID
     """Full seo-bot CRUD cycle: workspace → table → rows → read → UI → teardown."""
     token = admin_token
     workspace_name = f"seo-{int(time.time())}"
@@ -62,8 +63,9 @@ def test_seo_framework(browser, admin_token):
     try:
         # ── 2. CREATE table ────────────────────────────────────────────────────
         r = api("POST", "/api/v1/tables", token,
-                json={"table_id": TABLE_ID, "workspace_id": ws_id})
+                json={"table_name": TABLE_ID, "workspace_id": ws_id})
         assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+        TABLE_ID = str(r.json()["table_id"])
         table = r.json()
         print(f"[ok] CREATE table {TABLE_ID!r} (cols={len(table['columns'])})")
 

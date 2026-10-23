@@ -33,9 +33,10 @@ def test_column_name_uniqueness(admin_token, workspace):
         "POST",
         "/api/v1/tables",
         token,
-        json={"table_id": table_id, "workspace_id": workspace_id},
+        json={"table_name": table_id, "workspace_id": workspace_id},
     )
     assert response.status_code == 201, response.text[:200]
+    table_id = str(response.json()["table_id"])
 
     response = api(
         "POST",

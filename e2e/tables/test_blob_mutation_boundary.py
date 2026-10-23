@@ -24,9 +24,10 @@ def test_row_and_blob_mutations_use_separate_endpoints(admin_token, workspace):
         "POST",
         "/api/v1/tables",
         admin_token,
-        json={"table_id": table_id, "workspace_id": workspace_id},
+        json={"table_name": table_id, "workspace_id": workspace_id},
     )
     assert response.status_code == 201, f"create table: {response.status_code} {response.text[:200]}"
+    table_id = str(response.json()["table_id"])
 
     response = api(
         "POST",

@@ -54,11 +54,12 @@ def test_rls_only_authorization(page, workspace, admin_token, snapshot):
         print(f"[2] Setup: owner creates table '{shared_table_id}' in the shared workspace")
         response = api(
             "POST", "/api/v1/tables", admin_token,
-            json={"table_id": shared_table_id, "workspace_id": shared_ws_id},
+            json={"table_name": shared_table_id, "workspace_id": shared_ws_id},
         )
         assert response.status_code == 201, (
             f"create shared table: {response.status_code} {response.text[:200]}"
         )
+        shared_table_id = str(response.json()["table_id"])
 
         print(f"[3] Setup: owner creates un-shared workspace '{private_ws_name}' + table")
         response = api(
@@ -71,11 +72,12 @@ def test_rls_only_authorization(page, workspace, admin_token, snapshot):
         private_ws_id = response.json()["workspace_id"]
         response = api(
             "POST", "/api/v1/tables", admin_token,
-            json={"table_id": private_table_id, "workspace_id": private_ws_id},
+            json={"table_name": private_table_id, "workspace_id": private_ws_id},
         )
         assert response.status_code == 201, (
             f"create private table: {response.status_code} {response.text[:200]}"
         )
+        private_table_id = str(response.json()["table_id"])
 
         print("[4] Setup: owner invites the member at level 'read'")
         response = api(
@@ -105,7 +107,7 @@ def test_rls_only_authorization(page, workspace, admin_token, snapshot):
             "un-shared workspace leaked into the member's sidebar"
         )
         member_tables = {
-            (t["workspace_id"], t["table_id"]) for t in payload["tables"]
+            (t["workspace_id"], str(t["table_id"])) for t in payload["tables"]
         }
         assert (shared_ws_id, shared_table_id) in member_tables, (
             f"shared table missing from member sidebar: {sorted(member_tables)}"
@@ -160,21 +162,21 @@ def test_rls_only_authorization(page, workspace, admin_token, snapshot):
         assert response.json()["workspace_name"] == shared_ws_name, "workspace was renamed"
 
         print("[8] API: member cannot create a table in the shared workspace")
-        denied_table_id = f"denied-{suffix}"
+        denied_table_name = f"denied-{suffix}"
         response = api(
             "POST", "/api/v1/tables", member_token,
-            json={"table_id": denied_table_id, "workspace_id": shared_ws_id},
+            json={"table_name": denied_table_name, "workspace_id": shared_ws_id},
         )
         assert response.status_code == 403, (
             f"expected 403 on create table, got {response.status_code} {response.text[:200]}"
         )
         response = api("GET", "/api/v1/tables", admin_token)
         assert response.status_code == 200
-        owner_table_ids = {
-            t["table_id"] for t in response.json() if t["workspace_id"] == shared_ws_id
+        owner_table_names = {
+            t["table_name"] for t in response.json() if t["workspace_id"] == shared_ws_id
         }
-        assert denied_table_id not in owner_table_ids, (
-            f"refused table was created anyway: {sorted(owner_table_ids)}"
+        assert denied_table_name not in owner_table_names, (
+            f"refused table was created anyway: {sorted(owner_table_names)}"
         )
 
         # ── Existence stays undisclosed: 404, never 403 ──────────────────────
@@ -229,9 +231,8 @@ def test_rls_only_authorization(page, workspace, admin_token, snapshot):
         page.get_by_test_id(f"sidebar-table-{shared_table_id}").wait_for(
             state="visible", timeout=10000
         )
-        assert page.get_by_test_id(f"sidebar-table-{denied_table_id}").count() == 0, (
-            "refused table rendered in the member's sidebar"
-        )
+        refused = page.locator("[data-testid^='sidebar-table-']", has_text=denied_table_name)
+        assert refused.count() == 0, "refused table rendered in the member's sidebar"
         snap(page, "rls_only_02_member_sidebar_after_denials", snapshot)
 
         print("PASS: test_rls_only_authorization")

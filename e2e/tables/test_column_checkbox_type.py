@@ -68,8 +68,9 @@ def test_checkbox_toggle(authed_page, workspace, admin_token, snapshot):
 
     # ── 1. Create blank table ──────────────────────────────────────────────
     r = api("POST", "/api/v1/tables", token,
-            json={"table_id": table_id, "workspace_id": ws_name})
+            json={"table_name": table_id, "workspace_id": ws_name})
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+    table_id = str(r.json()["table_id"])
     schema = r.json()
     print(f"[ok] table {table_id!r} (cols={len(schema['columns'])})")
 

@@ -88,6 +88,7 @@ def add_row(token: str, table_id: str, row_data: dict) -> int:
 
 
 def test_workflow_nodes(authed_page, admin_token, snapshot) -> None:
+    global TABLE_ID
     token = admin_token
     page = authed_page
 
@@ -103,8 +104,9 @@ def test_workflow_nodes(authed_page, admin_token, snapshot) -> None:
 
     # ── Setup: blank table ───────────────────────────────────────────────
     r = api("POST", "/api/v1/tables", token,
-            json={"table_id": TABLE_ID, "workspace_id": ws_name})
+            json={"table_name": TABLE_ID, "workspace_id": ws_name})
     assert r.status_code == 201
+    TABLE_ID = str(r.json()["table_id"])
     print(f"[setup] table {TABLE_ID!r}")
 
     try:

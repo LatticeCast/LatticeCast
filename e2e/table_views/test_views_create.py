@@ -91,6 +91,7 @@ def assert_tab_visible(page, tab_name: str) -> None:
 
 
 def test_views_create(authed_page, admin_token, snapshot) -> None:
+    global TABLE_ID
     token = admin_token
     page = authed_page
 
@@ -103,8 +104,9 @@ def test_views_create(authed_page, admin_token, snapshot) -> None:
     print(f"[ok] CREATE workspace {ws_name!r} → {ws_uuid}")
 
     # ── Setup: blank table (no views) ──────────────────────────────────────────
-    r = api("POST", "/api/v1/tables", token, json={"table_id": TABLE_ID, "workspace_id": ws_name})
+    r = api("POST", "/api/v1/tables", token, json={"table_name": TABLE_ID, "workspace_id": ws_name})
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+    TABLE_ID = str(r.json()["table_id"])
     print(f"[ok] CREATE table {TABLE_ID!r}")
 
     try:

@@ -69,6 +69,7 @@ def goto_table(page, ws_id: str, table_id: str) -> None:
 
 
 def test_column_add(authed_page, workspace, admin_token, snapshot):
+    global TABLE_ID
     page = authed_page
     ws_id, _ws_name = workspace
     token = admin_token
@@ -77,8 +78,9 @@ def test_column_add(authed_page, workspace, admin_token, snapshot):
 
     # ── Setup: blank table ────────────────────────────────────────────────
     r = api("POST", "/api/v1/tables", token,
-            json={"table_id": TABLE_ID, "workspace_id": ws_id})
+            json={"table_name": TABLE_ID, "workspace_id": ws_id})
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+    TABLE_ID = str(r.json()["table_id"])
     print(f"[ok] table {TABLE_ID!r}")
 
     # ── Setup: Status select column (for kanban group_by) ─────────────────

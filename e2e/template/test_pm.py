@@ -43,7 +43,7 @@ PRIORITY_CHOICES = ["critical", "high", "medium", "low"]
 def test_pm_template_structure(authed_page, workspace, admin_token, snapshot):
     ws_id, ws_name = workspace
     suffix = int(time.time()) % 100000
-    table_name = f"pm-tpl-{suffix}"
+    table_id = f"pm-tpl-{suffix}"
 
     # ── Step 1: Create PM template via API ───────────────────────────────────
     print("[1] POST /api/v1/tables/template/pm")
@@ -51,11 +51,12 @@ def test_pm_template_structure(authed_page, workspace, admin_token, snapshot):
         "POST",
         "/api/v1/tables/template/pm",
         admin_token,
-        json={"table_id": table_name, "workspace_id": ws_id},
+        json={"table_name": table_id, "workspace_id": ws_id},
     )
     assert r.status_code in (200, 201), (
         f"create PM template: {r.status_code} {r.text[:300]}"
     )
+    table_id = str(r.json()["table_id"])
 
     data = r.json()
     columns = data.get("columns", [])
@@ -146,7 +147,7 @@ def test_pm_template_structure(authed_page, workspace, admin_token, snapshot):
     print("[4] UI: navigate to PM table")
     page = authed_page
 
-    page.goto(f"{BASE}/{ws_name}/{table_name}", wait_until="networkidle")
+    page.goto(f"{BASE}/{ws_name}/{table_id}", wait_until="networkidle")
 
     # Wait for views to load (Schema tab is auto-prepended)
     page.wait_for_selector("[data-testid='view-tab-Schema']", state="visible", timeout=10000)

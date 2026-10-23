@@ -121,9 +121,13 @@ def setup_api(token: str) -> str:
     ws_id = str(r.json()["workspace_id"])
     print(f"[setup] workspace {WS_NAME!r} → {ws_id}")
 
-    for tid in (T1, T2):
-        r = api("POST", "/api/v1/tables", token, json={"table_id": tid, "workspace_id": ws_id})
-        assert r.status_code == 201, f"create table {tid}: {r.status_code} {r.text[:200]}"
+    global T1, T2
+    created: list[str] = []
+    for name in (T1, T2):
+        r = api("POST", "/api/v1/tables", token, json={"table_name": name, "workspace_id": ws_id})
+        assert r.status_code == 201, f"create table {name}: {r.status_code} {r.text[:200]}"
+        created.append(str(r.json()["table_id"]))
+    T1, T2 = created
 
     for name, vtype in [(V1A, "kanban"), (V1B, "timeline")]:
         r = api("POST", f"/api/v1/tables/{T1}/views", token, json={"name": name, "type": vtype})

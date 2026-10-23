@@ -56,6 +56,7 @@ def goto_table(page, ws_id: str, table_id: str) -> None:
 
 
 def test_col_drag_reorder(authed_page, admin_token, snapshot):
+    global TABLE_ID
     token = admin_token
     page = authed_page
     print(f"[ok] login admin")
@@ -69,8 +70,9 @@ def test_col_drag_reorder(authed_page, admin_token, snapshot):
     try:
         # ── 2. Create blank table ──────────────────────────────────────────────
         r = api("POST", "/api/v1/tables", token,
-                json={"table_id": TABLE_ID, "workspace_id": ws_id})
+                json={"table_name": TABLE_ID, "workspace_id": ws_id})
         assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
+        TABLE_ID = str(r.json()["table_id"])
         schema = r.json()
         title_col = next((c for c in schema["columns"] if c["name"] == "Title"), None)
         assert title_col is not None, \

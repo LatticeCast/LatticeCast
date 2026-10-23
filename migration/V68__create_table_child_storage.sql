@@ -39,7 +39,9 @@ CREATE INDEX IF NOT EXISTS idx_rows_workspace_table
 CREATE TABLE IF NOT EXISTS public.table_views (
     workspace_id UUID        NOT NULL,
     table_id     BIGINT      NOT NULL,
-    view_id      BIGINT      NOT NULL DEFAULT 1,
+    -- No DEFAULT: V16 dropped V9's DEFAULT 1 because it bypassed the BEFORE
+    -- INSERT trigger, so a second view in the same table collided on 1.
+    view_id      BIGINT      NOT NULL,
     config       JSONB       NOT NULL DEFAULT '{}'::JSONB,
     created_by   UUID,
     updated_by   UUID,

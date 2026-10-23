@@ -68,8 +68,9 @@ def test_kanban_add_row(browser, admin_token, snapshot) -> None:
     try:
         # ── Setup: PM table (auto-creates Sprint Board kanban view) ───────────
         r = api("POST", "/api/v1/tables/template/pm", token,
-                json={"table_id": TABLE_ID, "workspace_name": WORKSPACE_NAME})
+                json={"table_name": TABLE_ID, "workspace_name": WORKSPACE_NAME})
         assert r.status_code == 201, f"create PM table: {r.status_code} {r.text[:200]}"
+        TABLE_ID = str(r.json()["table_id"])
         schema = r.json()
         columns = schema.get("columns", [])
         print(f"[ok] PM table {TABLE_ID!r} (cols={len(columns)})")
