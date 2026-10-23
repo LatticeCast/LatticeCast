@@ -20,6 +20,7 @@ from sqlalchemy.exc import DBAPIError
 _SQLSTATE_STATUS: dict[str, int] = {
     "22023": status.HTTP_422_UNPROCESSABLE_ENTITY,  # invalid_parameter_value
     "23514": status.HTTP_422_UNPROCESSABLE_ENTITY,  # check_violation
+    "23505": status.HTTP_409_CONFLICT,  # unique_violation (V67 tables_workspace_name_key)
     "42501": status.HTTP_403_FORBIDDEN,  # insufficient_privilege
 }
 

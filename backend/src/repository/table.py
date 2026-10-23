@@ -2,21 +2,31 @@
 # V34: Table holds identity only. Column CRUD lives in TableViewRepository
 # (operating on the __schema__ row). Index management stays here because it
 # touches public.rows, not table_views.
-import hashlib
-import re
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.db import reapply_rls_context
 from models.table import Table
 
-# Column types that get B-tree expression indexes (sortable/range queries)
-BTREE_TYPES = {"number", "date"}
-# Column types that get GIN indexes (containment/grouping queries)
-GIN_TYPES = {"select", "tags", "text", "string", "url", "checkbox"}
+# Column types that carry a per-column partial index on public.rows. This list
+# must match the types public.create_row_data_index accepts, or a column type
+# here is rejected by the database and one missing here silently has no index.
+INDEXED_TYPES = {
+    "number",
+    "date",
+    "datetime",
+    "text",
+    "string",
+    "select",
+    "tags",
+    "email",
+    "url",
+    "phone",
+    "checkbox",
+}
 
 
 class TableRepository:
@@ -26,79 +36,103 @@ class TableRepository:
     async def create_from_template(
         self,
         workspace_id: UUID,
-        table_id: str,
+        table_name: str,
         kind: str,
         created_by: UUID,
     ) -> Table:
         """V38: Atomic table create + populate via the PG function
         `create_table_from_template`. One transaction covers the INSERT,
         the __schema__ + __order__ writes, per-column index creation, and
-        (for templates) the seed views and default-view flag."""
-        tid = table_id.lower()
-        await self.session.execute(
-            text(
-                "SELECT create_table_from_template("
-                "CAST(:ws AS uuid), :tid, :kind, CAST(:by AS uuid))"
-            ),
-            {"ws": str(workspace_id), "tid": tid, "kind": kind, "by": str(created_by)},
-        )
-        # SELECT within same transaction — row is visible before commit.
+        (for templates) the seed views and default-view flag.
+
+        The identity is the database's to assign; the caller only names the
+        table, so the new table_id is taken from the function's return value.
+        """
+        name = table_name.lower()
         result = await self.session.execute(
             text(
-                "SELECT workspace_id, table_id, created_at, updated_at FROM tables "
-                "WHERE workspace_id = CAST(:ws AS uuid) AND table_id = :tid"
+                "SELECT create_table_from_template("
+                "CAST(:ws AS uuid), :name, :kind, CAST(:by AS uuid)) AS table_id"
             ),
-            {"ws": str(workspace_id), "tid": tid},
+            {"ws": str(workspace_id), "name": name, "kind": kind, "by": str(created_by)},
         )
-        row = result.mappings().one()
+        new_id = result.scalar_one()
+        row_result = await self.session.execute(
+            text(
+                "SELECT workspace_id, table_id, table_name, created_at, updated_at "
+                "FROM tables WHERE table_id = :tid"
+            ),
+            {"tid": new_id},
+        )
+        row = row_result.mappings().one()
         await self.session.commit()
         return Table(
             workspace_id=row["workspace_id"],
             table_id=row["table_id"],
+            table_name=row["table_name"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
 
+    async def get(self, table_id: int) -> Table | None:
+        """Primary-key read. The tables_read policy narrows it to workspaces the
+        caller may read, so an unreadable table is indistinguishable from an
+        absent one."""
+        await reapply_rls_context(self.session)
+        result = await self.session.execute(
+            select(Table).where(Table.table_id == table_id)
+        )
+        return result.scalars().first()
+
     async def resolve_table_global(
         self, identifier: str, workspace_ids: list[UUID] | None = None
     ) -> Table | None:
-        """Resolve a table by case-insensitive name.
+        """Resolve a table by name.
 
         With `workspace_ids`, the search is scoped to those workspaces. With
         None it spans every workspace the caller may read: the tables_read
         policy is already that filter, so no workspace list has to be
         assembled first just to hand it back as a WHERE clause.
+
+        The name is matched exactly: (workspace_id, table_name) is unique, and
+        a case-insensitive match would make two tables named `Log` and `log`
+        resolve to whichever row the planner returned first.
         """
         await reapply_rls_context(self.session)
-        conditions = [func.lower(Table.table_id) == identifier.lower()]
+        conditions = [Table.table_name == identifier]
         if workspace_ids is not None:
             if not workspace_ids:
                 return None
             conditions.append(Table.workspace_id.in_(workspace_ids))
-        result = await self.session.execute(select(Table).where(*conditions))
+        result = await self.session.execute(
+            select(Table).where(*conditions).order_by(Table.table_id)
+        )
         return result.scalars().first()
 
     async def list_by_workspace(self, workspace_id: UUID) -> list[Table]:
         await reapply_rls_context(self.session)
-        result = await self.session.execute(select(Table).where(Table.workspace_id == workspace_id))
+        result = await self.session.execute(
+            select(Table)
+            .where(Table.workspace_id == workspace_id)
+            .order_by(Table.table_name)
+        )
         return list(result.scalars().all())
 
-    async def update(self, table: Table, table_id: str) -> Table:
-        next_table_id = table_id.lower()
+    async def update(self, table: Table, table_name: str) -> Table:
+        """Rename the table. The identity does not move, so nothing cascades."""
+        next_table_name = table_name.lower()
         next_updated_at = datetime.now(UTC)
         result = await self.session.execute(
             text("""
                 UPDATE tables
-                SET table_id = :next_table_id,
+                SET table_name = :next_table_name,
                     updated_at = :updated_at
-                WHERE workspace_id = :workspace_id
-                  AND table_id = :table_id
-                RETURNING workspace_id, table_id, created_at, updated_at
+                WHERE table_id = :table_id
+                RETURNING workspace_id, table_id, table_name, created_at, updated_at
             """),
             {
-                "workspace_id": str(table.workspace_id),
-                "table_id": str(table.table_id),
-                "next_table_id": next_table_id,
+                "table_id": table.table_id,
+                "next_table_name": next_table_name,
                 "updated_at": next_updated_at,
             },
         )
@@ -109,6 +143,7 @@ class TableRepository:
         return Table(
             workspace_id=updated["workspace_id"],
             table_id=updated["table_id"],
+            table_name=updated["table_name"],
             created_at=updated["created_at"],
             updated_at=updated["updated_at"],
         )
@@ -119,39 +154,41 @@ class TableRepository:
 
     # ── Per-column index management (PG-side via SECURITY DEFINER funcs) ──
 
-    def _index_name(self, table_id: str, column_id: str) -> str:
-        # create_row_data_index validates ^idx_rd_[a-zA-Z0-9_]+$, so non-ASCII
-        # table_ids (e.g. Chinese "出國") would explode. Fall back to a hash
-        # when the table_id contains anything outside [A-Za-z0-9_-].
-        ascii_tid = re.sub(r"[^A-Za-z0-9_]", "", table_id.replace("-", ""))
-        if not ascii_tid or ascii_tid != table_id.replace("-", ""):
-            ascii_tid = hashlib.sha1(table_id.encode("utf-8")).hexdigest()[:12]
-        else:
-            ascii_tid = ascii_tid[:12]
+    @staticmethod
+    def _index_name(workspace_id: UUID, table_id: int, column_id: str) -> str:
+        """Mirror public._build_rd_idx_name(uuid, bigint, text).
+
+        create_row_data_index rejects a name that does not match the helper's
+        answer, so this has to produce exactly the same string:
+        idx_rd_<workspace 12 hex>_<table id>_<column 12 hex>.
+        """
+        ws = str(workspace_id).replace("-", "")[:12]
         cid = column_id.replace("-", "")[:12]
-        return f"idx_rd_{ascii_tid}_{cid}"
+        return f"idx_rd_{ws}_{table_id}_{cid}"
 
     async def create_column_index(
-        self, workspace_id: UUID, table_id: str, column_id: str, col_type: str
+        self, workspace_id: UUID, table_id: int, column_id: str, col_type: str
     ) -> None:
         """app_user has no DDL — V11 defines create_row_data_index as
         SECURITY DEFINER owned by dba; V18 fixed it to use
         immutable_iso_to_ts() for date columns instead of ::NUMERIC."""
-        if col_type not in BTREE_TYPES and col_type not in GIN_TYPES:
+        if col_type not in INDEXED_TYPES:
             return
-        idx_name = f"idx_rd_{str(workspace_id).replace('-', '')[:12]}_{self._index_name(table_id, column_id)[7:]}"
+        idx_name = self._index_name(workspace_id, table_id, column_id)
         await self.session.execute(
             text("SELECT create_row_data_index(:ws, :idx, :tid, :cid, :ct)").bindparams(
-                ws=str(workspace_id), idx=idx_name, tid=str(table_id), cid=column_id, ct=col_type
+                ws=str(workspace_id), idx=idx_name, tid=table_id, cid=column_id, ct=col_type
             )
         )
         await self.session.commit()
 
-    async def drop_column_index(self, workspace_id: UUID, table_id: str, column_id: str) -> None:
-        idx_name = f"idx_rd_{str(workspace_id).replace('-', '')[:12]}_{self._index_name(table_id, column_id)[7:]}"
+    async def drop_column_index(
+        self, workspace_id: UUID, table_id: int, column_id: str
+    ) -> None:
+        idx_name = self._index_name(workspace_id, table_id, column_id)
         await self.session.execute(
             text("SELECT drop_row_data_index(:ws, :idx, :tid, :cid)").bindparams(
-                ws=str(workspace_id), idx=idx_name, tid=str(table_id), cid=column_id
+                ws=str(workspace_id), idx=idx_name, tid=table_id, cid=column_id
             )
         )
         await self.session.commit()

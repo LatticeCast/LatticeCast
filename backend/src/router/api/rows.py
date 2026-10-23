@@ -37,7 +37,7 @@ class BlobCellMetadata(BaseModel):
     size: int = Field(description="Object size in bytes.", ge=0)
 
 
-def _blob_storage_key(workspace_id: str, table_id: str, row_id: int, column_id: str) -> str:
+def _blob_storage_key(workspace_id: str, table_id: int, row_id: int, column_id: str) -> str:
     """Build a blob key only from stable workspace/table/row/column identifiers."""
     return f"{workspace_id}/{table_id}/rows/{row_id}/blobs/{column_id}"
 
@@ -60,7 +60,7 @@ async def _get_blob_column(table, column_id: str, session: AsyncSession) -> dict
 
 @router.post("/tables/{table_id}/rows", response_model=RowResponse, status_code=status.HTTP_201_CREATED)
 async def create_row(
-    table_id: str,
+    table_id: int,
     data: RowCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
@@ -86,7 +86,7 @@ async def create_row(
 
 @router.get("/tables/{table_id}/rows", response_model=list[RowResponse])
 async def list_rows(
-    table_id: str,
+    table_id: int,
     offset: int = 0,
     limit: int = 100,
     sort: str = "desc",
@@ -121,7 +121,7 @@ async def list_rows(
 
 @router.get("/tables/{table_id}/rows/{row_id}", response_model=RowResponse)
 async def get_row(
-    table_id: str,
+    table_id: int,
     row_id: int,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
@@ -137,7 +137,7 @@ async def get_row(
 
 @router.patch("/tables/{table_id}/rows/{row_id}", response_model=RowResponse)
 async def patch_row(
-    table_id: str,
+    table_id: int,
     row_id: int,
     data: RowUpdate,
     user: User = Depends(get_current_user),
@@ -158,7 +158,7 @@ async def patch_row(
 
 @router.put("/tables/{table_id}/rows/{row_id}", response_model=RowResponse)
 async def put_row(
-    table_id: str,
+    table_id: int,
     row_id: int,
     data: RowPut,
     user: User = Depends(get_current_user),
@@ -191,7 +191,7 @@ async def put_row(
 The column's `kind` and `accept` options are UI hints, not server-side MIME restrictions: `file` columns may store ZIP or any other binary. The uploaded object replaces the cell's prior object; the returned descriptor is persisted in `row_data[column_id]`. Each cell holds one file only.""",
 )
 async def put_blob_cell(
-    table_id: str,
+    table_id: int,
     row_id: int,
     column_id: str,
     file: Annotated[UploadFile, File(description="The single file stored in this blob cell")],
@@ -255,7 +255,7 @@ async def put_blob_cell(
 The response preserves the stored MIME type and sends an attachment filename. Returns 404 when the cell is empty or its object no longer exists.""",
 )
 async def get_blob_cell(
-    table_id: str,
+    table_id: int,
     row_id: int,
     column_id: str,
     user: User = Depends(get_current_user),
@@ -322,7 +322,7 @@ async def get_blob_cell(
     description="Deletes the stored object and clears that cell's metadata. The cell remains available for a later upload.",
 )
 async def delete_blob_cell(
-    table_id: str,
+    table_id: int,
     row_id: int,
     column_id: str,
     user: User = Depends(get_current_user),
@@ -344,7 +344,7 @@ async def delete_blob_cell(
 
 @router.delete("/tables/{table_id}/rows/{row_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_row(
-    table_id: str,
+    table_id: int,
     row_id: int,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),

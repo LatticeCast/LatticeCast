@@ -26,7 +26,7 @@ def _view_dict(view: Any) -> dict[str, Any]:
 
 @router.get("/{table_id}/views")
 async def list_views(
-    table_id: str,
+    table_id: int,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> list[dict[str, Any]]:
@@ -39,7 +39,7 @@ async def list_views(
 
 @router.get("/{table_id}/views/{view_id}")
 async def get_view(
-    table_id: str,
+    table_id: int,
     view_id: int,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
@@ -58,7 +58,7 @@ async def get_view(
 
 @router.post("/{table_id}/views", status_code=status.HTTP_201_CREATED)
 async def create_view(
-    table_id: str,
+    table_id: int,
     data: dict[str, Any],
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
@@ -83,7 +83,7 @@ async def create_view(
 
 @router.put("/{table_id}/views/{view_id}")
 async def update_view(
-    table_id: str,
+    table_id: int,
     view_id: int,
     data: dict[str, Any],
     user: User = Depends(get_current_user),
@@ -116,7 +116,7 @@ async def update_view(
 
 @router.delete("/{table_id}/views/{view_id}")
 async def delete_view(
-    table_id: str,
+    table_id: int,
     view_id: int,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),

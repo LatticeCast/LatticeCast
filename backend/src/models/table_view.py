@@ -31,14 +31,14 @@ class TableView(SQLModel, table=True):
     __tablename__ = "table_views"
     __table_args__ = (
         ForeignKeyConstraint(
-            ["workspace_id", "table_id"],
-            ["tables.workspace_id", "tables.table_id"],
+            ["table_id"],
+            ["tables.table_id"],
             name="table_views_table_fkey",
         ),
     )
 
     workspace_id: UUID = Field(primary_key=True)
-    table_id: str = Field(primary_key=True)
+    table_id: int = Field(primary_key=True)
     view_id: int = Field(default=0, primary_key=True)
     config: dict[str, Any] = Field(
         default_factory=dict,

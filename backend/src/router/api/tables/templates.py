@@ -3,6 +3,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config.lattice_ql import invalidate_schema_cache
 from middleware.auth import get_current_user, get_rls_session
 from models.table import TableResponse
 from models.user import User
@@ -38,16 +39,17 @@ async def create_from_template(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    table_id = data.get("table_id", "") or data.get("table_name", "") or data.get("name", "")
-    if not table_id:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="table_id is required")
+    table_name = data.get("table_name", "") or data.get("name", "") or data.get("table_id", "")
+    if not table_name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="table_name is required")
     ws_repo = WorkspaceRepository(session)
     workspace_id = await _resolve_template_workspace(data, user, ws_repo)
     table_repo = TableRepository(session)
     table = await table_repo.create_from_template(
         workspace_id=workspace_id,
-        table_id=table_id,
+        table_name=table_name,
         kind=kind,
         created_by=user.user_id,
     )
+    await invalidate_schema_cache(str(workspace_id))
     return await _build_table_response(table, session)

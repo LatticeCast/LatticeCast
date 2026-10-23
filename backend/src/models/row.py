@@ -8,19 +8,20 @@ from sqlmodel import Field, SQLModel
 
 
 class Row(SQLModel, table=True):
-    """Row database model — PK is (workspace_id, table_id, row_id)"""
+    """Row database model — PK is (workspace_id, table_id, row_id); table_id is
+    the parent's identity, so the FK is single-column."""
 
     __tablename__ = "rows"
     __table_args__ = (
         ForeignKeyConstraint(
-            ["workspace_id", "table_id"],
-            ["tables.workspace_id", "tables.table_id"],
+            ["table_id"],
+            ["tables.table_id"],
             name="rows_table_fkey",
         ),
     )
 
-    workspace_id: UUID = Field(primary_key=True, description="Workspace UUID (composite PK/FK)")
-    table_id: str = Field(primary_key=True, description="Parent table ID (composite PK/FK)")
+    workspace_id: UUID = Field(primary_key=True, description="Workspace UUID (composite PK)")
+    table_id: int = Field(primary_key=True, description="Parent table identity (composite PK/FK)")
     row_id: int = Field(
         default=0, primary_key=True, description="Auto-increment row number per table (set by DB trigger)"
     )
@@ -55,7 +56,7 @@ class RowPut(SQLModel):
 
 class RowResponse(SQLModel):
     workspace_id: UUID = Field(..., description="Workspace UUID")
-    table_id: str = Field(..., description="Parent table ID (string)")
+    table_id: int = Field(..., description="Parent table identity")
     row_id: int = Field(..., description="Auto-increment row number per table")
     row_data: dict[str, Any] = Field(..., description="Row data keyed by column UUID")
     created_by: UUID | None = Field(default=None, description="UUID of user who created the row")

@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -12,10 +13,11 @@ from core.db import get_login_session
 from middleware.auth import get_rls_session, require_admin
 from models.user import User
 from repository.row import RowRepository
+from repository.table import TableRepository
 from repository.table_view import TableViewRepository
 
 ANNOUNCEMENT_WORKSPACE_ID = "f8bb8500-10f2-4e8c-b0a3-0d5c30778086"
-ANNOUNCEMENT_TABLE_ID = "announcement"
+ANNOUNCEMENT_TABLE_NAME = "announcement"
 
 router = APIRouter(prefix="/admin/announcements", tags=["admin-announcements"])
 
@@ -48,7 +50,18 @@ async def create_announcement(
     )
     await login.commit()
 
-    schema = await TableViewRepository(session).get_tables_schema(ANNOUNCEMENT_WORKSPACE_ID, ANNOUNCEMENT_TABLE_ID)
+    announcement = await TableRepository(session).resolve_table_global(
+        ANNOUNCEMENT_TABLE_NAME, [UUID(ANNOUNCEMENT_WORKSPACE_ID)]
+    )
+    if announcement is None or announcement.table_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Announcement table is missing",
+        )
+
+    schema = await TableViewRepository(session).get_tables_schema(
+        ANNOUNCEMENT_WORKSPACE_ID, announcement.table_id
+    )
     columns = {column["name"]: column["column_id"] for column in schema.get("columns", [])}
     required = ("Type", "Title", "Description", "updated_at", "updated_by", "created_at", "created_by")
     missing = [name for name in required if name not in columns]
@@ -71,7 +84,7 @@ async def create_announcement(
 
     row = await RowRepository(session).create(
         workspace_id=ANNOUNCEMENT_WORKSPACE_ID,
-        table_id=ANNOUNCEMENT_TABLE_ID,
+        table_id=announcement.table_id,
         row_data=row_data,
         created_by=user.user_id,
         updated_by=user.user_id,

@@ -15,20 +15,17 @@ from repository.table_view import TableViewRepository
 
 
 async def _get_table_for_member(
-    table_id: str,
+    table_id: int,
     user: User,
     session: AsyncSession,
     workspace_id: UUID | None = None,
 ) -> Table:
     """Resolve a table the caller can reach, or raise 404.
 
-    table_id is unique only WITHIN a workspace — different workspaces may
-    each have a table with the same string id (e.g. two users both have
-    `articles`). When the caller knows the workspace (URL like
-    /{workspace_id}/{table_id}), pass `workspace_id` to scope the lookup
-    unambiguously. When omitted, we search every workspace the caller may
-    read and pick the first match — fine for the rare case where only the
-    table_id is known, but ambiguous when names collide.
+    table_id is the table's identity now, so the lookup is a primary-key read
+    and no longer ambiguous across workspaces. `workspace_id` is still accepted
+    by callers that keep it in the URL, but it only narrows an already unique
+    row.
 
     Authorization is RLS's alone: the tables_read policy already limits the
     resolve to readable workspaces, so a table in an unreachable workspace
@@ -36,9 +33,8 @@ async def _get_table_for_member(
     404, which is what keeps existence undisclosed.
     """
     table_repo = TableRepository(session)
-    scope = [workspace_id] if workspace_id is not None else None
-    table = await table_repo.resolve_table_global(table_id, scope)
-    if not table:
+    table = await table_repo.get(table_id)
+    if table is None or (workspace_id is not None and table.workspace_id != workspace_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Table not found")
     return table
 
@@ -52,6 +48,7 @@ async def _build_table_response(table: Table, session: AsyncSession) -> dict[str
     return {
         "workspace_id": table.workspace_id,
         "table_id": table.table_id,
+        "table_name": table.table_name,
         "columns": schema.get("columns", []),
         "view_order": schema.get("view_order", []),
         "default_view": schema.get("default_view", 0) or 0,

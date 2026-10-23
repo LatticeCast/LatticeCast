@@ -23,7 +23,7 @@ class BlockQueryRequest(BaseModel):
 
 @router.post("/{table_id}/views/{view_name}/blocks/{block_id}/query")
 async def query_block(
-    table_id: str,
+    table_id: int,
     view_name: str,
     block_id: str,
     body: BlockQueryRequest,

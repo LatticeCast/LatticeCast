@@ -3,7 +3,7 @@
 - POST  /tables                       — create blank table
 - GET   /tables                       — list all tables across user's workspaces
 - GET   /tables/{table_id}            — single table (full schema snapshot)
-- PUT   /tables/{table_id}            — rename table_id
+- PUT   /tables/{table_id}            — rename (changes table_name, never the id)
 - DELETE /tables/{table_id}           — drop table
 - PATCH /tables/{table_id}            — update {view_order, default_view, col_order};
                                         returns the new full TableSchema
@@ -14,6 +14,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.lattice_ql import invalidate_schema_cache
@@ -23,6 +24,7 @@ from models.user import User
 from repository.table import TableRepository
 from repository.table_view import TableViewRepository
 from repository.workspace import WorkspaceRepository
+from util.pg_errors import http_error_for
 
 from ._shared import _build_table_response, _get_table_for_member
 
@@ -58,12 +60,18 @@ async def create_table(
         workspace_id = workspace.workspace_id
 
     table_repo = TableRepository(session)
-    table = await table_repo.create_from_template(
-        workspace_id=workspace_id,
-        table_id=data.table_id,
-        kind="blank",
-        created_by=user.user_id,
-    )
+    try:
+        table = await table_repo.create_from_template(
+            workspace_id=workspace_id,
+            table_name=data.table_name,
+            kind="blank",
+            created_by=user.user_id,
+        )
+    except DBAPIError as exc:
+        # V67's UNIQUE (workspace_id, table_name) rejects a duplicate name;
+        # translate that to 409 instead of letting it surface as a 500.
+        raise http_error_for(exc) or exc from exc
+    await invalidate_schema_cache(str(workspace_id))
     return await _build_table_response(table, session)
 
 
@@ -85,7 +93,7 @@ async def list_tables(
 
 @router.get("/{table_id}", response_model=TableResponse)
 async def get_table(
-    table_id: str,
+    table_id: int,
     workspace_id: UUID | None = None,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
@@ -99,7 +107,7 @@ async def get_table(
 
 @router.put("/{table_id}", response_model=TableResponse)
 async def update_table(
-    table_id: str,
+    table_id: int,
     data: TableUpdate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
@@ -108,17 +116,24 @@ async def update_table(
     await _require_write(table.workspace_id, user.user_id, WorkspaceRepository(session))
     table_repo = TableRepository(session)
     existing = await table_repo.list_by_workspace(table.workspace_id)
-    if any(t.table_id == data.table_id and t.table_id != table.table_id for t in existing):
+    clash = any(
+        t.table_name == data.table_name and t.table_id != table.table_id
+        for t in existing
+    )
+    if clash:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="A table with that name already exists in this workspace"
         )
-    table = await table_repo.update(table, data.table_id)
+    table = await table_repo.update(table, data.table_name)
+    # The LQL schema dict is keyed by table_name, so a rename changes what
+    # queries can resolve. Without this the old name keeps working for a TTL.
+    await invalidate_schema_cache(str(table.workspace_id))
     return await _build_table_response(table, session)
 
 
 @router.delete("/{table_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_table(
-    table_id: str,
+    table_id: int,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
@@ -126,6 +141,7 @@ async def delete_table(
     await _require_write(table.workspace_id, user.user_id, WorkspaceRepository(session))
     table_repo = TableRepository(session)
     await table_repo.delete(table)
+    await invalidate_schema_cache(str(table.workspace_id))
 
 
 # ── PATCH /tables/{table_id} ───────────────────────────────────────────
@@ -143,7 +159,7 @@ class SchemaPatch(BaseModel):
 
 @router.patch("/{table_id}")
 async def patch_schema(
-    table_id: str,
+    table_id: int,
     data: SchemaPatch,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),

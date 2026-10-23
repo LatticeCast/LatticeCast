@@ -27,7 +27,7 @@ router = APIRouter(prefix="/tables", tags=["tables"])
 
 @router.post("/{table_id}/columns", status_code=status.HTTP_201_CREATED)
 async def create_column(
-    table_id: str,
+    table_id: int,
     data: ColumnCreate,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
@@ -54,7 +54,7 @@ async def create_column(
 
 @router.patch("/{table_id}/columns/{column_id}")
 async def update_column(
-    table_id: str,
+    table_id: int,
     column_id: str,
     data: ColumnUpdate,
     user: User = Depends(get_current_user),
@@ -87,7 +87,7 @@ async def update_column(
 
 @router.delete("/{table_id}/columns/{column_id}")
 async def delete_column(
-    table_id: str,
+    table_id: int,
     column_id: str,
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),

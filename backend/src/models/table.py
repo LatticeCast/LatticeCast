@@ -48,16 +48,21 @@ class ColumnUpdate(SQLModel):
 
 
 class Table(SQLModel, table=True):
-    """Table identity — (workspace_id, table_id) composite PK."""
+    """Table identity — table_id is the database-assigned identity, table_name the
+    name humans and LatticeQL use."""
 
     __tablename__ = "tables"
 
-    workspace_id: UUID = Field(
+    table_id: int | None = Field(
+        default=None,
         primary_key=True,
-        foreign_key="workspaces.workspace_id",
-        description="Workspace UUID (composite PK)",
+        description="Database-assigned identity (BIGINT)",
     )
-    table_id: str = Field(primary_key=True, description="Table name (composite PK)")
+    workspace_id: UUID = Field(
+        foreign_key="workspaces.workspace_id",
+        description="Workspace UUID",
+    )
+    table_name: str = Field(description="Table name (unique within the workspace)")
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
@@ -65,7 +70,7 @@ class Table(SQLModel, table=True):
 class TableCreate(SQLModel):
     """Schema for creating a table."""
 
-    table_id: str = Field(..., description="Table name (becomes the PK)")
+    table_name: str = Field(..., description="Table name (unique within the workspace)")
     workspace_id: str | None = Field(default=None, description="Target workspace UUID or workspace_name")
 
 
@@ -75,7 +80,8 @@ class TableResponse(SQLModel):
     has a single shape to consume."""
 
     workspace_id: UUID
-    table_id: str
+    table_id: int
+    table_name: str
     columns: list[dict[str, Any]] = Field(default_factory=list)
     view_order: list[int] = Field(
         default_factory=list,
@@ -94,6 +100,6 @@ class TableResponse(SQLModel):
 
 
 class TableUpdate(SQLModel):
-    """Rename a table_id."""
+    """Rename a table (the identity does not move)."""
 
-    table_id: str = Field(..., description="New table name")
+    table_name: str = Field(..., description="New table name")

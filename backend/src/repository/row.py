@@ -17,7 +17,7 @@ class RowRepository:
     async def create(
         self,
         workspace_id: UUID,
-        table_id: str,
+        table_id: int,
         row_data: dict[str, Any] | None = None,
         created_by: UUID | None = None,
         updated_by: UUID | None = None,
@@ -36,7 +36,7 @@ class RowRepository:
             """),
             {
                 "workspace_id": str(workspace_id),
-                "table_id": str(table_id),
+                "table_id": table_id,
                 "row_data": json.dumps(row_data or {}),
                 "created_by": str(created_by) if created_by else None,
                 "updated_by": str(updated_by) if updated_by else None,
@@ -55,12 +55,12 @@ class RowRepository:
             updated_at=r["updated_at"],
         )
 
-    async def get_by_number(self, workspace_id: UUID, table_id: str, row_id: int) -> Row | None:
+    async def get_by_number(self, workspace_id: UUID, table_id: int, row_id: int) -> Row | None:
         statement = select(Row).where(Row.workspace_id == workspace_id, Row.table_id == table_id, Row.row_id == row_id)
         result = await self.session.execute(statement.execution_options(populate_existing=True))
         return result.scalar_one_or_none()
 
-    async def lock_for_write(self, workspace_id: UUID, table_id: str, row_id: int) -> Row:
+    async def lock_for_write(self, workspace_id: UUID, table_id: int, row_id: int) -> Row:
         """RLS must authorize UPDATE before any external storage side effect.
 
         The no-op UPDATE acquires a transaction-scoped row lock and applies
@@ -86,7 +86,7 @@ class RowRepository:
         return row
 
     async def list_by_table(
-        self, workspace_id: UUID, table_id: str, offset: int = 0, limit: int = 100, sort: str = "desc"
+        self, workspace_id: UUID, table_id: int, offset: int = 0, limit: int = 100, sort: str = "desc"
     ) -> list[Row]:
         order = Row.row_id.desc() if sort == "desc" else Row.row_id.asc()
         statement = (
@@ -113,7 +113,7 @@ class RowRepository:
             """),
             {
                 "workspace_id": str(row.workspace_id),
-                "table_id": str(row.table_id),
+                "table_id": row.table_id,
                 "row_id": row.row_id,
                 "patch": json.dumps(data.row_data),
             },
@@ -138,7 +138,7 @@ class RowRepository:
             """),
             {
                 "workspace_id": str(row.workspace_id),
-                "table_id": str(row.table_id),
+                "table_id": row.table_id,
                 "row_id": row.row_id,
                 "data": json.dumps(data.row_data),
             },
@@ -172,7 +172,7 @@ class RowRepository:
             """),
             {
                 "workspace_id": str(row.workspace_id),
-                "table_id": str(row.table_id),
+                "table_id": row.table_id,
                 "row_id": row.row_id,
                 "column_id": column_id,
                 "metadata": json.dumps(metadata),
@@ -203,7 +203,7 @@ class RowRepository:
         await self.session.commit()
 
     async def filter_by_jsonb(
-        self, workspace_id: UUID, table_id: str, contains: dict[str, Any], offset: int = 0, limit: int = 100
+        self, workspace_id: UUID, table_id: int, contains: dict[str, Any], offset: int = 0, limit: int = 100
     ) -> list[Row]:
         """Filter rows where row_data @> contains (JSONB containment query using GIN index)."""
         statement = (

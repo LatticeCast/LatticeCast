@@ -62,7 +62,12 @@ async def _build_schema(workspace_id: str, session: Any) -> dict[str, Any]:
                 "id": c["column_id"],
                 "type": kind,
             }
-        out[t.table_id] = {"table_id": t.table_id, "columns": columns}
+        # LQL references tables by name: (workspace_id, table_name) is unique,
+        # and table_name is right here on the row. The value carries the
+        # identity the compiler embeds in the SQL.
+        if t.table_id is None:
+            continue
+        out[t.table_name] = {"table_id": int(t.table_id), "columns": columns}
     return out
 
 

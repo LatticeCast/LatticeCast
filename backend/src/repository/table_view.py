@@ -23,7 +23,7 @@ class TableViewRepository:
 
     # ── Row access ────────────────────────────────────────────────────────
 
-    async def list_all(self, workspace_id: UUID, table_id: str) -> list[TableView]:
+    async def list_all(self, workspace_id: UUID, table_id: int) -> list[TableView]:
         await reapply_rls_context(self.session)
         # populate_existing=True forces SA to overwrite any cached
         # TableView instances in the identity map with fresh DB rows.
@@ -39,7 +39,7 @@ class TableViewRepository:
         return list(result.scalars().all())
 
     async def get_by_id(
-        self, workspace_id: UUID, table_id: str, view_id: int
+        self, workspace_id: UUID, table_id: int, view_id: int
     ) -> TableView | None:
         await reapply_rls_context(self.session)
         result = await self.session.execute(
@@ -52,7 +52,7 @@ class TableViewRepository:
         return result.scalar_one_or_none()
 
     async def get_by_name(
-        self, workspace_id: UUID, table_id: str, name: str
+        self, workspace_id: UUID, table_id: int, name: str
     ) -> TableView | None:
         await reapply_rls_context(self.session)
         result = await self.session.execute(
@@ -83,7 +83,7 @@ class TableViewRepository:
     async def create_view(
         self,
         workspace_id: UUID,
-        table_id: str,
+        table_id: int,
         config: dict[str, Any],
         created_by: UUID,
     ) -> dict[str, Any]:
@@ -108,7 +108,7 @@ class TableViewRepository:
     async def update_view(
         self,
         workspace_id: UUID,
-        table_id: str,
+        table_id: int,
         view_id: int,
         patch: dict[str, Any],
         updated_by: UUID,
@@ -135,7 +135,7 @@ class TableViewRepository:
     async def delete_view(
         self,
         workspace_id: UUID,
-        table_id: str,
+        table_id: int,
         view_id: int,
         deleted_by: UUID,
     ) -> dict[str, Any]:
@@ -159,7 +159,7 @@ class TableViewRepository:
     # ── Schema reads (tables.config) ──────────────────────────────────────
 
     async def get_tables_schema(
-        self, workspace_id: UUID, table_id: str
+        self, workspace_id: UUID, table_id: int
     ) -> dict[str, Any]:
         """Return the entire schema snapshot the FE needs to render a
         table: {columns, view_order, default_view, views}. Used by GET
@@ -201,7 +201,7 @@ class TableViewRepository:
     async def set_order(
         self,
         workspace_id: UUID,
-        table_id: str,
+        table_id: int,
         view_order: list[int],
         updated_by: UUID,
     ) -> dict[str, Any]:
@@ -223,7 +223,7 @@ class TableViewRepository:
     async def set_default_view(
         self,
         workspace_id: UUID,
-        table_id: str,
+        table_id: int,
         view_id: int | None,
         updated_by: UUID,
     ) -> dict[str, Any]:
@@ -245,7 +245,7 @@ class TableViewRepository:
     async def update_col_order(
         self,
         workspace_id: UUID,
-        table_id: str,
+        table_id: int,
         col_order: list[str],
         updated_by: UUID,
     ) -> dict[str, Any]:
@@ -267,7 +267,7 @@ class TableViewRepository:
     async def add_column(
         self,
         workspace_id: UUID,
-        table_id: str,
+        table_id: int,
         name: str,
         col_type: str,
         options: dict[str, Any],
@@ -293,7 +293,7 @@ class TableViewRepository:
     async def update_column(
         self,
         workspace_id: UUID,
-        table_id: str,
+        table_id: int,
         column_id: str,
         patch: dict[str, Any],
         updated_by: UUID,
@@ -319,7 +319,7 @@ class TableViewRepository:
     async def delete_column(
         self,
         workspace_id: UUID,
-        table_id: str,
+        table_id: int,
         column_id: str,
         deleted_by: UUID,
     ) -> dict[str, Any]:
