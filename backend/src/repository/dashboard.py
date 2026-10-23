@@ -11,15 +11,12 @@ class DashboardRepository:
     async def execute(
         session: AsyncSession,
         sql: str,
-        param_specs: list[dict],
-        runtime_params: dict[str, Any] | None = None,
+        params: dict[str, Any],
     ) -> list[dict[str, Any]]:
         """Execute a pre-compiled LatticeQL query and return rows as dicts.
 
-        param_specs is always empty today: compile_lql inlines $1 itself --
-        LatticeQL does not, contrary to what this docstring used to say -- and
-        rejects a query that still carries $2 or higher, because the names
-        behind those placeholders are not exposed by its API.
+        ``compile_lql`` resolves the LQL table name in its authorised workspace
+        and supplies the resulting numeric identity as a bound value.
         """
-        result = await session.execute(text(sql))
+        result = await session.execute(text(sql), params)
         return [dict(row) for row in result.mappings().all()]

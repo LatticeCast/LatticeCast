@@ -62,12 +62,9 @@ async def _build_schema(workspace_id: str, session: Any) -> dict[str, Any]:
                 "id": c["column_id"],
                 "type": kind,
             }
-        # LQL references tables by name: (workspace_id, table_name) is unique,
-        # and table_name is right here on the row. The value carries the
-        # identity the compiler embeds in the SQL.
-        if t.table_id is None:
-            continue
-        out[t.table_name] = {"table_id": int(t.table_id), "columns": columns}
+        # LQL input is a workspace-local name and column schema only. Numeric
+        # IDs are resolved after compilation under this workspace boundary.
+        out[t.table_name] = {"columns": columns}
     return out
 
 
@@ -94,30 +91,31 @@ async def invalidate_schema_cache(workspace_id: str) -> None:
         pass
 
 
-# LatticeQL 0.5 binds no parameters of its own: a query names tables, the
-# compiler inlines their numeric identity, and the schema it compiled against
-# already scoped the query to this workspace. Any $N left in the text comes
-# from an unsupported `$param` reference, so fail here rather than hand
-# PostgreSQL a query it cannot execute. An unbound placeholder used to reach
-# the database and come back as 'there is no parameter $1' -- a 500 that reads
-# like a server fault for what is really an unsupported query. Supporting
-# parameters needs LatticeQL to expose the names behind them; reproducing its
-# numbering on this side would couple us to its internals.
+# LatticeQL binds nothing of its own: the table name from the query is inlined
+# as a literal and the host supplies :workspace_id, which the compiler emits as
+# CAST(:workspace_id AS uuid) so the workspace claim is a bound value, never
+# text. Any $N left in the text comes from an unsupported `$param` reference,
+# so fail here rather than hand PostgreSQL a query it cannot execute. An
+# unbound placeholder used to reach the database and come back as 'there is no
+# parameter $1' -- a 500 that reads like a server fault for what is really an
+# unsupported query. Supporting parameters needs LatticeQL to expose the names
+# behind them; reproducing its numbering on this side would couple us to its
+# internals.
 _UNBOUND_PARAM = re.compile(r"\$([1-9]\d*)")
 
 
-async def compile_lql(lql: str, workspace_id: str, session: Any) -> tuple[str, list]:
+async def compile_lql(lql: str, workspace_id: str, session: Any) -> tuple[str, dict[str, str]]:
     schema = await get_schema(workspace_id, session)
     try:
-        sql = _compile(lql, schema)
+        compiled = _compile(lql, schema)
     except LatticeQLError as e:
         raise ValueError(str(e)) from e
 
-    leftover = sorted({int(n) for n in _UNBOUND_PARAM.findall(sql)})
+    leftover = sorted({int(n) for n in _UNBOUND_PARAM.findall(compiled.sql)})
     if leftover:
         placeholders = ", ".join(f"${n}" for n in leftover)
         raise ValueError(
             f"query parameters are not supported yet: {placeholders} left unbound"
         )
 
-    return sql, []
+    return compiled.sql, {"workspace_id": workspace_id}

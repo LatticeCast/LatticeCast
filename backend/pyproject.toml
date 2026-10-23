@@ -1,6 +1,6 @@
 [project]
 name = "lattice-cast-backend"
-version = "0.81.0"
+version = "0.82.0"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi",
@@ -15,7 +15,7 @@ dependencies = [
     "python-jose",
     "passlib",
     "aioboto3",
-    "lattice-ql @ git+https://github.com/latticeCast/LatticeQL@0.5.0",
+    "lattice-ql @ git+https://github.com/latticeCast/LatticeQL@0.6.1",
 ]
 
 [project.optional-dependencies]

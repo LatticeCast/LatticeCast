@@ -553,7 +553,7 @@ wheels = [
 
 [[package]]
 name = "lattice-cast-backend"
-version = "0.81.0"
+version = "0.82.0"
 source = { virtual = "." }
 dependencies = [
     { name = "aioboto3" },
@@ -583,7 +583,7 @@ requires-dist = [
     { name = "asyncpg" },
     { name = "fastapi" },
     { name = "httpx" },
-    { name = "lattice-ql", git = "https://github.com/latticeCast/LatticeQL?rev=0.5.0" },
+    { name = "lattice-ql", git = "https://github.com/latticeCast/LatticeQL?rev=0.6.1" },
     { name = "passlib" },
     { name = "pydantic", extras = ["email"] },
     { name = "pydantic-settings" },
@@ -599,8 +599,8 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "lattice-ql"
-version = "0.5.0"
-source = { git = "https://github.com/latticeCast/LatticeQL?rev=0.5.0#79747e64179058a6f73fb54174830222bbc6b019" }
+version = "0.6.1"
+source = { git = "https://github.com/latticeCast/LatticeQL?rev=0.6.1#9be90b2ddc3ab31665a83800c4a535fe04bbcc45" }
 
 [[package]]
 name = "multidict"

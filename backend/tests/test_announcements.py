@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
+from uuid import UUID
 
 
 def _run(coro):
@@ -23,10 +25,12 @@ class TestAnnouncementQuery:
             )
 
             session = AsyncMock()
-            caller = object()
             caller_lql = 'table("Announcements") | limit(10)'
             compiled_sql = "SELECT title FROM rows"
-            compiled_params: list[dict] = []
+            compiled_params = {
+                "workspace_id": ANNOUNCEMENT_WORKSPACE_ID,
+                "table_name": "announcement",
+            }
             expected_rows = [{"title": "Maintenance window"}]
             expected_schema = {"columns": [{"name": "Title", "column_id": "c-title"}], "views": []}
 
@@ -36,6 +40,12 @@ class TestAnnouncementQuery:
                     return_value=AsyncMock(get_tables_schema=AsyncMock(return_value=expected_schema)),
                 ) as schema_repo,
                 patch(
+                    "router.api.announcements.TableRepository",
+                    return_value=AsyncMock(
+                        resolve_table_global=AsyncMock(return_value=SimpleNamespace(table_id=42))
+                    ),
+                ),
+                patch(
                     "router.api.announcements.compile_lql",
                     new=AsyncMock(return_value=(compiled_sql, compiled_params)),
                 ) as compile_lql,
@@ -44,12 +54,12 @@ class TestAnnouncementQuery:
                     new=AsyncMock(return_value=expected_rows),
                 ) as execute,
             ):
-                response = await query_announcements(AnnouncementQueryRequest(lql=caller_lql), caller, session)
+                response = await query_announcements(AnnouncementQueryRequest(lql=caller_lql), session)
 
             assert response == {"rows": expected_rows, "columns": expected_schema["columns"]}
             schema_repo.return_value.get_tables_schema.assert_awaited_once_with(
-                ANNOUNCEMENT_WORKSPACE_ID,
-                "announcement",
+                UUID(ANNOUNCEMENT_WORKSPACE_ID),
+                42,
             )
             compile_lql.assert_awaited_once_with(caller_lql, ANNOUNCEMENT_WORKSPACE_ID, session)
             execute.assert_awaited_once_with(session, compiled_sql, compiled_params)

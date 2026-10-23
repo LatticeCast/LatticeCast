@@ -1,15 +1,16 @@
 """
 Tests for config/lattice_ql.py — schema cache + compile helper.
 
-Unit test:    mock the PG cache (config.pg_cache) + TableRepository;
-              assert compile_lql returns (sql, params).
+Unit test:    mock the PG cache + table schema reads; assert the backend binds
+              its authorised workspace to compiler output.
 Integration:  real workspace + table; verify schema shape and compile output.
               Execution via asyncpg is marked xfail: the SQL LatticeQL generates
               references `tables.table_name` which was dropped in migration V21.
               Full execution requires a DB schema update (future work).
 
 Run inside Docker:
-    docker compose exec -T backend python -m pytest tests/test_lattice_ql.py -v
+    docker compose exec -T backend sh -lc \
+      'cd /app && PYTHONPATH=/app/src .venv/bin/python -m pytest tests/test_lattice_ql.py -v'
 """
 
 from __future__ import annotations
@@ -35,13 +36,14 @@ class TestCompileLql:
 
     def _make_table(self, name: str, col_name: str = "status", col_type: str = "select") -> MagicMock:
         table = MagicMock()
-        table.table_id = name
+        table.table_id = 101
+        table.table_name = name
         table.workspace_id = "ws-uuid-0001"
         table.columns = [{"name": col_name, "column_id": "col-001", "type": col_type}]
         return table
 
     def test_compile_lql_returns_tuple(self):
-        """compile_lql(lql, workspace_id, session) returns (sql: str, params: list)."""
+        """compile_lql(lql, workspace_id, session) returns (sql, params: dict)."""
 
         async def _run_test():
             # Arrange: cache returns a miss, TableRepository returns one table
@@ -53,9 +55,13 @@ class TestCompileLql:
                 patch("config.lattice_ql.cache_get", AsyncMock(return_value=None)),
                 patch("config.lattice_ql.cache_set", AsyncMock()),
                 patch("config.lattice_ql.TableRepository") as MockRepo,
+                patch("config.lattice_ql.TableViewRepository") as MockViewRepo,
             ):
                 instance = MockRepo.return_value
                 instance.list_by_workspace = AsyncMock(return_value=[fake_table])
+                MockViewRepo.return_value.get_tables_schema = AsyncMock(
+                    return_value={"columns": fake_table.columns}
+                )
 
                 from config.lattice_ql import compile_lql
 
@@ -70,7 +76,10 @@ class TestCompileLql:
             assert len(result) == 2, "tuple must have exactly 2 elements (sql, params)"
             sql, params = result
             assert isinstance(sql, str) and sql.strip(), "sql must be a non-empty string"
-            assert isinstance(params, (list, tuple)), "params must be a list or tuple"
+            assert params == {"workspace_id": "00000000-0000-0000-0000-000000000001"}
+            assert "table_name = 'Tasks'" in sql
+            assert ":table_name" not in sql
+            assert "workspace_id = CAST(:workspace_id AS uuid)" in sql
 
         _run(_run_test())
 
@@ -80,7 +89,6 @@ class TestCompileLql:
         async def _run_test():
             cached_schema = {
                 "Tasks": {
-                    "table_id": "tasks-tbl",
                     "columns": {"status": {"id": "col-001", "type": "select"}},
                 }
             }
@@ -107,6 +115,8 @@ class TestCompileLql:
             instance.list_by_workspace.assert_not_called()
             sql, params = result
             assert isinstance(sql, str) and sql.strip()
+            assert params == {"workspace_id": "00000000-0000-0000-0000-000000000001"}
+            assert "table_name = 'Tasks'" in sql
 
         _run(_run_test())
 
@@ -114,7 +124,7 @@ class TestCompileLql:
         """LatticeQLError is converted to ValueError with kind:message."""
 
         async def _run_test():
-            cached_schema = {"Tasks": {"table_id": "t", "columns": {}}}
+            cached_schema = {"Tasks": {"columns": {}}}
 
             session_mock = MagicMock()
 
@@ -233,7 +243,7 @@ class TestCompileLqlIntegration:
                 )
 
             assert isinstance(sql, str) and sql.strip()
-            assert isinstance(params, (list, tuple))
+            assert params == {"workspace_id": str(ws_id)}
 
         _run(_run_test())
 
@@ -283,7 +293,7 @@ class TestCompileLqlIntegration:
             )
             conn = await asyncpg.connect(db_url)
             try:
-                rows = await conn.fetch(sql, *([ws_id] + list(params)))
+                rows = await conn.fetch(sql, params["workspace_id"])
                 count = rows[0]["measure"]
                 assert count >= 2
             finally:

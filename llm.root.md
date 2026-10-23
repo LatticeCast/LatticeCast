@@ -17,4 +17,4 @@ Browser -> nginx -> SvelteKit | FastAPI -> PostgreSQL (RLS) + S3-compatible stor
 
 ## Guides
 
-`llm.devops.md` workflow/runtime · `llm.frontend.md` UI state · `llm.arch.db.md` DB/RLS · `llm.arch.airtable.md` tables · `llm.views.dashboard.md` dashboards · `llm.storage.md` blobs · `llm.endpoint.md` API · `llm.e2e.md` tests.
+`llm.devops.md` workflow/runtime · `llm.core.md` workspace/table/row/storage invariants · `llm.sso.md` identity, membership, and RLS access · `llm.views.md` PM/CRM/table/dashboard views and LQL · `llm.storage.md` blobs · `llm.e2e.md` API/UI/snapshot verification.

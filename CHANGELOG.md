@@ -1,30 +1,24 @@
 # Changelog
 
+## v0.82 — 2026-10-24 (LatticeQL 0.6.0)
+
+- LatticeQL 0.6.0: the compiler inlines the table name, so a compiled query
+  reads only its own table; the backend supplies `:workspace_id` alone.
+- Post-aggregate `filter` (HAVING) now runs; row lists project
+  `row_id`/`row_data` only.
+- Pool checkout clears `app.current_user_id` and each transaction re-applies it,
+  so RLS can never answer with the previous caller's identity and a commit
+  cannot drop the current caller's.
+
 ## v0.81 — 2026-10-23 (table-scoped child storage)
 
-- Drop `workspace_id` from `rows`, `table_views`, `private.table_row_counters`
-  and `private.blob_objects` (V71). Children are keyed and foreign-keyed by
-  `table_id`, so a row can no longer be stored under a workspace its table does
-  not belong to — the mismatch V68's single-column foreign key allowed.
-- Authorise children by table: RLS policies resolve the caller's legal table ids
-  from the workspace grants (`current_user_tables('read'|'write')`) instead of
-  comparing a workspace column on the child.
-- Resolve canonical-timestamp columns by `table_id`, so the row trigger no
-  longer reads a field the row does not have.
-- `migration/scripts/move_table_storage.py`: verify what was actually copied —
-  every archived row's data, ownership and timestamps, every view's config and
-  every counter — and roll back when any of it disagrees; count archived tables
-  straight from the archive, so a table that never got a copy fails instead of
-  falling outside every mapped-table check; converge to the archive on re-run
-  instead of double-inserting; drop the placeholder view V70 seeds, identified
-  by the V70 transaction itself so a user view with the same config survives;
-  commit only after the checks pass.
-- Use LatticeQL 0.5.0: generated queries address rows by `table_id` alone, so
-  query parameters start at `$1` and the backend no longer inlines a workspace
-  literal.
-- ORM: `table_id`, `row_id` and `view_id` are `BIGINT`, so SQLAlchemy stops
-  down-casting them to `::INTEGER` and identities above int32 survive the round
-  trip; primary keys are the table-scoped keys.
+- V71 makes `table_id` the sole parent identity for rows, views, row counters,
+  and blob metadata; redundant child `workspace_id` values are removed, closing
+  the cross-workspace mismatch V68 permitted.
+- RLS resolves permitted table IDs from workspace grants; timestamp triggers,
+  composite BIGINT ORM keys, and child primary keys now match that model.
+- Storage migration verifies archived rows, views, counters, and blobs before
+  commit, converges safely on re-run, and removes only V70 placeholder views.
 
 ## v0.80 — 2026-10-23
 

@@ -32,7 +32,7 @@ def _run(coro):
 
 
 class TestExecute:
-    """DashboardRepository.execute() with empty params uses session.execute(text(sql))."""
+    """DashboardRepository.execute() binds compiler-provided query parameters."""
 
     def _make_session(self, rows: list[dict]) -> AsyncMock:
         result_mock = MagicMock()
@@ -46,7 +46,7 @@ class TestExecute:
             session = self._make_session([])
             from repository.dashboard import DashboardRepository
 
-            rows = await DashboardRepository.execute(session, "SELECT 1", [], None)
+            rows = await DashboardRepository.execute(session, "SELECT 1", {})
             assert rows == []
             session.execute.assert_called_once()
 
@@ -58,7 +58,7 @@ class TestExecute:
             session = self._make_session(fake_rows)
             from repository.dashboard import DashboardRepository
 
-            rows = await DashboardRepository.execute(session, "SELECT 1", [], None)
+            rows = await DashboardRepository.execute(session, "SELECT 1", {})
             assert rows == [{"measure": 5}, {"measure": 3}]
 
         _run(_run_test())
@@ -71,23 +71,28 @@ class TestExecute:
             session = self._make_session([])
             from repository.dashboard import DashboardRepository
 
-            await DashboardRepository.execute(session, "SELECT 42 AS n", [], None)
+            await DashboardRepository.execute(session, "SELECT 42 AS n", {})
             call_args = session.execute.call_args
             stmt = call_args[0][0]
             assert isinstance(stmt, TextClause)
 
         _run(_run_test())
 
-    def test_execute_ignores_runtime_params_when_empty_params(self):
-        """runtime_params are accepted but don't change the empty-params path."""
+    def test_execute_passes_compiler_params(self):
+        """The workspace/table-name bindings reach SQLAlchemy unchanged."""
 
         async def _run_test():
             session = self._make_session([{"count": 7}])
             from repository.dashboard import DashboardRepository
 
-            rows = await DashboardRepository.execute(session, "SELECT 7 AS count", [], {"sprint": "Q1"})
+            params = {
+                "workspace_id": "00000000-0000-0000-0000-000000000001",
+                "table_name": "Tasks",
+            }
+            rows = await DashboardRepository.execute(session, "SELECT 7 AS count", params)
             assert rows == [{"count": 7}]
             session.execute.assert_called_once()
+            assert session.execute.call_args.args[1] == params
 
         _run(_run_test())
 

@@ -209,7 +209,7 @@ def test_rls_only_authorization(page, workspace, admin_token, snapshot):
         assert len(owners) == 1, f"expected exactly one owner, got {owners}"
         assert len(roster) == 2, f"expected owner + member, got {list(roster)}"
 
-        # Reading another member's grants requires 'owner' (llm.user.md), so the
+        # Reading another member's grants requires 'owner' (llm.sso.md), so the
         # route refuses the 'read' member outright rather than answering with a
         # self-only list — strictly less disclosure than RLS alone would give.
         response = api("GET", f"/api/v1/workspaces/{shared_ws_id}/members", member_token)

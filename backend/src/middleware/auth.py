@@ -83,10 +83,12 @@ async def get_rls_session(
 ) -> AsyncSession:
     """App session with PG RLS user context set via set_config.
 
-    No manual reset: when the session closes and returns the connection to
-    the asyncpg pool, the pool runs `DISCARD ALL` on release, which clears
-    all session-level settings (incl. `app.current_user_id`). So the next
-    request starts clean even if this one aborted.
+    Nothing is reset here on purpose: the app engine clears
+    `app.current_user_id` on every pool checkout (core.db
+    `install_rls_reset_hook`), so a recycled connection never carries the
+    previous request's identity. SQLAlchemy's asyncpg pool only rolls back on
+    release -- it does not DISCARD/RESET session state -- which is why the
+    reset lives on the pool, not on this dependency.
     """
     await set_rls_context(session, str(user.user_id))
     yield session
