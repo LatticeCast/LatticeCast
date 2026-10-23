@@ -13,9 +13,12 @@
   longer reads a field the row does not have.
 - `migration/scripts/move_table_storage.py`: verify what was actually copied —
   every archived row's data, ownership and timestamps, every view's config and
-  every counter — and roll back when any of it disagrees; converge to the
-  archive on re-run instead of double-inserting; drop the placeholder view V70
-  seeds when the archive has none; commit only after the checks pass.
+  every counter — and roll back when any of it disagrees; count archived tables
+  straight from the archive, so a table that never got a copy fails instead of
+  falling outside every mapped-table check; converge to the archive on re-run
+  instead of double-inserting; drop the placeholder view V70 seeds, identified
+  by the V70 transaction itself so a user view with the same config survives;
+  commit only after the checks pass.
 - Use LatticeQL 0.5.0: generated queries address rows by `table_id` alone, so
   query parameters start at `$1` and the backend no longer inlines a workspace
   literal.

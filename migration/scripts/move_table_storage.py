@@ -133,11 +133,18 @@ SET config     = excluded.config,
 
 # V70 seeds a placeholder announcement view before the move runs, so on a
 # cutover database its view_id can differ from the archived one and the copy
-# would leave both. The seed is a migration artefact, not user data: drop it
-# when the archive has no view with that id.
+# would leave both. The seed is a migration artefact, not user data — but only
+# the row V70 itself created may be dropped, so the delete is bound to that
+# migration's own transaction: created_at is the instant recorded in
+# schema_migrations.applied_at, which no user view can carry. Everything else
+# (a view a user added with the same config) is left alone and reported by the
+# totals instead.
 DELETE_SEEDED_VIEWS = f"""
 DELETE FROM public.table_views AS seeded
-WHERE seeded.config = '{{"name": "announcement", "type": "table"}}'::JSONB
+USING private.schema_migrations AS applied
+WHERE applied.filename = 'V70__reseed_announcement_table.sql'
+  AND seeded.created_at = applied.applied_at
+  AND seeded.config = '{{"name": "announcement", "type": "table"}}'::JSONB
   AND EXISTS (
       SELECT 1 FROM {MAPPING} AS map
       WHERE map.new_table_id = seeded.table_id
@@ -226,12 +233,16 @@ $$;
 
 CHECKS = f"""
 WITH
-missing_tables AS (
+unmapped_tables AS (
+    -- Read straight from the archive, never from the mapping: a table with no
+    -- counterpart produces no mapping row, so a check that walks the mapping
+    -- would silently skip the very table that failed to move.
     SELECT count(*) AS n
-    FROM {MAPPING} AS map
+    FROM public.tables_old AS old
     WHERE NOT EXISTS (
         SELECT 1 FROM public.tables AS new
-        WHERE new.table_id = map.new_table_id
+        WHERE new.workspace_id = old.workspace_id
+          AND new.table_name   = old.table_id
     )
 ),
 row_drift AS (
@@ -288,8 +299,8 @@ blob_drift AS (
      AND  new.column_id  = old.column_id
     WHERE new.object_key IS NULL
 )
-SELECT 'archived tables missing'          AS claim, n, n > 0 AS broken
-FROM missing_tables
+SELECT 'archived tables without a copy'    AS claim, n, n > 0 AS broken
+FROM unmapped_tables
 UNION ALL SELECT 'row content/identity drift', n, n > 0 FROM row_drift
 UNION ALL SELECT 'view config drift',          n, n > 0 FROM view_drift
 UNION ALL SELECT 'row-id counter drift',       n, n > 0 FROM counter_drift
