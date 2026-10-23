@@ -8,7 +8,7 @@ Browser -> nginx -> SvelteKit | FastAPI -> PostgreSQL (RLS) + S3-compatible stor
 
 ## Rules
 
-- Identity: `workspace_id`; table identity: `(workspace_id, table_id)`; row/view IDs are per-table numbers.
+- Identity: `workspace_id`; table identity: `table_id` (BIGINT, DB-assigned), display name `table_name` unique per workspace; row/view IDs are per-table numbers.
 - Schema is `tables.config`; `rows.row_data` is keyed by column UUID.
 - Every RDS time column is `TIMESTAMPTZ` and represents a UTC instant. Only `rows.row_data` `date`/`datetime` cells are epoch-millisecond JSON numbers; localisation is the frontend's job.
 - PostgreSQL RLS is the authorization boundary, and the only one. The backend does not ask permission questions of its own. UI follows controller -> API -> response -> store -> `$derived` UI; components never duplicate authoritative cache data in local state.

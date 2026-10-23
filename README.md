@@ -58,7 +58,7 @@ docker compose up -d
 ## URL Pattern
 
 ```
-/<workspace_id>/<table_id>          — table detail (Table/Kanban/Timeline views)
+/<workspace_id>/<table_id>          — table detail (table_id is the numeric identity) (Table/Kanban/Timeline views)
 /<workspace_id>/<table_id>?view=X   — specific view
 /tables                             — tables list
 ```

@@ -137,16 +137,19 @@ def main():
     ws_id = ws["workspace_id"]
     print(f"User: {args.user} | Workspace: {ws['workspace_name']} ({ws_id})")
 
-    # Delete if exists, then recreate fresh
+    # Delete if the name is taken, then recreate fresh. The identity is assigned
+    # by the database, so the name is only the label.
     tables = http("GET", f"{args.base_url}/api/v1/tables", token)
-    if any(t["table_id"] == TBL for t in tables):
-        http("DELETE", f"{args.base_url}/api/v1/tables/{TBL}", token)
-        print(f"Deleted existing table {TBL}")
+    for existing in tables:
+        if existing["table_name"] == TBL:
+            http("DELETE", f"{args.base_url}/api/v1/tables/{existing['table_id']}", token)
+            print(f"Deleted existing table {TBL}")
 
     table = http("POST", f"{args.base_url}/api/v1/tables/template/crm", token,
-                 {"table_id": TBL, "workspace_id": ws_id})
+                 {"table_name": TBL, "workspace_id": ws_id})
+    table_id = table["table_id"]
     cols = {c["name"]: c["column_id"] for c in table["columns"]}
-    print(f"Created table {TBL}")
+    print(f"Created table {TBL} (id {table_id})")
 
     inserted = 0
     for title, stage, value, owner, close_date, tags in DEALS:
@@ -154,7 +157,7 @@ def main():
             cols["Title"]: title, cols["Stage"]: stage, cols["Value"]: value,
             cols["Owner"]: owner, cols["Close Date"]: close_date, cols["Tags"]: tags,
         }
-        http("POST", f"{args.base_url}/api/v1/tables/{TBL}/rows", token, {"row_data": row})
+        http("POST", f"{args.base_url}/api/v1/tables/{table_id}/rows", token, {"row_data": row})
         inserted += 1
     print(f"Inserted {inserted} deals")
 
@@ -201,7 +204,7 @@ def main():
     }
 
     for v in (win_loss, forecast):
-        http("POST", f"{args.base_url}/api/v1/tables/{TBL}/views", token, v)
+        http("POST", f"{args.base_url}/api/v1/tables/{table_id}/views", token, v)
         print(f"Added view: {v['name']}")
 
     print(f"\nDone. Open: {args.base_url}/{ws_id}/{TBL}")
