@@ -206,7 +206,7 @@ def verify(psql_fn) -> list[str]:
         "  AND tc.table_name='table_views' "
         "  AND tc.constraint_type='PRIMARY KEY';"
     )
-    expected_pk = "workspace_id,table_id,view_id"
+    expected_pk = "table_id,view_id"
     if result.strip() != expected_pk:
         errors.append(
             f"WRONG PK: table_views expected '{expected_pk}' "

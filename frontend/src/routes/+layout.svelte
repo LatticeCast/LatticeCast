@@ -103,7 +103,7 @@
 			refreshSidebar();
 			return;
 		}
-		const tableId = $page.params.table_id;
+		const tableId = Number($page.params.table_id);
 		if (tableId) {
 			const known = $tablesByWorkspace[ws.workspace_id]?.some((t) => t.table_id === tableId);
 			if (!known) refreshSidebar();

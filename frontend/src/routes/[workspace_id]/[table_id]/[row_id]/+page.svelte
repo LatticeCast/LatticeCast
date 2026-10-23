@@ -14,7 +14,7 @@
 	import type { Row, Table } from '$lib/types/table';
 	import CreateTicketModal from '$lib/components/table/CreateTicketModal.svelte';
 
-	const tableId = $derived($page.params.table_id ?? '');
+	const tableId = $derived(Number($page.params.table_id ?? 0));
 	const rowNumberParam = $derived(parseInt($page.params.row_id ?? '0', 10));
 	const workspaceId = $derived($page.params.workspace_id ?? '');
 

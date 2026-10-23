@@ -12,7 +12,7 @@
 		blockId
 	}: {
 		block: ChartBlock;
-		tableId: string;
+		tableId: number;
 		viewName: string;
 		blockId: string;
 	} = $props();

@@ -14,7 +14,7 @@ export function isUuid(s: string): boolean {
  * Uses workspace_id (UUID) — stable across renames; the layout prettifies
  * the URL to the workspace name afterwards.
  */
-export function tablePath(workspaceId: string, tableId: string): string {
+export function tablePath(workspaceId: string, tableId: number): string {
 	return `/${workspaceId}/${tableId}`;
 }
 
@@ -22,7 +22,7 @@ export function navigate(path: string): void {
 	goto(path);
 }
 
-export function navigateToTable(workspaceId: string, tableId: string): void {
+export function navigateToTable(workspaceId: string, tableId: number): void {
 	goto(tablePath(workspaceId, tableId));
 }
 

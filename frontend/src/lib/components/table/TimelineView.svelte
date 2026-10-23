@@ -28,7 +28,7 @@
 		onRowsRefresh = () => {},
 		onAddRow = () => {}
 	}: {
-		tableId: string;
+		tableId: number;
 		columns: Column[];
 		rows: Row[];
 		viewConfig: ViewConfig;

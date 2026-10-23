@@ -76,7 +76,7 @@
 
 	const renderItems = $derived(buildRenderItems(sortedRows, groupedRows, s.collapsedGroups));
 
-	const tableId = $derived($currentTableId ?? '');
+	const tableId = $derived($currentTableId ?? 0);
 	const wsId = $derived($currentWorkspaceId ?? '');
 
 	let loading = $state(true);

@@ -15,7 +15,7 @@
 	}: {
 		row: Row;
 		column: Column;
-		tableId: string;
+		tableId: number;
 		onClose: () => void;
 	} = $props();
 

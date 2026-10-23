@@ -162,7 +162,7 @@
 		creating = { ...creating, [wsId]: true };
 		error = '';
 		try {
-			await createTable({ table_id: name, workspace_id: wsId });
+			await createTable({ table_name: name, workspace_id: wsId });
 			newTableNames = { ...newTableNames, [wsId]: '' };
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create table';
@@ -174,7 +174,7 @@
 	function openTableSettings(table: Table, e: MouseEvent) {
 		e.stopPropagation();
 		tableSettingsTarget = table;
-		tableRenameValue = table.table_id;
+		tableRenameValue = table.table_name;
 		tableSettingsError = '';
 	}
 
@@ -187,7 +187,7 @@
 	async function handleTableRename() {
 		if (!tableSettingsTarget) return;
 		const name = tableRenameValue.trim();
-		if (!name || name === tableSettingsTarget.table_id) {
+		if (!name || name === tableSettingsTarget.table_name) {
 			closeTableSettings();
 			return;
 		}
@@ -195,7 +195,7 @@
 		const duplicate = $tablesStore.some(
 			(t) =>
 				t.workspace_id === wsId &&
-				t.table_id === name &&
+				t.table_name === name &&
 				t.table_id !== tableSettingsTarget!.table_id
 		);
 		if (duplicate) {
@@ -205,7 +205,7 @@
 		tableSaving = true;
 		tableSettingsError = '';
 		try {
-			await updateTable(tableSettingsTarget.table_id, { table_id: name });
+			await updateTable(tableSettingsTarget.table_id, { table_name: name });
 			closeTableSettings();
 		} catch (e) {
 			tableSettingsError = e instanceof Error ? e.message : 'Failed to rename table';
@@ -216,7 +216,8 @@
 
 	async function handleTableDelete() {
 		if (!tableSettingsTarget) return;
-		if (!confirm(`Delete table "${tableSettingsTarget.table_id}"? This cannot be undone.`)) return;
+		if (!confirm(`Delete table "${tableSettingsTarget.table_name}"? This cannot be undone.`))
+			return;
 		tableSaving = true;
 		tableSettingsError = '';
 		try {
@@ -426,7 +427,7 @@
 								class="flex cursor-pointer items-center gap-3 rounded-2xl {T.cardBg} px-4 py-4 shadow-sm transition {T.hoverBg}"
 							>
 								<span class="flex-1 text-left font-medium {T.body}">
-									{table.table_id}
+									{table.table_name}
 								</span>
 								{#if canWriteWorkspace}
 									<button

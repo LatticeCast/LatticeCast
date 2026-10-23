@@ -140,8 +140,10 @@ class TablePageStore {
 		this.schedulePersist();
 	}
 
-	get tableId(): string {
-		return get(page).params.table_id ?? '';
+	get tableId(): number {
+		// The URL still carries the id as text; the API and stores speak numbers.
+		const raw = get(page).params.table_id ?? '';
+		return Number(raw);
 	}
 
 	getColWidth(col: Column): number {
@@ -273,7 +275,7 @@ class TablePageStore {
 		await updateRow(this.tableId, row.row_id, { row_data: data });
 	}
 
-	async handleRefreshRows(tableId: string) {
+	async handleRefreshRows(tableId: number) {
 		await fetchRows(tableId);
 	}
 

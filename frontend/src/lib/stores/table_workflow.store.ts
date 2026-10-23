@@ -127,7 +127,7 @@ export function deriveEdges(rows: Row[], columns: Column[]): Edge[] {
 // ─── Mutations (all go through BE → rows store → $derived re-renders) ────────
 
 export async function addNode(
-	tableId: string,
+	tableId: number,
 	columns: Column[],
 	graphName: string,
 	x: number,
@@ -151,7 +151,7 @@ export async function addNode(
 }
 
 export async function deleteNode(
-	tableId: string,
+	tableId: number,
 	rows: Row[],
 	columns: Column[],
 	rowId: number
@@ -201,7 +201,7 @@ export async function deleteNode(
 }
 
 export async function removeEdgeByParts(
-	tableId: string,
+	tableId: number,
 	rows: Row[],
 	columns: Column[],
 	sourceRowId: number,
@@ -253,7 +253,7 @@ export function parseEdgeId(
 
 // ─── Subgraph CRUD (mutates graph_name column choices) ───────────────────────
 
-export async function addSubgraph(tableId: string, columns: Column[], name: string): Promise<void> {
+export async function addSubgraph(tableId: number, columns: Column[], name: string): Promise<void> {
 	const col = columns.find((c) => c.name === 'graph_name');
 	if (!col) return;
 	const existing = col.options?.choices ?? [];
@@ -264,7 +264,7 @@ export async function addSubgraph(tableId: string, columns: Column[], name: stri
 }
 
 export async function renameSubgraph(
-	tableId: string,
+	tableId: number,
 	columns: Column[],
 	rows: Row[],
 	oldName: string,
@@ -292,7 +292,7 @@ export async function renameSubgraph(
 }
 
 export async function removeSubgraph(
-	tableId: string,
+	tableId: number,
 	columns: Column[],
 	rows: Row[],
 	graphName: string

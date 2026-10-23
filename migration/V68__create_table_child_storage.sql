@@ -24,10 +24,17 @@ CREATE TABLE IF NOT EXISTS public.rows (
     updated_by   UUID,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT rows_pkey PRIMARY KEY (workspace_id, table_id, row_id),
+    -- table_id is globally unique, so workspace_id would be a redundant key
+    -- component; it stays a column for RLS.
+    CONSTRAINT rows_pkey PRIMARY KEY (table_id, row_id),
     CONSTRAINT rows_table_fkey FOREIGN KEY (table_id)
         REFERENCES public.tables (table_id) ON DELETE CASCADE
 );
+
+-- RLS predicates filter on workspace_id, so it stays a column and gets its own
+-- index: the primary key can no longer serve a workspace-wide scan.
+CREATE INDEX IF NOT EXISTS idx_rows_workspace_table
+    ON public.rows (workspace_id, table_id);
 
 CREATE TABLE IF NOT EXISTS public.table_views (
     workspace_id UUID        NOT NULL,
@@ -38,7 +45,7 @@ CREATE TABLE IF NOT EXISTS public.table_views (
     updated_by   UUID,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT table_views_pkey PRIMARY KEY (workspace_id, table_id, view_id),
+    CONSTRAINT table_views_pkey PRIMARY KEY (table_id, view_id),
     CONSTRAINT table_views_valid_type CHECK (
         config ->> 'type' IN (
             'table',
@@ -51,6 +58,10 @@ CREATE TABLE IF NOT EXISTS public.table_views (
     CONSTRAINT table_views_table_fkey FOREIGN KEY (table_id)
         REFERENCES public.tables (table_id) ON DELETE CASCADE
 );
+
+-- Same reason as rows: keep the RLS column indexed.
+CREATE INDEX IF NOT EXISTS idx_table_views_workspace_table
+    ON public.table_views (workspace_id, table_id);
 
 -- Counter rows are reached only through the SECURITY DEFINER trigger
 -- function, so neither app nor mgr needs privileges here.
@@ -70,8 +81,8 @@ CREATE TABLE IF NOT EXISTS private.blob_objects (
     row_id       BIGINT NOT NULL,
     column_id    TEXT   NOT NULL,
     CONSTRAINT blob_objects_pkey PRIMARY KEY (object_key),
-    CONSTRAINT blob_objects_row_fkey FOREIGN KEY (workspace_id, table_id, row_id)
-        REFERENCES public.rows (workspace_id, table_id, row_id) ON DELETE CASCADE
+    CONSTRAINT blob_objects_row_fkey FOREIGN KEY (table_id, row_id)
+        REFERENCES public.rows (table_id, row_id) ON DELETE CASCADE
 );
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.rows TO app, mgr;

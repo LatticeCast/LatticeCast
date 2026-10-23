@@ -13,7 +13,7 @@ const latestRequestByBlock = new Map<string, number>();
 let nextRequestId = 0;
 
 export async function fetchDashboardBlockRows(
-	tableId: string,
+	tableId: number,
 	viewName: string,
 	blockId: string,
 	runtimeParams?: Record<string, unknown>

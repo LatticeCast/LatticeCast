@@ -26,7 +26,7 @@
 		rows,
 		onOpenExpand
 	}: {
-		tableId: string;
+		tableId: number;
 		columns: Column[];
 		rows: Row[];
 		onOpenExpand: (row: Row) => void;

@@ -30,7 +30,7 @@ export async function fetchTables(): Promise<Table[]> {
 	return result;
 }
 
-export async function fetchTable(tableId: string, workspaceId?: string): Promise<Table> {
+export async function fetchTable(tableId: number, workspaceId?: string): Promise<Table> {
 	const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : '';
 	const table = await authenticatedRequestJson<Table>(`/tables/${tableId}${qs}`);
 	currentTableId.set(table.table_id);
@@ -51,7 +51,7 @@ export async function createTable(data: CreateTable): Promise<Table> {
 	return table;
 }
 
-export async function updateTable(tableId: string, data: UpdateTable): Promise<Table> {
+export async function updateTable(tableId: number, data: UpdateTable): Promise<Table> {
 	const table = await authenticatedRequestJson<Table>(`/tables/${tableId}`, {
 		method: 'PUT',
 		body: data
@@ -60,7 +60,7 @@ export async function updateTable(tableId: string, data: UpdateTable): Promise<T
 	return table;
 }
 
-export async function deleteTable(tableId: string): Promise<void> {
+export async function deleteTable(tableId: number): Promise<void> {
 	await authenticatedRequestJson<void>(`/tables/${tableId}`, { method: 'DELETE' });
 	tables.update((list) => list.filter((t) => t.table_id !== tableId));
 	if (get(currentTableId) === tableId) currentTableId.set(null);
@@ -68,7 +68,7 @@ export async function deleteTable(tableId: string): Promise<void> {
 
 // ─── Columns — mutations return full TableSchema → applySchema ────────────────
 
-export async function createColumn(tableId: string, data: CreateColumn): Promise<TableSchema> {
+export async function createColumn(tableId: number, data: CreateColumn): Promise<TableSchema> {
 	const schema = await authenticatedRequestJson<TableSchema>(`/tables/${tableId}/columns`, {
 		method: 'POST',
 		body: data
@@ -78,7 +78,7 @@ export async function createColumn(tableId: string, data: CreateColumn): Promise
 }
 
 export async function updateColumn(
-	tableId: string,
+	tableId: number,
 	columnId: string,
 	data: UpdateColumn
 ): Promise<TableSchema> {
@@ -93,7 +93,7 @@ export async function updateColumn(
 	return schema;
 }
 
-export async function deleteColumn(tableId: string, columnId: string): Promise<TableSchema> {
+export async function deleteColumn(tableId: number, columnId: string): Promise<TableSchema> {
 	const schema = await authenticatedRequestJson<TableSchema>(
 		`/tables/${tableId}/columns/${columnId}`,
 		{
@@ -105,7 +105,7 @@ export async function deleteColumn(tableId: string, columnId: string): Promise<T
 }
 
 export async function patchSchema(
-	tableId: string,
+	tableId: number,
 	data: { view_order?: number[]; default_view?: number; col_order?: string[] }
 ): Promise<TableSchema> {
 	const schema = await authenticatedRequestJson<TableSchema>(`/tables/${tableId}`, {
@@ -130,7 +130,7 @@ function nonBlobRowData(data: Record<string, unknown>): Record<string, unknown> 
 	);
 }
 
-export async function fetchRows(tableId: string, offset = 0, limit = 100): Promise<Row[]> {
+export async function fetchRows(tableId: number, offset = 0, limit = 100): Promise<Row[]> {
 	const result = await authenticatedRequestJson<Row[]>(
 		`/tables/${tableId}/rows?offset=${offset}&limit=${limit}`
 	);
@@ -138,7 +138,7 @@ export async function fetchRows(tableId: string, offset = 0, limit = 100): Promi
 	return result;
 }
 
-export async function createRow(tableId: string, data: CreateRow): Promise<Row> {
+export async function createRow(tableId: number, data: CreateRow): Promise<Row> {
 	const row = await authenticatedRequestJson<Row>(`/tables/${tableId}/rows`, {
 		method: 'POST',
 		body: { ...data, row_data: nonBlobRowData(data.row_data ?? {}) }
@@ -147,7 +147,7 @@ export async function createRow(tableId: string, data: CreateRow): Promise<Row> 
 	return row;
 }
 
-export async function updateRow(tableId: string, rowNumber: number, data: UpdateRow): Promise<Row> {
+export async function updateRow(tableId: number, rowNumber: number, data: UpdateRow): Promise<Row> {
 	const row = await authenticatedRequestJson<Row>(`/tables/${tableId}/rows/${rowNumber}`, {
 		method: 'PATCH',
 		body: { ...data, row_data: nonBlobRowData(data.row_data) }
@@ -156,7 +156,7 @@ export async function updateRow(tableId: string, rowNumber: number, data: Update
 	return row;
 }
 
-export async function deleteRow(tableId: string, rowNumber: number): Promise<void> {
+export async function deleteRow(tableId: number, rowNumber: number): Promise<void> {
 	await authenticatedRequestJson<void>(`/tables/${tableId}/rows/${rowNumber}`, {
 		method: 'DELETE'
 	});
@@ -167,7 +167,7 @@ export async function deleteRow(tableId: string, rowNumber: number): Promise<voi
 
 /** Fetch the original bytes from one explicitly selected blob cell. */
 export async function fetchBlobCell(
-	tableId: string,
+	tableId: number,
 	rowNumber: number,
 	columnId: string
 ): Promise<Blob | null> {
@@ -181,7 +181,7 @@ export async function fetchBlobCell(
 
 /** Upload one arbitrary file into an explicitly selected blob cell. */
 export async function uploadBlobCell(
-	tableId: string,
+	tableId: number,
 	rowNumber: number,
 	columnId: string,
 	file: Blob,
@@ -205,7 +205,7 @@ export async function uploadBlobCell(
 
 /** Download an explicitly selected blob cell using the current authenticated session. */
 export async function downloadBlobCell(
-	tableId: string,
+	tableId: number,
 	rowNumber: number,
 	columnId: string,
 	filename: string
@@ -229,17 +229,17 @@ export async function downloadBlobCell(
 
 export async function createFromTemplate(
 	kind: string,
-	table_id: string,
+	tableName: string,
 	workspaceId: string
 ): Promise<Table> {
 	const table = await authenticatedRequestJson<Table>(
 		`/tables/template/${encodeURIComponent(kind)}`,
-		{ method: 'POST', body: { table_id, workspace_id: workspaceId } }
+		{ method: 'POST', body: { table_name: tableName, workspace_id: workspaceId } }
 	);
 	tables.update((list) => [...list, table]);
 	return table;
 }
 
-export async function createPmTemplate(table_id: string, workspaceId: string): Promise<Table> {
-	return createFromTemplate('pm', table_id, workspaceId);
+export async function createPmTemplate(tableName: string, workspaceId: string): Promise<Table> {
+	return createFromTemplate('pm', tableName, workspaceId);
 }

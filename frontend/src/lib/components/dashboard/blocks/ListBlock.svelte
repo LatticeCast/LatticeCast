@@ -10,7 +10,7 @@
 		blockId
 	}: {
 		block: ListBlock;
-		tableId: string;
+		tableId: number;
 		viewName: string;
 		blockId: string;
 	} = $props();

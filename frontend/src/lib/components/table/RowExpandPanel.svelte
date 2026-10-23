@@ -31,7 +31,7 @@
 		columns: Column[];
 		onClose: () => void;
 		onUpdateRow: (rowNumber: number, data: Record<string, unknown>) => Promise<void>;
-		tableId: string;
+		tableId: number;
 		workspaceId: string;
 	} = $props();
 

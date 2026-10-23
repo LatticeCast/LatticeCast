@@ -5,7 +5,7 @@
 	import { updateView } from '$lib/backend/views';
 	import { fetchDashboardBlockRows } from '$lib/backend/dashboard';
 
-	let { view, tableId }: { view: DashboardViewType & { view_id: number }; tableId: string } =
+	let { view, tableId }: { view: DashboardViewType & { view_id: number }; tableId: number } =
 		$props();
 
 	let layout = $derived(view.config?.layout ?? []);

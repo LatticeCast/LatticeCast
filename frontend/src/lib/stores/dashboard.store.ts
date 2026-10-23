@@ -14,7 +14,7 @@ export interface DashboardBlockCacheEntry {
 
 export const dashboardBlocks = writable<Record<string, DashboardBlockCacheEntry>>({});
 
-export function dashboardBlockKey(tableId: string, viewName: string, blockId: string): string {
+export function dashboardBlockKey(tableId: number, viewName: string, blockId: string): string {
 	return JSON.stringify([tableId, viewName, blockId]);
 }
 

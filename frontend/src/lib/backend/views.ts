@@ -8,18 +8,18 @@ import type { TableSchema, UpdateView, ViewConfig } from '$lib/types/table';
 
 // ── Reads ──────────────────────────────────────────────────────────────
 
-export async function fetchViews(tableId: string): Promise<ViewConfig[]> {
+export async function fetchViews(tableId: number): Promise<ViewConfig[]> {
 	return authenticatedRequestJson<ViewConfig[]>(`/tables/${tableId}/views`);
 }
 
-export async function fetchView(tableId: string, viewId: number): Promise<ViewConfig> {
+export async function fetchView(tableId: number, viewId: number): Promise<ViewConfig> {
 	return authenticatedRequestJson<ViewConfig>(`/tables/${tableId}/views/${viewId}`);
 }
 
 // ── Mutations — call API + applySchema ────────────────────────────────
 
 export async function createView(
-	tableId: string,
+	tableId: number,
 	data: { name: string; type: string; config?: Record<string, unknown> }
 ): Promise<TableSchema> {
 	const schema = await authenticatedRequestJson<TableSchema>(`/tables/${tableId}/views`, {
@@ -31,7 +31,7 @@ export async function createView(
 }
 
 export async function updateView(
-	tableId: string,
+	tableId: number,
 	viewId: number,
 	updates: UpdateView
 ): Promise<TableSchema> {
@@ -43,7 +43,7 @@ export async function updateView(
 	return schema;
 }
 
-export async function deleteView(tableId: string, viewId: number): Promise<TableSchema> {
+export async function deleteView(tableId: number, viewId: number): Promise<TableSchema> {
 	const schema = await authenticatedRequestJson<TableSchema>(`/tables/${tableId}/views/${viewId}`, {
 		method: 'DELETE'
 	});

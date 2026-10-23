@@ -12,7 +12,8 @@ import type { Column, Table, TableSchema, Workspace } from '$lib/types/table';
 
 export interface SidebarTable {
 	workspace_id: string;
-	table_id: string;
+	table_id: number;
+	table_name: string;
 	config: {
 		columns: Column[];
 		view_order: number[];
@@ -32,7 +33,7 @@ export const tables = writable<Table[]>([]);
 
 // ── UI state ─────────────────────────────────────────────────────────────────
 export const currentWorkspaceId = writable<string | null>(null);
-export const currentTableId = writable<string | null>(null);
+export const currentTableId = writable<number | null>(null);
 export const menuOpen = writable<boolean>(true);
 
 // ── Derived helpers (same names as the old menu.store) ───────────────────
@@ -91,6 +92,7 @@ export function applySidebar(payload: SidebarPayload): void {
 			const prev = byKey.get(`${t.workspace_id}:${t.table_id}`);
 			return {
 				table_id: t.table_id,
+				table_name: t.table_name,
 				workspace_id: t.workspace_id,
 				columns: t.config.columns ?? [],
 				view_order: t.config.view_order ?? [],
@@ -103,7 +105,7 @@ export function applySidebar(payload: SidebarPayload): void {
 	});
 }
 
-export function patchTableCache(tableId: string, patch: Partial<Table>): void {
+export function patchTableCache(tableId: number, patch: Partial<Table>): void {
 	tables.update((list) => {
 		const idx = list.findIndex((t) => t.table_id === tableId);
 		if (idx >= 0) return list.map((t) => (t.table_id === tableId ? { ...t, ...patch } : t));

@@ -78,7 +78,7 @@ export interface TableSchema {
 
 /** Single row — from PG rows table via get_rows() */
 export interface Row {
-	table_id: string;
+	table_id: number;
 	row_id: number;
 	row_data: Record<UUID, unknown>;
 	created_by: UUID | null;
@@ -89,7 +89,8 @@ export interface Row {
 
 /** Full table response — from PG get_table() / BE GET /tables/{tid} */
 export interface Table {
-	table_id: string;
+	table_id: number;
+	table_name: string;
 	workspace_id: UUID;
 	columns: Column[];
 	view_order: number[];
@@ -129,7 +130,7 @@ export interface WorkspaceMemberFull {
 export type ViewType = 'table' | 'kanban' | 'timeline' | 'dashboard' | 'workflow';
 
 export interface CreateTable {
-	table_id: string;
+	table_name: string;
 	workspace_id: UUID;
 }
 
@@ -144,7 +145,7 @@ export interface CreateRow {
 }
 
 export interface UpdateTable {
-	table_id?: string;
+	table_name?: string;
 }
 
 export interface UpdateColumn {

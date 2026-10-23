@@ -62,11 +62,11 @@
 				>{wsName}</button
 			>
 			{#if $page.params.table_id}
-				{@const tableId = $page.params.table_id}
+				{@const tableId = Number($page.params.table_id)}
 				{@const tableName =
-					$tablesByWorkspace[wsId]?.find((t) => t.table_id === tableId)?.table_id ??
-					$currentTable?.table_id ??
-					tableId}
+					$tablesByWorkspace[wsId]?.find((t) => t.table_id === tableId)?.table_name ??
+					$currentTable?.table_name ??
+					String(tableId)}
 				<span class="shrink-0 text-white/40">/</span>
 				<button
 					onclick={() => navigate(`/${wsId}/${tableId}`)}

@@ -8,7 +8,7 @@ import type { ViewConfig, Row, Table } from '$lib/types/table';
 
 export const load: PageLoad = ({ params, url }) => {
 	const urlViewRaw = url.searchParams.get('view');
-	const tableParam = params.table_id;
+	const tableParam = Number(params.table_id);
 	const wsParam = params.workspace_id;
 
 	const wsList = get(workspaces);

@@ -60,7 +60,13 @@ SELECT
     src.workspace_id, src.table_id, src.config,
     src.created_by, src.updated_by, src.created_at, src.updated_at
 FROM src
-ON CONFLICT (workspace_id, table_name) DO NOTHING
+-- NOT EXISTS rather than ON CONFLICT: nextval() is non-transactional, so a
+-- conflicting row would still burn an identity value and leave a gap.
+WHERE NOT EXISTS (
+    SELECT 1 FROM public.tables AS existing
+    WHERE existing.workspace_id = src.workspace_id
+      AND existing.table_name   = src.table_id
+)
 """
 
 INSERT_ROWS = f"""
@@ -75,7 +81,7 @@ FROM public.rows_old AS old
 JOIN {MAPPING} AS map
   ON  map.workspace_id  = old.workspace_id
   AND map.old_table_id  = old.table_id
-ON CONFLICT (workspace_id, table_id, row_id) DO NOTHING
+ON CONFLICT (table_id, row_id) DO NOTHING
 """
 
 INSERT_VIEWS = f"""
@@ -90,7 +96,7 @@ FROM public.table_views_old AS old
 JOIN {MAPPING} AS map
   ON  map.workspace_id  = old.workspace_id
   AND map.old_table_id  = old.table_id
-ON CONFLICT (workspace_id, table_id, view_id) DO NOTHING
+ON CONFLICT (table_id, view_id) DO NOTHING
 """
 
 # The row trigger already raised counters for the rows inserted above; GREATEST

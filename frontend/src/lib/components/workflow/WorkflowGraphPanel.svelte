@@ -10,7 +10,7 @@
 		activeGraph,
 		onGraphChange
 	}: {
-		tableId: string;
+		tableId: number;
 		columns: Column[];
 		rows: Row[];
 		graphNames: string[];
