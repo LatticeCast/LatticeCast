@@ -2,7 +2,7 @@ import type { PageLoad } from './$types';
 import { get } from 'svelte/store';
 import { workspaces, tables, resolveWorkspaceParam } from '$lib/stores/table_schemas.store';
 import { fetchViews } from '$lib/backend/views';
-import { fetchRows, fetchTable } from '$lib/backend/tables';
+import { fetchAllRows, fetchTable } from '$lib/backend/tables';
 import { authStore } from '$lib/stores/auth.store';
 import type { ViewConfig, Row, Table } from '$lib/types/table';
 
@@ -23,7 +23,7 @@ export const load: PageLoad = ({ params, url }) => {
 
 	if (get(authStore)?.accessToken) {
 		viewsP = fetchViews(tableParam);
-		rowsP = fetchRows(tableParam);
+		rowsP = fetchAllRows(tableParam);
 		if (!cached) {
 			tableP = fetchTable(tableParam, resolvedWsId ?? undefined);
 		}

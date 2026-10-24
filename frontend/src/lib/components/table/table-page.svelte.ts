@@ -16,7 +16,7 @@ import {
 	updateColumn,
 	deleteRow as deleteRowApi,
 	updateRow,
-	fetchRows,
+	fetchAllRows,
 	fetchTable,
 	patchSchema
 } from '$lib/backend/tables';
@@ -276,7 +276,7 @@ class TablePageStore {
 	}
 
 	async handleRefreshRows(tableId: number) {
-		await fetchRows(tableId);
+		await fetchAllRows(tableId);
 	}
 
 	// ─── Cell edit handlers ────────────────────────────────────────────────────
@@ -613,18 +613,28 @@ class TablePageStore {
 		this.showImportTemplateModal = false;
 	}
 
-	exportCSV() {
+	async exportCSV() {
 		const tableId = this.tableId || 'table';
-		triggerDownload(buildCSV(get(columns), get(rows)), `${tableId}.csv`, 'text/csv');
+		try {
+			const allRows = await fetchAllRows(this.tableId);
+			triggerDownload(buildCSV(get(columns), allRows), `${tableId}.csv`, 'text/csv');
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to export CSV');
+		}
 	}
 
-	exportJSON() {
+	async exportJSON() {
 		const tableId = this.tableId || 'table';
-		triggerDownload(
-			buildExportJSON(get(columns), get(rows)),
-			`${tableId}-data.json`,
-			'application/json'
-		);
+		try {
+			const allRows = await fetchAllRows(this.tableId);
+			triggerDownload(
+				buildExportJSON(get(columns), allRows),
+				`${tableId}-data.json`,
+				'application/json'
+			);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to export JSON');
+		}
 	}
 
 	handleImportFile(e: Event) {

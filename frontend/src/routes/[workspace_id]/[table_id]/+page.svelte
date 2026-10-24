@@ -9,7 +9,7 @@
 	import { rows } from '$lib/stores/table_rows.store';
 
 	// Controller
-	import { patchSchema, fetchRows } from '$lib/backend/tables';
+	import { patchSchema, fetchAllRows } from '$lib/backend/tables';
 	import {
 		currentWorkspaceId,
 		currentTableId,
@@ -314,7 +314,7 @@
 				rows={$rows}
 				viewConfig={activeView}
 				onOpenExpand={(row) => s.openExpand(row)}
-				onRowsRefresh={() => fetchRows(tableId)}
+				onRowsRefresh={() => fetchAllRows(tableId)}
 				onAddRow={(data) => s.openCreateTicket(data)}
 			/>
 		{:else if activeView.type === 'timeline'}
@@ -324,7 +324,7 @@
 				rows={$rows}
 				viewConfig={activeView}
 				onOpenExpand={(row) => s.openExpand(row)}
-				onRowsRefresh={() => fetchRows(tableId)}
+				onRowsRefresh={() => fetchAllRows(tableId)}
 				onAddRow={(data) => s.openCreateTicket(data)}
 			/>
 		{:else if activeView.type === 'dashboard'}
