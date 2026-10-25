@@ -4,6 +4,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { fetchTable, fetchRows, createRow } from '$lib/backend/tables';
+	import { resolveTableForPath } from '$lib/utils/table-route';
+	import { tablePath } from '$lib/utils/url';
 	import {
 		getChoiceColor,
 		getTagValues,
@@ -14,9 +16,8 @@
 	import type { Row, Table } from '$lib/types/table';
 	import CreateTicketModal from '$lib/components/table/CreateTicketModal.svelte';
 
-	const tableId = $derived(Number($page.params.table_id ?? 0));
+	let tableId = $state(0);
 	const rowNumberParam = $derived(parseInt($page.params.row_id ?? '0', 10));
-	const workspaceId = $derived($page.params.workspace_id ?? '');
 
 	let table = $state<Table | null>(null);
 	let row = $state<Row | null>(null);
@@ -33,17 +34,21 @@
 	const isTicketTable = $derived(!!table?.columns.find((c) => c.name === 'Key'));
 
 	onMount(async () => {
+		const workspaceParam = $page.params.workspace_id ?? '';
+		const tableParam = $page.params.table_id ?? '';
+		const rowId = rowNumberParam;
 		try {
+			const resolved = await resolveTableForPath(workspaceParam, tableParam);
+			if (!resolved) throw new Error('Table not found');
+			const id = resolved.table_id;
 			const [t, rows] = await Promise.all([
-				fetchTable(tableId, $page.params.workspace_id),
-				fetchRows(tableId, 0, 200)
+				fetchTable(id, resolved.workspace_id),
+				fetchRows(id, 0, 200)
 			]);
+			tableId = id;
 			table = t;
-			row = rows.find((r) => r.row_id === rowNumberParam) ?? null;
-			if (!row) {
-				error = 'Row not found';
-				return;
-			}
+			row = rows.find((candidate) => candidate.row_id === rowId) ?? null;
+			if (!row) error = 'Row not found';
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load';
 		} finally {
@@ -84,7 +89,10 @@
 		<div class="mx-auto max-w-4xl px-6 py-6">
 			<!-- Actions bar -->
 			<div class="mb-4 flex items-center justify-between">
-				<a href="/{workspaceId}/{tableId}" class="text-sm text-blue-600 hover:underline">← Back</a>
+				<a
+					href={tablePath(table.workspace_id, table.table_id)}
+					class="text-sm text-blue-600 hover:underline">← Back</a
+				>
 				<button
 					onclick={() => (showCreateTicket = true)}
 					class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100"

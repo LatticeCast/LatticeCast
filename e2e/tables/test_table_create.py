@@ -170,9 +170,9 @@ def test_workspace_table_create(authed_page, admin_token, snapshot):
 
     table_btn = page.get_by_test_id(f"table-card-{BLANK_TABLE_ID}")
     table_btn.click()
-    # SvelteKit client-side nav — wait for URL to include the table id
+    # SvelteKit client-side nav shows the table name; the card keeps its numeric id.
     try:
-        page.wait_for_url(f"**/{BLANK_TABLE_ID}**", timeout=8000)
+        page.wait_for_url(f"**/{NEW_WS_NAME}/{BLANK_TABLE_NAME}", timeout=8000)
     except PlaywrightTimeout:
         _snap(page, "t15_FAIL_blank_nav", True)
         pytest.fail(f"blank table nav failed: URL={page.url}")
@@ -214,15 +214,21 @@ def test_workspace_table_create(authed_page, admin_token, snapshot):
     pm_input = page.get_by_test_id("pm-template-name-input")
     pm_input.fill(PM_TABLE_NAME)
 
-    # PM create uses SvelteKit goto() — the URL carries the new identity
+    # PM create uses SvelteKit goto() — the URL carries the table name.
     page.get_by_test_id("pm-template-submit").click()
     try:
-        page.wait_for_url(lambda url: url.rstrip("/").rsplit("/", 1)[-1].isdigit(), timeout=20000)
+        page.wait_for_url(f"**/{NEW_WS_NAME}/{PM_TABLE_NAME}", timeout=20000)
     except PlaywrightTimeout:
         _snap(page, "t15_FAIL_pm_create_url", True)
         pytest.fail(f"PM table create failed: URL={page.url}")
 
-    PM_TABLE_ID = page.url.rstrip("/").rsplit("/", 1)[-1]
+    table_response = api("GET", "/api/v1/tables", admin_token)
+    assert table_response.status_code == 200, table_response.text[:200]
+    pm_table = next(
+        table for table in table_response.json()
+        if table["workspace_id"] == new_ws_id and table["table_name"] == PM_TABLE_NAME
+    )
+    PM_TABLE_ID = str(pm_table["table_id"])
     print(f"    PM table created: {page.url} (id {PM_TABLE_ID})")
 
     _snap(page, "t15_07_after_pm_create", snapshot)

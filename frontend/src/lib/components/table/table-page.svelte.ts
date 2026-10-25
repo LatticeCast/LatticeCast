@@ -141,9 +141,8 @@ class TablePageStore {
 	}
 
 	get tableId(): number {
-		// The URL still carries the id as text; the API and stores speak numbers.
-		const raw = get(page).params.table_id ?? '';
-		return Number(raw);
+		// The browser route has a name; controllers call the API by numeric id.
+		return get(currentTableId) ?? Number(get(page).params.table_id ?? 0);
 	}
 
 	getColWidth(col: Column): number {

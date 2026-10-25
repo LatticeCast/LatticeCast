@@ -141,7 +141,7 @@ def test_table_rename(authed_page, workspace, admin_token, snapshot) -> None:
     card.click()
 
     try:
-        page.wait_for_url(f"**/{TABLE_A}**", timeout=8000)
+        page.wait_for_url(f"**/{ws_name}/{NEW_NAME}", timeout=8000)
     except PlaywrightTimeout:
         snap(page, "rename_FAIL_nav", snapshot)
         pytest.fail(f"navigation to renamed table failed: URL={page.url}")

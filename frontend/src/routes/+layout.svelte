@@ -9,6 +9,7 @@
 	import { onMount } from 'svelte';
 	import {
 		workspaces,
+		tables,
 		tablesByWorkspace,
 		initSidebar,
 		resetSidebar
@@ -23,6 +24,7 @@
 	import Sidebar from '$lib/components/sidebar/Sidebar.svelte';
 	import TopBar from '$lib/components/layout/TopBar.svelte';
 	import { isUuid, prettifyWorkspacePathname, navigate } from '$lib/utils/url';
+	import { findTableForPath } from '$lib/utils/table-route';
 
 	let { children } = $props();
 	let menuOpen = $state(false);
@@ -36,18 +38,27 @@
 		for (const ws of $workspaces) {
 			if ($tablesByWorkspace[ws.workspace_id]?.length) expandedWorkspaces.add(ws.workspace_id);
 		}
-		prettifyCurrentWorkspaceUrl();
+		prettifyCurrentUrl();
 	}
 
-	function prettifyCurrentWorkspaceUrl() {
+	function prettifyCurrentUrl() {
 		if (!browser) return;
-		const wsId = $page.params.workspace_id;
-		if (!wsId || !isUuid(wsId)) return;
-		const ws = $workspaces.find((w) => w.workspace_id === wsId);
+		const wsParam = $page.params.workspace_id;
+		if (!wsParam) return;
+		const ws = isUuid(wsParam)
+			? $workspaces.find((w) => w.workspace_id === wsParam)
+			: $workspaces.find((w) => w.workspace_name.toLowerCase() === wsParam.toLowerCase());
 		if (!ws) return;
-		const newPathname = prettifyWorkspacePathname($page.url.pathname, wsId, ws.workspace_name);
+		let newPathname = prettifyWorkspacePathname($page.url.pathname, wsParam, ws.workspace_name);
+		const tableParam = $page.params.table_id;
+		if (tableParam) {
+			const table = findTableForPath(wsParam, tableParam, $workspaces, $tables);
+			if (!table) return;
+			newPathname = `/${encodeURIComponent(ws.workspace_name)}/${encodeURIComponent(table.table_name)}`;
+			if ($page.params.row_id) newPathname += `/${encodeURIComponent($page.params.row_id)}`;
+		}
 		if (newPathname !== $page.url.pathname) {
-			history.replaceState(history.state, '', newPathname + $page.url.search);
+			history.replaceState(history.state, '', newPathname + $page.url.search + $page.url.hash);
 		}
 	}
 
@@ -93,7 +104,7 @@
 	}
 
 	afterNavigate(({ from }) => {
-		prettifyCurrentWorkspaceUrl();
+		prettifyCurrentUrl();
 		if (!from || !$authStore?.accessToken) return;
 		const wsId = $page.params.workspace_id;
 		if (!wsId) return;
@@ -103,9 +114,9 @@
 			refreshSidebar();
 			return;
 		}
-		const tableId = Number($page.params.table_id);
-		if (tableId) {
-			const known = $tablesByWorkspace[ws.workspace_id]?.some((t) => t.table_id === tableId);
+		const tableParam = $page.params.table_id;
+		if (tableParam) {
+			const known = !!findTableForPath(wsId, tableParam, $workspaces, $tables);
 			if (!known) refreshSidebar();
 		}
 	});

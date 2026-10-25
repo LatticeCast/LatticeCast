@@ -18,6 +18,7 @@
 	} from './table.utils';
 	import { downloadBlobCell, fetchBlobCell, uploadBlobCell } from '$lib/backend/tables';
 	import { rows } from '$lib/stores/table_rows.store';
+	import { tablePath } from '$lib/utils/url';
 
 	let {
 		row,
@@ -131,7 +132,7 @@
 		<div class="flex items-center gap-2">
 			<a
 				data-testid="row-panel-open-fullpage-link"
-				href="/{workspaceId}/{tableId}/{row.row_id}"
+				href="{tablePath(workspaceId, tableId)}/{row.row_id}"
 				class="rounded-lg px-3 py-1.5 text-sm font-medium text-white/80 transition hover:bg-white/20 hover:text-white"
 				aria-label="Open full page">Open full page</a
 			>

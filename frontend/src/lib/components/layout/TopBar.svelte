@@ -2,8 +2,9 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import AnnouncementBanner from '$lib/components/layout/AnnouncementBanner.svelte';
-	import { currentTable, workspaces, tablesByWorkspace } from '$lib/stores/table_schemas.store';
-	import { navigate } from '$lib/utils/url';
+	import { currentTable, workspaces, tables } from '$lib/stores/table_schemas.store';
+	import { navigate, tablePath } from '$lib/utils/url';
+	import { findTableForPath } from '$lib/utils/table-route';
 
 	let {
 		menuOpen = $bindable()
@@ -54,22 +55,24 @@
 		<span class="shrink-0 text-white/40">/</span>
 		{#if $page.params.workspace_id}
 			{@const wsId = $page.params.workspace_id}
-			{@const wsName = $workspaces.find((w) => w.workspace_id === wsId)?.workspace_name ?? wsId}
+			{@const wsName =
+				$workspaces.find((w) => w.workspace_id === wsId || w.workspace_name === wsId)
+					?.workspace_name ?? wsId}
 			<button
-				onclick={() => navigate(`/${wsId}`)}
+				onclick={() => navigate(`/${encodeURIComponent(wsName)}`)}
 				data-testid="breadcrumb-workspace"
 				class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
 				>{wsName}</button
 			>
 			{#if $page.params.table_id}
-				{@const tableId = Number($page.params.table_id)}
-				{@const tableName =
-					$tablesByWorkspace[wsId]?.find((t) => t.table_id === tableId)?.table_name ??
-					$currentTable?.table_name ??
-					String(tableId)}
+				{@const table = findTableForPath(wsId, $page.params.table_id, $workspaces, $tables)}
+				{@const tableName = table?.table_name ?? $currentTable?.table_name ?? $page.params.table_id}
+				{@const tableUrl = table
+					? tablePath(table.workspace_id, table.table_id)
+					: `/${encodeURIComponent(wsName)}/${encodeURIComponent(tableName)}`}
 				<span class="shrink-0 text-white/40">/</span>
 				<button
-					onclick={() => navigate(`/${wsId}/${tableId}`)}
+					onclick={() => navigate(tableUrl)}
 					data-testid="breadcrumb-table"
 					class="min-w-0 truncate rounded px-1 py-0.5 text-sm font-semibold text-white hover:text-white/80"
 					>{tableName}</button
@@ -77,7 +80,7 @@
 				{#if $page.params.row_id}
 					<span class="shrink-0 text-white/40">/</span>
 					<button
-						onclick={() => navigate(`/${wsId}/${tableId}/${$page.params.row_id}`)}
+						onclick={() => navigate(`${tableUrl}/${$page.params.row_id}`)}
 						data-testid="breadcrumb-row"
 						class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
 						>{$page.params.row_id}</button

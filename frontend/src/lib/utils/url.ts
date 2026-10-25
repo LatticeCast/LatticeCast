@@ -1,6 +1,8 @@
 // src/lib/utils/url.ts
 
 import { goto } from '$app/navigation';
+import { get } from 'svelte/store';
+import { tables, workspaces } from '$lib/stores/table_schemas.store';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -11,11 +13,16 @@ export function isUuid(s: string): boolean {
 /**
  * Canonical path to a table. Sidebar and workspace-home both navigate
  * through this so a table click behaves identically wherever it lives.
- * Uses workspace_id (UUID) — stable across renames; the layout prettifies
- * the URL to the workspace name afterwards.
+ * The API keeps the numeric table identity; browser paths use names.
  */
 export function tablePath(workspaceId: string, tableId: number): string {
-	return `/${workspaceId}/${tableId}`;
+	const workspaceName = get(workspaces).find(
+		(ws) => ws.workspace_id === workspaceId
+	)?.workspace_name;
+	const tableName = get(tables).find(
+		(table) => table.workspace_id === workspaceId && table.table_id === tableId
+	)?.table_name;
+	return `/${encodeURIComponent(workspaceName ?? workspaceId)}/${encodeURIComponent(tableName ?? String(tableId))}`;
 }
 
 export function navigate(path: string): void {

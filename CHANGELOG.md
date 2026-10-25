@@ -1,6 +1,11 @@
 # Changelog
 
-## v0.82 — 2026-10-24 (LatticeQL 0.6.0)
+## 0.82.1 — 2026-10-25
+
+- Restore workspace and table names in browser URLs while keeping numeric table IDs in backend requests.
+- Resolve direct table links after sidebar hydration and choose the first-created match when names overlap.
+
+## 0.82 — 2026-10-24 (LatticeQL 0.6.0)
 
 - LatticeQL 0.6.0: the compiler inlines the table name, so a compiled query
   reads only its own table; the backend supplies `:workspace_id` alone.
@@ -10,7 +15,7 @@
   so RLS can never answer with the previous caller's identity and a commit
   cannot drop the current caller's.
 
-## v0.81 — 2026-10-23 (table-scoped child storage)
+## 0.81 — 2026-10-23 (table-scoped child storage)
 
 - V71 makes `table_id` the sole parent identity for rows, views, row counters,
   and blob metadata; redundant child `workspace_id` values are removed, closing
@@ -20,7 +25,7 @@
 - Storage migration verifies archived rows, views, counters, and blobs before
   commit, converges safely on re-run, and removes only V70 placeholder views.
 
-## v0.80 — 2026-10-23
+## 0.80 — 2026-10-23
 
 - Give `public.tables` a BIGINT identity `table_id`; the old slug column becomes
   `table_name` (display name), unique per workspace.
@@ -34,7 +39,7 @@
 - Use LatticeQL 0.4.0 for numeric table identities in generated queries.
 - Synchronize frontend, backend, and E2E versions and lockfiles to 0.80.0.
 
-## v0.70 — 2026-10-21
+## 0.70 — 2026-10-21
 
 - Accept only LC-local JWTs; reject invalid or expired credentials with 401
   without external provider fallback or JWKS requests.
