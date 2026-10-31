@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.82.2 — 2026-10-31
+
+- Load all table rows across Table, Kanban, Timeline, CSV, and JSON exports; verify with a 101-row browser test (story63).
+- Upgrade LQL to 0.6.2: escape SQL literals and identifiers safely, accept CRM `table(crm)` queries, and add a GIN index on `rows.row_data` for JSONB containment.
+- Update README, `llm.root.md`, and the dev skills for the current workspace, table, permission, cache, and role model.
+- Record the remaining v0.82.1 review findings in `TODO.md` and synchronize frontend, backend, and E2E versions to 0.82.2.
+
 ## 0.82.1 — 2026-10-25
 
 - Restore workspace and table names in browser URLs while keeping numeric table IDs in backend requests.

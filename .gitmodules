@@ -5,7 +5,3 @@
 [submodule ".lattice-ql"]
 	path = .lattice-ql
 	url = ../LatticeQL
-
-[submodule "lattice-cast-ts"]
-	path = .lattice-cast-ts
-	url = ../lattice-cast

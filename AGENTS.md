@@ -8,7 +8,7 @@ dont use `/plan`. Use Skill(agent/agentic-hive)
 
 always working in ./.tmp/ don't /tmp/
 
-always working in tmux session LatticeCast that we can do pair programming ex: docker compose
+always working in tmux session lc-working that we can do pair programming ex: docker compose
 
 All `git commit` commands MUST run inside a tmux session. Never commit from a
 direct shell.
@@ -24,7 +24,7 @@ if touch migration sql, ALWAYS need load skill sql
 
 login with "lattice" user to use .browser snapshot
 
-see llm.snapshot.md
+see `llm.e2e.md` (snapshot section) and Skill(developing/debug-frontend)
 
 ## About LatticeCast
 
