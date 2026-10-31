@@ -4,7 +4,7 @@ import { error } from '@sveltejs/kit';
 import { tables } from '$lib/stores/table_schemas.store';
 import { resolveTableForPath } from '$lib/utils/table-route';
 import { fetchViews } from '$lib/backend/views';
-import { fetchRows, fetchTable } from '$lib/backend/tables';
+import { fetchAllRows, fetchTable } from '$lib/backend/tables';
 import { authStore } from '$lib/stores/auth.store';
 import type { ViewConfig, Row, Table } from '$lib/types/table';
 
@@ -24,7 +24,7 @@ export const load: PageLoad = async ({ params, url }) => {
 
 	if (hasSession && resolved) {
 		viewsP = fetchViews(tableParam);
-		rowsP = fetchRows(tableParam);
+		rowsP = fetchAllRows(tableParam);
 		if (!cached) {
 			tableP = fetchTable(tableParam, resolvedWsId ?? undefined);
 		}

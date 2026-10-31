@@ -138,6 +138,21 @@ export async function fetchRows(tableId: number, offset = 0, limit = 100): Promi
 	return result;
 }
 
+/** Load all ordered pages before replacing the shared row snapshot. */
+export async function fetchAllRows(tableId: number): Promise<Row[]> {
+	const pageSize = 100;
+	const allRows: Row[] = [];
+	let page: Row[];
+	do {
+		page = await authenticatedRequestJson<Row[]>(
+			`/tables/${tableId}/rows?offset=${allRows.length}&limit=${pageSize}&sort=asc`
+		);
+		allRows.push(...page);
+	} while (page.length === pageSize);
+	rows.set(allRows);
+	return allRows;
+}
+
 export async function createRow(tableId: number, data: CreateRow): Promise<Row> {
 	const row = await authenticatedRequestJson<Row>(`/tables/${tableId}/rows`, {
 		method: 'POST',
