@@ -702,4 +702,13 @@ def verify(psql_fn) -> list[str]:
         if result:
             errors.append(f"FORBIDDEN INDEX: public.{table} on workspace_id (V71)")
 
+    # V72: LQL's whole-document row_data @> filter needs a direct GIN index.
+    result = psql_fn(
+        "SELECT 1 FROM pg_indexes WHERE schemaname='public' "
+        "AND tablename='rows' AND indexname='idx_rows_row_data_gin' "
+        "AND indexdef LIKE '%USING gin (row_data)%';"
+    )
+    if not result:
+        errors.append("MISSING INDEX: rows.row_data GIN for LQL containment (V72)")
+
     return errors
