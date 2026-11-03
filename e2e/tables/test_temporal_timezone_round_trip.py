@@ -113,11 +113,13 @@ def test_temporal_timezone_round_trip(browser, workspace, admin_token, snapshot)
             date_input.wait_for(state="visible", timeout=5000)
         except PlaywrightTimeout:
             pytest.fail("date input did not appear after clicking the cell")
-        date_input.fill(PICKED_DAY)
+        # The picker's change saves the value, Enter closes the editor; keep
+        # both inside the wait so the request cannot land before it starts.
         with page.expect_response(
             lambda resp: f"/rows/{row_id}" in resp.url and resp.request.method in ("PUT", "PATCH"),
             timeout=10000,
         ):
+            date_input.fill(PICKED_DAY)
             date_input.press("Enter")
 
         # ── The stored value is the instant that day BEGINS in +8 ────────

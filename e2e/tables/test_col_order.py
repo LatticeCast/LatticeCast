@@ -155,12 +155,23 @@ def test_col_drag_reorder(authed_page, admin_token, snapshot):
         src_sel = f'th[draggable="true"]:has([data-testid="col-drag-handle-{title_id}"])'
         tgt_sel = f'th[draggable="true"]:has([data-testid="col-drag-handle-{col_c_id}"])'
 
-        with page.expect_response(
-            lambda r: r.request.method == "PATCH"
-                      and r.url.rstrip("/").endswith(f"/api/v1/tables/{TABLE_ID}")
-                      and r.ok,
-            timeout=10000,
-        ):
+        # Wait for the PATCH that actually carries col_order, not just any ok
+        # PATCH to this table: a response is sent only after the request has
+        # been committed, so the GET in step 10 cannot read stale order. A
+        # looser predicate let an unrelated table write satisfy the wait, and
+        # the follow-up GET then ran before the reorder landed.
+        def is_col_order_patch(r):
+            if r.request.method != "PATCH" or not r.ok:
+                return False
+            if not r.url.rstrip("/").endswith(f"/api/v1/tables/{TABLE_ID}"):
+                return False
+            try:
+                body = r.request.post_data_json or {}
+            except Exception:
+                return False
+            return "col_order" in body
+
+        with page.expect_response(is_col_order_patch, timeout=10000):
             page.drag_and_drop(src_sel, tgt_sel)
         snap(page, "e2e_col_order_02_after_drag", snapshot)
 

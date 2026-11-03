@@ -198,17 +198,12 @@
 		ordered.splice(fromIdx, 1);
 		ordered.splice(toIdx, 0, fromId);
 		s.viewColOrder = ordered;
-		const isImplicitTable =
-			s.activeViewId === IMPLICIT_TABLE_VIEW.view_id &&
-			!$viewsStore.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id);
-		if (isImplicitTable) {
-			try {
-				await patchSchema(s.tableId, { col_order: ordered });
-				s.viewColOrder = null;
-			} catch (e) {
-				error.set(e instanceof Error ? e.message : 'Failed to save column order');
-			}
-		}
+		const persisted = await s.persistColumnOrder(ordered);
+		// A table's col_order comes back in the schema, so the store already
+		// carries it. A view's order lives in that view's config, which nothing
+		// re-applies here — keep the local order for it. On failure drop the
+		// optimistic order so the grid shows what actually persisted.
+		if (persisted !== 'view') s.viewColOrder = null;
 	}
 
 	async function handleReorderViews(fromId: number, toId: number) {
@@ -305,6 +300,7 @@
 				localWidths={displayWidths}
 				onStartEdit={(rowId, col, val) => s.startEdit(rowId, col, val)}
 				onCommitEdit={(rowId, col) => s.commitEdit(rowId, col)}
+				onSaveEdit={(rowId, col) => s.saveEdit(rowId, col)}
 				onCancelEdit={() => s.cancelEdit()}
 				onEditValueChange={(v) => (s.editValue = v)}
 				onToggleCheckbox={(rowId, col) => s.toggleCheckbox(rowId, col)}

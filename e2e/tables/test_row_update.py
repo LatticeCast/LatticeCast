@@ -136,6 +136,22 @@ def test_row_update(authed_page, admin_token, snapshot):
         snap(page, "row_update_01_initial", snapshot)
         print("[ok] table loaded with row visible")
 
+        def is_edit_patch(col_id):
+            """The PATCH that carries this cell's edit, so the DB read after it
+            sees the write: an unrelated row PATCH answering first let the
+            verify step read the previous value."""
+
+            def match(resp):
+                if resp.request.method != "PATCH" or "/rows/" not in resp.url:
+                    return False
+                try:
+                    body = resp.request.post_data_json or {}
+                except Exception:
+                    return False
+                return col_id in (body.get("row_data") or {})
+
+            return match
+
         # ── Test 1: Edit text cell (Name: Alice → Bob) ───────────────────
         cell_name = get_cell_locator(page, row_id, idx_name)
         cell_name.click()
@@ -148,10 +164,7 @@ def test_row_update(authed_page, admin_token, snapshot):
             pytest.fail("Edit input did not appear after clicking text cell")
 
         input_loc.fill("Bob")
-        with page.expect_response(
-            lambda resp: "/rows/" in resp.url and resp.request.method == "PATCH",
-            timeout=10000,
-        ):
+        with page.expect_response(is_edit_patch(col_ids["Name"]), timeout=10000):
             input_loc.press("Enter")
 
         snap(page, "row_update_02_text_committed", snapshot)
@@ -172,10 +185,7 @@ def test_row_update(authed_page, admin_token, snapshot):
             snap(page, "row_update_FAIL_select_no_dropdown", snapshot)
             pytest.fail("Select dropdown did not appear after clicking select cell")
 
-        with page.expect_response(
-            lambda resp: "/rows/" in resp.url and resp.request.method == "PATCH",
-            timeout=10000,
-        ):
+        with page.expect_response(is_edit_patch(col_ids["Status"]), timeout=10000):
             select_loc.select_option("done")
 
         snap(page, "row_update_03_select_committed", snapshot)
@@ -195,10 +205,7 @@ def test_row_update(authed_page, admin_token, snapshot):
             snap(page, "row_update_FAIL_no_checkbox", snapshot)
             pytest.fail("Checkbox button not visible")
 
-        with page.expect_response(
-            lambda resp: "/rows/" in resp.url and resp.request.method == "PATCH",
-            timeout=10000,
-        ):
+        with page.expect_response(is_edit_patch(col_ids["Done"]), timeout=10000):
             checkbox_btn.click()
 
         snap(page, "row_update_04_checkbox_toggled", snapshot)
@@ -219,11 +226,10 @@ def test_row_update(authed_page, admin_token, snapshot):
             snap(page, "row_update_FAIL_date_no_input", snapshot)
             pytest.fail("Date input did not appear after clicking date cell")
 
-        date_input.fill("2026-12-31")
-        with page.expect_response(
-            lambda resp: "/rows/" in resp.url and resp.request.method == "PATCH",
-            timeout=10000,
-        ):
+        # A picker confirms with change (saved immediately) and Enter closes
+        # the editor; both live inside the wait so the write is not missed.
+        with page.expect_response(is_edit_patch(col_ids["Due"]), timeout=10000):
+            date_input.fill("2026-12-31")
             date_input.press("Enter")
 
         snap(page, "row_update_05_date_committed", snapshot)

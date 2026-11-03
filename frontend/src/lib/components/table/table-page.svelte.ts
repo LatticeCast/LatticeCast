@@ -115,9 +115,12 @@ class TablePageStore {
 	get viewColOrder() {
 		return this._viewColOrder;
 	}
+	// Display-only. A reorder is persisted by persistColumnOrder() as one
+	// explicit write; scheduling a view_config write here as well used to send
+	// a second, order-less PATCH that could answer before the real one — the
+	// UI moved, the API didn't, and nothing reported an error.
 	set viewColOrder(v) {
 		this._viewColOrder = v;
-		this.schedulePersist();
 	}
 
 	// Column resize: the drag preview is ephemeral local UI state (calling the
@@ -172,6 +175,7 @@ class TablePageStore {
 		this.activeViewId = 0;
 		this._suppressPersist = 0;
 		this._viewColOrder = null;
+		this._savedEdit = null;
 		this.resizingColId = null;
 		this.dragWidth = 0;
 		this.persistingWidth = false;
@@ -271,9 +275,13 @@ class TablePageStore {
 	// ─── Cell edit handlers ────────────────────────────────────────────────────
 
 	private _cancellingEdit = false;
+	/** The value the open editor has already sent, so a picker's change and the
+	 * Enter/blur after it result in one write rather than two. */
+	private _savedEdit: { key: string; value: string } | null = null;
 
 	startEdit(rowId: number, col: Column, currentVal: unknown) {
 		this._cancellingEdit = false;
+		this._savedEdit = null;
 		this.editingCell = { rowId, colId: col.column_id };
 		this.editValue = currentVal === null || currentVal === undefined ? '' : String(currentVal);
 	}
@@ -285,6 +293,7 @@ class TablePageStore {
 		this._cancellingEdit = true;
 		this.editingCell = null;
 		this.editValue = '';
+		this._savedEdit = null;
 	}
 
 	async commitEdit(rowId: number, col: Column) {
@@ -293,16 +302,38 @@ class TablePageStore {
 			return;
 		}
 		if (!this.editingCell) return;
+		await this.saveEdit(rowId, col);
 		this.editingCell = null;
+		this.editValue = '';
+		this._savedEdit = null;
+	}
+
+	/**
+	 * Send the open cell's value without closing the editor.
+	 *
+	 * A temporal picker confirms with `change` before focus leaves, and on
+	 * platforms where the calendar popup holds the keyboard Enter never
+	 * reaches the input at all — the cell then looked edited but no request
+	 * was ever sent. Saving on the change lands the value either way; the
+	 * Enter/blur that follows finds the value already sent and closes the
+	 * editor without a second write.
+	 */
+	async saveEdit(rowId: number, col: Column) {
+		if (!this.editingCell) return;
 		const row = get(rows).find((r) => r.row_id === rowId);
 		if (!row) return;
-		const newData = applyEditToRowData(row.row_data, col.column_id, this.editValue, col.type);
+		const value = this.editValue;
+		const key = `${rowId}:${col.column_id}`;
+		if (this._savedEdit?.key === key && this._savedEdit.value === value) return;
+		const newData = applyEditToRowData(row.row_data, col.column_id, value, col.type);
+		this._savedEdit = { key, value };
 		error.set(null);
 		try {
 			await updateRow(this.tableId, row.row_id, {
 				row_data: { [col.column_id]: newData[col.column_id] }
 			});
 		} catch (e) {
+			this._savedEdit = null;
 			error.set(e instanceof Error ? e.message : 'Failed to update cell');
 		}
 	}
@@ -584,6 +615,36 @@ class TablePageStore {
 	}
 
 	// ─── View handlers ─────────────────────────────────────────────────────────
+
+	/**
+	 * Persist a column reorder where that order actually lives.
+	 *
+	 * A tab backed by a table view keeps its order in that view's config; the
+	 * implicit Schema tab has no view row, so its order is the table's own
+	 * col_order. Deciding on "is this tab backed by a row" instead of on the
+	 * view id keeps a reorder from being applied locally and dropped for a tab
+	 * whose row exists, which read as "the UI moved but the API didn't".
+	 *
+	 * Returns where the order was written, or null when the write failed so
+	 * the caller can drop the optimistic order and show what persisted.
+	 */
+	async persistColumnOrder(ordered: string[]): Promise<'table' | 'view' | null> {
+		const view = get(viewsStore).find((v) => v.view_id === this.activeViewId);
+		error.set(null);
+		try {
+			if (view && view.type === 'table') {
+				await updateView(this.tableId, view.view_id, {
+					config: { ...view.config, colOrder: ordered }
+				});
+				return 'view';
+			}
+			await patchSchema(this.tableId, { col_order: ordered });
+			return 'table';
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to save column order');
+			return null;
+		}
+	}
 
 	handleViewChange(view: ViewConfig) {
 		this.activeViewId = view.view_id;
