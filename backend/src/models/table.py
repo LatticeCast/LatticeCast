@@ -97,6 +97,11 @@ class TableResponse(SQLModel):
         default_factory=list,
         description="User view rows ordered by view_order: {name, type, config}.",
     )
+    view_config: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Sort/group/filter/widths for the implicit Schema tab (view_id 0), "
+        "which has no table_views row to hold its own config.",
+    )
     created_at: datetime
     updated_at: datetime
 

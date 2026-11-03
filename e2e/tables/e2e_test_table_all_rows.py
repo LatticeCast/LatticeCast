@@ -83,5 +83,7 @@ def test_table_all_rows(authed_page, admin_token, pm_table, snapshot):
         else:
             exported = json.loads(destination.read_text())
         assert len(exported) == 101
-        assert exported[0]["Title"] == "full-row-001"
-        assert exported[-1]["Title"] == "full-row-101"
+        # Export reuses the same fetchAllRows() the grid loads from, which
+        # defaults to newest-first (reverse row_id order).
+        assert exported[0]["Title"] == "full-row-101"
+        assert exported[-1]["Title"] == "full-row-001"

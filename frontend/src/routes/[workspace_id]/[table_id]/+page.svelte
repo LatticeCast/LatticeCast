@@ -5,7 +5,12 @@
 	import { get } from 'svelte/store';
 
 	// Model (SSOT stores)
-	import { columns, defaultView, views as viewsStore } from '$lib/stores/table_schema.store';
+	import {
+		columns,
+		defaultView,
+		views as viewsStore,
+		viewConfig as tableViewConfig
+	} from '$lib/stores/table_schema.store';
 	import { rows } from '$lib/stores/table_rows.store';
 
 	// Controller
@@ -24,7 +29,9 @@
 		sortRows,
 		buildGroupedRows,
 		buildRenderItems,
-		buildSortedColumns
+		buildSortedColumns,
+		parseSortConfig,
+		parseWidths
 	} from '$lib/components/table/table.utils';
 
 	// Components
@@ -51,15 +58,6 @@
 
 	// --- Derived (from SSOT stores + view state) ---
 
-	const sortedColumns = $derived(buildSortedColumns($columns, s.viewColOrder));
-
-	const filteredRows = $derived(applyFilters($rows, s.filterConditions, s.searchQuery));
-	const sortedRows = $derived(sortRows(filteredRows, s.sortConfig, $columns));
-
-	const tableMinWidth = $derived(
-		48 + sortedColumns.reduce((sum, col) => sum + s.getColWidth(col), 0) + 40 + 40
-	);
-
 	const allViews = $derived(
 		$viewsStore.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id)
 			? $viewsStore
@@ -70,9 +68,33 @@
 		allViews.find((v) => v.view_id === s.activeViewId) ?? allViews[0] ?? IMPLICIT_TABLE_VIEW
 	);
 
-	const groupedRows = $derived(
-		buildGroupedRows(filteredRows, s.groupConfig, $columns, s.sortConfig)
+	// Sort/widths: BE response -> tables store (applySchema) -> this derived
+	// -> render. No local mirror — the implicit Schema tab's config lives on
+	// the table itself ($tableViewConfig), a real view's on its own row.
+	const activeViewConfig = $derived(
+		s.activeViewId === IMPLICIT_TABLE_VIEW.view_id ? $tableViewConfig : (activeView.config ?? {})
 	);
+	const sortConfig = $derived(parseSortConfig(activeViewConfig));
+	const persistedWidths = $derived(parseWidths(activeViewConfig));
+	// While actively dragging, overlay the live (unsaved) preview for just
+	// the column being resized — everything else still reads the store.
+	const displayWidths = $derived(
+		s.resizingColId ? { ...persistedWidths, [s.resizingColId]: s.dragWidth } : persistedWidths
+	);
+	function colWidth(col: { column_id: string; options?: { width?: number } }): number {
+		return displayWidths[col.column_id] ?? col.options?.width ?? 150;
+	}
+
+	const sortedColumns = $derived(buildSortedColumns($columns, s.viewColOrder));
+
+	const filteredRows = $derived(applyFilters($rows, s.filterConditions, s.searchQuery));
+	const sortedRows = $derived(sortRows(filteredRows, sortConfig, $columns));
+
+	const tableMinWidth = $derived(
+		48 + sortedColumns.reduce((sum, col) => sum + colWidth(col), 0) + 40 + 40
+	);
+
+	const groupedRows = $derived(buildGroupedRows(filteredRows, s.groupConfig, $columns, sortConfig));
 
 	const renderItems = $derived(buildRenderItems(sortedRows, groupedRows, s.collapsedGroups));
 
@@ -203,7 +225,11 @@
 </script>
 
 <div
-	class="flex h-full flex-col bg-white {s.resizingColId ? 'cursor-col-resize select-none' : ''}"
+	class="flex h-full flex-col bg-white {s.resizingColId
+		? 'cursor-col-resize select-none'
+		: s.persistingWidth
+			? 'cursor-wait'
+			: ''}"
 	data-table-loaded={!loading}
 >
 	{#if $error}
@@ -237,12 +263,12 @@
 		{#if activeView.type === 'table'}
 			<TableToolbar
 				columns={$columns}
-				sortConfig={s.sortConfig}
+				{sortConfig}
 				groupConfig={s.groupConfig}
 				filterConditions={s.filterConditions}
 				showFilterPanel={s.showFilterPanel}
 				searchQuery={s.searchQuery}
-				onSortChange={(c) => (s.sortConfig = c)}
+				onSortChange={(c) => s.changeSort(c)}
 				onGroupChange={(c) => (s.groupConfig = c)}
 				onShowFilterPanelChange={(v) => (s.showFilterPanel = v)}
 				onSearchQueryChange={(q) => (s.searchQuery = q)}
@@ -274,13 +300,13 @@
 				renameValue={s.renameValue}
 				colMenuId={s.colMenuId}
 				tagsPopupCell={s.tagsPopupCell}
-				sortConfig={s.sortConfig}
+				{sortConfig}
 				collapsedGroups={s.collapsedGroups}
-				localWidths={s.localWidths}
+				localWidths={displayWidths}
 				onStartEdit={(rowId, col, val) => s.startEdit(rowId, col, val)}
 				onCommitEdit={(rowId, col) => s.commitEdit(rowId, col)}
+				onCancelEdit={() => s.cancelEdit()}
 				onEditValueChange={(v) => (s.editValue = v)}
-				onEditingCellChange={(c) => (s.editingCell = c)}
 				onToggleCheckbox={(rowId, col) => s.toggleCheckbox(rowId, col)}
 				onRemoveTag={(rowId, col, tag) => s.removeTag(rowId, col, tag)}
 				onAddTag={(rowId, col, tag) => s.addTag(rowId, col, tag)}
@@ -293,12 +319,12 @@
 				onRenameValueChange={(v) => (s.renameValue = v)}
 				onRenamingColIdChange={(id) => (s.renamingColId = id)}
 				onColMenuChange={(id) => (s.colMenuId = id)}
-				onSortChange={(c) => (s.sortConfig = c)}
+				onSortChange={(c) => s.changeSort(c)}
 				onFilterAdd={(id) => s.addFilterForColumn(id)}
 				onShowFilterPanel={() => (s.showFilterPanel = true)}
 				onDeleteColumn={(id) => s.handleDeleteColumn(id)}
 				onDragReorderColumns={handleDragReorderColumns}
-				onResizeStart={(e, col) => s.handleResizeStart(e, col)}
+				onResizeStart={(e, col) => s.handleResizeStart(e, col, colWidth(col))}
 				onShowAddColumn={() => (s.showAddColumn = true)}
 				onAddRow={() => s.handleAddRow()}
 				onAddRowAndEdit={(colId) => s.handleAddRow(colId)}
@@ -349,14 +375,14 @@
 		contextMenu={s.contextMenu}
 		columns={$columns}
 		rows={$rows}
-		sortConfig={s.sortConfig}
+		{sortConfig}
 		filterConditions={s.filterConditions}
 		onClose={() => (s.contextMenu = null)}
 		onExpandRow={(row) => s.openExpand(row)}
 		onDuplicateRow={(id) => s.handleDuplicateRow(id)}
 		onDeleteRow={(id) => s.handleDeleteRow(id)}
 		onRenameColumn={(id, name) => s.startRename(id, name)}
-		onSortChange={(c) => (s.sortConfig = c)}
+		onSortChange={(c) => s.changeSort(c)}
 		onAddFilter={(id) => s.addFilterForColumn(id)}
 		onDeleteColumn={(id) => s.handleDeleteColumn(id)}
 	/>

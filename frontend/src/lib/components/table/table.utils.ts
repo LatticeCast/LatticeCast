@@ -304,6 +304,26 @@ export function applyFilters(
 	return result;
 }
 
+/** Sentinel colId for sorting by the row's own `#` (row_id) instead of a data column. */
+export const ROW_ID_SORT_COL = '__row_id__';
+
+/** Reads the view's persisted sort out of its config — the single source of
+ * truth (no local mirror): BE response -> store -> this parse -> render. */
+export function parseSortConfig(
+	config: Record<string, unknown> | undefined
+): { colId: string; dir: 'asc' | 'desc' } | null {
+	const s = config?.sort as { colId: string; dir: 'asc' | 'desc' } | undefined;
+	return s && s.colId && s.dir ? s : null;
+}
+
+/** Reads the view's persisted column widths out of its config. */
+export function parseWidths(config: Record<string, unknown> | undefined): Record<string, number> {
+	const w = config?.widths;
+	return w && typeof w === 'object' && !Array.isArray(w)
+		? { ...(w as Record<string, number>) }
+		: {};
+}
+
 export function sortRows(
 	rowList: Row[],
 	sortConfig: { colId: string; dir: 'asc' | 'desc' } | null,
@@ -311,6 +331,9 @@ export function sortRows(
 ): Row[] {
 	if (!sortConfig) return rowList;
 	const { colId, dir } = sortConfig;
+	if (colId === ROW_ID_SORT_COL) {
+		return [...rowList].sort((a, b) => (dir === 'asc' ? a.row_id - b.row_id : b.row_id - a.row_id));
+	}
 	const sortCol = colList.find((c) => c.column_id === colId);
 	const choiceOrder = sortCol?.type === 'select' ? getChoices(sortCol).map((c) => c.value) : null;
 	return [...rowList].sort((a, b) => {

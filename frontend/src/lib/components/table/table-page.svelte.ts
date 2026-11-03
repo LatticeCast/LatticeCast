@@ -6,7 +6,7 @@ import { SvelteSet } from 'svelte/reactivity';
 import { get } from 'svelte/store';
 import { page } from '$app/stores';
 import { columns, views as viewsStore } from '$lib/stores/table_schema.store';
-import { currentTableId, patchTableCache } from '$lib/stores/table_schemas.store';
+import { currentTableId, patchTableCache, tables } from '$lib/stores/table_schemas.store';
 import { rows } from '$lib/stores/table_rows.store';
 import { error, IMPLICIT_TABLE_VIEW } from '$lib/stores/tables.store';
 import {
@@ -38,6 +38,7 @@ import {
 	type FilterCondition,
 	type ContextMenuState,
 	parseCSV,
+	parseWidths,
 	applyEditToRowData,
 	toggleCheckboxInRowData,
 	removeTagFromRowData,
@@ -74,14 +75,6 @@ class TablePageStore {
 	editValue = $state<string>('');
 	tagsPopupCell = $state<{ rowId: number; colId: string } | null>(null);
 	colMenuId = $state<string | null>(null);
-	private _sortConfig = $state<{ colId: string; dir: 'asc' | 'desc' } | null>(null);
-	get sortConfig() {
-		return this._sortConfig;
-	}
-	set sortConfig(v) {
-		this._sortConfig = v;
-		this.schedulePersist();
-	}
 
 	private _filterConditions = $state<FilterCondition[]>([]);
 	get filterConditions() {
@@ -127,26 +120,21 @@ class TablePageStore {
 		this.schedulePersist();
 	}
 
+	// Column resize: the drag preview is ephemeral local UI state (calling the
+	// BE on every mousemove isn't reasonable), but the committed width is not
+	// — it only becomes true once the BE call that follows mouseup resolves
+	// and patches the store (see onResizeUp in setupMouseListeners below).
 	resizingColId = $state<string | null>(null);
 	resizeStartX = $state(0);
 	resizeStartWidth = $state(0);
-
-	private _localWidths = $state<Record<string, number>>({});
-	get localWidths() {
-		return this._localWidths;
-	}
-	set localWidths(v) {
-		this._localWidths = v;
-		this.schedulePersist();
-	}
+	dragWidth = $state(0);
+	/** True from mouseup until the width PATCH resolves — drives a wait cursor
+	 * so a resize doesn't look "done" before the store actually reflects it. */
+	persistingWidth = $state(false);
 
 	get tableId(): number {
 		// The browser route has a name; controllers call the API by numeric id.
 		return get(currentTableId) ?? Number(get(page).params.table_id ?? 0);
-	}
-
-	getColWidth(col: Column): number {
-		return this.localWidths[col.column_id] ?? col.options?.width ?? 150;
 	}
 
 	reset() {
@@ -164,9 +152,9 @@ class TablePageStore {
 		this.renameValue = '';
 		this.editingCell = null;
 		this.editValue = '';
+		this._cancellingEdit = false;
 		this.tagsPopupCell = null;
 		this.colMenuId = null;
-		this._sortConfig = null;
 		this._filterConditions = [];
 		this.showFilterPanel = false;
 		this.searchQuery = '';
@@ -184,7 +172,9 @@ class TablePageStore {
 		this.activeViewId = 0;
 		this._suppressPersist = 0;
 		this._viewColOrder = null;
-		this._localWidths = {};
+		this.resizingColId = null;
+		this.dragWidth = 0;
+		this.persistingWidth = false;
 	}
 
 	// ─── Row handlers ──────────────────────────────────────────────────────────
@@ -280,12 +270,28 @@ class TablePageStore {
 
 	// ─── Cell edit handlers ────────────────────────────────────────────────────
 
+	private _cancellingEdit = false;
+
 	startEdit(rowId: number, col: Column, currentVal: unknown) {
+		this._cancellingEdit = false;
 		this.editingCell = { rowId, colId: col.column_id };
 		this.editValue = currentVal === null || currentVal === undefined ? '' : String(currentVal);
 	}
 
+	/** Escape: discard the in-progress edit instead of committing it on the
+	 * blur that unmounting the input triggers (same end state as clicking
+	 * away — unfocused, not editing — but without writing editValue). */
+	cancelEdit() {
+		this._cancellingEdit = true;
+		this.editingCell = null;
+		this.editValue = '';
+	}
+
 	async commitEdit(rowId: number, col: Column) {
+		if (this._cancellingEdit) {
+			this._cancellingEdit = false;
+			return;
+		}
 		if (!this.editingCell) return;
 		this.editingCell = null;
 		const row = get(rows).find((r) => r.row_id === rowId);
@@ -404,12 +410,16 @@ class TablePageStore {
 		}
 	}
 
-	handleResizeStart(e: MouseEvent, col: Column) {
+	/** currentWidth is the width currently on screen (persisted width or the
+	 * column's own default) — the caller resolves it, since that value is
+	 * itself derived from the store, not something this class tracks. */
+	handleResizeStart(e: MouseEvent, col: Column, currentWidth: number) {
 		e.preventDefault();
 		e.stopPropagation();
 		this.resizingColId = col.column_id;
 		this.resizeStartX = e.clientX;
-		this.resizeStartWidth = this.getColWidth(col);
+		this.resizeStartWidth = currentWidth;
+		this.dragWidth = currentWidth;
 	}
 
 	// ─── UI helpers ────────────────────────────────────────────────────────────
@@ -462,22 +472,28 @@ class TablePageStore {
 
 	// ─── View config ───────────────────────────────────────────────────────────
 
+	/**
+	 * group/filter/colOrder only — sort and widths are no longer mirrored
+	 * into local state at all. They're $derived straight from the active
+	 * view's config in +page.svelte (parseSortConfig/parseWidths), so BE
+	 * response -> store -> derived is the only path that ever sets them.
+	 */
 	applyViewConfig(view: ViewConfig) {
 		if (view.type !== 'table') return;
-		if (view.config?.sort) {
-			const s = view.config.sort as { colId: string; dir: 'asc' | 'desc' };
-			this._sortConfig = s.colId && s.dir ? s : null;
-		} else {
-			this._sortConfig = null;
-		}
-		if (view.config?.group) {
-			const g = view.config.group as { colId: string; granularity?: 'month' | 'day' };
+		// The implicit Schema tab (view_id 0) has no table_views row of its
+		// own — its config lives on the table schema instead.
+		const config: Record<string, unknown> =
+			(view.view_id === IMPLICIT_TABLE_VIEW.view_id
+				? get(tables).find((t) => t.table_id === this.tableId)?.view_config
+				: view.config) ?? {};
+		if (config.group) {
+			const g = config.group as { colId: string; granularity?: 'month' | 'day' };
 			this._groupConfig = g.colId ? g : null;
 		} else {
 			this._groupConfig = null;
 		}
-		if (view.config?.filter && Array.isArray(view.config.filter)) {
-			const saved = view.config.filter as { colId: string; operator: string; value: string }[];
+		if (config.filter && Array.isArray(config.filter)) {
+			const saved = config.filter as { colId: string; operator: string; value: string }[];
 			this._filterConditions = saved.map((f) => ({
 				id: crypto.randomUUID(),
 				colId: f.colId,
@@ -487,20 +503,55 @@ class TablePageStore {
 		} else {
 			this._filterConditions = [];
 		}
-		if (
-			view.config?.widths &&
-			typeof view.config.widths === 'object' &&
-			!Array.isArray(view.config.widths)
-		) {
-			this._localWidths = { ...(view.config.widths as Record<string, number>) };
-		} else {
-			this._localWidths = {};
-		}
+		// Column order for the implicit tab is the physical `columns` array
+		// order (reordered via col_order on the table schema, see
+		// handleDragReorderColumns) — never view_config, so colOrder stays
+		// scoped to view.config here.
 		if (view.config?.colOrder && Array.isArray(view.config.colOrder)) {
 			this._viewColOrder = view.config.colOrder as string[];
 		} else {
 			this._viewColOrder = null;
 		}
+	}
+
+	/** The active view's config as it currently stands in the store — read
+	 * fresh (never cached locally) so a patch always merges onto the latest
+	 * server truth instead of a possibly-stale local copy. */
+	private currentViewConfig(): Record<string, unknown> {
+		if (this.activeViewId === IMPLICIT_TABLE_VIEW.view_id) {
+			return get(tables).find((t) => t.table_id === this.tableId)?.view_config ?? {};
+		}
+		return get(viewsStore).find((v) => v.view_id === this.activeViewId)?.config ?? {};
+	}
+
+	/**
+	 * The one write path for view config: merge `patch` onto the current
+	 * server config and PATCH/PUT it. The call's own response triggers
+	 * applySchema() (in backend/tables.ts + backend/views.ts), which writes
+	 * the `tables` store — every $derived reading that store (sortConfig,
+	 * persistedWidths, viewsStore, ...) updates from there, not from this
+	 * method's caller. Errors surface through the shared `error` store.
+	 */
+	private async persistViewConfigPatch(patch: Record<string, unknown>): Promise<void> {
+		try {
+			if (this.activeViewId === IMPLICIT_TABLE_VIEW.view_id) {
+				const newConfig = { ...this.currentViewConfig(), ...patch };
+				await patchSchema(this.tableId, { view_config: newConfig });
+				return;
+			}
+			const view = get(viewsStore).find((v) => v.view_id === this.activeViewId);
+			if (!view || view.type !== 'table') return;
+			const newConfig = { ...view.config, ...patch };
+			await updateView(this.tableId, view.view_id, { config: newConfig });
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to update view');
+		}
+	}
+
+	/** Sort click: call BE, await it, done — no local optimistic mirror. The
+	 * $derived sortConfig in +page.svelte picks it up once the store updates. */
+	async changeSort(config: { colId: string; dir: 'asc' | 'desc' } | null): Promise<void> {
+		await this.persistViewConfigPatch({ sort: config ?? undefined });
 	}
 
 	private schedulePersist() {
@@ -509,22 +560,27 @@ class TablePageStore {
 		this._persistTimer = setTimeout(() => this.persistViewConfig(), 100);
 	}
 
+	/** group/filter/colOrder still use the debounced local-optimistic path —
+	 * typing into a filter value or dragging a column reorder fires this on
+	 * every keystroke/step, and round-tripping the BE that often isn't
+	 * reasonable. Sort and widths were pulled out of this (see changeSort
+	 * and onResizeUp) because they're discrete, infrequent actions. */
 	persistViewConfig() {
 		if (this._suppressPersist > 0) return;
-		const view = get(viewsStore).find((v) => v.view_id === this.activeViewId);
-		if (!view || view.type !== 'table') return;
-		const newConfig = {
-			...view.config,
-			sort: this.sortConfig ?? undefined,
+		const patch: Record<string, unknown> = {
 			group: this.groupConfig ?? undefined,
 			filter:
 				this.filterConditions.length > 0
 					? this.filterConditions.map(({ colId, operator, value }) => ({ colId, operator, value }))
-					: undefined,
-			widths: Object.keys(this.localWidths).length > 0 ? { ...this.localWidths } : undefined,
-			colOrder: this.viewColOrder ?? undefined
+					: undefined
 		};
-		updateView(this.tableId, view.view_id, { config: newConfig }).catch(() => {});
+		// colOrder is per-view and only meaningful for real views — the
+		// implicit tab's column order is the physical col_order mechanism
+		// (see handleDragReorderColumns), never view_config.
+		if (this.activeViewId !== IMPLICIT_TABLE_VIEW.view_id) {
+			patch.colOrder = this.viewColOrder ?? undefined;
+		}
+		this.persistViewConfigPatch(patch);
 	}
 
 	// ─── View handlers ─────────────────────────────────────────────────────────
@@ -757,16 +813,23 @@ class TablePageStore {
 		const onResizeMove = (e: MouseEvent) => {
 			if (!this.resizingColId) return;
 			const delta = e.clientX - this.resizeStartX;
-			this.localWidths = {
-				...this.localWidths,
-				[this.resizingColId]: Math.max(60, this.resizeStartWidth + delta)
-			};
+			// Ephemeral drag preview only — not persisted, not read by
+			// anything outside the live drag (+page.svelte overlays this on
+			// the store's widths only while resizingColId is set).
+			this.dragWidth = Math.max(60, this.resizeStartWidth + delta);
 		};
 		const onResizeUp = () => {
-			if (this.resizingColId) {
-				this.resizingColId = null;
-				this.schedulePersist();
-			}
+			if (!this.resizingColId) return;
+			const colId = this.resizingColId;
+			const width = this.dragWidth;
+			const startWidth = this.resizeStartWidth;
+			this.resizingColId = null;
+			if (width === startWidth) return;
+			this.persistingWidth = true;
+			const widths = { ...parseWidths(this.currentViewConfig()), [colId]: width };
+			this.persistViewConfigPatch({ widths }).finally(() => {
+				this.persistingWidth = false;
+			});
 		};
 		const onWindowClick = () => {
 			this.colMenuId = null;

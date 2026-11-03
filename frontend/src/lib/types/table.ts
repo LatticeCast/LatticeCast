@@ -74,6 +74,8 @@ export interface TableSchema {
 	view_order: number[];
 	default_view: number;
 	views: ViewConfig[];
+	/** Sort/group/filter/widths for the implicit Schema tab (view_id 0). */
+	view_config?: Record<string, unknown>;
 }
 
 /** Single row — from PG rows table via get_rows() */
@@ -96,6 +98,7 @@ export interface Table {
 	view_order: number[];
 	default_view?: number;
 	views?: ViewConfig[];
+	view_config?: Record<string, unknown>;
 	created_at: string;
 	updated_at: string;
 }

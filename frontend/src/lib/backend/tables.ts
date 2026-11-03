@@ -106,7 +106,12 @@ export async function deleteColumn(tableId: number, columnId: string): Promise<T
 
 export async function patchSchema(
 	tableId: number,
-	data: { view_order?: number[]; default_view?: number; col_order?: string[] }
+	data: {
+		view_order?: number[];
+		default_view?: number;
+		col_order?: string[];
+		view_config?: Record<string, unknown>;
+	}
 ): Promise<TableSchema> {
 	const schema = await authenticatedRequestJson<TableSchema>(`/tables/${tableId}`, {
 		method: 'PATCH',
@@ -138,7 +143,15 @@ export async function fetchRows(tableId: number, offset = 0, limit = 100): Promi
 	return result;
 }
 
-/** Load all ordered pages before replacing the shared row snapshot. */
+/**
+ * Load all ordered pages before replacing the shared row snapshot.
+ *
+ * Pages are fetched ascending so offsets stay stable while paginating —
+ * row_id only ever grows, so a row created mid-fetch lands past the last
+ * page instead of shifting already-fetched offsets. The assembled list is
+ * then reversed so the default (no explicit sort) display order is
+ * newest-first, matching the backend's own default `sort=desc`.
+ */
 export async function fetchAllRows(tableId: number): Promise<Row[]> {
 	const pageSize = 100;
 	const allRows: Row[] = [];
@@ -149,6 +162,7 @@ export async function fetchAllRows(tableId: number): Promise<Row[]> {
 		);
 		allRows.push(...page);
 	} while (page.length === pageSize);
+	allRows.reverse();
 	rows.set(allRows);
 	return allRows;
 }

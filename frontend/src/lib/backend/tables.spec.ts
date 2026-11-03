@@ -35,7 +35,8 @@ describe('table row loading', () => {
 		finishSecondPage([row(101)]);
 		const result = await loading;
 		expect(result).toHaveLength(101);
-		expect(result.at(-1)?.row_id).toBe(101);
+		expect(result.at(0)?.row_id).toBe(101);
+		expect(result.at(-1)?.row_id).toBe(1);
 		expect(get(rows)).toEqual(result);
 	});
 

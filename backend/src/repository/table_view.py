@@ -188,6 +188,7 @@ class TableViewRepository:
             "view_order": view_order,
             "default_view": cfg.get("default_view", 0) or 0,
             "views": ordered_views + leftover,
+            "view_config": cfg.get("view_config", {}) or {},
         }
 
     # ── Order / default-view / column writes (V13 + V14 PG functions) ─────
@@ -252,6 +253,45 @@ class TableViewRepository:
                 "ws": str(workspace_id),
                 "tid": table_id,
                 "order": json.dumps(col_order),
+                "by": str(updated_by),
+            },
+        )
+        await self.session.commit()
+        return await self.get_tables_schema(workspace_id, table_id)
+
+    async def update_view_config(
+        self,
+        workspace_id: UUID,
+        table_id: int,
+        view_config: dict[str, Any],
+        updated_by: UUID,
+    ) -> dict[str, Any]:
+        """Replace tables.config.view_config wholesale — the implicit Schema
+        tab's counterpart to update_view() for real views.
+
+        No PG function, no server-side merge: the FE already sends the full
+        desired object (it builds it from the current value plus its own
+        change before calling this), same as table.py's plain-SQL rename.
+        A server-side partial merge would be redundant here — view_config
+        is never queried through JSONB operators, just read/written whole —
+        and would actively break clearing a field: a cleared key is absent
+        from the FE's JSON (JSON.stringify drops `undefined`), so a merge
+        that only deletes on explicit `null` would silently keep the stale
+        value forever.
+        """
+        await self.session.execute(
+            sa_text("""
+                UPDATE public.tables
+                SET    config = jsonb_set(config, '{view_config}', CAST(:view_config AS jsonb)),
+                       updated_by = :by,
+                       updated_at = now()
+                WHERE  workspace_id = CAST(:ws AS uuid)
+                AND    table_id     = :tid
+            """),
+            {
+                "ws": str(workspace_id),
+                "tid": table_id,
+                "view_config": json.dumps(view_config),
                 "by": str(updated_by),
             },
         )

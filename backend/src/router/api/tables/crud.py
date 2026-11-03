@@ -5,8 +5,8 @@
 - GET   /tables/{table_id}            — single table (full schema snapshot)
 - PUT   /tables/{table_id}            — rename (changes table_name, never the id)
 - DELETE /tables/{table_id}           — drop table
-- PATCH /tables/{table_id}            — update {view_order, default_view, col_order};
-                                        returns the new full TableSchema
+- PATCH /tables/{table_id}            — update {view_order, default_view, col_order,
+                                        view_config}; returns the new full TableSchema
 """
 
 from typing import Any
@@ -155,6 +155,7 @@ class SchemaPatch(BaseModel):
     view_order: list[int] | None = None
     default_view: int | None = None
     col_order: list[str] | None = None
+    view_config: dict[str, Any] | None = None
 
 
 @router.patch("/{table_id}")
@@ -177,6 +178,10 @@ async def patch_schema(
             table.workspace_id, table.table_id, data.col_order, updated_by=user.user_id
         )
         await invalidate_schema_cache(str(table.workspace_id))
+    if data.view_config is not None:
+        await view_repo.update_view_config(
+            table.workspace_id, table.table_id, data.view_config, updated_by=user.user_id
+        )
     if "default_view" in data.model_fields_set:
         try:
             await view_repo.set_default_view(

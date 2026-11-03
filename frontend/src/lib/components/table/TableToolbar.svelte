@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Column } from '$lib/types/table';
-	import type { FilterCondition } from './table.utils';
+	import { ROW_ID_SORT_COL, type FilterCondition } from './table.utils';
 	import GroupBySelector from './GroupBySelector.svelte';
 
 	let {
@@ -92,6 +92,33 @@
 				<div class="px-3 py-1.5 text-xs font-semibold tracking-wide text-gray-400 uppercase">
 					Sort by
 				</div>
+				<button
+					data-testid="sort-by-row-id"
+					class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===
+					ROW_ID_SORT_COL
+						? 'font-semibold text-blue-600'
+						: ''}"
+					onclick={() => {
+						if (sortConfig?.colId === ROW_ID_SORT_COL) {
+							onSortChange({
+								colId: ROW_ID_SORT_COL,
+								dir: sortConfig.dir === 'asc' ? 'desc' : 'asc'
+							});
+						} else {
+							onSortChange({ colId: ROW_ID_SORT_COL, dir: 'asc' });
+						}
+						showSortMenu = false;
+					}}
+					role="menuitem"
+				>
+					Row ID
+					{#if sortConfig?.colId === ROW_ID_SORT_COL}
+						<span class="ml-auto text-xs text-blue-500"
+							>{sortConfig.dir === 'asc' ? '↑ 1→9' : '↓ 9→1'}</span
+						>
+					{/if}
+				</button>
+				<hr class="my-1 border-gray-100" />
 				{#each sortedCols as col (col.column_id)}
 					<button
 						class="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-50 {sortConfig?.colId ===

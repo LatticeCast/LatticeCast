@@ -18,6 +18,7 @@ export interface SidebarTable {
 		columns: Column[];
 		view_order: number[];
 		default_view: number;
+		view_config?: Record<string, unknown>;
 	};
 }
 
@@ -64,6 +65,7 @@ export const columns = derived(currentTable, ($t) => $t?.columns ?? []);
 export const viewOrder = derived(currentTable, ($t) => $t?.view_order ?? []);
 export const defaultView = derived(currentTable, ($t) => $t?.default_view ?? 0);
 export const views = derived(currentTable, ($t) => $t?.views ?? []);
+export const viewConfig = derived(currentTable, ($t) => $t?.view_config ?? {});
 
 export function applySchema(schema: TableSchema): void {
 	const tid = get(currentTableId);
@@ -72,7 +74,8 @@ export function applySchema(schema: TableSchema): void {
 		columns: schema.columns,
 		view_order: schema.view_order,
 		default_view: schema.default_view,
-		views: schema.views
+		views: schema.views,
+		view_config: schema.view_config ?? {}
 	});
 }
 
@@ -98,6 +101,7 @@ export function applySidebar(payload: SidebarPayload): void {
 				view_order: t.config.view_order ?? [],
 				default_view: t.config.default_view ?? 0,
 				views: prev?.views ?? [],
+				view_config: t.config.view_config ?? prev?.view_config ?? {},
 				created_at: prev?.created_at ?? '',
 				updated_at: prev?.updated_at ?? ''
 			};

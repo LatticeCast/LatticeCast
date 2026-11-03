@@ -38,8 +38,8 @@
 		localWidths,
 		onStartEdit,
 		onCommitEdit,
+		onCancelEdit,
 		onEditValueChange,
-		onEditingCellChange,
 		onToggleCheckbox,
 		onRemoveTag,
 		onAddTag,
@@ -87,8 +87,8 @@
 		localWidths: Record<string, number>;
 		onStartEdit: (rowId: number, col: Column, currentVal: unknown) => void;
 		onCommitEdit: (rowId: number, col: Column) => void;
+		onCancelEdit: () => void;
 		onEditValueChange: (val: string) => void;
-		onEditingCellChange: (cell: { rowId: number; colId: string } | null) => void;
 		onToggleCheckbox: (rowId: number, col: Column) => void;
 		onRemoveTag: (rowId: number, col: Column, tag: string) => void;
 		onAddTag: (rowId: number, col: Column, tag: string) => void;
@@ -637,6 +637,9 @@
 														onCommitEdit(row.row_id, col);
 													}}
 													onblur={() => onCommitEdit(row.row_id, col)}
+													onkeydown={(e) => {
+														if (e.key === 'Escape') onCancelEdit();
+													}}
 													autofocus
 												>
 													<option value="">—</option>
@@ -658,7 +661,7 @@
 														onCommitEdit(row.row_id, col);
 														if (row.row_id === lastDataRowId) onAddRow();
 													}
-													if (e.key === 'Escape') onEditingCellChange(null);
+													if (e.key === 'Escape') onCancelEdit();
 												}}
 												autofocus
 											/>
@@ -675,7 +678,7 @@
 														onCommitEdit(row.row_id, col);
 														if (row.row_id === lastDataRowId) onAddRow();
 													}
-													if (e.key === 'Escape') onEditingCellChange(null);
+													if (e.key === 'Escape') onCancelEdit();
 												}}
 												autofocus
 											/>
@@ -692,7 +695,7 @@
 														onCommitEdit(row.row_id, col);
 														if (row.row_id === lastDataRowId) onAddRow();
 													}
-													if (e.key === 'Escape') onEditingCellChange(null);
+													if (e.key === 'Escape') onCancelEdit();
 												}}
 												autofocus
 											/>
