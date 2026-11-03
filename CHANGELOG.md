@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Serialize view configuration writes so quick sort, group, column reorder, and width changes retain each other; keep delayed changes bound to the view where they were made.
+- Commit a picked date when it changes, close its editor after a successful save, and preserve the editor on failure.
+
 ## 0.82.3 — 2026-11-04
 
 - Column reorder writes once, to the place that owns the order: the table's `col_order` when the active tab has no view row, that view's config when it does. Reordering a tab whose view row existed used to update the grid locally and save nothing.

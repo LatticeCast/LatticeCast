@@ -109,7 +109,8 @@ class TablePageStore {
 	rowsWithDocs = new SvelteSet<string>();
 	activeViewId = $state<number>(0);
 	private _suppressPersist = 0;
-	private _persistTimer: ReturnType<typeof setTimeout> | null = null;
+	private _persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	private _configWriteQueue: Promise<void> = Promise.resolve();
 
 	private _viewColOrder = $state<string[] | null>(null);
 	get viewColOrder() {
@@ -134,6 +135,7 @@ class TablePageStore {
 	/** True from mouseup until the width PATCH resolves — drives a wait cursor
 	 * so a resize doesn't look "done" before the store actually reflects it. */
 	persistingWidth = $state(false);
+	private _widthWrites = 0;
 
 	get tableId(): number {
 		// The browser route has a name; controllers call the API by numeric id.
@@ -175,6 +177,7 @@ class TablePageStore {
 		this.activeViewId = 0;
 		this._suppressPersist = 0;
 		this._viewColOrder = null;
+		this._editSession++;
 		this._savedEdit = null;
 		this.resizingColId = null;
 		this.dragWidth = 0;
@@ -275,12 +278,18 @@ class TablePageStore {
 	// ─── Cell edit handlers ────────────────────────────────────────────────────
 
 	private _cancellingEdit = false;
-	/** The value the open editor has already sent, so a picker's change and the
-	 * Enter/blur after it result in one write rather than two. */
-	private _savedEdit: { key: string; value: string } | null = null;
+	private _editSession = 0;
+	private _editWriteQueue: Promise<void> = Promise.resolve();
+	private _savedEdit: {
+		key: string;
+		value: string;
+		pending: boolean;
+		promise: Promise<boolean>;
+	} | null = null;
 
 	startEdit(rowId: number, col: Column, currentVal: unknown) {
 		this._cancellingEdit = false;
+		this._editSession++;
 		this._savedEdit = null;
 		this.editingCell = { rowId, colId: col.column_id };
 		this.editValue = currentVal === null || currentVal === undefined ? '' : String(currentVal);
@@ -290,7 +299,11 @@ class TablePageStore {
 	 * blur that unmounting the input triggers (same end state as clicking
 	 * away — unfocused, not editing — but without writing editValue). */
 	cancelEdit() {
+		// A picker change has already submitted a write. Do not make Escape
+		// appear to cancel a value that may already be committed on the server.
+		if (this._savedEdit?.pending) return;
 		this._cancellingEdit = true;
+		this._editSession++;
 		this.editingCell = null;
 		this.editValue = '';
 		this._savedEdit = null;
@@ -301,41 +314,49 @@ class TablePageStore {
 			this._cancellingEdit = false;
 			return;
 		}
-		if (!this.editingCell) return;
-		await this.saveEdit(rowId, col);
+		if (this.editingCell?.rowId !== rowId || this.editingCell.colId !== col.column_id) return;
+		const session = this._editSession;
+		const value = this.editValue;
+		if (!(await this.saveEdit(rowId, col))) return;
+		if (this._editSession !== session || this.editValue !== value) return;
 		this.editingCell = null;
 		this.editValue = '';
 		this._savedEdit = null;
 	}
 
-	/**
-	 * Send the open cell's value without closing the editor.
-	 *
-	 * A temporal picker confirms with `change` before focus leaves, and on
-	 * platforms where the calendar popup holds the keyboard Enter never
-	 * reaches the input at all — the cell then looked edited but no request
-	 * was ever sent. Saving on the change lands the value either way; the
-	 * Enter/blur that follows finds the value already sent and closes the
-	 * editor without a second write.
-	 */
-	async saveEdit(rowId: number, col: Column) {
-		if (!this.editingCell) return;
+	/** Send an edit once. A second change waits for the first write, so the
+	 * server cannot finish an older value after a newer one. */
+	async saveEdit(rowId: number, col: Column): Promise<boolean> {
+		if (this.editingCell?.rowId !== rowId || this.editingCell.colId !== col.column_id) return false;
 		const row = get(rows).find((r) => r.row_id === rowId);
-		if (!row) return;
+		if (!row) return false;
 		const value = this.editValue;
 		const key = `${rowId}:${col.column_id}`;
-		if (this._savedEdit?.key === key && this._savedEdit.value === value) return;
-		const newData = applyEditToRowData(row.row_data, col.column_id, value, col.type);
-		this._savedEdit = { key, value };
-		error.set(null);
-		try {
-			await updateRow(this.tableId, row.row_id, {
-				row_data: { [col.column_id]: newData[col.column_id] }
-			});
-		} catch (e) {
-			this._savedEdit = null;
-			error.set(e instanceof Error ? e.message : 'Failed to update cell');
+		if (this._savedEdit?.key === key && this._savedEdit.value === value) {
+			return this._savedEdit.promise;
 		}
+		const newData = applyEditToRowData(row.row_data, col.column_id, value, col.type);
+		error.set(null);
+		const tableId = this.tableId;
+		const promise = this._editWriteQueue.then(async () => {
+			try {
+				await updateRow(tableId, row.row_id, {
+					row_data: { [col.column_id]: newData[col.column_id] }
+				});
+				return true;
+			} catch (e) {
+				error.set(e instanceof Error ? e.message : 'Failed to update cell');
+				return false;
+			}
+		});
+		this._editWriteQueue = promise.then(() => undefined);
+		const saved = { key, value, pending: true, promise };
+		this._savedEdit = saved;
+		void promise.then((ok) => {
+			saved.pending = false;
+			if (!ok && this._savedEdit === saved) this._savedEdit = null;
+		});
+		return promise;
 	}
 
 	async toggleCheckbox(rowId: number, col: Column) {
@@ -513,10 +534,7 @@ class TablePageStore {
 		if (view.type !== 'table') return;
 		// The implicit Schema tab (view_id 0) has no table_views row of its
 		// own — its config lives on the table schema instead.
-		const config: Record<string, unknown> =
-			(view.view_id === IMPLICIT_TABLE_VIEW.view_id
-				? get(tables).find((t) => t.table_id === this.tableId)?.view_config
-				: view.config) ?? {};
+		const config = this.currentViewConfig(this.tableId, view.view_id);
 		if (config.group) {
 			const g = config.group as { colId: string; granularity?: 'month' | 'day' };
 			this._groupConfig = g.colId ? g : null;
@@ -548,35 +566,54 @@ class TablePageStore {
 	/** The active view's config as it currently stands in the store — read
 	 * fresh (never cached locally) so a patch always merges onto the latest
 	 * server truth instead of a possibly-stale local copy. */
-	private currentViewConfig(): Record<string, unknown> {
-		if (this.activeViewId === IMPLICIT_TABLE_VIEW.view_id) {
-			return get(tables).find((t) => t.table_id === this.tableId)?.view_config ?? {};
-		}
-		return get(viewsStore).find((v) => v.view_id === this.activeViewId)?.config ?? {};
+	private currentViewConfig(
+		tableId = this.tableId,
+		viewId = this.activeViewId
+	): Record<string, unknown> {
+		const table = get(tables).find((t) => t.table_id === tableId);
+		const view = table?.views?.find((v) => v.view_id === viewId);
+		return view?.type === 'table' ? view.config : (table?.view_config ?? {});
 	}
 
-	/**
-	 * The one write path for view config: merge `patch` onto the current
-	 * server config and PATCH/PUT it. The call's own response triggers
-	 * applySchema() (in backend/tables.ts + backend/views.ts), which writes
-	 * the `tables` store — every $derived reading that store (sortConfig,
-	 * persistedWidths, viewsStore, ...) updates from there, not from this
-	 * method's caller. Errors surface through the shared `error` store.
-	 */
-	private async persistViewConfigPatch(patch: Record<string, unknown>): Promise<void> {
+	/** Queue full-schema responses as well as writes. Each action reads the
+	 * cache after the preceding response has updated it. */
+	private async enqueueConfigWrite(
+		action: () => Promise<unknown>,
+		fallback: string
+	): Promise<boolean> {
+		const write = this._configWriteQueue.then(action);
+		this._configWriteQueue = write.then(
+			() => undefined,
+			() => undefined
+		);
 		try {
-			if (this.activeViewId === IMPLICIT_TABLE_VIEW.view_id) {
-				const newConfig = { ...this.currentViewConfig(), ...patch };
-				await patchSchema(this.tableId, { view_config: newConfig });
-				return;
-			}
-			const view = get(viewsStore).find((v) => v.view_id === this.activeViewId);
-			if (!view || view.type !== 'table') return;
-			const newConfig = { ...view.config, ...patch };
-			await updateView(this.tableId, view.view_id, { config: newConfig });
+			await write;
+			return true;
 		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to update view');
+			error.set(e instanceof Error ? e.message : fallback);
+			return false;
 		}
+	}
+
+	private persistViewConfigPatch(
+		patch:
+			| Record<string, unknown>
+			| ((current: Record<string, unknown>) => Record<string, unknown>),
+		tableId = this.tableId,
+		viewId = this.activeViewId
+	): Promise<boolean> {
+		return this.enqueueConfigWrite(async () => {
+			const table = get(tables).find((t) => t.table_id === tableId);
+			if (!table) throw new Error('Table not found');
+			const view = table.views?.find((v) => v.view_id === viewId);
+			if (!view && viewId !== IMPLICIT_TABLE_VIEW.view_id) throw new Error('View not found');
+			if (view && view.type !== 'table') throw new Error('Not a table view');
+			const current = view?.config ?? table.view_config ?? {};
+			const update = typeof patch === 'function' ? patch(current) : patch;
+			const config = { ...current, ...update };
+			if (view) await updateView(tableId, viewId, { config });
+			else await patchSchema(tableId, { view_config: config });
+		}, 'Failed to update view');
 	}
 
 	/** Sort click: call BE, await it, done — no local optimistic mirror. The
@@ -587,31 +624,24 @@ class TablePageStore {
 
 	private schedulePersist() {
 		if (this._suppressPersist > 0 || this.resizingColId) return;
-		if (this._persistTimer) clearTimeout(this._persistTimer);
-		this._persistTimer = setTimeout(() => this.persistViewConfig(), 100);
-	}
-
-	/** group/filter/colOrder still use the debounced local-optimistic path —
-	 * typing into a filter value or dragging a column reorder fires this on
-	 * every keystroke/step, and round-tripping the BE that often isn't
-	 * reasonable. Sort and widths were pulled out of this (see changeSort
-	 * and onResizeUp) because they're discrete, infrequent actions. */
-	persistViewConfig() {
-		if (this._suppressPersist > 0) return;
-		const patch: Record<string, unknown> = {
+		const tableId = this.tableId;
+		const viewId = this.activeViewId;
+		const key = `${tableId}:${viewId}`;
+		const previous = this._persistTimers.get(key);
+		if (previous) clearTimeout(previous);
+		const patch = {
 			group: this.groupConfig ?? undefined,
-			filter:
-				this.filterConditions.length > 0
-					? this.filterConditions.map(({ colId, operator, value }) => ({ colId, operator, value }))
-					: undefined
+			filter: this.filterConditions.length
+				? this.filterConditions.map(({ colId, operator, value }) => ({ colId, operator, value }))
+				: undefined
 		};
-		// colOrder is per-view and only meaningful for real views — the
-		// implicit tab's column order is the physical col_order mechanism
-		// (see handleDragReorderColumns), never view_config.
-		if (this.activeViewId !== IMPLICIT_TABLE_VIEW.view_id) {
-			patch.colOrder = this.viewColOrder ?? undefined;
-		}
-		this.persistViewConfigPatch(patch);
+		this._persistTimers.set(
+			key,
+			setTimeout(() => {
+				this._persistTimers.delete(key);
+				void this.persistViewConfigPatch(patch, tableId, viewId);
+			}, 100)
+		);
 	}
 
 	// ─── View handlers ─────────────────────────────────────────────────────────
@@ -629,21 +659,24 @@ class TablePageStore {
 	 * the caller can drop the optimistic order and show what persisted.
 	 */
 	async persistColumnOrder(ordered: string[]): Promise<'table' | 'view' | null> {
-		const view = get(viewsStore).find((v) => v.view_id === this.activeViewId);
+		const tableId = this.tableId;
+		const viewId = this.activeViewId;
+		const view = get(tables)
+			.find((t) => t.table_id === tableId)
+			?.views?.find((v) => v.view_id === viewId);
 		error.set(null);
-		try {
-			if (view && view.type === 'table') {
-				await updateView(this.tableId, view.view_id, {
-					config: { ...view.config, colOrder: ordered }
-				});
-				return 'view';
-			}
-			await patchSchema(this.tableId, { col_order: ordered });
-			return 'table';
-		} catch (e) {
-			error.set(e instanceof Error ? e.message : 'Failed to save column order');
-			return null;
+		if (view?.type === 'table') {
+			return (await this.persistViewConfigPatch({ colOrder: ordered }, tableId, viewId))
+				? 'view'
+				: null;
 		}
+		if (view || viewId !== IMPLICIT_TABLE_VIEW.view_id) return null;
+		return (await this.enqueueConfigWrite(
+			() => patchSchema(tableId, { col_order: ordered }),
+			'Failed to save column order'
+		))
+			? 'table'
+			: null;
 	}
 
 	handleViewChange(view: ViewConfig) {
@@ -652,7 +685,11 @@ class TablePageStore {
 		url.searchParams.set('view', String(view.view_id));
 		history.replaceState(history.state, '', url.toString());
 		this.applyViewConfig(view);
-		patchSchema(this.tableId, { default_view: view.view_id }).catch(() => {});
+		const tableId = this.tableId;
+		void this.enqueueConfigWrite(
+			() => patchSchema(tableId, { default_view: view.view_id }),
+			'Failed to save default view'
+		);
 	}
 
 	async handleAddView(type: string, name: string) {
@@ -886,10 +923,13 @@ class TablePageStore {
 			const startWidth = this.resizeStartWidth;
 			this.resizingColId = null;
 			if (width === startWidth) return;
+			this._widthWrites++;
 			this.persistingWidth = true;
-			const widths = { ...parseWidths(this.currentViewConfig()), [colId]: width };
-			this.persistViewConfigPatch({ widths }).finally(() => {
-				this.persistingWidth = false;
+			this.persistViewConfigPatch((current) => ({
+				widths: { ...parseWidths(current), [colId]: width }
+			})).finally(() => {
+				this._widthWrites--;
+				this.persistingWidth = this._widthWrites > 0;
 			});
 		};
 		const onWindowClick = () => {

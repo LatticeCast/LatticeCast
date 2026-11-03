@@ -72,7 +72,10 @@
 	// -> render. No local mirror — the implicit Schema tab's config lives on
 	// the table itself ($tableViewConfig), a real view's on its own row.
 	const activeViewConfig = $derived(
-		s.activeViewId === IMPLICIT_TABLE_VIEW.view_id ? $tableViewConfig : (activeView.config ?? {})
+		s.activeViewId === IMPLICIT_TABLE_VIEW.view_id &&
+			!$viewsStore.some((v) => v.view_id === IMPLICIT_TABLE_VIEW.view_id)
+			? $tableViewConfig
+			: (activeView.config ?? {})
 	);
 	const sortConfig = $derived(parseSortConfig(activeViewConfig));
 	const persistedWidths = $derived(parseWidths(activeViewConfig));
@@ -300,7 +303,6 @@
 				localWidths={displayWidths}
 				onStartEdit={(rowId, col, val) => s.startEdit(rowId, col, val)}
 				onCommitEdit={(rowId, col) => s.commitEdit(rowId, col)}
-				onSaveEdit={(rowId, col) => s.saveEdit(rowId, col)}
 				onCancelEdit={() => s.cancelEdit()}
 				onEditValueChange={(v) => (s.editValue = v)}
 				onToggleCheckbox={(rowId, col) => s.toggleCheckbox(rowId, col)}

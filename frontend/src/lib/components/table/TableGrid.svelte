@@ -38,7 +38,6 @@
 		localWidths,
 		onStartEdit,
 		onCommitEdit,
-		onSaveEdit,
 		onCancelEdit,
 		onEditValueChange,
 		onToggleCheckbox,
@@ -89,7 +88,6 @@
 		onStartEdit: (rowId: number, col: Column, currentVal: unknown) => void;
 		onCommitEdit: (rowId: number, col: Column) => void;
 		/** Send the open cell's value without closing the editor. */
-		onSaveEdit: (rowId: number, col: Column) => void;
 		onCancelEdit: () => void;
 		onEditValueChange: (val: string) => void;
 		onToggleCheckbox: (rowId: number, col: Column) => void;
@@ -676,13 +674,10 @@
 												oninput={(e) =>
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
 												onchange={(e) => {
-													// A date picker confirms with `change`, and on some
-													// platforms Enter never reaches the input because
-													// the calendar popup has the keyboard. Save on the
-													// change but keep the editor open — commitEdit
-													// then skips the repeat instead of double-writing.
+													// Picking a date commits it. Escape can cancel only
+													// while no change has been submitted.
 													onEditValueChange((e.currentTarget as HTMLInputElement).value);
-													onSaveEdit(row.row_id, col);
+													onCommitEdit(row.row_id, col);
 												}}
 												onblur={() => onCommitEdit(row.row_id, col)}
 												onkeydown={(e) => {

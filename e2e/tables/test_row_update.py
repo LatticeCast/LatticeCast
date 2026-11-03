@@ -226,11 +226,11 @@ def test_row_update(authed_page, admin_token, snapshot):
             snap(page, "row_update_FAIL_date_no_input", snapshot)
             pytest.fail("Date input did not appear after clicking date cell")
 
-        # A picker confirms with change (saved immediately) and Enter closes
-        # the editor; both live inside the wait so the write is not missed.
+        # Picking a date commits it, even when the calendar keeps Enter from
+        # reaching the input. No blur or Enter is needed for this write.
         with page.expect_response(is_edit_patch(col_ids["Due"]), timeout=10000):
             date_input.fill("2026-12-31")
-            date_input.press("Enter")
+        date_input.wait_for(state="detached", timeout=10000)
 
         snap(page, "row_update_05_date_committed", snapshot)
 

@@ -39,7 +39,7 @@ export async function updateView(
 		method: 'PUT',
 		body: updates
 	});
-	applySchema(schema);
+	applySchema(schema, tableId);
 	return schema;
 }
 

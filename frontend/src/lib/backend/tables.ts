@@ -117,7 +117,7 @@ export async function patchSchema(
 		method: 'PATCH',
 		body: data
 	});
-	applySchema(schema);
+	applySchema(schema, tableId);
 	return schema;
 }
 

@@ -67,8 +67,8 @@ export const defaultView = derived(currentTable, ($t) => $t?.default_view ?? 0);
 export const views = derived(currentTable, ($t) => $t?.views ?? []);
 export const viewConfig = derived(currentTable, ($t) => $t?.view_config ?? {});
 
-export function applySchema(schema: TableSchema): void {
-	const tid = get(currentTableId);
+export function applySchema(schema: TableSchema, tableId?: number): void {
+	const tid = tableId ?? get(currentTableId);
 	if (!tid) return;
 	patchTableCache(tid, {
 		columns: schema.columns,
