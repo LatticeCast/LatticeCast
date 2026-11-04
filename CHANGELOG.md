@@ -1,16 +1,13 @@
 # Changelog
 
-## Unreleased
-
-- Serialize view configuration writes so quick sort, group, column reorder, and width changes retain each other; keep delayed changes bound to the view where they were made.
-- Commit a picked date when it changes, close its editor after a successful save, and preserve the editor on failure.
-
 ## 0.82.3 — 2026-11-04
 
 - Column reorder writes once, to the place that owns the order: the table's `col_order` when the active tab has no view row, that view's config when it does. Reordering a tab whose view row existed used to update the grid locally and save nothing.
 - A temporal cell saves on the picker's `change` and keeps the editor open until Enter or blur, so a date lands even on a platform where the calendar popup takes the keyboard and Enter never reaches the input.
 - E2E waits match the request that carries the change (`col_order`, or the edited column in `row_data`), so a verification read can no longer run ahead of the write it checks.
-- Verification: `npm run check` 0 errors (67 a11y warnings), full browser suite 71 passed (167s) on the local stack. Stage was not re-verified.
+- Serialize view configuration writes so quick sort, group, column reorder, and width changes retain each other; keep delayed changes bound to the view where they were made.
+- Commit a picked date when it changes, close its editor after a successful save, and preserve the editor on failure.
+- Verification: `npm run check` 0 errors (67 a11y warnings), full browser suite 71 passed (167s) on the local stack; unit suite 9/9 and `tables/` + `table_views/` E2E 44/44 passed on the final 0.82.3 tree. Stage was not re-verified.
 
 ## 0.82.2 — 2026-10-31
 
