@@ -18,6 +18,29 @@ from core.db import reapply_rls_context
 from models.table_view import TableView
 
 
+def schema_from_config(config: dict[str, Any], views_rows: list[TableView]) -> dict[str, Any]:
+    """Assemble the same schema for a single table or a batched list."""
+    view_order = config.get("view_order", []) or []
+    by_id: dict[int, dict[str, Any]] = {
+        v.view_id: {
+            "view_id": v.view_id,
+            "name": v.name,
+            "type": v.type,
+            "config": v.config,
+        }
+        for v in views_rows
+    }
+    ordered_views = [by_id[i] for i in view_order if i in by_id]
+    leftover = [value for i, value in by_id.items() if i not in view_order]
+    return {
+        "columns": config.get("columns", []) or [],
+        "view_order": view_order,
+        "default_view": config.get("default_view", 0) or 0,
+        "views": ordered_views + leftover,
+        "view_config": config.get("view_config", {}) or {},
+    }
+
+
 class TableViewRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -32,30 +55,43 @@ class TableViewRepository:
         # stale ORM object (expire_on_commit=False) and returns it here
         # — leading to PUT /views/{vid} responses with the OLD config.
         result = await self.session.execute(
-            select(TableView).where(
+            select(TableView)
+            .where(
                 TableView.table_id == table_id,
-            ).execution_options(populate_existing=True)
+            )
+            .execution_options(populate_existing=True)
+        )
+        return list(result.scalars().all())
+
+    async def list_for_tables(self, table_ids: list[int]) -> list[TableView]:
+        """Read views for all visible tables with one RLS-scoped query."""
+        if not table_ids:
+            return []
+        await reapply_rls_context(self.session)
+        result = await self.session.execute(
+            select(TableView)
+            .where(TableView.table_id.in_(table_ids))
+            .order_by(TableView.table_id, TableView.view_id)
+            .execution_options(populate_existing=True)
         )
         return list(result.scalars().all())
 
     async def get_by_id(self, table_id: int, view_id: int) -> TableView | None:
         await reapply_rls_context(self.session)
         result = await self.session.execute(
-            select(TableView).where(
+            select(TableView)
+            .where(
                 TableView.table_id == table_id,
                 TableView.view_id == view_id,
-            ).execution_options(populate_existing=True)
+            )
+            .execution_options(populate_existing=True)
         )
         return result.scalar_one_or_none()
 
     async def get_by_name(self, table_id: int, name: str) -> TableView | None:
         await reapply_rls_context(self.session)
         result = await self.session.execute(
-            sa_text(
-                "SELECT * FROM table_views "
-                "WHERE table_id = :tid "
-                "AND config->>'name' = :name LIMIT 1"
-            ),
+            sa_text("SELECT * FROM table_views WHERE table_id = :tid AND config->>'name' = :name LIMIT 1"),
             {"tid": table_id, "name": name},
         )
         row = result.first()
@@ -85,10 +121,7 @@ class TableViewRepository:
         tables.config.view_order atomically. Returns the full
         schema snapshot {columns, view_order, default_view, views}."""
         await self.session.execute(
-            sa_text(
-                "SELECT create_view(CAST(:ws AS uuid), :tid, "
-                "CAST(:config AS jsonb), CAST(:by AS uuid))"
-            ),
+            sa_text("SELECT create_view(CAST(:ws AS uuid), :tid, CAST(:config AS jsonb), CAST(:by AS uuid))"),
             {
                 "ws": str(workspace_id),
                 "tid": table_id,
@@ -111,10 +144,7 @@ class TableViewRepository:
         config. Returns the full schema snapshot with the embedded
         views[] array so the FE can replace its store from one shape."""
         await self.session.execute(
-            sa_text(
-                "SELECT update_view(CAST(:ws AS uuid), :tid, :vid, "
-                "CAST(:patch AS jsonb), CAST(:by AS uuid))"
-            ),
+            sa_text("SELECT update_view(CAST(:ws AS uuid), :tid, :vid, CAST(:patch AS jsonb), CAST(:by AS uuid))"),
             {
                 "ws": str(workspace_id),
                 "tid": table_id,
@@ -136,10 +166,7 @@ class TableViewRepository:
         """V14 delete_view: removes the row + strips view_id from
         view_order. Returns the full schema snapshot."""
         await self.session.execute(
-            sa_text(
-                "SELECT delete_view(CAST(:ws AS uuid), :tid, :vid, "
-                "CAST(:by AS uuid))"
-            ),
+            sa_text("SELECT delete_view(CAST(:ws AS uuid), :tid, :vid, CAST(:by AS uuid))"),
             {
                 "ws": str(workspace_id),
                 "tid": table_id,
@@ -152,44 +179,20 @@ class TableViewRepository:
 
     # ── Schema reads (tables.config) ──────────────────────────────────────
 
-    async def get_tables_schema(
-        self, workspace_id: UUID, table_id: int
-    ) -> dict[str, Any]:
+    async def get_tables_schema(self, workspace_id: UUID, table_id: int) -> dict[str, Any]:
         """Return the entire schema snapshot the FE needs to render a
         table: {columns, view_order, default_view, views}. Used by GET
         and every mutation endpoint (server-is-SSOT)."""
         await reapply_rls_context(self.session)
         result = await self.session.execute(
-            sa_text(
-                "SELECT config FROM public.tables "
-                "WHERE workspace_id = CAST(:ws AS uuid) AND table_id = :tid"
-            ),
+            sa_text("SELECT config FROM public.tables WHERE workspace_id = CAST(:ws AS uuid) AND table_id = :tid"),
             {"ws": str(workspace_id), "tid": table_id},
         )
         row = result.first()
         cfg: dict[str, Any] = {}
         if row and isinstance(row[0], dict):
             cfg = row[0]
-        view_order = cfg.get("view_order", []) or []
-        views_rows = await self.list_all(table_id)
-        by_id: dict[int, dict[str, Any]] = {
-            v.view_id: {
-                "view_id": v.view_id,
-                "name": v.name,
-                "type": v.type,
-                "config": v.config,
-            }
-            for v in views_rows
-        }
-        ordered_views = [by_id[i] for i in view_order if i in by_id]
-        leftover = [d for i, d in by_id.items() if i not in view_order]
-        return {
-            "columns": cfg.get("columns", []) or [],
-            "view_order": view_order,
-            "default_view": cfg.get("default_view", 0) or 0,
-            "views": ordered_views + leftover,
-            "view_config": cfg.get("view_config", {}) or {},
-        }
+        return schema_from_config(cfg, await self.list_all(table_id))
 
     # ── Order / default-view / column writes (V13 + V14 PG functions) ─────
 
@@ -201,10 +204,7 @@ class TableViewRepository:
         updated_by: UUID,
     ) -> dict[str, Any]:
         await self.session.execute(
-            sa_text(
-                "SELECT update_view_order(CAST(:ws AS uuid), :tid, "
-                "CAST(:order AS jsonb), CAST(:by AS uuid))"
-            ),
+            sa_text("SELECT update_view_order(CAST(:ws AS uuid), :tid, CAST(:order AS jsonb), CAST(:by AS uuid))"),
             {
                 "ws": str(workspace_id),
                 "tid": table_id,
@@ -223,10 +223,7 @@ class TableViewRepository:
         updated_by: UUID,
     ) -> dict[str, Any]:
         await self.session.execute(
-            sa_text(
-                "SELECT update_default_view(CAST(:ws AS uuid), :tid, "
-                ":vid, CAST(:by AS uuid))"
-            ),
+            sa_text("SELECT update_default_view(CAST(:ws AS uuid), :tid, :vid, CAST(:by AS uuid))"),
             {
                 "ws": str(workspace_id),
                 "tid": table_id,
@@ -245,10 +242,7 @@ class TableViewRepository:
         updated_by: UUID,
     ) -> dict[str, Any]:
         await self.session.execute(
-            sa_text(
-                "SELECT update_col_order(CAST(:ws AS uuid), :tid, "
-                "CAST(:order AS jsonb), CAST(:by AS uuid))"
-            ),
+            sa_text("SELECT update_col_order(CAST(:ws AS uuid), :tid, CAST(:order AS jsonb), CAST(:by AS uuid))"),
             {
                 "ws": str(workspace_id),
                 "tid": table_id,
@@ -309,8 +303,7 @@ class TableViewRepository:
     ) -> dict[str, Any]:
         await self.session.execute(
             sa_text(
-                "SELECT add_column(CAST(:ws AS uuid), :tid, :name, :type, "
-                "CAST(:opts AS jsonb), CAST(:by AS uuid))"
+                "SELECT add_column(CAST(:ws AS uuid), :tid, :name, :type, CAST(:opts AS jsonb), CAST(:by AS uuid))"
             ),
             {
                 "ws": str(workspace_id),
@@ -335,10 +328,7 @@ class TableViewRepository:
         # V13 update_column takes column_id as TEXT (not UUID) — it indexes
         # into the columns JSONB array by string match on column_id.
         await self.session.execute(
-            sa_text(
-                "SELECT update_column(CAST(:ws AS uuid), :tid, "
-                ":cid, CAST(:patch AS jsonb), CAST(:by AS uuid))"
-            ),
+            sa_text("SELECT update_column(CAST(:ws AS uuid), :tid, :cid, CAST(:patch AS jsonb), CAST(:by AS uuid))"),
             {
                 "ws": str(workspace_id),
                 "tid": table_id,
@@ -358,10 +348,7 @@ class TableViewRepository:
         deleted_by: UUID,
     ) -> dict[str, Any]:
         await self.session.execute(
-            sa_text(
-                "SELECT delete_column(CAST(:ws AS uuid), :tid, "
-                ":cid, CAST(:by AS uuid))"
-            ),
+            sa_text("SELECT delete_column(CAST(:ws AS uuid), :tid, :cid, CAST(:by AS uuid))"),
             {
                 "ws": str(workspace_id),
                 "tid": table_id,

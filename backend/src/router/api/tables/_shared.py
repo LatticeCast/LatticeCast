@@ -45,15 +45,34 @@ async def _build_table_response(table: Table, session: AsyncSession) -> dict[str
     mutation endpoint returns. FE never needs separate read calls."""
     view_repo = TableViewRepository(session)
     schema = await view_repo.get_tables_schema(table.workspace_id, table.table_id)
+    return table_response_data(
+        table.workspace_id,
+        table.table_id,
+        table.table_name,
+        table.created_at,
+        table.updated_at,
+        schema,
+    )
+
+
+def table_response_data(
+    workspace_id: UUID,
+    table_id: int,
+    table_name: str,
+    created_at: Any,
+    updated_at: Any,
+    schema: dict[str, Any],
+) -> dict[str, Any]:
+    """Render identity plus a preloaded schema in the public API shape."""
     return {
-        "workspace_id": table.workspace_id,
-        "table_id": table.table_id,
-        "table_name": table.table_name,
+        "workspace_id": workspace_id,
+        "table_id": table_id,
+        "table_name": table_name,
         "columns": schema.get("columns", []),
         "view_order": schema.get("view_order", []),
         "default_view": schema.get("default_view", 0) or 0,
         "views": schema.get("views", []),
         "view_config": schema.get("view_config", {}) or {},
-        "created_at": table.created_at,
-        "updated_at": table.updated_at,
+        "created_at": created_at,
+        "updated_at": updated_at,
     }

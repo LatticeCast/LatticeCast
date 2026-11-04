@@ -22,11 +22,11 @@ from middleware.auth import get_current_user, get_rls_session
 from models.table import TableCreate, TableResponse, TableUpdate
 from models.user import User
 from repository.table import TableRepository
-from repository.table_view import TableViewRepository
+from repository.table_view import TableViewRepository, schema_from_config
 from repository.workspace import WorkspaceRepository
 from util.pg_errors import http_error_for
 
-from ._shared import _build_table_response, _get_table_for_member
+from ._shared import _build_table_response, _get_table_for_member, table_response_data
 
 router = APIRouter(prefix="/tables", tags=["tables"])
 
@@ -80,15 +80,23 @@ async def list_tables(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """List tables across the user's workspaces (each with its column schema)."""
-    ws_repo = WorkspaceRepository(session)
-    workspaces = await ws_repo.list_by_user(user.user_id)
-    table_repo = TableRepository(session)
-    out: list[dict[str, Any]] = []
-    for ws in workspaces:
-        for t in await table_repo.list_by_workspace(ws.workspace_id):
-            out.append(await _build_table_response(t, session))
-    return out
+    """List RLS-visible tables and their schemas with two data queries."""
+    table_rows = await TableRepository(session).list_all_with_config()
+    views = await TableViewRepository(session).list_for_tables([row["table_id"] for row in table_rows])
+    views_by_table: dict[int, list[Any]] = {}
+    for view in views:
+        views_by_table.setdefault(view.table_id, []).append(view)
+    return [
+        table_response_data(
+            row["workspace_id"],
+            row["table_id"],
+            row["table_name"],
+            row["created_at"],
+            row["updated_at"],
+            schema_from_config(row["config"] or {}, views_by_table.get(row["table_id"], [])),
+        )
+        for row in table_rows
+    ]
 
 
 @router.get("/{table_id}", response_model=TableResponse)
@@ -116,10 +124,7 @@ async def update_table(
     await _require_write(table.workspace_id, user.user_id, WorkspaceRepository(session))
     table_repo = TableRepository(session)
     existing = await table_repo.list_by_workspace(table.workspace_id)
-    clash = any(
-        t.table_name == data.table_name and t.table_id != table.table_id
-        for t in existing
-    )
+    clash = any(t.table_name == data.table_name and t.table_id != table.table_id for t in existing)
     if clash:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="A table with that name already exists in this workspace"
@@ -170,13 +175,9 @@ async def patch_schema(
     view_repo = TableViewRepository(session)
 
     if data.view_order is not None:
-        await view_repo.set_order(
-            table.workspace_id, table.table_id, data.view_order, updated_by=user.user_id
-        )
+        await view_repo.set_order(table.workspace_id, table.table_id, data.view_order, updated_by=user.user_id)
     if data.col_order is not None:
-        await view_repo.update_col_order(
-            table.workspace_id, table.table_id, data.col_order, updated_by=user.user_id
-        )
+        await view_repo.update_col_order(table.workspace_id, table.table_id, data.col_order, updated_by=user.user_id)
         await invalidate_schema_cache(str(table.workspace_id))
     if data.view_config is not None:
         await view_repo.update_view_config(

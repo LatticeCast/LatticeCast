@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.82.4 — 2026-11-04
 
 - Make blank, CRM, and PM template seeds emit text blob columns directly; remove the legacy doc normalization from table creation.
+- Batch `GET /tables` across readable workspaces into one table query and one view query while preserving full schema responses.
 
 ## 0.82.3 — 2026-11-04
 

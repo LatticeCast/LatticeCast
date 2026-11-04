@@ -3,6 +3,7 @@
 # (operating on the __schema__ row). Index management stays here because it
 # touches public.rows, not table_views.
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, text
@@ -50,18 +51,12 @@ class TableRepository:
         """
         name = table_name.lower()
         result = await self.session.execute(
-            text(
-                "SELECT create_table_from_template("
-                "CAST(:ws AS uuid), :name, :kind, CAST(:by AS uuid)) AS table_id"
-            ),
+            text("SELECT create_table_from_template(CAST(:ws AS uuid), :name, :kind, CAST(:by AS uuid)) AS table_id"),
             {"ws": str(workspace_id), "name": name, "kind": kind, "by": str(created_by)},
         )
         new_id = result.scalar_one()
         row_result = await self.session.execute(
-            text(
-                "SELECT workspace_id, table_id, table_name, created_at, updated_at "
-                "FROM tables WHERE table_id = :tid"
-            ),
+            text("SELECT workspace_id, table_id, table_name, created_at, updated_at FROM tables WHERE table_id = :tid"),
             {"tid": new_id},
         )
         row = row_result.mappings().one()
@@ -79,14 +74,10 @@ class TableRepository:
         caller may read, so an unreadable table is indistinguishable from an
         absent one."""
         await reapply_rls_context(self.session)
-        result = await self.session.execute(
-            select(Table).where(Table.table_id == table_id)
-        )
+        result = await self.session.execute(select(Table).where(Table.table_id == table_id))
         return result.scalars().first()
 
-    async def resolve_table_global(
-        self, identifier: str, workspace_ids: list[UUID] | None = None
-    ) -> Table | None:
+    async def resolve_table_global(self, identifier: str, workspace_ids: list[UUID] | None = None) -> Table | None:
         """Resolve a table by name.
 
         With `workspace_ids`, the search is scoped to those workspaces. With
@@ -104,17 +95,25 @@ class TableRepository:
             if not workspace_ids:
                 return None
             conditions.append(Table.workspace_id.in_(workspace_ids))
-        result = await self.session.execute(
-            select(Table).where(*conditions).order_by(Table.table_id)
-        )
+        result = await self.session.execute(select(Table).where(*conditions).order_by(Table.table_id))
         return result.scalars().first()
+
+    async def list_all_with_config(self) -> list[dict[str, Any]]:
+        """Read all RLS-visible tables and their JSONB schemas in one query."""
+        await reapply_rls_context(self.session)
+        result = await self.session.execute(
+            text(
+                "SELECT workspace_id, table_id, table_name, config, "
+                "created_at, updated_at FROM public.tables "
+                "ORDER BY workspace_id, table_name"
+            )
+        )
+        return [dict(row) for row in result.mappings().all()]
 
     async def list_by_workspace(self, workspace_id: UUID) -> list[Table]:
         await reapply_rls_context(self.session)
         result = await self.session.execute(
-            select(Table)
-            .where(Table.workspace_id == workspace_id)
-            .order_by(Table.table_name)
+            select(Table).where(Table.workspace_id == workspace_id).order_by(Table.table_name)
         )
         return list(result.scalars().all())
 
@@ -166,9 +165,7 @@ class TableRepository:
         cid = column_id.replace("-", "")[:12]
         return f"idx_rd_{ws}_{table_id}_{cid}"
 
-    async def create_column_index(
-        self, workspace_id: UUID, table_id: int, column_id: str, col_type: str
-    ) -> None:
+    async def create_column_index(self, workspace_id: UUID, table_id: int, column_id: str, col_type: str) -> None:
         """app_user has no DDL — V11 defines create_row_data_index as
         SECURITY DEFINER owned by dba; V18 fixed it to use
         immutable_iso_to_ts() for date columns instead of ::NUMERIC."""
@@ -182,9 +179,7 @@ class TableRepository:
         )
         await self.session.commit()
 
-    async def drop_column_index(
-        self, workspace_id: UUID, table_id: int, column_id: str
-    ) -> None:
+    async def drop_column_index(self, workspace_id: UUID, table_id: int, column_id: str) -> None:
         idx_name = self._index_name(workspace_id, table_id, column_id)
         await self.session.execute(
             text("SELECT drop_row_data_index(:ws, :idx, :tid, :cid)").bindparams(
