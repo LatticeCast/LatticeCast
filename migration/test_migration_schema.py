@@ -711,4 +711,19 @@ def verify(psql_fn) -> list[str]:
     if not result:
         errors.append("MISSING INDEX: rows.row_data GIN for LQL containment (V72)")
 
+    # V73: template seed functions must emit the final blob/text schema directly.
+    # The dispatcher must no longer depend on a legacy doc conversion pass.
+    legacy_doc_functions = psql_fn(
+        "SELECT count(*) FROM pg_proc "
+        "WHERE pronamespace = 'public'::regnamespace "
+        "  AND proname IN ('_seed_blank', '_seed_crm', '_seed_pm', "
+        "                  'create_table_from_template') "
+        "  AND (prosrc LIKE '%''doc''%' "
+        "       OR prosrc LIKE '%\"kind\":\"doc\"%');"
+    ).strip()
+    if legacy_doc_functions != "0":
+        errors.append(
+            "LEGACY DOC TEMPLATE FUNCTION: expected no doc type or kind (V73)"
+        )
+
     return errors

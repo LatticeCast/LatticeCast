@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Make blank, CRM, and PM template seeds emit text blob columns directly; remove the legacy doc normalization from table creation.
+
 ## 0.82.3 — 2026-11-04
 
 - Column reorder writes once, to the place that owns the order: the table's `col_order` when the active tab has no view row, that view's config when it does. Reordering a tab whose view row existed used to update the grid locally and save nothing.
