@@ -5,11 +5,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.lattice_ql import compile_lql
-from core.db import get_session
+from core.db import get_fixed_identity_session
 from repository.dashboard import DashboardRepository
 from repository.table import TableRepository
 from repository.table_view import TableViewRepository
@@ -28,16 +27,16 @@ class AnnouncementQueryRequest(BaseModel):
 @router.post("/query")
 async def query_announcements(
     body: AnnouncementQueryRequest,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_fixed_identity_session(ANNOUNCEMENT_USER_ID)),
 ) -> dict[str, Any]:
     """Run caller-provided LatticeQL against the read-only announcement data.
 
     This endpoint is intentionally public: callers do not need an app account.
-    The backend always reads under the fixed announcement identity.
+    The backend always reads under the fixed announcement identity -- set by
+    the `get_fixed_identity_session` dependency, the same way an authenticated
+    request's identity is set, so it gets the same transaction-local
+    re-application on every transaction this session opens.
     """
-    await session.execute(
-        text("SELECT set_config('app.current_user_id', :uid, false)").bindparams(uid=ANNOUNCEMENT_USER_ID)
-    )
     announcement = await TableRepository(session).resolve_table_global(
         ANNOUNCEMENT_TABLE_NAME, [UUID(ANNOUNCEMENT_WORKSPACE_ID)]
     )

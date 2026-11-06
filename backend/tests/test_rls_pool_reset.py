@@ -1,14 +1,25 @@
-"""The RLS identity must not survive a pooled connection.
+"""The RLS identity must not survive a pooled connection, or a commit.
 
-`app.current_user_id` is a session-level GUC and SQLAlchemy's asyncpg pool
-returns a connection with only a ROLLBACK -- it never issues DISCARD/RESET.
-Without the checkout hook in core.db, a request that does not set an identity
-(the pre-token lookups, or any route that forgets get_rls_session) would be
-authorised as whoever used that connection last: a cross-user read.
+`app.current_user_id` is set is_local=TRUE: a transaction-local GUC that
+PostgreSQL itself clears at COMMIT/ROLLBACK, on whichever physical connection
+ran the transaction. That is what makes it safe under an external
+transaction-mode pooler (e.g. PgBouncer) that can hand each transaction of
+the same logical session to a different backend connection -- a session-level
+set (is_local=FALSE) would not reliably survive that handoff, and the next
+transaction on that connection -- quite possibly a different tenant's
+request -- could inherit it.
 
-These tests pin the hook's contract. The last one needs a database and skips
-when none is reachable; it is the behaviour the hook exists for, so it must run
-wherever the backend talks to PostgreSQL.
+The checkout hook in core.db is a second, independent layer for the case
+SQLAlchemy's own pool already had to handle before this: its asyncpg pool
+returns a connection with only a ROLLBACK, never DISCARD/RESET, so a
+session-level value used to survive checkin. A request that never sets an
+identity (the pre-token lookups, or any route that forgets get_rls_session)
+would then be authorised as whoever used that connection last: a cross-user
+read.
+
+These tests pin both layers' contracts. The ones needing a database skip
+when none is reachable; they are the behaviour these mechanisms exist for, so
+they must run wherever the backend talks to PostgreSQL.
 """
 
 from __future__ import annotations
@@ -120,10 +131,19 @@ def _database_reachable(url: str) -> bool:
     return True
 
 
-def test_pooled_connection_never_hands_over_a_previous_identity():
+@pytest.fixture
+def db_url() -> str:
+    """The app DB URL, or skip -- shared by every test below that needs a
+    real PostgreSQL to pin behaviour against (connection pooling, COMMIT
+    semantics) that cannot be faked with a mock connection."""
     url = _database_url()
     if not _database_reachable(url):
         pytest.skip("no database reachable from this environment")
+    return url
+
+
+def test_pooled_connection_never_hands_over_a_previous_identity(db_url: str):
+    url = db_url
 
     async def scenario() -> str | None:
         # One connection, so the second session must reuse the first's.
@@ -166,11 +186,10 @@ def test_install_rls_identity_hook_is_idempotent(monkeypatch):
     assert event.contains(Session, "after_begin", core_db.apply_rls_identity)
 
 
-def test_identity_is_reapplied_after_a_commit():
-    """A commit returns the connection; the next statement must keep its caller."""
-    url = _database_url()
-    if not _database_reachable(url):
-        pytest.skip("no database reachable from this environment")
+def test_identity_is_reapplied_after_a_commit(db_url: str):
+    """A commit clears the transaction-local GUC; the next statement on the
+    same session must still see its caller, via after_begin re-applying it."""
+    url = db_url
 
     async def scenario() -> tuple[str | None, str | None]:
         engine = create_async_engine(url, pool_size=1, max_overflow=0)
@@ -193,10 +212,8 @@ def test_identity_is_reapplied_after_a_commit():
     assert actual == expected, f"identity lost at the commit boundary: {actual!r}"
 
 
-def test_a_session_without_identity_sets_nothing():
-    url = _database_url()
-    if not _database_reachable(url):
-        pytest.skip("no database reachable from this environment")
+def test_a_session_without_identity_sets_nothing(db_url: str):
+    url = db_url
 
     async def scenario() -> str | None:
         engine = create_async_engine(url, pool_size=1, max_overflow=0)
@@ -213,3 +230,38 @@ def test_a_session_without_identity_sets_nothing():
             await engine.dispose()
 
     assert asyncio.run(scenario()) in (None, "")
+
+
+def test_commit_alone_clears_the_identity_with_no_app_hook_involved(db_url: str):
+    """The transaction-local guarantee holds without any app-level help.
+
+    Deliberately installs neither the checkout-clear hook nor the
+    after_begin re-apply hook, and sets the GUC on a raw Core connection
+    rather than through an ORM Session. This is the property an external
+    transaction-mode pooler depends on: COMMIT alone -- PostgreSQL's own
+    transaction semantics, not a reset query or an app event -- is what
+    clears the value, on whatever physical connection happened to run it.
+
+    Not a duplicate of `test_identity_is_reapplied_after_a_commit`: that one
+    proves the app's hook makes the identity outlive a commit; this one
+    proves the opposite baseline it is built on -- that PostgreSQL itself
+    drops it with no app help at all. Losing either leaves a gap.
+    """
+    url = db_url
+
+    async def scenario() -> str | None:
+        engine = create_async_engine(url, pool_size=1, max_overflow=0)
+        try:
+            async with engine.connect() as connection:
+                async with connection.begin():
+                    await connection.execute(
+                        text(f"SELECT set_config('{RLS_IDENTITY_SETTING}', :uid, true)"),
+                        {"uid": str(uuid.uuid4())},
+                    )
+                # `connection.begin()` committed on a clean exit above.
+                result = await connection.execute(text(f"SELECT current_setting('{RLS_IDENTITY_SETTING}', true)"))
+                return result.scalar()
+        finally:
+            await engine.dispose()
+
+    assert asyncio.run(scenario()) in (None, ""), "is_local=TRUE identity survived its own COMMIT"

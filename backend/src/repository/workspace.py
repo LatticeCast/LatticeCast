@@ -3,10 +3,9 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.db import reapply_rls_context
 from models.workspace import Workspace, WorkspaceMember
+from repository._base import RLSRepository
 
 if TYPE_CHECKING:
     # Imported for the annotations only; the runtime import stays inside the
@@ -25,10 +24,7 @@ def _highest_level(actions: list[str]) -> str:
     return "read"
 
 
-class WorkspaceRepository:
-    def __init__(self, session: AsyncSession):
-        self.session = session
-
+class WorkspaceRepository(RLSRepository):
     async def create(self, workspace_name: str) -> Workspace:
         workspace = Workspace(workspace_name=workspace_name)
         self.session.add(workspace)
@@ -37,8 +33,7 @@ class WorkspaceRepository:
         return workspace
 
     async def get_by_id(self, workspace_id: UUID) -> Workspace | None:
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(select(Workspace).where(Workspace.workspace_id == workspace_id))
+        result = await self._execute(select(Workspace).where(Workspace.workspace_id == workspace_id))
         return result.scalar_one_or_none()
 
     async def list_by_user(self, user_id: UUID) -> list[Workspace]:
@@ -47,8 +42,7 @@ class WorkspaceRepository:
         No predicate of its own: the workspaces_read policy (V52) already
         returns exactly the rows the caller may read.
         """
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(select(Workspace))
+        result = await self._execute(select(Workspace))
         return list(result.scalars().all())
 
     async def grant(self, workspace_id: UUID, user_id: UUID, level: str) -> None:
@@ -84,8 +78,7 @@ class WorkspaceRepository:
         from models.user import UserInfo
         from models.workspace import MemberFullResponse
 
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
+        result = await self._execute(
             select(
                 WorkspaceMember.workspace_id,
                 WorkspaceMember.user_id,
@@ -122,8 +115,7 @@ class WorkspaceRepository:
         the full roster to an owner of that workspace. Every caller of the
         four public checks below satisfies one of the two.
         """
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
+        result = await self._execute(
             select(WorkspaceMember.action).where(
                 WorkspaceMember.workspace_id == workspace_id,
                 WorkspaceMember.user_id == user_id,
@@ -150,8 +142,7 @@ class WorkspaceRepository:
         One aggregate query; a user with no rows reads as "read", the same
         default the three-branch permission CASE used to fall back to.
         """
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
+        result = await self._execute(
             select(func.array_agg(WorkspaceMember.action)).where(
                 WorkspaceMember.workspace_id == workspace_id,
                 WorkspaceMember.user_id == user_id,
@@ -175,7 +166,6 @@ class WorkspaceRepository:
 
         Tries UUID parse first; falls back to LOWER(workspace_name) lookup.
         """
-        await reapply_rls_context(self.session)
         try:
             workspace_uuid = UUID(identifier)
             workspace = await self.get_by_id(workspace_uuid)
@@ -184,7 +174,7 @@ class WorkspaceRepository:
         except ValueError:
             pass
         # Fallback: case-insensitive workspace_name lookup
-        result = await self.session.execute(
+        result = await self._execute(
             select(Workspace).where(func.lower(Workspace.workspace_name) == identifier.lower())
         )
         return result.scalar_one_or_none()
@@ -198,8 +188,7 @@ class WorkspaceRepository:
         fallback needs no predicate: workspaces_read has already filtered the
         rows to what the caller may read.
         """
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
+        result = await self._execute(
             select(Workspace)
             .join(WorkspaceMember, WorkspaceMember.workspace_id == Workspace.workspace_id)
             .where(
@@ -213,5 +202,5 @@ class WorkspaceRepository:
         if workspace:
             return workspace
         # Fall back to any readable workspace
-        result = await self.session.execute(select(Workspace).order_by(Workspace.created_at).limit(1))
+        result = await self._execute(select(Workspace).order_by(Workspace.created_at).limit(1))
         return result.scalar_one_or_none()

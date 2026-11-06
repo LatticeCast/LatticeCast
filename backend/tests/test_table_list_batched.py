@@ -46,10 +46,7 @@ def test_list_tables_batches_across_workspaces_and_preserves_view_order():
         _result(mappings=table_rows),
         _result(scalars=views),
     ]
-    with (
-        patch("repository.table.reapply_rls_context", new_callable=AsyncMock),
-        patch("repository.table_view.reapply_rls_context", new_callable=AsyncMock),
-    ):
+    with patch("repository._base.reapply_rls_context", new_callable=AsyncMock):
         response = asyncio.run(list_tables(None, session))
 
     assert session.execute.await_count == 2
@@ -64,7 +61,7 @@ def test_list_tables_batches_across_workspaces_and_preserves_view_order():
 def test_list_tables_skips_view_query_when_no_tables_are_visible():
     session = AsyncMock()
     session.execute.return_value = _result()
-    with patch("repository.table.reapply_rls_context", new_callable=AsyncMock):
+    with patch("repository._base.reapply_rls_context", new_callable=AsyncMock):
         response = asyncio.run(list_tables(None, session))
 
     assert response == []

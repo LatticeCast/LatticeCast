@@ -7,10 +7,9 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.db import reapply_rls_context
 from models.table import Table
+from repository._base import RLSRepository
 
 # Column types that carry a per-column partial index on public.rows. This list
 # must match the types public.create_row_data_index accepts, or a column type
@@ -30,10 +29,7 @@ INDEXED_TYPES = {
 }
 
 
-class TableRepository:
-    def __init__(self, session: AsyncSession):
-        self.session = session
-
+class TableRepository(RLSRepository):
     async def create_from_template(
         self,
         workspace_id: UUID,
@@ -73,8 +69,7 @@ class TableRepository:
         """Primary-key read. The tables_read policy narrows it to workspaces the
         caller may read, so an unreadable table is indistinguishable from an
         absent one."""
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(select(Table).where(Table.table_id == table_id))
+        result = await self._execute(select(Table).where(Table.table_id == table_id))
         return result.scalars().first()
 
     async def resolve_table_global(self, identifier: str, workspace_ids: list[UUID] | None = None) -> Table | None:
@@ -89,19 +84,17 @@ class TableRepository:
         a case-insensitive match would make two tables named `Log` and `log`
         resolve to whichever row the planner returned first.
         """
-        await reapply_rls_context(self.session)
         conditions = [Table.table_name == identifier]
         if workspace_ids is not None:
             if not workspace_ids:
                 return None
             conditions.append(Table.workspace_id.in_(workspace_ids))
-        result = await self.session.execute(select(Table).where(*conditions).order_by(Table.table_id))
+        result = await self._execute(select(Table).where(*conditions).order_by(Table.table_id))
         return result.scalars().first()
 
     async def list_all_with_config(self) -> list[dict[str, Any]]:
         """Read all RLS-visible tables and their JSONB schemas in one query."""
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
+        result = await self._execute(
             text(
                 "SELECT workspace_id, table_id, table_name, config, "
                 "created_at, updated_at FROM public.tables "
@@ -111,8 +104,7 @@ class TableRepository:
         return [dict(row) for row in result.mappings().all()]
 
     async def list_by_workspace(self, workspace_id: UUID) -> list[Table]:
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
+        result = await self._execute(
             select(Table).where(Table.workspace_id == workspace_id).order_by(Table.table_name)
         )
         return list(result.scalars().all())

@@ -11,11 +11,10 @@ from typing import Any
 from uuid import UUID
 
 from sqlalchemy import text as sa_text
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from core.db import reapply_rls_context
 from models.table_view import TableView
+from repository._base import RLSRepository
 
 
 def schema_from_config(config: dict[str, Any], views_rows: list[TableView]) -> dict[str, Any]:
@@ -41,20 +40,16 @@ def schema_from_config(config: dict[str, Any], views_rows: list[TableView]) -> d
     }
 
 
-class TableViewRepository:
-    def __init__(self, session: AsyncSession):
-        self.session = session
-
+class TableViewRepository(RLSRepository):
     # ── Row access ────────────────────────────────────────────────────────
 
     async def list_all(self, table_id: int) -> list[TableView]:
-        await reapply_rls_context(self.session)
         # populate_existing=True forces SA to overwrite any cached
         # TableView instances in the identity map with fresh DB rows.
         # Without it, after a PG-function UPDATE the session keeps the
         # stale ORM object (expire_on_commit=False) and returns it here
         # — leading to PUT /views/{vid} responses with the OLD config.
-        result = await self.session.execute(
+        result = await self._execute(
             select(TableView)
             .where(
                 TableView.table_id == table_id,
@@ -67,8 +62,7 @@ class TableViewRepository:
         """Read views for all visible tables with one RLS-scoped query."""
         if not table_ids:
             return []
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
+        result = await self._execute(
             select(TableView)
             .where(TableView.table_id.in_(table_ids))
             .order_by(TableView.table_id, TableView.view_id)
@@ -77,8 +71,7 @@ class TableViewRepository:
         return list(result.scalars().all())
 
     async def get_by_id(self, table_id: int, view_id: int) -> TableView | None:
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
+        result = await self._execute(
             select(TableView)
             .where(
                 TableView.table_id == table_id,
@@ -89,8 +82,7 @@ class TableViewRepository:
         return result.scalar_one_or_none()
 
     async def get_by_name(self, table_id: int, name: str) -> TableView | None:
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
+        result = await self._execute(
             sa_text("SELECT * FROM table_views WHERE table_id = :tid AND config->>'name' = :name LIMIT 1"),
             {"tid": table_id, "name": name},
         )
@@ -183,8 +175,7 @@ class TableViewRepository:
         """Return the entire schema snapshot the FE needs to render a
         table: {columns, view_order, default_view, views}. Used by GET
         and every mutation endpoint (server-is-SSOT)."""
-        await reapply_rls_context(self.session)
-        result = await self.session.execute(
+        result = await self._execute(
             sa_text("SELECT config FROM public.tables WHERE workspace_id = CAST(:ws AS uuid) AND table_id = :tid"),
             {"ws": str(workspace_id), "tid": table_id},
         )

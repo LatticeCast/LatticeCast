@@ -18,7 +18,7 @@ class TestAnnouncementQuery:
 
         async def _run_test():
             from router.api.announcements import (
-                ANNOUNCEMENT_USER_ID,
+                ANNOUNCEMENT_TABLE_NAME,
                 ANNOUNCEMENT_WORKSPACE_ID,
                 AnnouncementQueryRequest,
                 query_announcements,
@@ -44,7 +44,7 @@ class TestAnnouncementQuery:
                     return_value=AsyncMock(
                         resolve_table_global=AsyncMock(return_value=SimpleNamespace(table_id=42))
                     ),
-                ),
+                ) as table_repo,
                 patch(
                     "router.api.announcements.compile_lql",
                     new=AsyncMock(return_value=(compiled_sql, compiled_params)),
@@ -57,6 +57,9 @@ class TestAnnouncementQuery:
                 response = await query_announcements(AnnouncementQueryRequest(lql=caller_lql), session)
 
             assert response == {"rows": expected_rows, "columns": expected_schema["columns"]}
+            table_repo.return_value.resolve_table_global.assert_awaited_once_with(
+                ANNOUNCEMENT_TABLE_NAME, [UUID(ANNOUNCEMENT_WORKSPACE_ID)]
+            )
             schema_repo.return_value.get_tables_schema.assert_awaited_once_with(
                 UUID(ANNOUNCEMENT_WORKSPACE_ID),
                 42,
@@ -64,9 +67,8 @@ class TestAnnouncementQuery:
             compile_lql.assert_awaited_once_with(caller_lql, ANNOUNCEMENT_WORKSPACE_ID, session)
             execute.assert_awaited_once_with(session, compiled_sql, compiled_params)
 
-            session.execute.assert_awaited_once()
-            access_statement = session.execute.await_args.args[0]
-            assert "set_config('app.current_user_id'" in str(access_statement)
-            assert access_statement.compile().params == {"uid": ANNOUNCEMENT_USER_ID}
+            # FastAPI supplies a session with the fixed identity already set.
+            # The handler itself only performs the announcement query.
+            session.execute.assert_not_awaited()
 
         _run(_run_test())

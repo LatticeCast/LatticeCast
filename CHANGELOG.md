@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.82.5 — 2026-11-06
+
+- Make the RLS identity GUC (`app.current_user_id`) transaction-local (`set_config(..., true)`) instead of session-level, re-applied at the start of every transaction rather than relying on it surviving a connection handoff. Closes the gap that would otherwise make a future transaction-mode external pooler (e.g. PgBouncer) unsafe: a session-level value can leak to a different tenant's request on the same backend connection, where a transaction-local one cannot survive COMMIT/ROLLBACK regardless of which physical connection ran it. No behavior change today (no such pooler is in front of PostgreSQL yet).
+- Repair `test_announcement_admin.py` and `test_update_email.py`, which had been failing at collection (`ImportError`) since table identity and the gdpr user model moved on: rewritten against the current `TableRepository`-resolved table_id and `UserInfo`/`update_me_email` shapes.
+
+- Keep the Sort and Export menus visible below the horizontally scrollable table toolbar.
+- Validate cached PM tokens before reuse, so expired worktree tokens trigger a fresh login.
+
 ## 0.82.4 — 2026-11-04
 
 - Make blank, CRM, and PM template seeds emit text blob columns directly; remove the legacy doc normalization from table creation.

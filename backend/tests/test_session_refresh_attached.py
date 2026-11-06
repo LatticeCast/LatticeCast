@@ -110,17 +110,21 @@ class TestTableRepositoryCreateFromTemplate:
             mapping_result = MagicMock()
             mapping_result.mappings.return_value.one.return_value = {
                 "workspace_id": workspace_id,
-                "table_id": "my-table",
+                "table_id": 7,
+                "table_name": "my-table",
                 "created_at": now,
                 "updated_at": now,
             }
             session = _make_session()
-            session.execute = AsyncMock(side_effect=[MagicMock(), mapping_result])
+            id_result = MagicMock()
+            id_result.scalar_one.return_value = 7
+            session.execute = AsyncMock(side_effect=[id_result, mapping_result])
             repo = TableRepository(session)
             table = await repo.create_from_template(workspace_id, "My-Table", "blank", created_by)
 
             assert table.workspace_id == workspace_id
-            assert table.table_id == "my-table"
+            assert table.table_id == 7
+            assert table.table_name == "my-table"
             assert session.execute.await_count == 2
             session.commit.assert_called_once()
             session.refresh.assert_not_called()
@@ -137,12 +141,13 @@ class TestTableRepositoryUpdate:
             from repository.table import TableRepository
 
             workspace_id = uuid4()
-            table = Table(workspace_id=workspace_id, table_id="old-name")
+            table = Table(workspace_id=workspace_id, table_id=7, table_name="old-name")
             now = datetime.now(UTC).replace(tzinfo=None)
             mapping_result = MagicMock()
             mapping_result.mappings.return_value.one_or_none.return_value = {
                 "workspace_id": workspace_id,
-                "table_id": "new-name",
+                "table_id": 7,
+                "table_name": "new-name",
                 "created_at": now,
                 "updated_at": now,
             }
@@ -152,7 +157,8 @@ class TestTableRepositoryUpdate:
             repo = TableRepository(session)
             result = await repo.update(table, "new-name")
 
-            assert result.table_id == "new-name"
+            assert result.table_id == 7
+            assert result.table_name == "new-name"
             session.commit.assert_called_once()
             session.refresh.assert_not_called()
 

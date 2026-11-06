@@ -48,6 +48,37 @@
 	let showSortMenu = $state(false);
 	let showExportMenu = $state(false);
 
+	// The toolbar scrolls horizontally (overflow-x-auto), which per the CSS
+	// overflow spec forces its overflow-y to a computed 'auto' too -- there is
+	// no way to keep one axis scrollable and the other truly 'visible' on the
+	// same element. A `position: absolute` dropdown anchored under a toolbar
+	// button is therefore clipped to the toolbar's own row height and never
+	// paints, no matter its z-index. Fixed positioning, placed from the
+	// button's own viewport rect, escapes that ancestor's clipping box.
+	let sortBtnEl: HTMLButtonElement | undefined = $state();
+	let exportBtnEl: HTMLButtonElement | undefined = $state();
+	let sortMenuPos = $state({ top: 0, left: 0 });
+	let exportMenuPos = $state({ top: 0, left: 0 });
+
+	function toggleSortMenu(e: MouseEvent) {
+		e.stopPropagation();
+		showSortMenu = !showSortMenu;
+		if (showSortMenu && sortBtnEl) {
+			const rect = sortBtnEl.getBoundingClientRect();
+			sortMenuPos = { top: rect.bottom + 4, left: rect.left };
+		}
+	}
+
+	function toggleExportMenu(e: MouseEvent) {
+		e.stopPropagation();
+		showSortMenu = false;
+		showExportMenu = !showExportMenu;
+		if (showExportMenu && exportBtnEl) {
+			const rect = exportBtnEl.getBoundingClientRect();
+			exportMenuPos = { top: rect.bottom + 4, left: rect.left };
+		}
+	}
+
 	const sortedCols = $derived(columns);
 
 	const btnBase = 'flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm transition';
@@ -60,11 +91,9 @@
 	<!-- Sort -->
 	<div class="relative">
 		<button
+			bind:this={sortBtnEl}
 			data-testid="toolbar-sort-btn"
-			onclick={(e) => {
-				e.stopPropagation();
-				showSortMenu = !showSortMenu;
-			}}
+			onclick={toggleSortMenu}
 			class="{btnBase} {sortConfig ? btnActive : btnInactive}"
 		>
 			<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,7 +114,8 @@
 		</button>
 		{#if showSortMenu}
 			<div
-				class="absolute top-full left-0 z-30 mt-1 min-w-[200px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+				class="fixed z-30 min-w-[200px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+				style="top: {sortMenuPos.top}px; left: {sortMenuPos.left}px;"
 				onclick={(e) => e.stopPropagation()}
 				role="menu"
 			>
@@ -228,12 +258,9 @@
 	<!-- Export Data -->
 	<div class="relative">
 		<button
+			bind:this={exportBtnEl}
 			data-testid="toolbar-export-btn"
-			onclick={(e) => {
-				e.stopPropagation();
-				showExportMenu = !showExportMenu;
-				showSortMenu = false;
-			}}
+			onclick={toggleExportMenu}
 			class="{btnBase} {btnInactive}"
 		>
 			<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -248,7 +275,8 @@
 		</button>
 		{#if showExportMenu}
 			<div
-				class="absolute top-full left-0 z-30 mt-1 min-w-[150px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+				class="fixed z-30 min-w-[150px] rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
+				style="top: {exportMenuPos.top}px; left: {exportMenuPos.left}px;"
 				onclick={(e) => e.stopPropagation()}
 				role="menu"
 			>
