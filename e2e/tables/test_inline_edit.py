@@ -17,6 +17,8 @@ Run:
 
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 import time
 
 import pytest
@@ -25,7 +27,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from e2e_base import BASE, api
 
 _TS = int(time.time())
-TABLE_ID = f"inline-edit-{_TS}"
+TABLE_NAME = f"inline-edit-{_TS}"
 
 
 def snap(page, name: str, snapshot: bool) -> None:
@@ -37,8 +39,8 @@ def snap(page, name: str, snapshot: bool) -> None:
         pass
 
 
-def wait_table_page(page, ws_name: str, table_id: str) -> None:
-    page.goto(f"{BASE}/{ws_name}/{table_id}", wait_until="domcontentloaded", timeout=20000)
+def wait_table_page(page, ws_name: str, table_name: str) -> None:
+    page.goto(f"{BASE}/{ws_name}/{table_name}", wait_until="domcontentloaded", timeout=20000)
     try:
         page.wait_for_selector('[data-table-loaded="true"]', timeout=15000)
     except PlaywrightTimeout:
@@ -69,21 +71,21 @@ def is_row_patch(response, table_id: str, row_id: int) -> bool:
 
 
 def test_inline_edit(authed_page, workspace, admin_token, snapshot):
-    global TABLE_ID
     page = authed_page
     ws_id, ws_name = workspace
+    table_name = TABLE_NAME
 
     # ── Setup: table ─────────────────────────────────────────────────────────
-    r = api("POST", "/api/v1/tables", admin_token, json={"table_name": TABLE_ID, "workspace_id": ws_name})
+    r = api("POST", "/api/v1/tables", admin_token, json={"table_name": table_name, "workspace_id": ws_name})
     assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
-    TABLE_ID = str(r.json()["table_id"])
-    print(f"[setup] table {TABLE_ID!r}")
+    table_id = str(r.json()["table_id"])
+    print(f"[setup] table {table_id!r}")
 
     # ── Setup: columns (Name text, City text, Score number) ──────────────────
     col_ids = {}
     col_types = {"Name": "text", "City": "text", "Score": "number"}
     for name, ctype in col_types.items():
-        r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", admin_token,
+        r = api("POST", f"/api/v1/tables/{table_id}/columns", admin_token,
                 json={"name": name, "type": ctype})
         assert r.status_code in (200, 201), f"create column {name!r}: {r.status_code} {r.text[:200]}"
         schema = r.json()
@@ -104,7 +106,7 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
     row_ids: list[int] = []
     for rd in rows_data:
         row_data = {col_name: rd["Name"], col_city: rd["City"], col_score: rd["Score"]}
-        r = api("POST", f"/api/v1/tables/{TABLE_ID}/rows", admin_token,
+        r = api("POST", f"/api/v1/tables/{table_id}/rows", admin_token,
                 json={"row_data": row_data})
         assert r.status_code == 201, f"create row {rd!r}: {r.status_code} {r.text[:200]}"
         row_ids.append(r.json()["row_id"])
@@ -114,7 +116,7 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
 
     # Column order in the grid: Name (index 0), City (index 1), Score (index 2)
     # We'll determine actual indices from the table schema
-    r = api("GET", f"/api/v1/tables/{TABLE_ID}", admin_token)
+    r = api("GET", f"/api/v1/tables/{table_id}", admin_token)
     assert r.status_code == 200, f"get table schema: {r.status_code} {r.text[:200]}"
     columns = r.json().get("columns", [])
     col_order = [c["column_id"] for c in columns]
@@ -124,7 +126,9 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
     print(f"[setup] col indices: Name={idx_name}, City={idx_city}, Score={idx_score}")
 
     # ── Navigate to table ────────────────────────────────────────────────────
-    wait_table_page(page, ws_name, TABLE_ID)
+    wait_table_page(page, ws_name, table_name)
+    named_path = f"/{ws_name}/{table_name}"
+    assert urlparse(page.url).path == named_path
 
     try:
         page.wait_for_selector(f'[data-testid="grid-row-{rid_alice}"]', timeout=10000)
@@ -151,7 +155,7 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
 
     # Clear and type new value
     input_loc.fill("Osaka")
-    with page.expect_response(lambda response: is_row_patch(response, TABLE_ID, rid_alice)) as saved:
+    with page.expect_response(lambda response: is_row_patch(response, table_id, rid_alice)) as saved:
         input_loc.press("Enter")
     assert saved.value.status == 200, f"City PATCH failed: {saved.value.status}"
     input_loc.wait_for(state="detached", timeout=10000)
@@ -159,7 +163,7 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
     snap(page, "inline_edit_03_after_commit_city", snapshot)
 
     # Verify DB via API
-    row_api = get_row_from_api(admin_token, TABLE_ID, rid_alice)
+    row_api = get_row_from_api(admin_token, table_id, rid_alice)
     db_city = row_api["row_data"].get(col_city)
     assert db_city == "Osaka", f"DB verification failed: expected City='Osaka', got {db_city!r}"
     print("[ok] text cell edit committed to DB (Tokyo → Osaka)")
@@ -178,14 +182,14 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
     snap(page, "inline_edit_04_editing_score", snapshot)
 
     input_loc.fill("999")
-    with page.expect_response(lambda response: is_row_patch(response, TABLE_ID, rid_bob)) as saved:
+    with page.expect_response(lambda response: is_row_patch(response, table_id, rid_bob)) as saved:
         input_loc.press("Enter")
     assert saved.value.status == 200, f"Score PATCH failed: {saved.value.status}"
     input_loc.wait_for(state="detached", timeout=10000)
 
     snap(page, "inline_edit_05_after_commit_score", snapshot)
 
-    row_api = get_row_from_api(admin_token, TABLE_ID, rid_bob)
+    row_api = get_row_from_api(admin_token, table_id, rid_bob)
     db_score = row_api["row_data"].get(col_score)
     assert db_score == 999, f"DB verification failed: expected Score=999, got {db_score!r}"
     print("[ok] number cell edit committed to DB (200 → 999)")
@@ -207,7 +211,7 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
 
     snap(page, "inline_edit_06_after_escape", snapshot)
 
-    row_api = get_row_from_api(admin_token, TABLE_ID, rid_alice)
+    row_api = get_row_from_api(admin_token, table_id, rid_alice)
     db_name = row_api["row_data"].get(col_name)
     assert db_name == "Alice", f"Escape did not cancel: expected Name='Alice', got {db_name!r}"
     print("[ok] Escape cancels edit — no DB change (Name still 'Alice')")
@@ -226,19 +230,26 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
     input_loc.fill("Munich")
     # Click on a different cell to trigger blur
     cell_name_alice = get_cell_locator(page, rid_alice, idx_name)
-    with page.expect_response(lambda response: is_row_patch(response, TABLE_ID, rid_bob)) as saved:
+    with page.expect_response(lambda response: is_row_patch(response, table_id, rid_bob)) as saved:
         cell_name_alice.click()
     assert saved.value.status == 200, f"Blur PATCH failed: {saved.value.status}"
 
     snap(page, "inline_edit_07_after_blur", snapshot)
 
-    row_api = get_row_from_api(admin_token, TABLE_ID, rid_bob)
+    row_api = get_row_from_api(admin_token, table_id, rid_bob)
     db_city = row_api["row_data"].get(col_city)
     assert db_city == "Munich", f"Blur commit failed: expected City='Munich', got {db_city!r}"
     print("[ok] blur commits edit to DB (Berlin → Munich)")
 
-    # ── Test 5: Reload page → edits persisted ────────────────────────────
-    wait_table_page(page, ws_name, TABLE_ID)
+    # ── Test 5: Reload the named table page → edits persisted ───────────
+    assert urlparse(page.url).path == named_path
+    response = page.reload(wait_until="domcontentloaded", timeout=20000)
+    assert response and response.ok, f"Reload failed: {response.status if response else None} {page.url}"
+    try:
+        page.wait_for_selector('[data-table-loaded="true"]', timeout=15000)
+    except PlaywrightTimeout:
+        snap(page, "inline_edit_FAIL_reload", snapshot)
+        pytest.fail(f"Table page did not finish loading after reload: {page.url}")
 
     try:
         page.wait_for_selector(f'[data-testid="grid-row-{rid_alice}"]', timeout=10000)
