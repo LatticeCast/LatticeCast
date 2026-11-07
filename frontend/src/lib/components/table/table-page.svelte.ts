@@ -309,19 +309,20 @@ class TablePageStore {
 		this._savedEdit = null;
 	}
 
-	async commitEdit(rowId: number, col: Column) {
+	async commitEdit(rowId: number, col: Column): Promise<boolean> {
 		if (this._cancellingEdit) {
 			this._cancellingEdit = false;
-			return;
+			return false;
 		}
-		if (this.editingCell?.rowId !== rowId || this.editingCell.colId !== col.column_id) return;
+		if (this.editingCell?.rowId !== rowId || this.editingCell.colId !== col.column_id) return false;
 		const session = this._editSession;
 		const value = this.editValue;
-		if (!(await this.saveEdit(rowId, col))) return;
-		if (this._editSession !== session || this.editValue !== value) return;
+		if (!(await this.saveEdit(rowId, col))) return false;
+		if (this._editSession !== session || this.editValue !== value) return false;
 		this.editingCell = null;
 		this.editValue = '';
 		this._savedEdit = null;
+		return true;
 	}
 
 	/** Send an edit once. A second change waits for the first write, so the

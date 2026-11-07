@@ -106,9 +106,7 @@ async def list_rows(
         except Exception:
             contains = {}
         if contains:
-            return await repo.filter_by_jsonb(
-                table.table_id, contains=contains, offset=offset, limit=limit
-            )
+            return await repo.filter_by_jsonb(table.table_id, contains=contains, offset=offset, limit=limit)
     return await repo.list_by_table(table.table_id, offset=offset, limit=limit, sort=sort)
 
 
@@ -148,6 +146,9 @@ async def patch_row(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     try:
+        # SELECT permits readers; the update function otherwise reports an
+        # RLS-denied write as a generic "row not found" database error.
+        row = await repo.lock_for_write(table.table_id, row_id)
         return await repo.patch_row(workspace_id=table.workspace_id, row=row, data=data, updated_by=user.user_id)
     except DBAPIError as exc:
         await session.rollback()
@@ -169,6 +170,7 @@ async def put_row(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Row not found")
     try:
+        row = await repo.lock_for_write(table.table_id, row_id)
         return await repo.put_row(workspace_id=table.workspace_id, row=row, data=data, updated_by=user.user_id)
     except DBAPIError as exc:
         await session.rollback()

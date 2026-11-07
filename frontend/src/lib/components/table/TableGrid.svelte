@@ -86,7 +86,7 @@
 		collapsedGroups: SvelteSet<string>;
 		localWidths: Record<string, number>;
 		onStartEdit: (rowId: number, col: Column, currentVal: unknown) => void;
-		onCommitEdit: (rowId: number, col: Column) => void;
+		onCommitEdit: (rowId: number, col: Column) => Promise<boolean>;
 		/** Send the open cell's value without closing the editor. */
 		onCancelEdit: () => void;
 		onEditValueChange: (val: string) => void;
@@ -657,10 +657,10 @@
 												oninput={(e) =>
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
 												onblur={() => onCommitEdit(row.row_id, col)}
-												onkeydown={(e) => {
+												onkeydown={async (e) => {
 													if (e.key === 'Enter') {
-														onCommitEdit(row.row_id, col);
-														if (row.row_id === lastDataRowId) onAddRow();
+														const committed = await onCommitEdit(row.row_id, col);
+														if (committed && row.row_id === lastDataRowId) onAddRow();
 													}
 													if (e.key === 'Escape') onCancelEdit();
 												}}
@@ -680,10 +680,10 @@
 													onCommitEdit(row.row_id, col);
 												}}
 												onblur={() => onCommitEdit(row.row_id, col)}
-												onkeydown={(e) => {
+												onkeydown={async (e) => {
 													if (e.key === 'Enter') {
-														onCommitEdit(row.row_id, col);
-														if (row.row_id === lastDataRowId) onAddRow();
+														const committed = await onCommitEdit(row.row_id, col);
+														if (committed && row.row_id === lastDataRowId) onAddRow();
 													}
 													if (e.key === 'Escape') onCancelEdit();
 												}}
@@ -697,10 +697,10 @@
 												oninput={(e) =>
 													onEditValueChange((e.currentTarget as HTMLInputElement).value)}
 												onblur={() => onCommitEdit(row.row_id, col)}
-												onkeydown={(e) => {
+												onkeydown={async (e) => {
 													if (e.key === 'Enter') {
-														onCommitEdit(row.row_id, col);
-														if (row.row_id === lastDataRowId) onAddRow();
+														const committed = await onCommitEdit(row.row_id, col);
+														if (committed && row.row_id === lastDataRowId) onAddRow();
 													}
 													if (e.key === 'Escape') onCancelEdit();
 												}}

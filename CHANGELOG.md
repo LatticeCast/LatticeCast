@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.82.6 — 2026-11-07
+
+- Wait for an inline row edit to finish saving before Enter adds a row; verify the PATCH response and persisted cell value in E2E.
+- Return 403 for read-only PATCH and PUT row attempts, consistent with POST and DELETE; cover all four mutations with a permission regression test.
+
 ## 0.82.5 — 2026-11-06
 
 - Make the RLS identity GUC (`app.current_user_id`) transaction-local (`set_config(..., true)`) instead of session-level, re-applied at the start of every transaction rather than relying on it surviving a connection handoff. Closes the gap that would otherwise make a future transaction-mode external pooler (e.g. PgBouncer) unsafe: a session-level value can leak to a different tenant's request on the same backend connection, where a transaction-local one cannot survive COMMIT/ROLLBACK regardless of which physical connection ran it. No behavior change today (no such pooler is in front of PostgreSQL yet).

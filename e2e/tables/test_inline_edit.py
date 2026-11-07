@@ -62,6 +62,12 @@ def get_cell_locator(page, row_id: int, col_index: int):
     return row.locator(f"td:nth-child({col_index + 2})")
 
 
+def is_row_patch(response, table_id: str, row_id: int) -> bool:
+    return response.request.method == "PATCH" and response.url.endswith(
+        f"/api/v1/tables/{table_id}/rows/{row_id}"
+    )
+
+
 def test_inline_edit(authed_page, workspace, admin_token, snapshot):
     global TABLE_ID
     page = authed_page
@@ -132,7 +138,6 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
     # ── Test 1: Edit text cell (Alice's City: Tokyo → Osaka) ─────────────
     cell_city_alice = get_cell_locator(page, rid_alice, idx_city)
     cell_city_alice.click()
-    page.wait_for_timeout(300)
 
     # An input should appear inside the cell
     input_loc = cell_city_alice.locator("input")
@@ -146,8 +151,10 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
 
     # Clear and type new value
     input_loc.fill("Osaka")
-    input_loc.press("Enter")
-    page.wait_for_timeout(500)
+    with page.expect_response(lambda response: is_row_patch(response, TABLE_ID, rid_alice)) as saved:
+        input_loc.press("Enter")
+    assert saved.value.status == 200, f"City PATCH failed: {saved.value.status}"
+    input_loc.wait_for(state="detached", timeout=10000)
 
     snap(page, "inline_edit_03_after_commit_city", snapshot)
 
@@ -160,7 +167,6 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
     # ── Test 2: Edit number cell (Bob's Score: 200 → 999) ────────────────
     cell_score_bob = get_cell_locator(page, rid_bob, idx_score)
     cell_score_bob.click()
-    page.wait_for_timeout(300)
 
     input_loc = cell_score_bob.locator("input")
     try:
@@ -172,8 +178,10 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
     snap(page, "inline_edit_04_editing_score", snapshot)
 
     input_loc.fill("999")
-    input_loc.press("Enter")
-    page.wait_for_timeout(500)
+    with page.expect_response(lambda response: is_row_patch(response, TABLE_ID, rid_bob)) as saved:
+        input_loc.press("Enter")
+    assert saved.value.status == 200, f"Score PATCH failed: {saved.value.status}"
+    input_loc.wait_for(state="detached", timeout=10000)
 
     snap(page, "inline_edit_05_after_commit_score", snapshot)
 
@@ -185,7 +193,6 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
     # ── Test 3: Escape cancels edit (Alice's Name: Alice, try → "Zara") ──
     cell_name_alice = get_cell_locator(page, rid_alice, idx_name)
     cell_name_alice.click()
-    page.wait_for_timeout(300)
 
     input_loc = cell_name_alice.locator("input")
     try:
@@ -196,7 +203,7 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
 
     input_loc.fill("Zara")
     input_loc.press("Escape")
-    page.wait_for_timeout(500)
+    input_loc.wait_for(state="detached", timeout=3000)
 
     snap(page, "inline_edit_06_after_escape", snapshot)
 
@@ -208,7 +215,6 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
     # ── Test 4: Blur commits edit (Bob's City: Berlin → Munich) ──────────
     cell_city_bob = get_cell_locator(page, rid_bob, idx_city)
     cell_city_bob.click()
-    page.wait_for_timeout(300)
 
     input_loc = cell_city_bob.locator("input")
     try:
@@ -220,8 +226,9 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
     input_loc.fill("Munich")
     # Click on a different cell to trigger blur
     cell_name_alice = get_cell_locator(page, rid_alice, idx_name)
-    cell_name_alice.click()
-    page.wait_for_timeout(500)
+    with page.expect_response(lambda response: is_row_patch(response, TABLE_ID, rid_bob)) as saved:
+        cell_name_alice.click()
+    assert saved.value.status == 200, f"Blur PATCH failed: {saved.value.status}"
 
     snap(page, "inline_edit_07_after_blur", snapshot)
 
