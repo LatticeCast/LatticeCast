@@ -4,7 +4,7 @@ from sqlalchemy import text
 from middleware.auth import get_current_user, get_rls_session
 from repository.workspace import WorkspaceRepository
 
-router = APIRouter(prefix="/sidebar")
+router = APIRouter(prefix="/workspaces_tables")
 
 
 @router.get("")

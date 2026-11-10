@@ -4,9 +4,9 @@ import { error } from '@sveltejs/kit';
 import { tables } from '$lib/stores/table_schemas.store';
 import { resolveTableForPath } from '$lib/utils/table-route';
 import { fetchViews } from '$lib/backend/views';
-import { fetchAllRows, fetchTable } from '$lib/backend/tables';
+import { fetchRows, fetchTable } from '$lib/backend/tables';
 import { authStore } from '$lib/stores/auth.store';
-import type { ViewConfig, Row, Table } from '$lib/types/table';
+import type { ViewConfig, RowQueryResponse, Table } from '$lib/types/table';
 
 export const load: PageLoad = async ({ params, url }) => {
 	const urlViewRaw = url.searchParams.get('view');
@@ -19,12 +19,12 @@ export const load: PageLoad = async ({ params, url }) => {
 	const cached = get(tables).find((table) => table.table_id === tableParam);
 
 	let viewsP: Promise<ViewConfig[]> | null = null;
-	let rowsP: Promise<Row[]> | null = null;
+	let rowsP: Promise<RowQueryResponse> | null = null;
 	let tableP: Promise<Table> | null = null;
 
 	if (hasSession && resolved) {
 		viewsP = fetchViews(tableParam);
-		rowsP = fetchAllRows(tableParam);
+		rowsP = fetchRows(tableParam);
 		if (!cached) {
 			tableP = fetchTable(tableParam, resolvedWsId ?? undefined);
 		}

@@ -4,7 +4,7 @@ import { authenticatedRequestJson } from './client';
 import { applySidebar, type SidebarPayload } from '$lib/stores/table_schemas.store';
 
 export async function fetchSidebar(): Promise<SidebarPayload> {
-	const payload = await authenticatedRequestJson<SidebarPayload>('/sidebar');
+	const payload = await authenticatedRequestJson<SidebarPayload>('/workspaces_tables');
 	applySidebar(payload);
 	return payload;
 }

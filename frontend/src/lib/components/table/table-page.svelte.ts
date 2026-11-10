@@ -17,6 +17,7 @@ import {
 	deleteRow as deleteRowApi,
 	updateRow,
 	fetchAllRows,
+	queryAllRows,
 	fetchTable,
 	patchSchema
 } from '$lib/backend/tables';
@@ -770,7 +771,7 @@ class TablePageStore {
 	async exportCSV() {
 		const tableId = this.tableId || 'table';
 		try {
-			const allRows = await fetchAllRows(this.tableId);
+			const allRows = await queryAllRows(this.tableId);
 			triggerDownload(buildCSV(get(columns), allRows), `${tableId}.csv`, 'text/csv');
 		} catch (e) {
 			error.set(e instanceof Error ? e.message : 'Failed to export CSV');
@@ -780,7 +781,7 @@ class TablePageStore {
 	async exportJSON() {
 		const tableId = this.tableId || 'table';
 		try {
-			const allRows = await fetchAllRows(this.tableId);
+			const allRows = await queryAllRows(this.tableId);
 			triggerDownload(
 				buildExportJSON(get(columns), allRows),
 				`${tableId}-data.json`,

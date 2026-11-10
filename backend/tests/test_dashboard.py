@@ -1,12 +1,10 @@
 """
-Tests for the block query endpoint and DashboardRepository.
+Tests for the workspace LQL endpoint and DashboardRepository.
 
-  POST /api/v1/tables/{table_id}/views/{view_name}/blocks/{block_id}/query
+  POST /api/v1/workspaces/{workspace_id}/lql
 
 Unit tests:  mock AsyncSession; verify execute() behavior.
 Integration: requires live stack (INTEGRATION_TESTS=1).
-             Happy-path execution is xfail: LatticeQL v0.24 compiles SQL that
-             references tables.table_name (dropped in V21); see test_lattice_ql.py.
 
 Run inside Docker:
     docker compose exec -T backend python -m pytest tests/test_dashboard.py -v
@@ -121,135 +119,65 @@ async def _lattice_auth_headers(client) -> dict:
 
 
 @_skip_integration
-class TestWidgetQueryEndpoint:
-    """Integration tests against the HTTP endpoint."""
+class TestWorkspaceLQLEndpoint:
+    """Integration tests for the workspace-scoped HTTP API."""
 
-    def _make_dashboard_view_payload(self, table_id: str) -> dict:
-        return {
-            "name": "Sales Dashboard",
-            "type": "dashboard",
-            "config": {
-                "layout": [{"id": "w1", "x": 0, "y": 0, "w": 6, "h": 4}],
-                "blocks": {
-                    "w1": {
-                        "kind": "number",
-                        "title": "Row count",
-                        "lql": f'table("{table_id}") | aggregate(count())',
-                        "field": "measure",
-                    }
-                },
-            },
-        }
-
-    def test_non_dashboard_view_returns_400(self):
-        """POST to a Table-type view returns 400."""
+    def test_unreadable_workspace_returns_404(self):
         import httpx
 
         async def _run_test():
             async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
                 headers = await _lattice_auth_headers(client)
-                ws_r = await client.get("/api/v1/workspaces", headers=headers)
-                assert ws_r.status_code == 200
-                ws_id = ws_r.json()[0]["workspace_id"]
-
-                await client.post(
-                    "/api/v1/tables",
-                    json={"table_id": "dash_nondash", "workspace_id": str(ws_id)},
+                response = await client.post(
+                    "/api/v1/workspaces/00000000-0000-0000-0000-000000000123/lql",
+                    json={"lql": 'table("Tasks")'},
                     headers=headers,
                 )
-
-                r = await client.post(
-                    "/api/v1/tables/dash_nondash/views/Table/blocks/w1/query",
-                    json={},
-                    headers=headers,
-                )
-                assert r.status_code == 400
-                assert "not a dashboard" in r.json()["detail"].lower()
+                assert response.status_code == 404
 
         _run(_run_test())
 
-    def test_unknown_widget_returns_404(self):
-        """POST with an unknown widget_id returns 404."""
+    def test_invalid_lql_returns_400(self):
         import httpx
 
         async def _run_test():
             async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
                 headers = await _lattice_auth_headers(client)
-                ws_r = await client.get("/api/v1/workspaces", headers=headers)
-                ws_id = ws_r.json()[0]["workspace_id"]
+                workspaces = await client.get("/api/v1/workspaces", headers=headers)
+                assert workspaces.status_code == 200
+                workspace_id = workspaces.json()[0]["workspace_id"]
 
-                await client.post(
-                    "/api/v1/tables",
-                    json={"table_id": "dash_wid404", "workspace_id": str(ws_id)},
+                response = await client.post(
+                    f"/api/v1/workspaces/{workspace_id}/lql",
+                    json={"lql": "this is not valid lql !!!!"},
                     headers=headers,
                 )
-                view = self._make_dashboard_view_payload("dash_wid404")
-                await client.post(
-                    "/api/v1/tables/dash_wid404/views",
-                    json={"name": view["name"], "type": view["type"], "config": view["config"]},
-                    headers=headers,
-                )
-
-                r = await client.post(
-                    "/api/v1/tables/dash_wid404/views/Sales Dashboard/blocks/no_block/query",
-                    json={},
-                    headers=headers,
-                )
-                assert r.status_code == 404
-                assert "block" in r.json()["detail"].lower()
+                assert response.status_code == 400
 
         _run(_run_test())
 
-    @pytest.mark.xfail(
-        reason=(
-            "LatticeQL SQL references tables.table_name dropped in V21. "
-            "Execution will succeed once the DB schema is updated."
-        ),
-        strict=False,
-    )
-    def test_count_widget_returns_rows_shape(self):
-        """Create dashboard with count widget, hit endpoint, assert response shape."""
+    def test_query_can_name_any_table_in_workspace(self):
+        import json
+
         import httpx
 
         async def _run_test():
             async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
                 headers = await _lattice_auth_headers(client)
-                ws_r = await client.get("/api/v1/workspaces", headers=headers)
-                assert ws_r.status_code == 200
-                ws_id = ws_r.json()[0]["workspace_id"]
+                tables = await client.get("/api/v1/tables", headers=headers)
+                assert tables.status_code == 200
+                assert tables.json(), "Seed data must provide a readable table"
+                table = tables.json()[0]
+                workspace_id = table["workspace_id"]
+                lql = f"table({json.dumps(table['table_name'])}) | aggregate(count())"
 
-                tbl_id = "dash_count_test"
-                await client.post(
-                    "/api/v1/tables",
-                    json={"table_id": tbl_id, "workspace_id": str(ws_id)},
+                response = await client.post(
+                    f"/api/v1/workspaces/{workspace_id}/lql",
+                    json={"lql": lql},
                     headers=headers,
                 )
-                for _ in range(3):
-                    await client.post(
-                        f"/api/v1/tables/{tbl_id}/rows",
-                        json={"row_data": {}},
-                        headers=headers,
-                    )
-
-                view = self._make_dashboard_view_payload(tbl_id)
-                await client.post(
-                    f"/api/v1/tables/{tbl_id}/views",
-                    json={"name": view["name"], "type": view["type"], "config": view["config"]},
-                    headers=headers,
-                )
-
-                r = await client.post(
-                    f"/api/v1/tables/{tbl_id}/views/Sales Dashboard/blocks/w1/query",
-                    json={},
-                    headers=headers,
-                )
-                assert r.status_code == 200
-                body = r.json()
-                assert "rows" in body
-                assert isinstance(body["rows"], list)
-                assert len(body["rows"]) == 1
-                assert "measure" in body["rows"][0]
-                assert body["rows"][0]["measure"] >= 3
+                assert response.status_code == 200, response.text
+                assert isinstance(response.json()["rows"], list)
 
         _run(_run_test())
 

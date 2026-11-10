@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.90.0 — 2026-11-11
+
+- Add `GET /api/v1/rows` for multiple table IDs or workspace IDs, with JSONB containment, stable sorting, optional pagination and totals. V74 keeps the query inside a PostgreSQL `SECURITY INVOKER` function under existing RLS.
+- Scope LQL execution to `POST /api/v1/workspaces/{workspace_id}/lql`; replace the sidebar route with `/api/v1/workspaces_tables` and remove the legacy dashboard block query route.
+- Read table rows through the new query endpoint in the FE. The Table grid loads 100 rows per page with Previous/Next controls; Kanban, Timeline, Workflow, and exports request the full result. Mark the legacy single-table list endpoint deprecated and document the new query contract in OpenAPI.
+- Verify V74 on an isolated PostgreSQL database, including cross-workspace RLS, filtering and pagination; verify the BE query parameter contract.
+
 ## 0.82.6 — 2026-11-07
 
 - Wait for an inline row edit to finish saving before Enter adds a row; verify the PATCH response and persisted cell value in E2E.

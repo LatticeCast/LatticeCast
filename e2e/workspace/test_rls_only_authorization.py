@@ -5,7 +5,7 @@ is revoked from the `app` role (V53), so what a caller may see or change is
 decided by the policies in V52 alone. This test pins that boundary from the
 outside, with one owner and one invited `read`-level member:
 
-  * the member's /sidebar carries the shared workspace and `level == "read"`,
+  * the member's /workspaces_tables carries the shared workspace and `level == "read"`,
     and the browser renders it (with no owner-only affordance);
   * `read` does not gate mutation: rename and table creation are refused;
   * a workspace the member was never invited to answers 404, not 403, so its
@@ -90,8 +90,8 @@ def test_rls_only_authorization(page, workspace, admin_token, snapshot):
         assert response.json()["level"] == "read"
 
         # ── API: the member's sidebar payload ────────────────────────────────
-        print("[5] API: member GET /sidebar reports the shared workspace at level 'read'")
-        response = api("GET", "/api/v1/sidebar", member_token)
+        print("[5] API: member GET /workspaces_tables reports the shared workspace at level 'read'")
+        response = api("GET", "/api/v1/workspaces_tables", member_token)
         assert response.status_code == 200, (
             f"member sidebar: {response.status_code} {response.text[:200]}"
         )
@@ -119,7 +119,7 @@ def test_rls_only_authorization(page, workspace, admin_token, snapshot):
         # ── UI: the member's rendered sidebar ────────────────────────────────
         print(f"[6] UI: member opens /{shared_ws_id}/ and the sidebar renders the workspace")
         seed_login_info(page, member_token, member_name, role="user")
-        with page.expect_response("**/api/v1/sidebar") as sidebar_info:
+        with page.expect_response("**/api/v1/workspaces_tables") as sidebar_info:
             page.goto(f"{BASE}/{shared_ws_id}/", wait_until="networkidle")
         assert sidebar_info.value.status == 200
         assert "/login" not in page.url, f"Redirected to /login: {page.url}"
@@ -219,7 +219,7 @@ def test_rls_only_authorization(page, workspace, admin_token, snapshot):
         )
 
         print("[11] UI: after the refusals the member's sidebar is unchanged")
-        with page.expect_response("**/api/v1/sidebar") as sidebar_info:
+        with page.expect_response("**/api/v1/workspaces_tables") as sidebar_info:
             page.reload(wait_until="networkidle")
         assert sidebar_info.value.status == 200
         page.get_by_test_id("menu-toggle").click()

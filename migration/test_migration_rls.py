@@ -1,6 +1,9 @@
+#!/usr/bin/env python3
 """
 test_migration_rls.py — Verify RLS policies exist after migrations.
 """
+
+import json
 
 _USER_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 _USER_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
@@ -115,9 +118,9 @@ def verify(psql_fn) -> list[str]:
     sidebar_counts = _as_app(
         psql_fn,
         _USER_A,
-        f"SELECT jsonb_array_length(payload->'workspaces') || ',' || "
-        f"jsonb_array_length(payload->'tables') "
-        f"FROM (SELECT public.get_user_sidebar() payload) s;"
+        "SELECT jsonb_array_length(payload->'workspaces') || ',' || "
+        "jsonb_array_length(payload->'tables') "
+        "FROM (SELECT public.get_user_sidebar() payload) s;",
     ).strip()
     if sidebar_counts != "1,1":
         errors.append(
@@ -159,8 +162,7 @@ def verify(psql_fn) -> list[str]:
         f"WHERE user_id = '{_USER_B}'::UUID;",
     )
     user_b_email = psql_fn(
-        "SELECT email FROM gdpr.user_info "
-        f"WHERE user_id = '{_USER_B}'::UUID;"
+        f"SELECT email FROM gdpr.user_info WHERE user_id = '{_USER_B}'::UUID;"
     ).strip()
     if user_b_email != "tv_rls_b@example.com":
         errors.append("RLS BEHAVIORAL: user A changed user B's email")
@@ -177,8 +179,12 @@ def verify(psql_fn) -> list[str]:
         _USER_B,
         "SELECT public.set_current_user_password_hash('hash-for-user-b');",
     )
-    password_a = _as_app(psql_fn, _USER_A, "SELECT public.get_current_user_password_hash();")
-    password_b = _as_app(psql_fn, _USER_B, "SELECT public.get_current_user_password_hash();")
+    password_a = _as_app(
+        psql_fn, _USER_A, "SELECT public.get_current_user_password_hash();"
+    )
+    password_b = _as_app(
+        psql_fn, _USER_B, "SELECT public.get_current_user_password_hash();"
+    )
     if password_a != "hash-for-user-a" or password_b != "hash-for-user-b":
         errors.append("SELF-SERVICE IDENTITY: password helper crossed user identities")
 
@@ -218,13 +224,10 @@ def verify(psql_fn) -> list[str]:
     count = _as_app(
         psql_fn,
         _USER_A,
-        f"SELECT COUNT(*) FROM public.tables "
-        f"WHERE workspace_id = '{_WS_A}'::uuid;",
+        f"SELECT COUNT(*) FROM public.tables WHERE workspace_id = '{_WS_A}'::uuid;",
     )
     if not count.isdigit() or int(count) == 0:
-        errors.append(
-            "RLS BEHAVIORAL: user A cannot SELECT from own workspace tables"
-        )
+        errors.append("RLS BEHAVIORAL: user A cannot SELECT from own workspace tables")
 
     # SELECT isolation: user A cannot see workspace B views. V71 removed the
     # workspace_id column, so isolation is addressed through the table id.
@@ -234,9 +237,7 @@ def verify(psql_fn) -> list[str]:
         f"SELECT COUNT(*) FROM public.table_views WHERE table_id = {tbl_b};",
     )
     if count.isdigit() and int(count) > 0:
-        errors.append(
-            "RLS BEHAVIORAL: user A can SELECT from workspace B table_views"
-        )
+        errors.append("RLS BEHAVIORAL: user A can SELECT from workspace B table_views")
 
     # v40: table_views.name and .type are gone — they live inside config
     # JSONB. view_id is auto-assigned by trg_set_view_id_fn (DEFAULT 0
@@ -332,9 +333,7 @@ def verify(psql_fn) -> list[str]:
         f"SELECT COUNT(*) FROM public.rows WHERE table_id = {tbl_b};",
     )
     if foreign_rows.isdigit() and int(foreign_rows) > 0:
-        errors.append(
-            "RLS BEHAVIORAL: user A can SELECT rows of workspace B (V71)"
-        )
+        errors.append("RLS BEHAVIORAL: user A can SELECT rows of workspace B (V71)")
 
     foreign_write = _as_app(
         psql_fn,
@@ -348,9 +347,79 @@ def verify(psql_fn) -> list[str]:
         "SELECT 1;",
     )
     if foreign_write != "1":
-        errors.append(
-            "RLS BEHAVIORAL: user A can INSERT rows into workspace B (V71)"
+        errors.append("RLS BEHAVIORAL: user A can INSERT rows into workspace B (V71)")
+
+    # V74: the invoker function must preserve RLS for both source modes.
+    _as_app(
+        psql_fn,
+        _USER_A,
+        f"INSERT INTO public.rows (table_id, row_data) "
+        f"VALUES ({tbl_a}, '{{\"probe\":false}}'::jsonb);",
+    )
+    _as_app(
+        psql_fn,
+        _USER_B,
+        f"INSERT INTO public.rows (table_id, row_data) "
+        f"VALUES ({tbl_b}, '{{\"probe\":true}}'::jsonb);",
+    )
+
+    def query_rows_as_a(source: str, options: str = "") -> dict:
+        result = _as_app(
+            psql_fn,
+            _USER_A,
+            f"SELECT public.query_rows({source}{options});",
         )
+        return json.loads(result)
+
+    table_source = f"p_table_ids => ARRAY[{tbl_a}, {tbl_b}]::BIGINT[]"
+    workspace_source = f"p_workspace_ids => ARRAY['{_WS_A}'::UUID, '{_WS_B}'::UUID]"
+    for source_name, source in (
+        ("table_ids", table_source),
+        ("workspace_ids", workspace_source),
+    ):
+        payload = query_rows_as_a(source, ", p_include_total => TRUE")
+        if (
+            len(payload["items"]) != 2
+            or payload["total"] != 2
+            or payload["page"] is not None
+            or payload["page_size"] is not None
+            or payload["has_more"]
+            or any(item["table_id"] != int(tbl_a) for item in payload["items"])
+        ):
+            errors.append(
+                f"V74 QUERY: {source_name} did not preserve RLS/all-rows contract"
+            )
+
+    first = query_rows_as_a(
+        table_source,
+        ", p_page_size => 1, p_include_total => TRUE",
+    )
+    second = query_rows_as_a(
+        table_source,
+        ", p_page => 2, p_page_size => 1, p_include_total => TRUE",
+    )
+    if (
+        len(first["items"]) != 1
+        or first["page"] != 1
+        or first["total"] != 2
+        or first["total_pages"] != 2
+        or not first["has_more"]
+        or len(second["items"]) != 1
+        or second["has_more"]
+        or first["items"][0]["row_id"] <= second["items"][0]["row_id"]
+    ):
+        errors.append("V74 QUERY: pagination/default row_id DESC is incorrect")
+
+    filtered = query_rows_as_a(
+        workspace_source,
+        """, p_filter_json => '{"probe":true}'::JSONB, p_include_total => TRUE""",
+    )
+    if (
+        len(filtered["items"]) != 1
+        or filtered["total"] != 1
+        or filtered["items"][0]["table_id"] != int(tbl_a)
+    ):
+        errors.append("V74 QUERY: JSONB containment or filtered total is incorrect")
 
     # V52 allows a member to read their own grants, while owners retain the
     # full roster. User A owns workspace A and has no grant on workspace B.
@@ -361,9 +430,7 @@ def verify(psql_fn) -> list[str]:
         f"WHERE workspace_id = '{_WS_A}'::uuid;",
     )
     if not count.isdigit() or int(count) == 0:
-        errors.append(
-            "RLS BEHAVIORAL: owner cannot SELECT own workspace_members"
-        )
+        errors.append("RLS BEHAVIORAL: owner cannot SELECT own workspace_members")
 
     count = _as_app(
         psql_fn,

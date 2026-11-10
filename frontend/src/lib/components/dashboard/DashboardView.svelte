@@ -5,7 +5,11 @@
 	import { updateView } from '$lib/backend/views';
 	import { fetchDashboardBlockRows } from '$lib/backend/dashboard';
 
-	let { view, tableId }: { view: DashboardViewType & { view_id: number }; tableId: number } =
+	let {
+		view,
+		tableId,
+		workspaceId
+	}: { view: DashboardViewType & { view_id: number }; tableId: number; workspaceId: string } =
 		$props();
 
 	let layout = $derived(view.config?.layout ?? []);
@@ -19,8 +23,15 @@
 	// One fetch trigger for the dashboard. Individual blocks only derive their
 	// shared cache entry, so remounting a block cannot create a second request.
 	$effect(() => {
+		if (!workspaceId) return;
 		for (const blockId of Object.keys(blocks)) {
-			void fetchDashboardBlockRows(tableId, view.name, blockId).catch(() => {});
+			void fetchDashboardBlockRows(
+				tableId,
+				workspaceId,
+				view.name,
+				blockId,
+				blocks[blockId].lql
+			).catch(() => {});
 		}
 	});
 

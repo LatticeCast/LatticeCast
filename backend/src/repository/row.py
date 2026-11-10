@@ -90,17 +90,54 @@ class RowRepository:
             raise HTTPException(status_code=403, detail="Row write permission required")
         return row
 
-    async def list_by_table(
-        self, table_id: int, offset: int = 0, limit: int = 100, sort: str = "desc"
-    ) -> list[Row]:
+    async def list_by_table(self, table_id: int, offset: int = 0, limit: int = 100, sort: str = "desc") -> list[Row]:
         order = Row.row_id.desc() if sort == "desc" else Row.row_id.asc()
         statement = select(Row).where(Row.table_id == table_id).order_by(order).offset(offset).limit(limit)
         result = await self.session.execute(statement)
         return list(result.scalars().all())
 
-    async def patch_row(
-        self, workspace_id: UUID, row: Row, data: RowUpdate, updated_by: UUID | None = None
-    ) -> Row:
+    async def query_rows(
+        self,
+        table_ids: list[int] | None,
+        workspace_ids: list[UUID] | None,
+        page: int | None,
+        page_size: int | None,
+        sort_by: str,
+        desc: bool,
+        filter_json: dict[str, Any],
+        include_total: bool,
+    ) -> dict[str, Any]:
+        """Call the RLS-scoped PostgreSQL query function without ORM hydration."""
+        from core.db import reapply_rls_context
+
+        await reapply_rls_context(self.session)
+        result = await self.session.execute(
+            text("""
+                SELECT public.query_rows(
+                    CAST(:table_ids AS BIGINT[]),
+                    CAST(:workspace_ids AS UUID[]),
+                    CAST(:page AS INTEGER),
+                    CAST(:page_size AS INTEGER),
+                    CAST(:sort_by AS TEXT),
+                    CAST(:desc AS BOOLEAN),
+                    CAST(:filter_json AS JSONB),
+                    CAST(:include_total AS BOOLEAN)
+                )
+            """),
+            {
+                "table_ids": table_ids,
+                "workspace_ids": workspace_ids,
+                "page": page,
+                "page_size": page_size,
+                "sort_by": sort_by,
+                "desc": desc,
+                "filter_json": json.dumps(filter_json),
+                "include_total": include_total,
+            },
+        )
+        return result.scalar_one()
+
+    async def patch_row(self, workspace_id: UUID, row: Row, data: RowUpdate, updated_by: UUID | None = None) -> Row:
         """Pass a partial non-blob patch directly to PostgreSQL."""
         result = await self.session.execute(
             text("""

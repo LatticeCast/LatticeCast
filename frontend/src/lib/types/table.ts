@@ -89,6 +89,16 @@ export interface Row {
 	updated_at: string;
 }
 
+/** Multi-source rows query envelope from GET /api/v1/rows. */
+export interface RowQueryResponse {
+	items: Row[];
+	page: number | null;
+	page_size: number | null;
+	has_more: boolean;
+	total: number | null;
+	total_pages: number | null;
+}
+
 /** Full table response — from PG get_table() / BE GET /tables/{tid} */
 export interface Table {
 	table_id: number;

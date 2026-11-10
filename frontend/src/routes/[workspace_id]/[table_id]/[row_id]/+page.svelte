@@ -3,7 +3,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { fetchTable, fetchRows, createRow } from '$lib/backend/tables';
+	import { fetchTable, fetchRow, createRow } from '$lib/backend/tables';
 	import { resolveTableForPath } from '$lib/utils/table-route';
 	import { tablePath } from '$lib/utils/url';
 	import {
@@ -41,13 +41,13 @@
 			const resolved = await resolveTableForPath(workspaceParam, tableParam);
 			if (!resolved) throw new Error('Table not found');
 			const id = resolved.table_id;
-			const [t, rows] = await Promise.all([
+			const [t, fetchedRow] = await Promise.all([
 				fetchTable(id, resolved.workspace_id),
-				fetchRows(id, 0, 200)
+				fetchRow(id, rowId)
 			]);
 			tableId = id;
 			table = t;
-			row = rows.find((candidate) => candidate.row_id === rowId) ?? null;
+			row = fetchedRow;
 			if (!row) error = 'Row not found';
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load';

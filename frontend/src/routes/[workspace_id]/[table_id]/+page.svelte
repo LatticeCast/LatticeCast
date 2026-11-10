@@ -14,7 +14,7 @@
 	import { rows } from '$lib/stores/table_rows.store';
 
 	// Controller
-	import { patchSchema, fetchAllRows } from '$lib/backend/tables';
+	import { patchSchema, fetchRows, fetchAllRows, ROW_PAGE_SIZE } from '$lib/backend/tables';
 	import {
 		currentWorkspaceId,
 		currentTableId,
@@ -37,6 +37,7 @@
 	// Components
 	import TableToolbar from '$lib/components/table/TableToolbar.svelte';
 	import TableGrid from '$lib/components/table/TableGrid.svelte';
+	import { T } from '$lib/UI/theme.svelte';
 	import ViewSwitcher from '$lib/components/table/ViewSwitcher.svelte';
 	import KanbanBoard from '$lib/components/table/KanbanBoard.svelte';
 	import TimelineView from '$lib/components/table/TimelineView.svelte';
@@ -90,6 +91,23 @@
 
 	const sortedColumns = $derived(buildSortedColumns($columns, s.viewColOrder));
 
+	let rowPage = $state(1);
+	let rowHasMore = $state(false);
+	let rowMode = $state<'paged' | 'all'>('paged');
+	let requestedMode = $state<'paged' | 'all' | null>(null);
+	let rowLoading = $state(false);
+	let rowRequestId = 0;
+	const needsAllRows = $derived(
+		(activeView.type === 'table' &&
+			(sortConfig !== null ||
+				s.groupConfig !== null ||
+				s.filterConditions.length > 0 ||
+				s.searchQuery.trim().length > 0)) ||
+			activeView.type === 'kanban' ||
+			activeView.type === 'timeline' ||
+			activeView.type === 'workflow'
+	);
+
 	const filteredRows = $derived(applyFilters($rows, s.filterConditions, s.searchQuery));
 	const sortedRows = $derived(sortRows(filteredRows, sortConfig, $columns));
 
@@ -97,14 +115,85 @@
 		48 + sortedColumns.reduce((sum, col) => sum + colWidth(col), 0) + 40 + 40
 	);
 
-	const groupedRows = $derived(buildGroupedRows(filteredRows, s.groupConfig, $columns, sortConfig));
-
-	const renderItems = $derived(buildRenderItems(sortedRows, groupedRows, s.collapsedGroups));
+	const visibleRows = $derived(
+		activeView.type === 'table' && rowMode === 'all'
+			? sortedRows.slice((rowPage - 1) * ROW_PAGE_SIZE, rowPage * ROW_PAGE_SIZE)
+			: sortedRows
+	);
+	const groupedRows = $derived(buildGroupedRows(visibleRows, s.groupConfig, $columns, sortConfig));
+	const renderItems = $derived(buildRenderItems(visibleRows, groupedRows, s.collapsedGroups));
+	const canGoNext = $derived(
+		rowMode === 'all' ? rowPage * ROW_PAGE_SIZE < sortedRows.length : rowHasMore
+	);
 
 	const tableId = $derived($currentTableId ?? 0);
 	const wsId = $derived($currentWorkspaceId ?? '');
 
 	let loading = $state(true);
+
+	async function loadRowPage(targetPage: number) {
+		const requestId = ++rowRequestId;
+		rowLoading = true;
+		requestedMode = 'paged';
+		try {
+			const result = await fetchRows(tableId, targetPage, ROW_PAGE_SIZE);
+			if (requestId !== rowRequestId) return;
+			if (targetPage > 1 && result.items.length === 0) {
+				await loadRowPage(targetPage - 1);
+				return;
+			}
+			rowPage = targetPage;
+			rowHasMore = result.has_more;
+			rowMode = 'paged';
+			requestedMode = null;
+		} catch (e) {
+			if (requestId === rowRequestId)
+				error.set(e instanceof Error ? e.message : 'Failed to load rows');
+		} finally {
+			if (requestId === rowRequestId) rowLoading = false;
+		}
+	}
+
+	async function loadFullRows() {
+		const requestId = ++rowRequestId;
+		rowLoading = true;
+		requestedMode = 'all';
+		try {
+			await fetchAllRows(tableId);
+			if (requestId !== rowRequestId) return;
+			rowPage = 1;
+			rowMode = 'all';
+			requestedMode = null;
+		} catch (e) {
+			if (requestId === rowRequestId)
+				error.set(e instanceof Error ? e.message : 'Failed to load rows');
+		} finally {
+			if (requestId === rowRequestId) rowLoading = false;
+		}
+	}
+
+	function changeRowPage(delta: number) {
+		if (rowLoading || rowPage + delta < 1 || (delta > 0 && !canGoNext)) return;
+		if (rowMode === 'all') rowPage += delta;
+		else void loadRowPage(rowPage + delta);
+	}
+
+	async function handleAddRow(editColId?: string) {
+		await s.handleAddRow(editColId);
+		if (rowMode === 'paged') await loadRowPage(1);
+		else rowPage = 1;
+	}
+
+	async function handleDeleteRow(rowId: number) {
+		await s.handleDeleteRow(rowId);
+		if (rowMode === 'paged') await loadRowPage(rowPage);
+	}
+
+	async function handleDuplicateRow(rowId: number) {
+		await s.handleDuplicateRow(rowId);
+		if (rowMode === 'paged') await loadRowPage(1);
+		else rowPage = 1;
+	}
 
 	async function handleOpenTextCell(
 		row: import('$lib/types/table').Row,
@@ -120,6 +209,12 @@
 			s.reset();
 			error.set('');
 			loading = true;
+			rowRequestId++;
+			rowPage = 1;
+			rowHasMore = false;
+			rowMode = 'paged';
+			requestedMode = null;
+			rowLoading = false;
 		});
 
 		if (cached) {
@@ -133,10 +228,16 @@
 		(async () => {
 			try {
 				if (!viewsP || !rowsP) return;
-				const [viewsList] = await Promise.all([viewsP, rowsP, ...(tableP ? [tableP] : [])]);
+				const [viewsList, firstRows] = await Promise.all([
+					viewsP,
+					rowsP,
+					...(tableP ? [tableP] : [])
+				]);
 				if (cancelled) return;
 
+				let initialNeedsAll = false;
 				untrack(() => {
+					rowHasMore = firstRows.has_more;
 					if (!cached) {
 						if (resolvedWsId) currentWorkspaceId.set(resolvedWsId);
 						currentTableId.set(tableParam);
@@ -163,7 +264,27 @@
 					s.activeViewId = targetViewId;
 					const initView = candidates.find((v) => v.view_id === targetViewId);
 					if (initView) s.applyViewConfig(initView);
-
+					const config =
+						initView?.view_id === IMPLICIT_TABLE_VIEW.view_id
+							? get(tableViewConfig)
+							: initView?.config;
+					initialNeedsAll =
+						initView?.type === 'kanban' ||
+						initView?.type === 'timeline' ||
+						initView?.type === 'workflow' ||
+						(initView?.type === 'table' &&
+							(s.filterConditions.length > 0 ||
+								s.groupConfig !== null ||
+								parseSortConfig(config) !== null));
+				});
+				if (initialNeedsAll) {
+					await fetchAllRows(tableParam);
+					if (cancelled) return;
+					untrack(() => {
+						rowMode = 'all';
+					});
+				}
+				untrack(() => {
 					loading = false;
 				});
 			} catch (e) {
@@ -178,6 +299,23 @@
 		return () => {
 			cancelled = true;
 		};
+	});
+
+	$effect(() => {
+		if (loading || !tableId) return;
+		const desiredMode = needsAllRows ? 'all' : 'paged';
+		if (desiredMode === requestedMode) return;
+		if (desiredMode === rowMode && requestedMode === null) return;
+		untrack(() => {
+			if (desiredMode === 'all') void loadFullRows();
+			else void loadRowPage(1);
+		});
+	});
+
+	$effect(() => {
+		if (rowMode !== 'all' || activeView.type !== 'table') return;
+		const lastPage = Math.max(1, Math.ceil(sortedRows.length / ROW_PAGE_SIZE));
+		if (rowPage > lastPage) rowPage = lastPage;
 	});
 
 	onMount(() => s.setupMouseListeners());
@@ -258,7 +396,9 @@
 			onReorderViews={handleReorderViews}
 		/>
 
-		{#if activeView.type === 'table'}
+		{#if rowLoading && activeView.type !== 'table'}
+			<div class="flex flex-1 items-center justify-center text-sm {T.muted}">Loading rows...</div>
+		{:else if activeView.type === 'table'}
 			<TableToolbar
 				columns={$columns}
 				{sortConfig}
@@ -284,7 +424,7 @@
 			<TableGrid
 				{sortedColumns}
 				{renderItems}
-				loading={false}
+				loading={rowLoading}
 				{tableMinWidth}
 				addingRow={s.addingRow}
 				addingColumn={s.addingColumn}
@@ -309,7 +449,7 @@
 				onRemoveTag={(rowId, col, tag) => s.removeTag(rowId, col, tag)}
 				onAddTag={(rowId, col, tag) => s.addTag(rowId, col, tag)}
 				onTagsPopupChange={(c) => (s.tagsPopupCell = c)}
-				onDeleteRow={(id) => s.handleDeleteRow(id)}
+				onDeleteRow={(id) => handleDeleteRow(id)}
 				onOpenExpand={(row) => s.openExpand(row)}
 				onOpenContextMenu={(e, type, id) => s.openContextMenu(e, type, id)}
 				onStartRename={(id, name) => s.startRename(id, name)}
@@ -324,13 +464,35 @@
 				onDragReorderColumns={handleDragReorderColumns}
 				onResizeStart={(e, col) => s.handleResizeStart(e, col, colWidth(col))}
 				onShowAddColumn={() => (s.showAddColumn = true)}
-				onAddRow={() => s.handleAddRow()}
-				onAddRowAndEdit={(colId) => s.handleAddRow(colId)}
+				onAddRow={() => handleAddRow()}
+				onAddRowAndEdit={(colId) => handleAddRow(colId)}
 				onAddRowInGroup={(key, col) => s.handleAddRowInGroup(key, col)}
 				onToggleCollapseGroup={(key) => s.toggleCollapseGroup(key)}
 				onManageOptions={(col) => (s.managingOptionsCol = col)}
 				onOpenTextCell={(row, col) => void handleOpenTextCell(row, col)}
 			/>
+			<div
+				class="flex items-center justify-end gap-3 border-t px-4 py-2 text-sm {T.cardBg} {T.border}"
+				data-testid="table-pagination"
+				data-row-page-loading={rowLoading}
+			>
+				<span class={T.muted}>
+					Page {rowPage}{#if rowMode === 'all'}
+						of {Math.max(1, Math.ceil(sortedRows.length / ROW_PAGE_SIZE))}{/if}
+				</span>
+				<button
+					type="button"
+					class="rounded border px-3 py-1 disabled:opacity-40 {T.border} {T.body}"
+					disabled={rowLoading || rowPage <= 1}
+					onclick={() => changeRowPage(-1)}>Previous</button
+				>
+				<button
+					type="button"
+					class="rounded border px-3 py-1 disabled:opacity-40 {T.border} {T.body}"
+					disabled={rowLoading || !canGoNext}
+					onclick={() => changeRowPage(1)}>Next</button
+				>
+			</div>
 		{:else if activeView.type === 'kanban'}
 			<KanbanBoard
 				{tableId}
@@ -354,6 +516,7 @@
 		{:else if activeView.type === 'dashboard'}
 			<DashboardView
 				view={activeView as unknown as DashboardViewType & { view_id: number }}
+				workspaceId={wsId}
 				{tableId}
 			/>
 		{:else if activeView.type === 'workflow'}
@@ -377,8 +540,8 @@
 		filterConditions={s.filterConditions}
 		onClose={() => (s.contextMenu = null)}
 		onExpandRow={(row) => s.openExpand(row)}
-		onDuplicateRow={(id) => s.handleDuplicateRow(id)}
-		onDeleteRow={(id) => s.handleDeleteRow(id)}
+		onDuplicateRow={(id) => handleDuplicateRow(id)}
+		onDeleteRow={(id) => handleDeleteRow(id)}
 		onRenameColumn={(id, name) => s.startRename(id, name)}
 		onSortChange={(c) => s.changeSort(c)}
 		onAddFilter={(id) => s.addFilterForColumn(id)}

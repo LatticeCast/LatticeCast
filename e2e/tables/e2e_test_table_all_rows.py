@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 
+from playwright.sync_api import expect
+
 from e2e_base import BASE, api
 
 
@@ -36,13 +38,13 @@ def test_table_all_rows(authed_page, admin_token, pm_table, snapshot):
         assert response.status_code == 201, response.text[:200]
         row_ids.append(response.json()["row_id"])
 
-    response = api("GET", f"/api/v1/tables/{table_id}/rows?limit=200&sort=asc", admin_token)
+    response = api("GET", f"/api/v1/rows?table_ids=%5B{table_id}%5D", admin_token)
     assert response.status_code == 200, response.text[:200]
-    persisted = response.json()
+    persisted = response.json()["items"]
     assert len(persisted) == 101
-    assert [row["row_id"] for row in persisted] == row_ids
+    assert [row["row_id"] for row in persisted] == list(reversed(row_ids))
     last_id = row_ids[-1]
-    assert persisted[-1]["row_data"][column_ids["Title"]] == "full-row-101"
+    assert persisted[0]["row_data"][column_ids["Title"]] == "full-row-101"
 
     ui_base = os.environ.get("E2E_FRONTEND_URL", BASE)
     page.goto(f"{ui_base}/{ws_id}/{table_id}", wait_until="domcontentloaded")
@@ -50,21 +52,28 @@ def test_table_all_rows(authed_page, admin_token, pm_table, snapshot):
     page.get_by_test_id("view-tab-Schema").click()
     last_grid_row = page.get_by_test_id(f"grid-row-{last_id}")
     last_grid_row.scroll_into_view_if_needed()
-    assert page.locator('[data-testid^="grid-row-"]').count() == 101
+    expect(page.locator('[data-testid^="grid-row-"]')).to_have_count(100)
+    pager = page.get_by_test_id("table-pagination")
+    pager.get_by_role("button", name="Next").click()
+    expect(page.locator('[data-testid^="grid-row-"]')).to_have_count(1)
+    expect(page.get_by_test_id(f"grid-row-{row_ids[0]}")).to_be_visible()
+    pager.get_by_role("button", name="Previous").click()
+    expect(page.locator('[data-testid^="grid-row-"]')).to_have_count(100)
+    expect(last_grid_row).to_be_visible()
     if snapshot:
         page.screenshot(path="/output/table_all_rows_grid.png", full_page=True)
 
     page.get_by_test_id(f"view-tab-{kanban['name']}").click()
     last_card = page.get_by_test_id(f"kanban-card-{last_id}-btn")
     last_card.scroll_into_view_if_needed()
-    assert page.locator('[data-testid^="kanban-card-"][draggable="true"]').count() == 101
+    expect(page.locator('[data-testid^="kanban-card-"][draggable="true"]')).to_have_count(101)
     if snapshot:
         page.screenshot(path="/output/table_all_rows_kanban.png", full_page=True)
 
     page.get_by_test_id(f"view-tab-{timeline['name']}").click()
     last_bar = page.get_by_test_id(f"timeline-row-bar-{last_id}")
     last_bar.scroll_into_view_if_needed()
-    assert page.locator('[data-testid^="timeline-row-bar-"]').count() == 101
+    expect(page.locator('[data-testid^="timeline-row-bar-"]')).to_have_count(101)
     if snapshot:
         page.screenshot(path="/output/table_all_rows_timeline.png", full_page=True)
 
@@ -83,7 +92,6 @@ def test_table_all_rows(authed_page, admin_token, pm_table, snapshot):
         else:
             exported = json.loads(destination.read_text())
         assert len(exported) == 101
-        # Export reuses the same fetchAllRows() the grid loads from, which
-        # defaults to newest-first (reverse row_id order).
+        # Export queries the full result in newest-first row_id order.
         assert exported[0]["Title"] == "full-row-101"
         assert exported[-1]["Title"] == "full-row-001"

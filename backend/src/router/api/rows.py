@@ -1,12 +1,13 @@
 # router/api/rows.py
 
+import json
 from io import BytesIO
-from typing import Annotated
+from typing import Annotated, Literal
 from urllib.parse import quote
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from botocore.exceptions import ClientError
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -16,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config.settings import settings
 from config.storage import s3_client
 from middleware.auth import get_current_user, get_rls_session
-from models.row import RowCreate, RowPut, RowResponse, RowUpdate
+from models.row import RowCreate, RowPut, RowQueryResponse, RowResponse, RowUpdate
 from models.user import User
 from repository.row import RowRepository
 from repository.table_view import TableViewRepository
@@ -58,6 +59,106 @@ async def _get_blob_column(table, column_id: str, session: AsyncSession) -> dict
 # --------------------------------------------------
 
 
+def _parse_row_query_ids(raw: str, kind: str) -> list[int] | list[UUID]:
+    try:
+        values = json.loads(raw)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=f"{kind} must be a JSON array") from exc
+    if not isinstance(values, list) or not 1 <= len(values) <= 100:
+        raise HTTPException(status_code=422, detail=f"{kind} must contain 1 to 100 IDs")
+
+    if kind == "table_ids":
+        if any(type(value) is not int or not 1 <= value <= 2**63 - 1 for value in values):
+            raise HTTPException(status_code=422, detail="table_ids must contain positive bigint IDs")
+        return list(dict.fromkeys(values))
+
+    parsed: list[UUID] = []
+    for value in values:
+        if not isinstance(value, str):
+            raise HTTPException(status_code=422, detail="workspace_ids must contain UUID strings")
+        try:
+            parsed.append(UUID(value))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="workspace_ids must contain UUID strings") from exc
+    return list(dict.fromkeys(parsed))
+
+
+@router.get(
+    "/rows",
+    response_model=RowQueryResponse,
+    summary="Query rows across tables or workspaces",
+    response_description="RLS-visible rows with optional pagination metadata.",
+)
+async def query_rows(
+    table_ids: str | None = Query(
+        default=None,
+        description="JSON array of 1-100 positive table IDs, e.g. [12,13]. Supply this or workspace_ids, never both.",
+    ),
+    workspace_ids: str | None = Query(
+        default=None,
+        description='JSON array of 1-100 workspace UUID strings, e.g. ["uuid-1","uuid-2"]. Supply this or table_ids.',
+    ),
+    page: int | None = Query(
+        default=None,
+        ge=1,
+        description="1-based page number. Requires page_size; defaults to 1 when page_size is supplied.",
+    ),
+    page_size: int | None = Query(
+        default=None, ge=1, le=200, description="Rows per page (1-200). Omit to return every matching row."
+    ),
+    sort_by: Literal["row_id", "table_id", "created_at", "updated_at"] = Query(
+        default="row_id", description="System column for ordering. Ties are resolved by table_id and row_id."
+    ),
+    desc: bool = Query(default=True, description="Sort descending when true; ascending when false."),
+    filter_json: str | None = Query(
+        default=None,
+        description='JSON object matched by row_data @> filter_json, e.g. {"column-uuid":"Osaka"}.',
+    ),
+    include_total: bool = Query(
+        default=False, description="Return the exact matching row count and total pages when true."
+    ),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+):
+    """Query rows from exactly one source type.
+
+    IDs that are missing or hidden by RLS contribute no rows. The default order
+    is row_id DESC, table_id DESC; row IDs are local to each table. Without
+    page_size, the full result is returned, and page, page_size, total_pages
+    are null. With page_size, has_more reports whether a next page exists.
+    total and total_pages are null unless include_total=true.
+    """
+    if (table_ids is None) == (workspace_ids is None):
+        raise HTTPException(status_code=422, detail="Provide exactly one of table_ids or workspace_ids")
+    if page is not None and page_size is None:
+        raise HTTPException(status_code=422, detail="page requires page_size")
+
+    selected_tables = _parse_row_query_ids(table_ids, "table_ids") if table_ids is not None else None
+    selected_workspaces = _parse_row_query_ids(workspace_ids, "workspace_ids") if workspace_ids is not None else None
+
+    try:
+        contains = json.loads(filter_json) if filter_json is not None else {}
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="filter_json must be a JSON object") from exc
+    if not isinstance(contains, dict):
+        raise HTTPException(status_code=422, detail="filter_json must be a JSON object")
+
+    try:
+        return await RowRepository(session).query_rows(
+            table_ids=selected_tables,
+            workspace_ids=selected_workspaces,
+            page=page,
+            page_size=page_size,
+            sort_by=sort_by,
+            desc=desc,
+            filter_json=contains,
+            include_total=include_total,
+        )
+    except DBAPIError as exc:
+        await session.rollback()
+        raise (http_error_for(exc) or exc) from exc
+
+
 @router.post("/tables/{table_id}/rows", response_model=RowResponse, status_code=status.HTTP_201_CREATED)
 async def create_row(
     table_id: int,
@@ -84,7 +185,7 @@ async def create_row(
         raise (http_error_for(exc) or exc) from exc
 
 
-@router.get("/tables/{table_id}/rows", response_model=list[RowResponse])
+@router.get("/tables/{table_id}/rows", response_model=list[RowResponse], deprecated=True)
 async def list_rows(
     table_id: int,
     offset: int = 0,
@@ -94,7 +195,7 @@ async def list_rows(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """List rows. sort=desc|asc. filter_json = JSONB containment filter e.g. {"col_id":"value"}"""
+    """Deprecated single-table list. Use GET /rows?table_ids=[id] for new clients."""
     table = await _get_table_for_member(table_id, user, session)
 
     repo = RowRepository(session)

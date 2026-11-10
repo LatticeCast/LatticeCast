@@ -1,6 +1,6 @@
 // src/lib/stores/table_schemas.store.ts
 //
-// SSOT for sidebar + home: one bulk fetch via GET /api/v1/sidebar
+// SSOT for sidebar + home: one bulk fetch via GET /api/v1/workspaces_tables
 // hydrates the whole menu tree, so first-table-click no longer pays a
 // schema round-trip. Two independent arrays — workspaces + tables —
 // because empty workspaces (zero tables) still need to appear.

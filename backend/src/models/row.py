@@ -23,9 +23,7 @@ class Row(SQLModel, table=True):
         ),
     )
 
-    table_id: int = Field(
-        primary_key=True, sa_type=BigInteger, description="Parent table identity (composite PK/FK)"
-    )
+    table_id: int = Field(primary_key=True, sa_type=BigInteger, description="Parent table identity (composite PK/FK)")
     row_id: int = Field(
         default=0,
         primary_key=True,
@@ -69,3 +67,14 @@ class RowResponse(SQLModel):
     updated_by: UUID | None = Field(default=None, description="UUID of user who last updated the row")
     created_at: datetime = Field(..., description="Creation timestamp")
     updated_at: datetime = Field(..., description="Last update timestamp")
+
+
+class RowQueryResponse(SQLModel):
+    items: list[RowResponse] = Field(description="Rows selected by source IDs and visible under RLS")
+    page: int | None = Field(description="Current 1-based page, or null for an unpaginated query")
+    page_size: int | None = Field(description="Rows per page, or null when all rows are returned")
+    has_more: bool = Field(description="Whether another page exists; false for an unpaginated query")
+    total: int | None = Field(description="Exact matching count when include_total=true, otherwise null")
+    total_pages: int | None = Field(
+        description="Exact page count when paginated with include_total=true, otherwise null"
+    )

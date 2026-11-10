@@ -14,9 +14,10 @@ let nextRequestId = 0;
 
 export async function fetchDashboardBlockRows(
 	tableId: number,
+	workspaceId: string,
 	viewName: string,
 	blockId: string,
-	runtimeParams?: Record<string, unknown>
+	lql: string
 ): Promise<BlockRow[]> {
 	const key = dashboardBlockKey(tableId, viewName, blockId);
 	const requestId = ++nextRequestId;
@@ -24,8 +25,8 @@ export async function fetchDashboardBlockRows(
 	setDashboardBlockLoading(key);
 	try {
 		const payload = await authenticatedRequestJson<{ rows: BlockRow[] }>(
-			`/tables/${tableId}/views/${encodeURIComponent(viewName)}/blocks/${blockId}/query`,
-			{ method: 'POST', body: { params: runtimeParams ?? {} } }
+			`/workspaces/${encodeURIComponent(workspaceId)}/lql`,
+			{ method: 'POST', body: { lql } }
 		);
 		if (latestRequestByBlock.get(key) === requestId) setDashboardBlockRows(key, payload.rows);
 		return payload.rows;

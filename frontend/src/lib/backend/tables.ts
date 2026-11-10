@@ -13,6 +13,7 @@ import type {
 	Table,
 	TableSchema,
 	Row,
+	RowQueryResponse,
 	BlobCellMetadata,
 	CreateTable,
 	CreateColumn,
@@ -135,36 +136,41 @@ function nonBlobRowData(data: Record<string, unknown>): Record<string, unknown> 
 	);
 }
 
-export async function fetchRows(tableId: number, offset = 0, limit = 100): Promise<Row[]> {
-	const result = await authenticatedRequestJson<Row[]>(
-		`/tables/${tableId}/rows?offset=${offset}&limit=${limit}`
+export const ROW_PAGE_SIZE = 100;
+let latestRowsRequest = 0;
+
+export async function fetchRows(
+	tableId: number,
+	page = 1,
+	pageSize = ROW_PAGE_SIZE
+): Promise<RowQueryResponse> {
+	const requestId = ++latestRowsRequest;
+	const tableIds = encodeURIComponent(JSON.stringify([tableId]));
+	const result = await authenticatedRequestJson<RowQueryResponse>(
+		`/rows?table_ids=${tableIds}&page=${page}&page_size=${pageSize}`
 	);
-	rows.set(result);
+	if (requestId === latestRowsRequest) rows.set(result.items);
 	return result;
 }
 
-/**
- * Load all ordered pages before replacing the shared row snapshot.
- *
- * Pages are fetched ascending so offsets stay stable while paginating —
- * row_id only ever grows, so a row created mid-fetch lands past the last
- * page instead of shifting already-fetched offsets. The assembled list is
- * then reversed so the default (no explicit sort) display order is
- * newest-first, matching the backend's own default `sort=desc`.
- */
+/** Read an addressed row without scanning a list page. */
+export async function fetchRow(tableId: number, rowId: number): Promise<Row> {
+	return authenticatedRequestJson<Row>(`/tables/${tableId}/rows/${rowId}`);
+}
+
+/** Read all rows for exports without replacing the current table page. */
+export async function queryAllRows(tableId: number): Promise<Row[]> {
+	const tableIds = encodeURIComponent(JSON.stringify([tableId]));
+	const result = await authenticatedRequestJson<RowQueryResponse>(`/rows?table_ids=${tableIds}`);
+	return result.items;
+}
+
+/** Load every row into the shared store for views that need the full table. */
 export async function fetchAllRows(tableId: number): Promise<Row[]> {
-	const pageSize = 100;
-	const allRows: Row[] = [];
-	let page: Row[];
-	do {
-		page = await authenticatedRequestJson<Row[]>(
-			`/tables/${tableId}/rows?offset=${allRows.length}&limit=${pageSize}&sort=asc`
-		);
-		allRows.push(...page);
-	} while (page.length === pageSize);
-	allRows.reverse();
-	rows.set(allRows);
-	return allRows;
+	const requestId = ++latestRowsRequest;
+	const result = await queryAllRows(tableId);
+	if (requestId === latestRowsRequest) rows.set(result);
+	return result;
 }
 
 export async function createRow(tableId: number, data: CreateRow): Promise<Row> {
