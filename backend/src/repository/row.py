@@ -197,14 +197,21 @@ class RowRepository:
     async def update_blob(
         self,
         workspace_id: UUID,
-        row: Row,
+        table_id: int,
+        row_id: int,
         column_id: str,
         metadata: dict[str, Any],
         updated_by: UUID | None = None,
         *,
         commit: bool = True,
     ) -> Row:
-        """Write metadata for exactly one blob cell through PostgreSQL."""
+        """Write metadata for exactly one blob cell through PostgreSQL.
+
+        Addresses the row by identity instead of by ORM instance: a caller
+        that rolled its session back before talking to storage holds an
+        expired object, and reading a column off it reloads the row (sync IO)
+        in the middle of an async request.
+        """
         result = await self.session.execute(
             text("""
                 SELECT *
@@ -218,8 +225,8 @@ class RowRepository:
             """),
             {
                 "workspace_id": str(workspace_id),
-                "table_id": row.table_id,
-                "row_id": row.row_id,
+                "table_id": table_id,
+                "row_id": row_id,
                 "column_id": column_id,
                 "metadata": json.dumps(metadata),
             },

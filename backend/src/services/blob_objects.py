@@ -7,22 +7,24 @@ from sqlalchemy import text
 from config.settings import settings
 from config.storage import s3_client
 from core import db as core_db
-from core.db import get_login_session, get_session, set_rls_context
+from core.db import get_login_session
 from util import logger
 
 
-async def register_upload(table, row_id: int, column_id: str, key: str, user_id: str) -> None:
-    """Commit the recovery record separately while the caller holds its lock.
+async def queue_orphan_upload(key: str) -> None:
+    """Queue an uploaded object when its row transaction could not publish it.
 
-    This record survives an interrupted upload or an ambiguous DB commit.
-    The cleanup worker cannot touch the key until the publisher releases
-    its PostgreSQL advisory transaction lock.
+    The manager queue accepts keys even after the owning row/workspace was
+    deleted. Cleanup checks for a live reference, so ambiguous commits are
+    safe to queue as well.
     """
-    async for session in get_session():
-        await set_rls_context(session, user_id)
+    async for session in get_login_session():
         await session.execute(
-            text("SELECT public.register_blob_object(:ws, :tid, :rid, :cid, :key)"),
-            {"ws": str(table.workspace_id), "tid": table.table_id, "rid": row_id, "cid": column_id, "key": key},
+            text("""
+                INSERT INTO private.blob_cleanup_queue (object_key)
+                VALUES (:key) ON CONFLICT (object_key) DO NOTHING
+            """),
+            {"key": key},
         )
         await session.commit()
 

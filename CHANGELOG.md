@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.90.3 — 2026-11-11
+
+- Take the database out of the blob upload path: the object goes to storage first, then one short transaction registers it and writes the cell, so no row, table, or idle session lock survives an S3 request. A slow upload no longer blocks another blob PUT or a workspace deletion.
+- Queue the uploaded key for cleanup when the row, column, or workspace disappeared mid-upload, and drop it directly if even that fails; objects are only published after the row write commits.
+- Address the blob cell by table and row identity rather than by ORM instance, since a session rolled back before the upload holds an expired object.
+- Verify with a concurrent regression test (slow upload + fast upload + workspace delete) and the blob browser suite; `V75` grants the manager role INSERT on the cleanup queue.
+
 ## 0.90.2 — 2026-11-11
 
 - Lock the parent table before row writes to prevent deadlocks between blob PUT and workspace deletion; add concurrent regression coverage.
