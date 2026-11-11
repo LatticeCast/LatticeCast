@@ -30,10 +30,10 @@ from __future__ import annotations
 import time
 
 import pytest
+from e2e_base import BASE, api, seed_login_info
+from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
-
-from e2e_base import BASE, api, login, seed_login_info
-
+from playwright.sync_api import expect
 
 VIEW_NAME = "Filter Test View"
 
@@ -49,8 +49,8 @@ def snap(page, name: str, snapshot: bool) -> None:
         return
     try:
         page.screenshot(path=f"/output/{name}.png", full_page=True)
-    except Exception:
-        pass
+    except (OSError, PlaywrightError) as exc:
+        print(f"[snapshot] failed: {exc}")
 
 
 def wait_table_page(page, ws_name: str, table_id: str) -> None:
@@ -59,6 +59,13 @@ def wait_table_page(page, ws_name: str, table_id: str) -> None:
         page.wait_for_selector('[data-table-loaded="true"]', timeout=15000)
     except PlaywrightTimeout:
         pytest.fail(f"Table page did not finish loading for {table_id!r}")
+
+
+def wait_visible_row_count(page, count: int) -> None:
+    expect(page.locator('[data-testid^="grid-row-"]')).to_have_count(count, timeout=10000)
+    expect(page.get_by_test_id("table-pagination")).to_have_attribute(
+        "data-row-page-loading", "false", timeout=10000
+    )
 
 
 def visible_row_ids(page, row_ids: list[int]) -> list[int]:
@@ -220,6 +227,7 @@ def test_view_table_filter(browser, admin_token, snapshot) -> None:
                 snap(page, "ft_FAIL_bob_still_visible", snapshot)
                 pytest.fail("Bob's row still visible after filter Name contains 'a'")
 
+            wait_visible_row_count(page, 3)
             vis_after = visible_row_ids(page, row_ids)
             expected = {rid_alice, rid_carol, rid_dave}
             assert set(vis_after) == expected, f"After Name contains 'a': expected {expected}, got {set(vis_after)}"
@@ -255,6 +263,7 @@ def test_view_table_filter(browser, admin_token, snapshot) -> None:
 
             snap(page, "ft_04_after_reload", snapshot)
 
+            wait_visible_row_count(page, 3)
             vis_reload = visible_row_ids(page, row_ids)
             if rid_bob in vis_reload:
                 snap(page, "ft_FAIL_bob_visible_after_reload", snapshot)
@@ -316,6 +325,7 @@ def test_view_table_filter(browser, admin_token, snapshot) -> None:
                 snap(page, "ft_FAIL_dave_still_visible", snapshot)
                 pytest.fail("Dave's row still visible after Status equals 'active'")
 
+            wait_visible_row_count(page, 2)
             vis_two = visible_row_ids(page, row_ids)
             expected_two = {rid_alice, rid_carol}
             assert set(vis_two) == expected_two, f"After two filters: expected {expected_two}, got {set(vis_two)}"
@@ -353,6 +363,7 @@ def test_view_table_filter(browser, admin_token, snapshot) -> None:
                 snap(page, "ft_FAIL_bob_not_back", snapshot)
                 pytest.fail("Bob's row not visible after clearing filters")
 
+            wait_visible_row_count(page, 4)
             vis_clear = visible_row_ids(page, row_ids)
             assert len(vis_clear) == 4, f"Expected 4 visible rows after clear, got {len(vis_clear)}: {vis_clear}"
             print("[ok] UI: all 4 rows visible after clearing filters")
@@ -397,6 +408,7 @@ def test_view_table_filter(browser, admin_token, snapshot) -> None:
                 snap(page, "ft_FAIL_alice_still_visible_is_empty", snapshot)
                 pytest.fail("Alice still visible after is_empty filter on Status")
 
+            wait_visible_row_count(page, 1)
             vis_empty = visible_row_ids(page, row_ids)
             assert set(vis_empty) == {rid_dave}, f"After is_empty: expected only Dave ({rid_dave}), got {set(vis_empty)}"
             print("[ok] UI: Status is_empty → only Dave visible")
@@ -427,6 +439,7 @@ def test_view_table_filter(browser, admin_token, snapshot) -> None:
                 snap(page, "ft_FAIL_alice_not_back", snapshot)
                 pytest.fail("Alice not visible after removing is_empty filter")
 
+            wait_visible_row_count(page, 4)
             vis_final = visible_row_ids(page, row_ids)
             assert len(vis_final) == 4, f"Expected 4 rows after remove, got {len(vis_final)}: {vis_final}"
             print("[ok] UI: all 4 rows visible after removing filter")

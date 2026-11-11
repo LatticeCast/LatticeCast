@@ -7,9 +7,8 @@ import json
 import os
 from pathlib import Path
 
-from playwright.sync_api import expect
-
 from e2e_base import BASE, api
+from playwright.sync_api import expect
 
 
 def test_table_all_rows(authed_page, admin_token, pm_table, snapshot):
@@ -60,6 +59,16 @@ def test_table_all_rows(authed_page, admin_token, pm_table, snapshot):
     pager.get_by_role("button", name="Previous").click()
     expect(page.locator('[data-testid^="grid-row-"]')).to_have_count(100)
     expect(last_grid_row).to_be_visible()
+
+    # Search must include a row that lives beyond the first API page.
+    search = page.get_by_test_id("toolbar-search-input")
+    search.fill("full-row-001")
+    expect(page.locator('[data-testid^="grid-row-"]')).to_have_count(1)
+    expect(page.get_by_test_id(f"grid-row-{row_ids[0]}")).to_be_visible()
+    expect(pager).to_have_attribute("data-row-page-loading", "false")
+    search.fill("")
+    expect(page.locator('[data-testid^="grid-row-"]')).to_have_count(100)
+
     if snapshot:
         page.screenshot(path="/output/table_all_rows_grid.png", full_page=True)
 

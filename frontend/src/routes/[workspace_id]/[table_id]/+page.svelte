@@ -155,6 +155,12 @@
 	}
 
 	async function loadFullRows() {
+		// Page 1 is complete when the API reports no next page.
+		// A filter or search can then use the current rows without blanking the grid.
+		if (rowMode === 'paged' && requestedMode === null && rowPage === 1 && !rowHasMore) {
+			rowMode = 'all';
+			return;
+		}
 		const requestId = ++rowRequestId;
 		rowLoading = true;
 		requestedMode = 'all';
@@ -278,7 +284,7 @@
 								parseSortConfig(config) !== null));
 				});
 				if (initialNeedsAll) {
-					await fetchAllRows(tableParam);
+					if (firstRows.has_more) await fetchAllRows(tableParam);
 					if (cancelled) return;
 					untrack(() => {
 						rowMode = 'all';
@@ -306,6 +312,8 @@
 		const desiredMode = needsAllRows ? 'all' : 'paged';
 		if (desiredMode === requestedMode) return;
 		if (desiredMode === rowMode && requestedMode === null) return;
+		// Keep the full cache when clearing a filter or search.
+		if (desiredMode === 'paged' && rowMode === 'all' && requestedMode === null) return;
 		untrack(() => {
 			if (desiredMode === 'all') void loadFullRows();
 			else void loadRowPage(1);

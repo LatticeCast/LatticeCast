@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.90.1 — 2026-11-11
+
+- Reuse a complete first row page for table filters, search, and view loading; keep the full row cache when clearing a filter or search.
+- Make filter and search E2E wait for the final grid, and verify search finds a row beyond the first page.
+
 ## 0.90.0 — 2026-11-11
 
 - Add `GET /api/v1/rows` for multiple table IDs or workspace IDs, with JSONB containment, stable sorting, optional pagination and totals. V74 keeps the query inside a PostgreSQL `SECURITY INVOKER` function under existing RLS.

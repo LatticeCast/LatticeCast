@@ -22,10 +22,10 @@ from __future__ import annotations
 import time
 
 import pytest
-from playwright.sync_api import TimeoutError as PlaywrightTimeout
-
 from e2e_base import BASE, api
-
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
+from playwright.sync_api import expect
 
 VIEW_NAME = "Search Test View"
 
@@ -35,8 +35,8 @@ def snap(page, name: str, snapshot: bool) -> None:
         return
     try:
         page.screenshot(path=f"/output/{name}.png", full_page=True)
-    except Exception:
-        pass
+    except (OSError, PlaywrightError) as exc:
+        print(f"[snapshot] failed: {exc}")
 
 
 def wait_table_page(page, ws_name: str, table_id: str) -> None:
@@ -45,6 +45,13 @@ def wait_table_page(page, ws_name: str, table_id: str) -> None:
         page.wait_for_selector('[data-table-loaded="true"]', timeout=15000)
     except PlaywrightTimeout:
         pytest.fail(f"Table page did not finish loading for {table_id!r}")
+
+
+def wait_visible_row_count(page, count: int) -> None:
+    expect(page.locator('[data-testid^="grid-row-"]')).to_have_count(count, timeout=10000)
+    expect(page.get_by_test_id("table-pagination")).to_have_attribute(
+        "data-row-page-loading", "false", timeout=10000
+    )
 
 
 def visible_row_ids(page, row_ids: list[int]) -> list[int]:
@@ -60,7 +67,7 @@ def visible_row_ids(page, row_ids: list[int]) -> list[int]:
 def test_search(authed_page, admin_token, workspace, snapshot):
     page = authed_page
     token = admin_token
-    ws_id, ws_name = workspace
+    _ws_id, ws_name = workspace
 
     _TS = int(time.time())
     TABLE_ID = f"search-{_TS}"
@@ -102,7 +109,7 @@ def test_search(authed_page, admin_token, workspace, snapshot):
         row_ids.append(r.json()["row_id"])
     print(f"[setup] rows: {row_ids}")
 
-    rid_alice, rid_bob, rid_carol, rid_dave = row_ids
+    rid_alice, rid_bob, rid_carol, _rid_dave = row_ids
 
     # ── Setup: table view ────────────────────────────────────────────────────
     r = api("POST", f"/api/v1/tables/{TABLE_ID}/views", token,
@@ -146,7 +153,7 @@ def test_search(authed_page, admin_token, workspace, snapshot):
         pytest.fail("Search input not visible")
 
     search_input.fill("tok")
-    page.wait_for_timeout(500)
+    wait_visible_row_count(page, 2)
 
     snap(page, "search_02_after_tok", snapshot)
 
@@ -163,7 +170,7 @@ def test_search(authed_page, admin_token, workspace, snapshot):
         snap(page, "search_FAIL_no_clear_btn", snapshot)
         pytest.fail("Search clear button not visible")
     clear_btn.click()
-    page.wait_for_timeout(500)
+    wait_visible_row_count(page, 4)
 
     snap(page, "search_03_after_clear", snapshot)
 
@@ -173,7 +180,7 @@ def test_search(authed_page, admin_token, workspace, snapshot):
 
     # ── Step 5: type "bob" (lowercase) → case-insensitive match ───────────
     search_input.fill("bob")
-    page.wait_for_timeout(500)
+    wait_visible_row_count(page, 1)
 
     snap(page, "search_04_after_bob", snapshot)
 
@@ -200,7 +207,7 @@ def test_search(authed_page, admin_token, workspace, snapshot):
 
     # ── Step 7: type "zzz" (no match) → 0 rows visible ───────────────────
     search_input.fill("zzz")
-    page.wait_for_timeout(500)
+    wait_visible_row_count(page, 0)
 
     snap(page, "search_06_after_zzz", snapshot)
 
