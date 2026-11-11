@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.90.4 — 2026-11-12
+
+- Keep blob cleanup off public.rows: V76 tracks committed blob references in private.blob_objects, and cleanup commits one key per transaction. Pre-migration references with unknown state are retained until a row mutation resolves them.
+- Cover 65 tables, queued blob deletion, live blob retention, and a cleanup relation-lock count below 64. Return 404 when a row disappears during upload.
+- Preserve a newly uploaded object when a commit acknowledgement and orphan queue both fail, because the row may already reference it.
+
 ## 0.90.3 — 2026-11-11
 
 - Take the database out of the blob upload path: the object goes to storage first, then one short transaction registers it and writes the cell, so no row, table, or idle session lock survives an S3 request. A slow upload no longer blocks another blob PUT or a workspace deletion.

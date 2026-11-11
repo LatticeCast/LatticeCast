@@ -23,7 +23,7 @@ from repository.row import RowRepository
 from repository.table_view import TableViewRepository
 from services.blob_objects import queue_orphan_upload
 from util import logger
-from util.pg_errors import http_error_for
+from util.pg_errors import http_error_for, sqlstate_of
 
 from .tables._shared import _get_table_for_member
 
@@ -327,6 +327,7 @@ async def put_blob_cell(
     # table lock (or idle DB transaction) may span the S3 request.
     await session.rollback()
     upload_started = False
+    commit_started = False
     try:
         async with s3_client() as s3:
             upload_started = True
@@ -352,6 +353,7 @@ async def put_blob_cell(
         await repo.update_blob(
             workspace_id, resolved_table_id, row_id, column_id, metadata.model_dump(), updated_by=actor_id, commit=False
         )
+        commit_started = True
         await session.commit()
     except BaseException as exc:
         try:
@@ -363,14 +365,19 @@ async def put_blob_cell(
                 await queue_orphan_upload(metadata.key)
             except Exception as queue_error:
                 logger.warn(f"Failed to queue orphan blob {metadata.key}: {queue_error}")
-                try:
-                    async with s3_client() as s3:
-                        await s3.delete_object(Bucket=settings.blob.bucket, Key=metadata.key)
-                except Exception as delete_error:
-                    logger.warn(f"Failed to delete orphan blob {metadata.key}: {delete_error}")
+                if not commit_started:
+                    try:
+                        async with s3_client() as s3:
+                            await s3.delete_object(Bucket=settings.blob.bucket, Key=metadata.key)
+                    except Exception as delete_error:
+                        logger.warn(f"Failed to delete orphan blob {metadata.key}: {delete_error}")
+                # If commit lost its acknowledgement, the row may already
+                # reference this key. Never delete it without a DB check.
         if isinstance(exc, ClientError):
             raise HTTPException(status_code=500, detail="Storage error") from exc
         if isinstance(exc, DBAPIError):
+            if sqlstate_of(exc) == "22023" and await repo.get_by_number(resolved_table_id, row_id) is None:
+                raise HTTPException(status_code=404, detail="Row not found") from exc
             raise (http_error_for(exc) or exc) from exc
         raise
     return metadata

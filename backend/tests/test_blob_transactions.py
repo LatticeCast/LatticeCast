@@ -14,7 +14,9 @@ from fastapi import HTTPException, UploadFile
 from router.api import rows as api
 
 
-def run_probe(*, denied=False, upload_failure=False, deleted_during_upload=False, commit_failure=False):
+def run_probe(
+    *, denied=False, upload_failure=False, deleted_during_upload=False, commit_failure=False, queue_failure=False
+):
     async def probe():
         events = []
         table = SimpleNamespace(workspace_id=uuid4(), table_id="test")
@@ -57,7 +59,13 @@ def run_probe(*, denied=False, upload_failure=False, deleted_during_upload=False
             stack.enter_context(patch.object(api, "_get_table_for_member", AsyncMock(return_value=table)))
             stack.enter_context(patch.object(api, "_get_blob_column", AsyncMock()))
             stack.enter_context(patch.object(api, "RowRepository", return_value=repo))
-            queue = stack.enter_context(patch.object(api, "queue_orphan_upload", AsyncMock()))
+            queue = stack.enter_context(
+                patch.object(
+                    api,
+                    "queue_orphan_upload",
+                    AsyncMock(side_effect=RuntimeError("queue unavailable") if queue_failure else None),
+                )
+            )
             client = stack.enter_context(patch.object(api, "s3_client", return_value=context))
             if denied or upload_failure or deleted_during_upload or commit_failure:
                 with pytest.raises((HTTPException, RuntimeError)):
@@ -107,6 +115,10 @@ def test_deleted_during_upload_queues_orphan():
 
 def test_ambiguous_commit_leaves_cleanup_to_db_authority():
     assert run_probe(commit_failure=True)[-2:] == ["db_commit", "db_rollback"]
+
+
+def test_ambiguous_commit_does_not_delete_blob_when_queue_is_unavailable():
+    assert run_probe(commit_failure=True, queue_failure=True)[-2:] == ["db_commit", "db_rollback"]
 
 
 def test_foreign_blob_key_rejected_before_storage_read():
