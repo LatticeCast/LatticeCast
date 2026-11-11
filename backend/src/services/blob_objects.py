@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from config.settings import settings
 from config.storage import s3_client
+from core import db as core_db
 from core.db import get_login_session, get_session, set_rls_context
 from util import logger
 
@@ -67,10 +68,48 @@ async def cleanup_once() -> int:
     return processed
 
 
+# Reserved session advisory lock for the single blob cleanup leader.
+CLEANUP_LEADER_LOCK_KEY = 0x4C435F424C4F42
+
+
 async def cleanup_loop() -> None:
+    # Only the elected worker drains the queue; retry if its connection is lost.
     while True:
         try:
-            await cleanup_once()
+            if core_db.login_engine is None:
+                raise RuntimeError("Login database engine is not initialized")
+            async with core_db.login_engine.connect() as leader:
+                acquired = (
+                    await leader.execute(
+                        text("SELECT pg_try_advisory_lock(:key)"),
+                        {"key": CLEANUP_LEADER_LOCK_KEY},
+                    )
+                ).scalar_one()
+                await leader.commit()
+                if not acquired:
+                    await asyncio.sleep(5)
+                    continue
+                try:
+                    while True:
+                        # Detect a lost leader connection before starting work.
+                        await leader.execute(text("SELECT 1"))
+                        await leader.commit()
+                        try:
+                            await cleanup_once()
+                        except Exception as exc:
+                            logger.warn(f"Blob cleanup worker will retry: {exc}")
+                        await asyncio.sleep(5)
+                finally:
+                    try:
+                        await leader.execute(
+                            text("SELECT pg_advisory_unlock(:key)"),
+                            {"key": CLEANUP_LEADER_LOCK_KEY},
+                        )
+                        await leader.commit()
+                    except Exception as exc:
+                        logger.warn(f"Blob cleanup leader unlock failed: {exc}")
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
-            logger.warn(f"Blob cleanup worker will retry: {exc}")
-        await asyncio.sleep(5)
+            logger.warn(f"Blob cleanup leader will retry: {exc}")
+            await asyncio.sleep(5)

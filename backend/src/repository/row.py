@@ -66,13 +66,20 @@ class RowRepository:
         return result.scalar_one_or_none()
 
     async def lock_for_write(self, table_id: int, row_id: int) -> Row:
-        """RLS must authorize UPDATE before any external storage side effect.
+        """Lock the parent table before the row, then check UPDATE permission.
 
-        The no-op UPDATE acquires a transaction-scoped row lock and applies
-        the write policy, unlike SELECT FOR UPDATE which only checks read.
+        Workspace deletion cascades from tables to rows. Taking a row lock
+        first can deadlock with that cascade when a later FK check needs a
+        KEY SHARE lock on tables. Keep this order for every row mutation.
         """
         from fastapi import HTTPException
 
+        await self.session.execute(
+            text("SELECT 1 FROM public.tables WHERE table_id = :tid FOR KEY SHARE"),
+            {"tid": table_id},
+        )
+        # The no-op UPDATE acquires a row lock and applies the write policy;
+        # SELECT FOR UPDATE would only check read permission.
         result = await self.session.execute(
             select(Row)
             .from_statement(

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.90.2 — 2026-11-11
+
+- Lock the parent table before row writes to prevent deadlocks between blob PUT and workspace deletion; add concurrent regression coverage.
+- Elect one blob cleanup leader across uvicorn workers with a PostgreSQL advisory lock.
+
 ## 0.90.1 — 2026-11-11
 
 - Reuse a complete first row page for table filters, search, and view loading; keep the full row cache when clearing a filter or search.
