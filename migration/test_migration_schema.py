@@ -3,6 +3,8 @@ test_migration_schema.py — Verify table/column structure after migrations.
 Called by test_migrations.py (not standalone).
 """
 
+import subprocess
+
 # Expected columns: (schema, table, column, data_type_fragment)
 EXPECTED_COLUMNS: list[tuple[str, str, str, str]] = [
     # auth.users
@@ -710,6 +712,54 @@ def verify(psql_fn) -> list[str]:
     )
     if not result:
         errors.append("MISSING INDEX: rows.row_data GIN for LQL containment (V72)")
+
+    # V77: new columns create B-tree indexes only for range/sort types.
+    # Choice/boolean containment uses the shared GIN, while free text and
+    # blob types do not create individual indexes. Roll back the probe.
+    try:
+        psql_fn("""
+        BEGIN;
+        DO $probe$
+        DECLARE
+            v_ws UUID := 'f8bb8500-10f2-4e8c-b0a3-0d5c30778086';
+            v_user UUID := '36baf5e2-b9ae-4ef6-9657-3445a323128c';
+            v_table BIGINT;
+            v_type TEXT;
+            v_config JSONB;
+            v_idx TEXT;
+            v_exists BOOLEAN;
+        BEGIN
+            INSERT INTO public.workspace_members (
+                workspace_id, user_id, action
+            ) VALUES (v_ws, v_user, 'write')
+            ON CONFLICT DO NOTHING;
+            PERFORM set_config('app.current_user_id', v_user::TEXT, TRUE);
+            SELECT table_id INTO STRICT v_table FROM public.tables
+            WHERE workspace_id = v_ws AND table_name = 'announcement';
+            FOREACH v_type IN ARRAY ARRAY[
+                'text', 'string', 'url', 'blob', 'select', 'tags',
+                'checkbox', 'number', 'date', 'datetime'
+            ] LOOP
+                v_config := public.add_column(
+                    v_ws, v_table, 'probe_' || v_type, v_type,
+                    '{}'::JSONB, v_user
+                );
+                v_idx := public._build_rd_idx_name(
+                    v_ws, v_table,
+                    v_config -> 'columns' -> -1 ->> 'column_id'
+                );
+                v_exists := to_regclass('public.' || quote_ident(v_idx))
+                    IS NOT NULL;
+                IF v_exists <> (v_type IN ('number', 'date', 'datetime')) THEN
+                    RAISE EXCEPTION 'wrong V77 index behavior for %', v_type;
+                END IF;
+            END LOOP;
+        END;
+        $probe$;
+        ROLLBACK;
+        """)
+    except subprocess.CalledProcessError as exc:
+        errors.append(f"V77 COLUMN INDEX PROBE: {exc.stderr}")
 
     # V73: template seed functions must emit the final blob/text schema directly.
     # The dispatcher must no longer depend on a legacy doc conversion pass.

@@ -15,12 +15,12 @@ Self-hosted Airtable-like table engine and unified backend. Flexible JSONB table
 | VS Code | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **LatticeCast** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-- **Flexible Schema** — create columns of any type (text, number, date, select, tags, checkbox, url), all stored as JSONB
+- **Flexible Schema** — create columns from the ten supported types listed below; cell values are stored as JSONB
 - **Workspaces** — multi-user, with `read` / `write` / `owner` access levels enforced by PostgreSQL row-level security
 - **Views** — Table (spreadsheet), Kanban (drag-and-drop), Timeline/Gantt (date bars), Dashboard (LatticeQL charts, numbers, lists) and Workflow (node graph), all customizable
 - **PM Template** — Jira-like project management with epic/story/task/bug types, Sprint Board (Kanban) and Roadmap (Timeline) views; ticket key is `<type>-<row_id>` (e.g. `story-5`)
 - **CRM Template** — Pipeline Kanban plus a Sales Dashboard whose blocks are LatticeQL queries over the same rows
-- **Per-column Indexes** — auto-managed PG B-tree (number/date) and GIN (select/tags) indexes
+- **JSONB Indexing** — one PostgreSQL GIN over `table_id` and `row_data` supports containment queries across dynamic schemas; number/date range fields keep B-tree indexes
 - **Blob cells** — a `blob` column holds exactly one file (`file`, `image`, `text`, `table` kinds) in RustFS; PM tickets use a `text` blob for Markdown notes
 - **Import** — CSV/JSON import and templates in the table UI
 - **Authentication** — LC-local HS256 JWTs, password login with rotating refresh tokens, and a first-party SSO issuer (authorization code + PKCE, native handoff) so static front ends need no auth backend
@@ -40,13 +40,33 @@ RustFS            → one-file blob cells at {workspace_id}/{table_id}/rows/{row
 
 Children (`rows`, `table_views`) carry no `workspace_id`; the workspace is the parent table's, and RLS resolves permitted `table_id`s from workspace grants. Every RDS timestamp is a UTC `TIMESTAMPTZ`; `date`/`datetime` cells inside `row_data` are epoch-millisecond numbers. See `llm.root.md` and `llm.core.md`.
 
+## Column Types
+
+The API and frontend accept these ten column types. Each cell is stored under its column UUID in `rows.row_data`.
+
+| Type | Cell value | Meaning | Column index |
+|------|------------|---------|--------------|
+| `text` | String | Free-form text | None |
+| `string` | String | String-valued field | None |
+| `number` | Number | Numeric value | B-tree for range/sort |
+| `date` | Number | UTC epoch milliseconds, displayed as a date | B-tree for range/sort |
+| `datetime` | Number | UTC epoch milliseconds, displayed with time | B-tree for range/sort |
+| `select` | String | One value from the column's configured choices | Shared GIN for containment |
+| `tags` | Array of strings | Multiple selected tags | Shared GIN for containment |
+| `checkbox` | Boolean | Checked or unchecked | Shared GIN for containment |
+| `url` | String | URL value | None |
+| `blob` | Object metadata | One file in S3-compatible storage; the file body is outside PostgreSQL | None |
+
+`email` and `phone` are not accepted column types. Blob cells are written through their dedicated blob endpoints.
+The shared GIN covers the whole `row_data` JSONB value; "None" means no separate column index is created.
+
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
 | Frontend | SvelteKit 2, Svelte 5, Tailwind CSS 4, TypeScript, Vite 7 |
 | Backend | FastAPI, Python 3.12, Uvicorn |
-| Database | PostgreSQL 18, JSONB + auto-managed indexes |
+| Database | PostgreSQL 18, JSONB + composite GIN + RLS |
 | Cache | PostgreSQL UNLOGGED table (`private.cache`) |
 | Query language | LatticeQL (`.lattice-ql`) — compiles dashboard queries to PostgreSQL JSONB SQL |
 | Storage | RustFS (S3-compatible) — blob cells and per-user files |

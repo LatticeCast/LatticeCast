@@ -11,20 +11,15 @@ from sqlalchemy import select, text
 from models.table import Table
 from repository._base import RLSRepository
 
-# Column types that carry a per-column partial index on public.rows. This list
-# must match the types public.create_row_data_index accepts, or a column type
-# here is rejected by the database and one missing here silently has no index.
+# Indexed column types: numeric/temporal fields have B-tree range indexes;
+# single/multiple choice and boolean fields use the shared JSONB GIN.
+# Free text, URL, and blob columns do not request a per-column index.
 INDEXED_TYPES = {
     "number",
     "date",
     "datetime",
-    "text",
-    "string",
     "select",
     "tags",
-    "email",
-    "url",
-    "phone",
     "checkbox",
 }
 

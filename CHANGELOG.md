@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.92.5 — 2026-11-12
+
+- Document the ten supported column types and align automatic row indexing: number/date/datetime retain per-column B-tree indexes; select/tags/checkbox use shared JSONB GIN containment; text/string/url/blob create no separate column index.
+- Add V77's index helper change and a manual, resumable script to build the composite `(table_id, row_data)` GIN and retire legacy indexes. Verify migration behavior and the build/drop workflow on an isolated local PostgreSQL database; live databases are unchanged.
+
 ## 0.90.4 — 2026-11-12
 
 - Keep blob cleanup off public.rows: V76 tracks committed blob references in private.blob_objects, and cleanup commits one key per transaction. Pre-migration references with unknown state are retained until a row mutation resolves them.
