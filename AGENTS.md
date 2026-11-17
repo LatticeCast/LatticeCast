@@ -10,6 +10,8 @@ always working in ./.tmp/ don't /tmp/
 
 always working in tmux session lc-working that we can do pair programming ex: docker compose
 
+always working in docker dont run scripts in host
+
 All `git commit` commands MUST run inside a tmux session. Never commit from a
 direct shell.
 
