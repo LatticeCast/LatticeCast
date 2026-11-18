@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.92.1 — 2026-11-19
+
+- Move the backend metrics port from 9100 to 9250 (`METRICS_PORT` default and the Prometheus scrape target), leaving 9100 free for a node exporter.
+
 ## 0.92.0 — 2026-11-18
 
 - Passwordless login is now an explicit admin opt-in (V78): `gdpr.user_password.allow_no_pwd` (nullable, no default) must be TRUE for an account with no password hash to log in. A missing row, NULL or FALSE is refused with 401. V78 back-fills nothing, so accounts that logged in without a password stop doing so until an admin opts them in. Admin-only: `POST /admin/users` takes `allow_no_pwd` (default false) and `PUT /admin/users/{email}/allow-no-pwd` toggles it; the generic user update rejects it. Setting a password clears it.
@@ -14,7 +18,7 @@
 
 ## 0.91.0 — 2026-11-18
 
-- Add backend Prometheus metrics on a dedicated `METRICS_PORT` (default 9100, never published or routed through nginx): API request duration and in-flight count by route template, and SQLAlchemy pool connections per engine (app, login). Labels carry no workspace, user, or raw URL.
+- Add backend Prometheus metrics on a dedicated `METRICS_PORT` (default 9250, never published or routed through nginx): API request duration and in-flight count by route template, and SQLAlchemy pool connections per engine (app, login). Labels carry no workspace, user, or raw URL.
 - Run one uvicorn worker per container, matching the deployed command; the unused supervisord wrapper is removed. Scale by running more containers.
 - Add an optional `monitor` Compose profile (`./monitor`): Prometheus, Perses, and postgres-exporter, with Prometheus depending on the backend and not the reverse.
 

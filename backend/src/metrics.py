@@ -2,7 +2,7 @@
 
 One uvicorn worker per container, so the plain in-process registry is enough:
 scale by running more containers and let Prometheus scrape each one. Metrics are
-served on their own port (METRICS_PORT, default 9100), which is never published
+served on their own port (METRICS_PORT, default 9250), which is never published
 or routed through nginx/ALB.
 
 Labels stay low-cardinality on purpose: the route *template*, the method, the
@@ -106,7 +106,7 @@ for _name, _attr in (("app", "app_engine"), ("login", "login_engine")):
 
 def start_metrics_server():
     """Serve /metrics on METRICS_PORT. Returns the server, or None if it cannot bind."""
-    port = int(os.environ.get("METRICS_PORT", "9100"))
+    port = int(os.environ.get("METRICS_PORT", "9250"))
     try:
         server, _thread = start_http_server(port)
     except OSError as exc:  # metrics must never take the API down
