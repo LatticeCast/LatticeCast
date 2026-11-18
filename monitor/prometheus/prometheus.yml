@@ -12,7 +12,8 @@ scrape_configs:
     static_configs:
       - targets: ["postgres-exporter:9187"]
 
-  # Aggregated across uvicorn workers on a dedicated port (never routed via nginx).
+  # One uvicorn worker per container, metrics on a dedicated port (never routed via nginx).
+  # With several backend containers, use dns_sd_configs / service discovery so each is scraped.
   # Keep route templates as labels; never workspace_id / user_id / raw URLs.
   - job_name: lattice-cast-backend
     metrics_path: /metrics

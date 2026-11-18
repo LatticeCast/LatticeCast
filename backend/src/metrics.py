@@ -11,6 +11,7 @@ status class, and the pool name. Never workspace_id, user_id, or a raw URL.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 
@@ -33,6 +34,23 @@ DB_POOL_CONNECTIONS = Gauge(
     ("engine", "state"),
 )
 DB_POOL_SIZE = Gauge("lc_db_pool_size", "Configured SQLAlchemy pool_size per engine.", ("engine",))
+
+
+EVENT_LOOP_LAG_SECONDS = Histogram(
+    "lc_event_loop_lag_seconds",
+    "How late the event loop wakes a timer; blocking calls on the loop show up here.",
+    buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5),
+)
+LOOP_LAG_INTERVAL = 0.1
+
+
+async def event_loop_lag_loop() -> None:
+    """Sleep a fixed interval and record how much later than that it resumed."""
+    loop = asyncio.get_running_loop()
+    while True:
+        expected = loop.time() + LOOP_LAG_INTERVAL
+        await asyncio.sleep(LOOP_LAG_INTERVAL)
+        EVENT_LOOP_LAG_SECONDS.observe(max(loop.time() - expected, 0.0))
 
 
 class MetricsMiddleware:

@@ -24,7 +24,7 @@ from services.lc_auth import (
     issue_refresh_token,
     set_browser_session_cookie,
 )
-from util.security import hash_password, verify_password
+from util.security import hash_password_async, verify_password_async
 
 router = APIRouter(prefix="/login", tags=["auth"])
 
@@ -163,7 +163,7 @@ async def password_login(
     pwd_result = await login_session.execute(select(UserPassword).where(UserPassword.user_id == user.user_id))
     stored_pwd = pwd_result.scalar_one_or_none()
 
-    if stored_pwd and not verify_password(request.password, stored_pwd.password_hash):
+    if stored_pwd and not await verify_password_async(request.password, stored_pwd.password_hash):
         raise HTTPException(status_code=401, detail="Wrong password")
 
     sso_token, sso_max_age = await create_browser_session(login_session, user.user_id, "password")
@@ -434,12 +434,14 @@ async def set_me_password(
     stored_password_hash = pwd_result.scalar_one()
 
     if stored_password_hash:
-        if not request.current_password or not verify_password(request.current_password, stored_password_hash):
+        if not request.current_password or not await verify_password_async(
+            request.current_password, stored_password_hash
+        ):
             raise HTTPException(status_code=401, detail="Wrong current_password")
 
     await session.execute(
         text("SELECT public.set_current_user_password_hash(:password_hash)").bindparams(
-            password_hash=hash_password(request.new_password)
+            password_hash=await hash_password_async(request.new_password)
         )
     )
     await session.commit()

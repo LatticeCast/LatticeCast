@@ -14,7 +14,7 @@ from __version__ import __version__
 from config.settings import settings
 from config.storage import ensure_bucket_exists
 from core.db import close_db, init_db
-from metrics import MetricsMiddleware, start_metrics_server
+from metrics import MetricsMiddleware, event_loop_lag_loop, start_metrics_server
 from router.api.admin.announcements import router as admin_announcements_router
 from router.api.admin.users import router as admin_users_router
 from router.api.announcements import router as api_announcements_router
@@ -53,14 +53,17 @@ async def lifespan(app: FastAPI):
 
     cleanup_task = asyncio.create_task(cleanup_loop())
     metrics_server = start_metrics_server()
+    lag_task = asyncio.create_task(event_loop_lag_loop())
     try:
         yield
     finally:
         if metrics_server is not None:
             metrics_server.shutdown()
-        cleanup_task.cancel()
-        with suppress(asyncio.CancelledError):
-            await cleanup_task
+        for task in (cleanup_task, lag_task):
+            task.cancel()
+        for task in (cleanup_task, lag_task):
+            with suppress(asyncio.CancelledError):
+                await task
 
     # Shutdown
     print("🛑 Shutting down services...")

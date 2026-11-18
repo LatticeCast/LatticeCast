@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.91.1 — 2026-11-18
+
+- Add `lc_event_loop_lag_seconds`: how late the event loop wakes a timer, so a blocking call on the single worker is visible.
+- Run bcrypt verify/hash off the event loop in the login, password-change and SSO client-secret paths. Without the `bcrypt` package passlib fell back to libc `crypt`, which holds the GIL, so a thread alone did not help (measured: 0.208 s of loop stall in a thread, 0.001 s with `bcrypt` installed). `bcrypt==4.0.1` is now a dependency.
+
 ## 0.91.0 — 2026-11-18
 
 - Add backend Prometheus metrics on a dedicated `METRICS_PORT` (default 9100, never published or routed through nginx): API request duration and in-flight count by route template, and SQLAlchemy pool connections per engine (app, login). Labels carry no workspace, user, or raw URL.

@@ -29,7 +29,7 @@ from core.db import get_login_session
 from middleware.auth import get_current_user, require_admin
 from models.user import User
 from services.lc_auth import COOKIE_NAME, create_lc_access_token
-from util.security import hash_password, verify_password
+from util.security import hash_password_async, verify_password_async
 
 router = APIRouter(prefix="/sso", tags=["sso"])
 
@@ -217,7 +217,7 @@ async def create_client(
             {
                 "client_id": request.client_id,
                 "client_kind": request.client_kind,
-                "secret_hash": hash_password(secret) if secret else None,
+                "secret_hash": await hash_password_async(secret) if secret else None,
                 "display_name": request.display_name,
             },
         )
@@ -367,7 +367,9 @@ async def token(request: TokenRequest, session: AsyncSession = Depends(get_login
     if client["client_kind"] == "public":
         if not request.code_verifier:
             raise HTTPException(status_code=400, detail="code_verifier is required for public clients")
-    elif not request.client_secret or not verify_password(request.client_secret, client["client_secret_hash"]):
+    elif not request.client_secret or not await verify_password_async(
+        request.client_secret, client["client_secret_hash"]
+    ):
         raise HTTPException(status_code=401, detail="Invalid client credentials")
 
     result = await session.execute(
