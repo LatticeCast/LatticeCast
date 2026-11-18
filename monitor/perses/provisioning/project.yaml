@@ -1,0 +1,6 @@
+kind: Project
+metadata:
+  name: lattice-cast
+spec:
+  display:
+    name: LatticeCast

@@ -1,0 +1,12 @@
+database:
+  file:
+    folder: /perses
+    extension: json
+
+# Everything in these folders is (re)loaded into the database, overriding
+# what exists. Put Datasource / Project / Dashboard YAML here.
+provisioning:
+  interval: 1h
+  enable_watch: true
+  folders:
+    - /etc/perses/provisioning

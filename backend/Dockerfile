@@ -15,7 +15,7 @@ ENV DEPLOY_COMMIT=${DEPLOY_COMMIT}
 # Drop the emSign ECC Root CA - G3 from the system store too: apt, git, curl and
 # openssl in this image otherwise keep trusting the root Mozilla distrusted. The
 # other emSign roots stay; only G3 was compromised.
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates supervisor git && \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git && \
     rm -f /usr/share/ca-certificates/mozilla/emSign_ECC_Root_CA_-_G3.crt && \
     update-ca-certificates && rm -rf /var/lib/apt/lists/*
 
@@ -31,6 +31,5 @@ RUN uv pip install --system  --verbose -r pyproject.toml
 COPY ./src/ ./src/
 RUN mkdir -p /app/src/workspace
 
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# One worker per container: scale by running more containers, not more processes.
+CMD ["sh", "-c", "exec python -m uvicorn main:app --host 0.0.0.0 --port \"$NGX_PORT\" --workers 1 --app-dir /app/src"]

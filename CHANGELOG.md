@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.91.0 — 2026-11-18
+
+- Add backend Prometheus metrics on a dedicated `METRICS_PORT` (default 9100, never published or routed through nginx): API request duration and in-flight count by route template, and SQLAlchemy pool connections per engine (app, login). Labels carry no workspace, user, or raw URL.
+- Run one uvicorn worker per container, matching the deployed command; the unused supervisord wrapper is removed. Scale by running more containers.
+- Add an optional `monitor` Compose profile (`./monitor`): Prometheus, Perses, and postgres-exporter, with Prometheus depending on the backend and not the reverse.
+
 ## 0.90.5 — 2026-11-12
 
 - Document the ten supported column types and align automatic row indexing: number/date/datetime retain per-column B-tree indexes; select/tags/checkbox use shared JSONB GIN containment; text/string/url/blob create no separate column index.

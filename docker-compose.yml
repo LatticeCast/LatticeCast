@@ -213,6 +213,56 @@ services:
     cpus: 2.0
     network_mode: host
 
+  # Observability (Prometheus + Perses). `docker compose --profile monitor up -d`; config lives in ./monitor.
+  prometheus:
+    profiles:
+      - monitor
+    image: prom/prometheus:v3.13.5
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-19090}:9090"
+    volumes:
+      - ./monitor/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - lc-network
+
+  perses:
+    profiles:
+      - monitor
+    image: persesdev/perses:v0.55.1
+    command:
+      - --config=/etc/perses/config.yaml
+      - --log.level=warning
+    ports:
+      - "127.0.0.1:${PERSES_PORT:-13000}:8080"
+    volumes:
+      - ./monitor/perses/config.yaml:/etc/perses/config.yaml:ro
+      - ./monitor/perses/provisioning:/etc/perses/provisioning:ro
+      - perses_data:/perses
+    depends_on:
+      - prometheus
+    networks:
+      - lc-network
+
+  postgres-exporter:
+    profiles:
+      - monitor
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    environment:
+      DATA_SOURCE_NAME: postgresql://dba_user:dba_pws@db:5432/${POSTGRES_DB}?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - lc-network
+
 networks:
   lc-network:
     driver: bridge
@@ -220,3 +270,5 @@ networks:
 volumes:
   db_data:
   blob_data:
+  prometheus_data:
+  perses_data:

@@ -14,6 +14,7 @@ from __version__ import __version__
 from config.settings import settings
 from config.storage import ensure_bucket_exists
 from core.db import close_db, init_db
+from metrics import MetricsMiddleware, start_metrics_server
 from router.api.admin.announcements import router as admin_announcements_router
 from router.api.admin.users import router as admin_users_router
 from router.api.announcements import router as api_announcements_router
@@ -51,9 +52,12 @@ async def lifespan(app: FastAPI):
         print(f"⚠ Blob storage initialization failed: {e}")
 
     cleanup_task = asyncio.create_task(cleanup_loop())
+    metrics_server = start_metrics_server()
     try:
         yield
     finally:
+        if metrics_server is not None:
+            metrics_server.shutdown()
         cleanup_task.cancel()
         with suppress(asyncio.CancelledError):
             await cleanup_task
@@ -135,6 +139,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+app.add_middleware(MetricsMiddleware)
 
 # Parent API router - all routes under /api
 api_router = APIRouter(prefix="/api/v1")
