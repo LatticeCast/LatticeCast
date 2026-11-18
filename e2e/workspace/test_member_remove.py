@@ -43,7 +43,7 @@ def test_member_remove_loses_access(browser, authed_page, admin_token, snapshot)
     # ── Setup: create member user ────────────────────────────────────────────
     print(f"[2] Setup: create member user '{MEMBER_EMAIL}'")
     api("DELETE", f"/api/v1/admin/users/{MEMBER_EMAIL}", admin_token)
-    r = api("POST", "/api/v1/admin/users", admin_token, json={"email": MEMBER_EMAIL, "role": "user"})
+    r = api("POST", "/api/v1/admin/users", admin_token, json={"email": MEMBER_EMAIL, "role": "user", "allow_no_pwd": True})
     assert r.status_code == 201, f"create member user: {r.status_code} {r.text[:200]}"
     member_user_id = r.json()["user_id"]
     member_user_name = r.json().get("user_name", MEMBER_USER)

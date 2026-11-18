@@ -44,7 +44,7 @@ def test_admin_create_user(browser, admin_token, snapshot):
 
     # Step 2: Admin creates user
     print("[2] Admin creates user")
-    r = api("POST", "/api/v1/admin/users", admin_token, json={"email": TEST_EMAIL, "role": "user"})
+    r = api("POST", "/api/v1/admin/users", admin_token, json={"email": TEST_EMAIL, "role": "user", "allow_no_pwd": True})
     assert r.status_code == 201, f"create user: {r.status_code} {r.text[:300]}"
     created = r.json()
     user_id = created["user_id"]

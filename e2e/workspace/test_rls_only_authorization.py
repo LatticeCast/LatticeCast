@@ -42,7 +42,7 @@ def test_rls_only_authorization(page, workspace, admin_token, snapshot):
     print(f"[1] Setup: create member user '{member_email}'")
     response = api(
         "POST", "/api/v1/admin/users", admin_token,
-        json={"email": member_email, "user_name": member_name, "role": "user"},
+        json={"email": member_email, "user_name": member_name, "role": "user", "allow_no_pwd": True},
     )
     assert response.status_code == 201, (
         f"create member: {response.status_code} {response.text[:200]}"

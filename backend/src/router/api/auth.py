@@ -8,7 +8,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,7 +24,7 @@ from services.lc_auth import (
     issue_refresh_token,
     set_browser_session_cookie,
 )
-from util.security import hash_password_async, verify_password_async
+from util.security import ensure_bcrypt_length, hash_password_async, verify_password_async
 
 router = APIRouter(prefix="/login", tags=["auth"])
 
@@ -44,7 +44,9 @@ class PasswordLoginRequest(BaseModel):
     """Request body for password login (sole FE-visible flow)."""
 
     user_name: str = Field(..., min_length=1, max_length=64, description="User handle or email")
-    password: str = Field(..., description="User password")
+    password: str = Field(..., description="User password (at most 72 bytes in UTF-8)")
+
+    _password_fits_bcrypt = field_validator("password")(ensure_bcrypt_length)
 
 
 class RefreshTokenRequest(BaseModel):
@@ -127,7 +129,7 @@ def _token_response(
     "/password",
     response_model=TokenResponse,
     responses={
-        401: {"model": HTTPErrorResponse, "description": "Wrong password"},
+        401: {"model": HTTPErrorResponse, "description": "Wrong password, or password login not enabled"},
         404: {"model": HTTPErrorResponse, "description": "User not registered"},
     },
 )
@@ -140,11 +142,11 @@ async def password_login(
     returns a locally signed Lattice Cast access JWT
     as the access token.
 
-    If the account has no row in gdpr.user_password, the supplied
-    password is not checked — the JWT is issued directly. If a row
-    exists, the password must match the stored bcrypt hash. This
-    replaces the old global AUTH_REQUIRED=true/false split with a
-    per-account setting (see `PUT /login/me/password`).
+    The account's gdpr.user_password row decides how it logs in: with a
+    password_hash the supplied password must match; with no hash, only
+    `allow_no_pwd = TRUE` lets it in without one. Anything else — no row,
+    NULL or FALSE — is refused with 401. Setting a password
+    (`PUT /login/me/password`) clears `allow_no_pwd`.
 
     Uses the login_session (mgr_user, BYPASSRLS) because at login time no
     user is authenticated yet — the app_session's RLS filter would return
@@ -163,8 +165,11 @@ async def password_login(
     pwd_result = await login_session.execute(select(UserPassword).where(UserPassword.user_id == user.user_id))
     stored_pwd = pwd_result.scalar_one_or_none()
 
-    if stored_pwd and not await verify_password_async(request.password, stored_pwd.password_hash):
-        raise HTTPException(status_code=401, detail="Wrong password")
+    if stored_pwd is not None and stored_pwd.password_hash:
+        if not await verify_password_async(request.password, stored_pwd.password_hash):
+            raise HTTPException(status_code=401, detail="Wrong password")
+    elif stored_pwd is None or stored_pwd.allow_no_pwd is not True:
+        raise HTTPException(status_code=401, detail="Password login is not enabled for this account")
 
     sso_token, sso_max_age = await create_browser_session(login_session, user.user_id, "password")
     set_browser_session_cookie(response, sso_token, sso_max_age)
@@ -404,10 +409,12 @@ async def update_me_email(
 class SetPasswordRequest(BaseModel):
     """Request body for setting/changing the current user's password."""
 
-    new_password: str = Field(..., min_length=1, description="New password")
+    new_password: str = Field(..., min_length=1, description="New password (at most 72 bytes in UTF-8)")
     current_password: str | None = Field(
         default=None, description="Required only if the account already has a password set"
     )
+
+    _new_password_fits_bcrypt = field_validator("new_password")(ensure_bcrypt_length)
 
 
 @router.put(

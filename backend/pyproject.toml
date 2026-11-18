@@ -1,6 +1,6 @@
 [project]
 name = "lattice-cast-backend"
-version = "0.91.1"
+version = "0.92.0"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi",
@@ -13,8 +13,7 @@ dependencies = [
     "sqlalchemy[asyncio]", # async engine requires greenlet at runtime
     "asyncpg",
     "python-jose",
-    "passlib",
-    "bcrypt==4.0.1",  # verified with passlib 1.7.4; without a bcrypt package passlib uses libc crypt, which holds the GIL
+    "pwdlib[bcrypt]",
     "aioboto3",
     "prometheus-client",
     "lattice-ql @ git+https://github.com/latticeCast/LatticeQL@0.6.2",

@@ -15,8 +15,7 @@ from config.settings import settings
 from config.storage import ensure_bucket_exists
 from core.db import close_db, init_db
 from metrics import MetricsMiddleware, event_loop_lag_loop, start_metrics_server
-from router.api.admin.announcements import router as admin_announcements_router
-from router.api.admin.users import router as admin_users_router
+from router.api.admin import router as admin_router
 from router.api.announcements import router as api_announcements_router
 from router.api.auth import router as api_auth_router
 from router.api.lql import router as api_lql_router
@@ -123,6 +122,8 @@ Use the **rows** tag for the exact upload, download, and delete contracts. Every
         {"name": "dashboard", "description": "Dashboard block queries over table rows."},
         {"name": "storage", "description": "File storage (S3-compatible, user files prefixed with UUID)"},
         {"name": "admin-users", "description": "User management (requires admin role)"},
+        {"name": "admin-sso", "description": "SSO client registration (requires admin role)"},
+        {"name": "admin-storage", "description": "Storage listing across all users (requires admin role)"},
         {"name": "health", "description": "Health check and debug endpoints"},
     ],
     lifespan=lifespan,
@@ -151,8 +152,7 @@ api_router.include_router(api_auth_router)
 api_router.include_router(api_sso_router)
 api_router.include_router(api_announcements_router)
 api_router.include_router(api_storage_router)
-api_router.include_router(admin_announcements_router)
-api_router.include_router(admin_users_router)
+api_router.include_router(admin_router)
 api_router.include_router(api_workspaces_router)
 api_router.include_router(api_lql_router)
 api_router.include_router(api_tables_router)

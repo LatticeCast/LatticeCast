@@ -21,15 +21,14 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, R
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.settings import settings
 from core.db import get_login_session
-from middleware.auth import get_current_user, require_admin
+from middleware.auth import get_current_user
 from models.user import User
 from services.lc_auth import COOKIE_NAME, create_lc_access_token
-from util.security import hash_password_async, verify_password_async
+from util.security import verify_password_async
 
 router = APIRouter(prefix="/sso", tags=["sso"])
 
@@ -169,76 +168,6 @@ class HandoffResponse(BaseModel):
 class BrowserTokenRequest(BaseModel):
     handoff_ticket: str = Field(min_length=20, max_length=512)
     client_id: str = Field(min_length=1, max_length=128)
-
-
-class ClientCreateRequest(BaseModel):
-    client_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,127}$")
-    display_name: str = Field(min_length=1, max_length=200)
-    client_kind: Literal["public", "confidential"]
-    redirect_uris: list[str] = Field(min_length=1, max_length=20)
-    client_secret: str | None = Field(default=None, min_length=16, max_length=512)
-
-
-class ClientCreateResponse(BaseModel):
-    client_id: str
-    client_kind: Literal["public", "confidential"]
-    redirect_uris: list[str]
-    client_secret: str | None = None
-
-
-def _valid_redirect_uri(uri: str) -> bool:
-    parsed = urlsplit(uri)
-    # The App uses /handoff and opens a first-party web callback. Restricting
-    # registrations to HTTPS avoids arbitrary custom-scheme redirect capture.
-    return parsed.scheme == "https" and bool(parsed.netloc) and not parsed.fragment
-
-
-@router.post("/clients", response_model=ClientCreateResponse, status_code=201)
-async def create_client(
-    request: ClientCreateRequest,
-    _: User = Depends(require_admin),
-    session: AsyncSession = Depends(get_login_session),
-) -> ClientCreateResponse:
-    """Register a first-party client. Return a generated secret exactly once."""
-    if len(set(request.redirect_uris)) != len(request.redirect_uris) or not all(
-        _valid_redirect_uri(uri) for uri in request.redirect_uris
-    ):
-        raise HTTPException(status_code=422, detail="redirect_uris must be distinct absolute URIs without fragments")
-    if request.client_kind == "public" and request.client_secret:
-        raise HTTPException(status_code=422, detail="public clients cannot have a client_secret")
-    secret = request.client_secret or (secrets.token_urlsafe(36) if request.client_kind == "confidential" else None)
-    try:
-        await session.execute(
-            text(
-                "INSERT INTO private.sso_clients "
-                "(client_id, client_kind, client_secret_hash, display_name) "
-                "VALUES (:client_id, :client_kind, :secret_hash, :display_name)"
-            ),
-            {
-                "client_id": request.client_id,
-                "client_kind": request.client_kind,
-                "secret_hash": await hash_password_async(secret) if secret else None,
-                "display_name": request.display_name,
-            },
-        )
-        for uri in request.redirect_uris:
-            await session.execute(
-                text(
-                    "INSERT INTO private.sso_client_redirect_uris (client_id, redirect_uri, is_default) "
-                    "VALUES (:client_id, :redirect_uri, :is_default)"
-                ),
-                {"client_id": request.client_id, "redirect_uri": uri, "is_default": uri == request.redirect_uris[0]},
-            )
-        await session.commit()
-    except IntegrityError as exc:
-        await session.rollback()
-        raise HTTPException(status_code=409, detail="client_id or redirect_uri already exists") from exc
-    return ClientCreateResponse(
-        client_id=request.client_id,
-        client_kind=request.client_kind,
-        redirect_uris=request.redirect_uris,
-        client_secret=secret,
-    )
 
 
 @router.get("/authorize")

@@ -92,7 +92,7 @@ class TestAdminStorage:
     def test_admin_can_list_all_files(self, client, tokens):
         """Admin can list all files"""
         resp = client.get(
-            "/api/storage/admin/files",
+            "/api/v1/admin/storage/files",
             headers={"Authorization": f"Bearer {tokens['admin']}"},
         )
         assert resp.status_code == 200
@@ -220,7 +220,7 @@ class TestAdminSeesUserFiles:
 
         # Admin lists all files
         resp = client.get(
-            "/api/storage/admin/files",
+            "/api/v1/admin/storage/files",
             headers={"Authorization": f"Bearer {tokens['admin']}"},
         )
         assert resp.status_code == 200
@@ -325,7 +325,7 @@ def run_all_tests():
     print("✓ Admin uploaded: admin-test/admin.txt")
 
     resp = client.get(
-        "/api/storage/admin/files",
+        "/api/v1/admin/storage/files",
         headers={"Authorization": f"Bearer {tokens['admin']}"},
     )
     assert resp.status_code == 200
@@ -362,7 +362,7 @@ def run_all_tests():
 
     # Admin sees user file with prefix
     resp = client.get(
-        "/api/storage/admin/files",
+        "/api/v1/admin/storage/files",
         headers={"Authorization": f"Bearer {tokens['admin']}"},
     )
     admin_files = resp.json()["files"]

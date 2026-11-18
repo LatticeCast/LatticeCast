@@ -32,7 +32,7 @@ def test_password_login_has_no_external_provider_flow(page, admin_token, snapsho
     user_name = f"local-only-{uuid4().hex[:12]}"
     email = f"{user_name}@e2e.local"
     response = api("POST", "/api/v1/admin/users", admin_token,
-                   json={"email": email, "user_name": user_name, "role": "user"})
+                   json={"email": email, "user_name": user_name, "role": "user", "allow_no_pwd": True})
     assert response.status_code == 201, response.text
     user_id = response.json()["user_id"]
     external_requests = []

@@ -20,20 +20,42 @@ encodes a stated product goal, not an oversight.
 - Do not narrow this policy to "fix" email enumeration; it is the invite
   mechanism, not a leak.
 
-## Login without a password is allowed
+## Passwordless login is an explicit, admin-only opt-in (V78)
 
-`POST /login/password` (`backend/src/router/api/auth.py`): if the account
-has no row in `gdpr.user_password`, the supplied password is not checked at
-all — the JWT is issued directly.
+`POST /login/password` (`backend/src/router/api/auth.py`) decides from the
+account's `gdpr.user_password` row:
 
-- **Why:** frictionless demo accounts. `bootstrap_user` and seeded accounts
-  (e.g. the announcement user) intentionally ship with no password row, so a
-  demo deployment needs no password-setup step before someone can log in as
-  them.
-- Setting a password (`PUT /login/me/password`) is what makes an account
-  password-protected — opt-in per account, not a global `AUTH_REQUIRED` flag.
-- Do not "fix" this by requiring a password row globally; it would remove the
-  demo flow the per-account model exists for.
+| row                                   | result                             |
+| ------------------------------------- | ---------------------------------- |
+| `password_hash` set                   | the password must match            |
+| no hash, `allow_no_pwd` **TRUE**      | logs in without a password         |
+| anything else (no row, NULL, FALSE)   | 401, password login not enabled    |
+
+- **Why:** this reverses the earlier rule that "no password row means no
+  check". That made every account created without a password a standing
+  open door. Passwordless login is now something an admin chooses per account
+  (demo accounts, e2e users), never a side effect of a missing row.
+- `allow_no_pwd` is a nullable BOOLEAN with no default, and `password_hash` is
+  nullable. Only TRUE opens an account. A CHECK forbids a hash together with
+  TRUE. V78 back-fills nothing: accounts that had no row stop logging in until
+  an admin opts them in or they set a password.
+- Only an admin can set it: `POST /api/v1/admin/users` (`allow_no_pwd`, default
+  false) and `PUT /api/v1/admin/users/{email}/allow-no-pwd`. The generic user
+  update does not accept it, and no self-service route can. Opting in an
+  account that already has a password is a 409.
+- Setting a password (`PUT /login/me/password`) clears `allow_no_pwd`.
+- bcrypt reads only 72 bytes, so longer passwords and secrets are rejected
+  with a 422, not truncated.
+- Do not "fix" a locked demo account by treating a missing row as passwordless
+  again; opt it in.
+
+## Admin endpoints live in one place
+
+Every endpoint that needs an admin is under `/api/v1/admin/`, and
+`require_admin` is applied once, on the parent router in
+`backend/src/router/api/admin/__init__.py`. Sub-routers carry no admin check of
+their own. `backend/tests/test_admin_routes.py` fails if an `/admin` route lacks
+the guard or an admin-only route sits outside `/admin`.
 
 ## Horizontal scaling direction (planned, not yet implemented)
 

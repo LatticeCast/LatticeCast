@@ -59,7 +59,7 @@ def test_user(admin_token):
 
     print(f"[0] Setup — test email: {test_email}")
     print("[2] Create non-admin test user")
-    r = api("POST", ADMIN_PATH, admin_token, json={"email": test_email, "role": "user"})
+    r = api("POST", ADMIN_PATH, admin_token, json={"email": test_email, "role": "user", "allow_no_pwd": True})
     assert r.status_code == 201, f"create user: {r.status_code} {r.text[:300]}"
     user_name = r.json()["user_name"]
     print(f"    created: {user_name}")
@@ -109,6 +109,11 @@ def test_admin_only(browser, admin_token, test_user, request):
     print("[7] Non-admin: PUT /admin/users/{email} → 403")
     r = api("PUT", f"{ADMIN_PATH}/{test_email}", user_token, json={"role": "admin"})
     assert_403(r, "PUT /admin/users/{email}")
+
+    # Step 7b: Non-admin cannot grant passwordless login, not even to themselves
+    print("[7b] Non-admin: PUT /admin/users/{email}/allow-no-pwd → 403")
+    r = api("PUT", f"{ADMIN_PATH}/{test_email}/allow-no-pwd", user_token, json={"allow_no_pwd": True})
+    assert_403(r, "PUT /admin/users/{email}/allow-no-pwd")
 
     # Step 8: Non-admin DELETE /admin/users/{email} → 403
     print("[8] Non-admin: DELETE /admin/users/{email} → 403")

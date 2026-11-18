@@ -528,6 +528,34 @@ def verify(psql_fn) -> list[str]:
         if result:
             errors.append(f"FORBIDDEN CALLER IDENTITY FUNCTION: {old_function} (V46)")
 
+    # V78: passwordless login is an explicit opt-in. allow_no_pwd is a nullable
+    # BOOLEAN with no default (only TRUE opens an account), the hash is nullable
+    # so an opted-in account carries none, and a hash together with TRUE is
+    # forbidden. No row is back-filled.
+    column_state = psql_fn(
+        "SELECT string_agg(column_name || ':' || data_type || ':' || is_nullable"
+        " || ':' || coalesce(column_default, 'none'), ',' ORDER BY column_name) "
+        "FROM information_schema.columns "
+        "WHERE table_schema = 'gdpr' AND table_name = 'user_password' "
+        "AND column_name IN ('allow_no_pwd', 'password_hash');"
+    ).strip()
+    if column_state != (
+        "allow_no_pwd:boolean:YES:none,password_hash:character varying:YES:none"
+    ):
+        errors.append(f"V78 user_password columns unexpected: {column_state}")
+    login_mode = psql_fn(
+        "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+        "WHERE conrelid = 'gdpr.user_password'::regclass "
+        "AND conname = 'user_password_login_mode';"
+    ).strip()
+    if "allow_no_pwd IS NOT TRUE" not in login_mode:
+        errors.append("V78 MISSING CHECK: user_password_login_mode")
+    backfilled = psql_fn(
+        "SELECT count(*) FROM gdpr.user_password WHERE allow_no_pwd IS TRUE;"
+    ).strip()
+    if backfilled != "0":
+        errors.append("V78 must not opt any account into passwordless login")
+
     # _build_rd_idx_name(text, text) is gone with the VARCHAR identity. It
     # existed only so drop_row_data_index could also remove the unscoped index
     # names written by databases migrated before V47; those indexes live on the

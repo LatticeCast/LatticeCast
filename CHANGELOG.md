@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.92.0 — 2026-11-18
+
+- Passwordless login is now an explicit admin opt-in (V78): `gdpr.user_password.allow_no_pwd` (nullable, no default) must be TRUE for an account with no password hash to log in. A missing row, NULL or FALSE is refused with 401. V78 back-fills nothing, so accounts that logged in without a password stop doing so until an admin opts them in. Admin-only: `POST /admin/users` takes `allow_no_pwd` (default false) and `PUT /admin/users/{email}/allow-no-pwd` toggles it; the generic user update rejects it. Setting a password clears it.
+- Move every admin-only endpoint under `/api/v1/admin/` behind one `require_admin` on the parent router: `POST /sso/clients` is now `POST /admin/sso/clients` and `GET /storage/admin/files` is now `GET /admin/storage/files`. The old paths return 404. A test fails if an admin route is unguarded or an admin-only route sits outside `/admin`.
+- Replace unmaintained `passlib` (needs the removed `crypt` module on Python 3.13) with `pwdlib[bcrypt]`. Hashes stay bcrypt `$2b$`, 12 rounds, so existing passwords keep working; only the library changes, and `bcrypt` is no longer pinned below 4.1 (now 5.x). Argon2 is not enabled.
+- bcrypt reads only the first 72 bytes, which passlib silently truncated to. Login, password change and SSO client creation now return 422 ("must be at most 72 bytes (UTF-8)") instead of ignoring the rest; verification of an over-long value is a failed match, never a server error. An existing account whose password was longer than 72 bytes will now be told so at login and needs a reset.
+
 ## 0.91.1 — 2026-11-18
 
 - Add `lc_event_loop_lag_seconds`: how late the event loop wakes a timer, so a blocking call on the single worker is visible.

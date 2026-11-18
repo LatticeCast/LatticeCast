@@ -52,7 +52,7 @@ def test_me_email_change(authed_page, admin_token):
     # [2] Create a second user for the conflict test
     print(f"[2] Setup: create conflict user '{CONFLICT_EMAIL}'")
     api("DELETE", f"/api/v1/admin/users/{CONFLICT_EMAIL}", token)
-    r = api("POST", "/api/v1/admin/users", token, json={"email": CONFLICT_EMAIL, "role": "user"})
+    r = api("POST", "/api/v1/admin/users", token, json={"email": CONFLICT_EMAIL, "role": "user", "allow_no_pwd": True})
     assert r.status_code == 201, f"create conflict user: {r.status_code} {r.text[:200]}"
 
     try:

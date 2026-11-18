@@ -5,7 +5,7 @@
   verifies only those JWTs—no external JWKS, userinfo, Google, or Authentik
   fallback.
 - `auth.users`: UUID + application role. `gdpr.user_info`: handle/email/config.
-  `gdpr.user_password`: bcrypt hash.
+  `gdpr.user_password`: bcrypt hash, or `allow_no_pwd` TRUE for an admin-approved passwordless account.
 - `/login/password` and `/sso/token` issue the same access-token format.
   `services/lc_auth.py` owns access JWTs, opaque browser sessions, and hashed
   rotating refresh tokens.

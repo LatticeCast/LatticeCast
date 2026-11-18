@@ -39,7 +39,7 @@ def test_read_only_member_cannot_mutate_rows(admin_token, workspace):
         "POST",
         "/api/v1/admin/users",
         admin_token,
-        json={"email": email, "role": "user"},
+        json={"email": email, "role": "user", "allow_no_pwd": True},
     )
     assert result.status_code == 201, result.text
     user_id = result.json()["user_id"]

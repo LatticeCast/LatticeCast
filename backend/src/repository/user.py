@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.user import User, UserInfo
+from models.user import User, UserInfo, UserPassword
 from models.workspace import Workspace, WorkspaceMember
 
 
@@ -73,8 +73,12 @@ async def bootstrap_user(
     email: str,
     role: str = "user",
     user_name: str | None = None,
+    allow_no_pwd: bool = False,
 ) -> User:
     """Create auth.users + gdpr.user_info + default workspace.
+
+    A new account cannot log in until it has a password or `allow_no_pwd` is
+    True, which stores a passwordless row (gdpr.user_password, no hash).
 
     v40: PII + handle + config merged into gdpr.user_info. Everything
     runs on login_session (mgr_user, BYPASSRLS) because the user isn't
@@ -88,6 +92,9 @@ async def bootstrap_user(
     handle = user_name or _slugify(email)
     info = UserInfo(user_id=user.user_id, email=email, user_name=handle)
     login_session.add(info)
+    await login_session.flush()
+    if allow_no_pwd:
+        login_session.add(UserPassword(user_id=user.user_id, password_hash=None, allow_no_pwd=True))
 
     # V35 rejects dots in path-derived workspace names. `handle` is already
     # unique and URL-safe, unlike an email address.

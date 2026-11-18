@@ -10,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.db import get_login_session
-from middleware.auth import get_rls_session, require_admin
+from middleware.auth import get_current_user, get_rls_session
 from models.user import User
 from repository.row import RowRepository
 from repository.table import TableRepository
@@ -19,7 +19,7 @@ from repository.table_view import TableViewRepository
 ANNOUNCEMENT_WORKSPACE_ID = "f8bb8500-10f2-4e8c-b0a3-0d5c30778086"
 ANNOUNCEMENT_TABLE_NAME = "announcement"
 
-router = APIRouter(prefix="/admin/announcements", tags=["admin-announcements"])
+router = APIRouter(prefix="/announcements", tags=["admin-announcements"])
 
 
 class AnnouncementCreateRequest(BaseModel):
@@ -31,7 +31,7 @@ class AnnouncementCreateRequest(BaseModel):
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_announcement(
     body: AnnouncementCreateRequest,
-    user: User = Depends(require_admin),
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
     login: AsyncSession = Depends(get_login_session),
 ) -> dict[str, int]:

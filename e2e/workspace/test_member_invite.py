@@ -35,7 +35,7 @@ def test_member_invite(authed_page, workspace, admin_token, snapshot):
     # ── Setup: create invitee user ───────────────────────────────────────────
     print(f"[2] Setup: create invitee user '{invitee_email}'")
     api("DELETE", f"/api/v1/admin/users/{invitee_email}", admin_token)
-    r = api("POST", "/api/v1/admin/users", admin_token, json={"email": invitee_email, "role": "user"})
+    r = api("POST", "/api/v1/admin/users", admin_token, json={"email": invitee_email, "role": "user", "allow_no_pwd": True})
     assert r.status_code == 201, f"create invitee: {r.status_code} {r.text[:200]}"
     invitee_user_id = r.json()["user_id"]
     print(f"    invitee user_id={invitee_user_id}")

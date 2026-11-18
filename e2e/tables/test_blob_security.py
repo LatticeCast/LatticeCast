@@ -27,7 +27,7 @@ def test_blob_write_denial_and_forged_creation(admin_token, workspace):
     assert result.status_code == 422, result.text
 
     email = f"blob-reader-{uuid4().hex[:12]}@e2e.local"
-    result = api("POST", "/api/v1/admin/users", admin_token, json={"email": email, "role": "user"})
+    result = api("POST", "/api/v1/admin/users", admin_token, json={"email": email, "role": "user", "allow_no_pwd": True})
     assert result.status_code == 201, result.text
     user_id = result.json()["user_id"]
     try:

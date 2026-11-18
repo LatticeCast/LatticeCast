@@ -4,6 +4,7 @@
 # gdpr.user_info. No more separate auth.gdpr table.
 
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
@@ -11,15 +12,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.db import get_login_session, get_session
-from middleware.auth import require_admin
-from models.user import User, UserInfo, UserResponse
+from models.user import User, UserInfo, UserPassword, UserResponse
 from repository.user import UserRepository, bootstrap_user
 
-router = APIRouter(
-    prefix="/admin/users",
-    tags=["admin-users"],
-    dependencies=[Depends(require_admin)],
-)
+router = APIRouter(prefix="/users", tags=["admin-users"])
 
 
 RoleType = Literal["user", "admin"]
@@ -29,6 +25,10 @@ class UserCreate(BaseModel):
     email: str = Field(..., description="User email address (used as unique identifier)")
     role: RoleType = Field(default="user", description="User role")
     user_name: str | None = Field(default=None, description="Optional handle; auto-slugged from email if omitted")
+    allow_no_pwd: bool = Field(
+        default=False,
+        description="True lets the account log in without a password. Otherwise it cannot log in until a password is set.",
+    )
 
     model_config = {"json_schema_extra": {"examples": [{"email": "user@example.com", "role": "user"}]}}
 
@@ -36,7 +36,20 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     role: RoleType | None = Field(default=None, description="New role for the user")
 
-    model_config = {"json_schema_extra": {"examples": [{"role": "admin"}]}}
+    # Unknown fields are rejected, so allow_no_pwd (create-time only) can never be
+    # "accepted" here and silently ignored.
+    model_config = {"extra": "forbid", "json_schema_extra": {"examples": [{"role": "admin"}]}}
+
+
+class AllowNoPwdRequest(BaseModel):
+    allow_no_pwd: bool = Field(
+        ..., description="True: the account may log in without a password. False: it may not (until a password is set)."
+    )
+
+
+class AllowNoPwdResponse(BaseModel):
+    user_id: UUID
+    allow_no_pwd: bool
 
 
 class UserListResponse(BaseModel):
@@ -82,6 +95,7 @@ async def create_user(
         email=data.email,
         role=data.role,
         user_name=data.user_name,
+        allow_no_pwd=data.allow_no_pwd,
     )
     return await _build_response(user, login_session)
 
@@ -129,6 +143,46 @@ async def update_user(
         await login_session.commit()
         await login_session.refresh(user)
     return await _build_response(user, login_session)
+
+
+@router.put(
+    "/{user_email}/allow-no-pwd",
+    response_model=AllowNoPwdResponse,
+    responses={409: {"description": "The account has a password"}},
+)
+async def set_allow_no_pwd(
+    user_email: str,
+    data: AllowNoPwdRequest,
+    login_session: AsyncSession = Depends(get_login_session),
+) -> AllowNoPwdResponse:
+    """Let one account log in without a password, or stop it.
+
+    Only an explicit TRUE opens passwordless login. An account that already has a
+    password cannot be made passwordless (409): remove the password first.
+    """
+    user = await UserRepository(login_session).get_by_email(user_email)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    stored = (
+        await login_session.execute(select(UserPassword).where(UserPassword.user_id == user.user_id))
+    ).scalar_one_or_none()
+    if data.allow_no_pwd:
+        if stored is not None and stored.password_hash:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Account has a password; it cannot also be passwordless",
+            )
+        if stored is None:
+            login_session.add(UserPassword(user_id=user.user_id, password_hash=None, allow_no_pwd=True))
+        else:
+            stored.allow_no_pwd = True
+            login_session.add(stored)
+    elif stored is not None and not stored.password_hash:
+        stored.allow_no_pwd = None
+        login_session.add(stored)
+    await login_session.commit()
+    return AllowNoPwdResponse(user_id=user.user_id, allow_no_pwd=bool(data.allow_no_pwd))
 
 
 @router.delete("/{user_email}", status_code=status.HTTP_204_NO_CONTENT)

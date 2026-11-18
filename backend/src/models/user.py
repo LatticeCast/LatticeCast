@@ -50,15 +50,21 @@ class UserPassword(SQLModel, table=True):
     workspace invites) which would expose password_hash to every one of
     those reads. Password login uses mgr_user before an identity exists;
     authenticated password changes use context-bound PostgreSQL functions
-    that derive the target from app.current_user_id. No row means no password
-    is set.
+    that derive the target from app.current_user_id.
+
+    Login modes (see password_login): a hash means the password must match;
+    no hash with allow_no_pwd TRUE means passwordless login; anything else,
+    including no row, refuses login. Only TRUE opens an account.
     """
 
     __tablename__ = "user_password"
     __table_args__ = {"schema": "gdpr"}
 
     user_id: UUID = Field(primary_key=True, foreign_key="gdpr.user_info.user_id", description="UUID FK → user_info")
-    password_hash: str = Field(description="Bcrypt hash")
+    password_hash: str | None = Field(default=None, description="Bcrypt hash; NULL for a passwordless account")
+    allow_no_pwd: bool | None = Field(
+        default=None, description="Only TRUE lets the account log in without a password (never with a hash)"
+    )
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Last update timestamp")
 
 
