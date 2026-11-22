@@ -30,30 +30,46 @@ BASE: str = os.environ.get("BASE_URL", "http://localhost:13491").rstrip("/")
 BROWSER_WS: str = os.environ.get("BROWSER_WS", "")
 
 # --- Pacing -----------------------------------------------------------------
-# A remote (https) target sits behind a CloudFront WAF that blocks one IP at
-# ~3000 requests / 5 min (login: 100 / 5 min). Every request to BASE, API or
-# browser, goes through one shared throttle. Local runs are not throttled.
+# The deployed target sits behind a CloudFront WAF that blocks one IP at
+# ~3000 requests / 5 min (login: 100 / 5 min); the local nginx emulates it.
+# Every request to BASE, API or browser, goes through one shared throttle.
 # E2E_MAX_RPS overrides (0 disables).
-MAX_RPS: float = float(os.environ.get("E2E_MAX_RPS", "4" if BASE.startswith("https://") else "0"))
+MAX_RPS: float = float(os.environ.get("E2E_MAX_RPS", "4"))
+BURST: float = float(os.environ.get("E2E_BURST", "10"))
 _throttle_lock = threading.Lock()
-_next_slot = 0.0
+_tokens = BURST
+_last_refill = time.monotonic()
 
 
 def throttle() -> None:
-    """Block until the next request slot (shared by API calls and browser requests)."""
-    global _next_slot
+    """Token bucket shared by API calls and browser requests: MAX_RPS on average,
+    with a small burst so deliberately concurrent requests are not forced into a queue."""
+    global _tokens, _last_refill
     if MAX_RPS <= 0:
         return
     with _throttle_lock:
         now = time.monotonic()
-        slot = max(now, _next_slot)
-        _next_slot = slot + 1.0 / MAX_RPS
-    if slot > now:
-        time.sleep(slot - now)
+        _tokens = min(BURST, _tokens + (now - _last_refill) * MAX_RPS)
+        _last_refill = now
+        wait = 0.0 if _tokens >= 1 else (1 - _tokens) / MAX_RPS
+        _tokens -= 1
+    if wait > 0:
+        time.sleep(wait)
 
 
 def is_cloudfront_block(status: int, server: str, body: str) -> bool:
-    return status == 403 and ("cloudfront" in server.lower() or "cloudfront" in body.lower())
+    """A real WAF block, not a backend 403 relayed through CloudFront.
+
+    CloudFront adds `x-cache: Error from cloudfront` to every non-2xx it relays, so that
+    header proves nothing. A WAF block is answered by CloudFront itself: `Server: CloudFront`
+    and an HTML "The request could not be satisfied" page; a backend 403 is JSON from uvicorn.
+    """
+    if status != 403:
+        return False
+    if server.strip().lower() == "cloudfront":
+        return True
+    text = body.lstrip().lower()
+    return text.startswith("<!doctype html") and "the request could not be satisfied" in text
 
 
 def waf_block_abort(where: str, status: int, server: str, body: str) -> None:
@@ -84,7 +100,9 @@ if MAX_RPS > 0:
 
 def pace_browser(browser):
     """Throttle every browser request to BASE (all pages and contexts) and abort on a CloudFront 403."""
-    if MAX_RPS <= 0:
+    # The local vite dev server serves hundreds of modules per page; pace the browser
+    # only against a deployed (bundled) target.
+    if MAX_RPS <= 0 or not BASE.startswith("https://"):
         return browser
 
     def _route(route):
@@ -94,7 +112,7 @@ def pace_browser(browser):
 
     def _response(resp):
         if resp.url.startswith(BASE) and resp.status == 403:
-            waf_block_abort(resp.url, 403, resp.headers.get("server", ""), resp.headers.get("x-cache", ""))
+            waf_block_abort(resp.url, 403, resp.headers.get("server", ""), "")
 
     def _arm(ctx):
         ctx.route("**/*", _route)

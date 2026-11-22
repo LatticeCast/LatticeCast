@@ -1,8 +1,36 @@
+# Emulates the CloudFront WAF (3000 requests / 5 min per IP ~ 10 req/s; 100 logins / 5 min)
+# so e2e runs hit the same API limits locally. A token bucket approximates the WAF window.
+limit_req_zone $binary_remote_addr zone=lc_all:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=lc_login:10m rate=20r/m;
+
 server {
     listen ${LISTEN_PORT};
 
-    # API → backend
+    limit_req_status 403;
+
+    # Same shape as CloudFront's HTML block page (a backend 403 is JSON), so e2e's WAF detection fires locally too.
+    error_page 403 @waf_block;
+    location @waf_block {
+        default_type text/html;
+        return 403 "<!DOCTYPE HTML><HTML><BODY><H1>403 ERROR</H1><H2>The request could not be satisfied.</H2>Request blocked (local WAF emulation).</BODY></HTML>";
+    }
+
+    # Logins: 20/min sustained, burst 100 (the WAF allows 100 per 5 min).
+    location = /api/v1/login/password {
+        limit_req zone=lc_login burst=100 nodelay;
+        limit_req zone=lc_all burst=100 nodelay;
+        limit_req_status 403;
+        proxy_pass http://backend:${NGX_PORT};
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # API → backend (limited like the WAF; the vite dev server's hundreds of module
+    # requests per page are not, since the deployed SPA is bundled and makes few)
     location /api/ {
+        limit_req zone=lc_all burst=100 nodelay;
         proxy_pass http://backend:${NGX_PORT};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

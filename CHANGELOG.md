@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.92.3 — 2026-11-22
+
+- Fix: a blob upload (`PUT .../blob/{column_id}`) racing a row or workspace delete could return 500 when the row vanished between the recheck and the ownership insert (foreign-key violation); it now returns 404 "Row not found". Found because pacing the e2e requests changed the timing of the race test.
+- e2e WAF detection no longer treats `x-cache: Error from cloudfront` as a block (CloudFront adds it to every non-2xx it relays, including the backend's own 401/403). A block is `Server: CloudFront` or the HTML "The request could not be satisfied" page. The throttle is now a token bucket (4 req/s average, burst 10, `E2E_BURST`) so deliberately concurrent requests are not serialized.
+- The local nginx now emulates the CloudFront WAF so e2e hits the same limits before a deploy: about 10 req/s per IP on `/api/` (burst 100) and 20 logins/min (burst 100), answering 403 with a CloudFront-style block body. Static and vite module requests are not limited locally. The e2e API throttle (4 req/s, `E2E_MAX_RPS`) is now on by default locally too, so the suite stays under the emulated limit; browser requests are paced only against an https target.
+
 ## 0.92.2 — 2026-11-22
 
 - The e2e suite now paces itself so a full run from one IP stays under the CloudFront WAF limit (3000 requests and 100 logins per 5 minutes). When `BASE_URL` is https, one shared throttle (default 4 req/s, `E2E_MAX_RPS`, 0 disables) covers every `requests` call to the target and every browser request; local http runs are not throttled. `login()` is cached per run, and a CloudFront 403 aborts the whole run with a clear message instead of cascading failures.

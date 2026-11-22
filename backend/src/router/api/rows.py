@@ -376,7 +376,9 @@ async def put_blob_cell(
         if isinstance(exc, ClientError):
             raise HTTPException(status_code=500, detail="Storage error") from exc
         if isinstance(exc, DBAPIError):
-            if sqlstate_of(exc) == "22023" and await repo.get_by_number(resolved_table_id, row_id) is None:
+            # 22023: register/update saw no row. 23503: the row (or its workspace) was deleted
+            # between the recheck and the ownership insert, so the FK to rows failed.
+            if sqlstate_of(exc) in ("22023", "23503") and await repo.get_by_number(resolved_table_id, row_id) is None:
                 raise HTTPException(status_code=404, detail="Row not found") from exc
             raise (http_error_for(exc) or exc) from exc
         raise
