@@ -11,7 +11,7 @@ import os
 import pytest
 from playwright.sync_api import sync_playwright
 
-from e2e_base import BASE, api, connect_browser, create_template_table, login, seed_login_info
+from e2e_base import BASE, api, connect_browser, create_template_table, login, pace_browser, seed_login_info
 
 
 def pytest_addoption(parser):
@@ -26,7 +26,7 @@ def snapshot(request):
 @pytest.fixture(scope="session")
 def browser():
     pw = sync_playwright().start()
-    b = connect_browser(pw)
+    b = pace_browser(connect_browser(pw))
     yield b
     b.close()
     pw.stop()

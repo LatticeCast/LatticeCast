@@ -20,12 +20,99 @@ from __future__ import annotations
 import json
 import os
 import sys
+import threading
+import time
 from typing import Any
 
 import requests
 
 BASE: str = os.environ.get("BASE_URL", "http://localhost:13491").rstrip("/")
 BROWSER_WS: str = os.environ.get("BROWSER_WS", "")
+
+# --- Pacing -----------------------------------------------------------------
+# A remote (https) target sits behind a CloudFront WAF that blocks one IP at
+# ~3000 requests / 5 min (login: 100 / 5 min). Every request to BASE, API or
+# browser, goes through one shared throttle. Local runs are not throttled.
+# E2E_MAX_RPS overrides (0 disables).
+MAX_RPS: float = float(os.environ.get("E2E_MAX_RPS", "4" if BASE.startswith("https://") else "0"))
+_throttle_lock = threading.Lock()
+_next_slot = 0.0
+
+
+def throttle() -> None:
+    """Block until the next request slot (shared by API calls and browser requests)."""
+    global _next_slot
+    if MAX_RPS <= 0:
+        return
+    with _throttle_lock:
+        now = time.monotonic()
+        slot = max(now, _next_slot)
+        _next_slot = slot + 1.0 / MAX_RPS
+    if slot > now:
+        time.sleep(slot - now)
+
+
+def is_cloudfront_block(status: int, server: str, body: str) -> bool:
+    return status == 403 and ("cloudfront" in server.lower() or "cloudfront" in body.lower())
+
+
+def waf_block_abort(where: str, status: int, server: str, body: str) -> None:
+    """Fail the whole run at once with a clear message instead of cascading 403s."""
+    if is_cloudfront_block(status, server, body):
+        import pytest
+
+        pytest.exit(
+            f"CloudFront/WAF 403 on {where}: this IP is rate-limited (3000 req / 100 logins per 5 min). "
+            f"Lower E2E_MAX_RPS (now {MAX_RPS}), wait 5 minutes, and rerun. Not retrying.",
+            returncode=3,
+        )
+
+
+if MAX_RPS > 0:
+    _orig_session_request = requests.Session.request
+
+    def _paced_request(self, method, url, *args, **kw):
+        if isinstance(url, str) and url.startswith(BASE):
+            throttle()
+        resp = _orig_session_request(self, method, url, *args, **kw)
+        if isinstance(url, str) and url.startswith(BASE):
+            waf_block_abort(f"{method} {url}", resp.status_code, resp.headers.get("server", ""), resp.text[:500])
+        return resp
+
+    requests.Session.request = _paced_request  # also covers requests.get/post/put/request
+
+
+def pace_browser(browser):
+    """Throttle every browser request to BASE (all pages and contexts) and abort on a CloudFront 403."""
+    if MAX_RPS <= 0:
+        return browser
+
+    def _route(route):
+        if route.request.url.startswith(BASE):
+            throttle()
+        route.continue_()
+
+    def _response(resp):
+        if resp.url.startswith(BASE) and resp.status == 403:
+            waf_block_abort(resp.url, 403, resp.headers.get("server", ""), resp.headers.get("x-cache", ""))
+
+    def _arm(ctx):
+        ctx.route("**/*", _route)
+        ctx.on("response", _response)
+        return ctx
+
+    new_context, new_page = browser.new_context, browser.new_page
+
+    def paced_new_context(*a, **kw):
+        return _arm(new_context(*a, **kw))
+
+    def paced_new_page(*a, **kw):
+        page = new_page(*a, **kw)
+        _arm(page.context)
+        return page
+
+    browser.new_context, browser.new_page = paced_new_context, paced_new_page
+    return browser
 
 
 def connect_browser(pw):
@@ -47,8 +134,21 @@ def fatal(msg: str) -> None:
 
 
 
+_login_cache: dict[tuple[str, str], str] = {}
+
+
 def login(user_name: str, password: str = "") -> str:
-    """POST /login/password → bearer token. Aborts the test on failure."""
+    """POST /login/password → bearer token (cached per run: the login limit is 100 / 5 min).
+
+    Aborts the test on failure."""
+    if (user_name, password) in _login_cache:
+        return _login_cache[(user_name, password)]
+    token = _login(user_name, password)
+    _login_cache[(user_name, password)] = token
+    return token
+
+
+def _login(user_name: str, password: str) -> str:
     r = requests.post(
         f"{BASE}/api/v1/login/password",
         json={"user_name": user_name, "password": password},

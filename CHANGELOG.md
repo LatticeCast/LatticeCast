@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.92.2 — 2026-11-22
+
+- The e2e suite now paces itself so a full run from one IP stays under the CloudFront WAF limit (3000 requests and 100 logins per 5 minutes). When `BASE_URL` is https, one shared throttle (default 4 req/s, `E2E_MAX_RPS`, 0 disables) covers every `requests` call to the target and every browser request; local http runs are not throttled. `login()` is cached per run, and a CloudFront 403 aborts the whole run with a clear message instead of cascading failures.
+
 ## 0.92.1 — 2026-11-19
 
 - Move the backend metrics port from 9100 to 9250 (`METRICS_PORT` default and the Prometheus scrape target), leaving 9100 free for a node exporter.
