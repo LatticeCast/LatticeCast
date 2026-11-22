@@ -1377,3 +1377,27 @@
 - OAuth login (Google, Authentik) with PKCE
 - MinIO file storage with UUID-prefix isolation
 - Admin user management API
+
+## 0.3 2026-Mar
+
+AHTM (agentic-hive + tmux-md) era, stage 3, undated: preparing LatticeCast, the answer to the 0.2 ticket explosion. The bot builds the tool that replaces its own markdown ticket files.
+- The project starts with hand-written `llm.*.md` docs for the LLM: `llm.root.md` (overview, stack, and an index of the others), `llm.dev.md`, `llm.frontend.md`, `llm.arch.auth.md`, `llm.endpoint.md`, `llm.storage.md`, `llm.user.md`, `llm.deploy.md`. They describe the project, not the task state.
+- The goal is written as a README todo: an "Airtable-like project management system with flexible, user-defined schemas", with rows stored as JSONB and column types (text, number, date, select, checkbox, url) driving the UI.
+- claude-bot bootstraps it from that todo, one small `ticket:` commit at a time: Table/Column/Row models, repositories and routers, then the Svelte table UI, theme, grid, toolbar, and import/export.
+- Next is a PM design (`DESIGN.md`): a PM table whose tickets (keys like `lc_42`) take their status from git branches. This is the route from `.tmp/llm.plan.status` to LatticeCast's own PM in 0.5.
+
+## 0.2 2026-Feb
+
+AHTM era, stage 2, undated: several tickets in flight at once, and markdown ticket management starts to blow up.
+- The orchestrator runs N workers in parallel, one ticket each, all in the same working tree. Coordination is file based: `_task_queue` for the plan, `_trigger_<id>` per worker for DONE/BLOCKED, `mkdir _git.lock` as the commit lock, workers killed after 900s, a run capped at 50 cycles.
+- `.tmp/llm.plan.status` is now the shared state of many workers. Which tickets are free, running, blocked or done lives in a text file plus these side files, and nothing but the checkboxes ties them together.
+- Weak spots of this version, fixed later in claude-bot: workers start with `git reset --hard` and can wipe each other's work, the planner is an LLM that can wrongly report ALL_DONE (later replaced by plain bash + python), and a worker's success is only what its own pipeline reports.
+
+## 0.1 2026-Jan
+
+AHTM era, stage 1, undated: claude-bot with tmux and markdown, before LatticeCast and before any `llm.*.md` project docs. Task management is a few markdown files under `.tmp/`, driven from tmux.
+- `.tmp/llm.plan.status` is the ticket list, one `[ ]` / `[x]` line per ticket; a ticket must be small enough to finish in under 15 minutes. `.tmp/llm.working.log` is an append-only abstract of finished work (`[W1] ...`). `.tmp/llm.working.notes` holds the detailed notes. Any other `.tmp/llm*.md` is a design doc or reference.
+- `CLAUDE.md` tells Claude to read them on start, in this order: `README.md`, plan.status, working.log, working.notes, the other `.tmp/llm*.md`. All scratch work goes in a project-local `.tmp/` that is never committed.
+- The loop: a tmux session with an orchestrator window and one window per worker. The orchestrator (Haiku) reads `.tmp/llm.plan.status` and gives each worker one ticket; each worker (Sonnet) runs a sequential `claude -p` pipeline: implement, test/format/lint, commit, mark the ticket `[x]`.
+- Packaged as the `agent-claude-bot` skill: worker rules (one ticket per session, never ask questions, after 3 failed attempts stash and write BLOCKED, all tests pass before committing, commit message `ticket: <verb> <what>`), a planning phase where Claude and the user design the tickets first, and reference scripts (`start.sh`, `stop.sh`, `orchestrator.sh`, `worker.sh`, `checkpoint.sh`, `rollback.sh`) that Claude adapts into the project's `.tmp/claude-bot/`.
+- This was the project-management method before LatticeCast had its own PM (the PM template arrives in 0.5).
