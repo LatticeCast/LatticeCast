@@ -40,7 +40,7 @@ import time
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, column_body, reading_of
 
 DT_COL = "Event At"
 DATE_COL = "Event Day"
@@ -84,7 +84,7 @@ def patch_cell(token: str, table_id: str, row_id: int, col_id: str, value):
 
 def add_column(token: str, table_id: str, name: str, col_type: str) -> str:
     r = api("POST", f"/api/v1/tables/{table_id}/columns", token,
-            json={"name": name, "type": col_type})
+            json=column_body(name, col_type))
     assert r.status_code == 201, f"add {col_type} column: {r.status_code} {r.text[:200]}"
     schema = r.json()
     col = next((c for c in schema["columns"] if c["name"] == name), None)
@@ -92,7 +92,7 @@ def add_column(token: str, table_id: str, name: str, col_type: str) -> str:
         f"column {name!r} missing from returned schema snapshot; "
         f"got {[c['name'] for c in schema['columns']]}"
     )
-    assert col["type"] == col_type, f"column {name!r} type={col['type']!r}, expected {col_type!r}"
+    assert reading_of(col) == col_type, f"column {name!r} reads as {reading_of(col)!r}, expected {col_type!r}"
     return col["column_id"]
 
 
@@ -132,8 +132,9 @@ def test_datetime_column_type(authed_page, workspace, admin_token, snapshot):
     assert r.status_code == 200, f"GET table: {r.status_code} {r.text[:200]}"
     persisted = next((c for c in r.json()["columns"] if c["column_id"] == dt_col), None)
     assert persisted is not None, "datetime column absent from re-read schema"
-    assert persisted["type"] == "datetime", f"re-read type={persisted['type']!r}, expected 'datetime'"
-    print("[ok] API: type 'datetime' persisted in the schema")
+    assert persisted["type"] == "int", f"re-read type={persisted['type']!r}, expected storage type 'int'"
+    assert reading_of(persisted) == "datetime", f"re-read display={persisted['options']!r}, expected datetime"
+    print("[ok] API: int column read as datetime persisted in the schema")
 
     r = api("POST", f"/api/v1/tables/{table_id}/views", token,
             json={"name": "Table", "type": "table", "config": {}})
@@ -144,8 +145,8 @@ def test_datetime_column_type(authed_page, workspace, admin_token, snapshot):
     row_id = r.json()["row_id"]
     print(f"[ok] row id={row_id}")
 
-    # ── step 2: API — ISO datetime normalises to epoch milliseconds ────────
-    r = patch_cell(token, table_id, row_id, dt_col, DT_ISO)
+    # ── step 2: API — a datetime is an int cell holding epoch milliseconds ──
+    r = patch_cell(token, table_id, row_id, dt_col, DT_MS)
     assert r.status_code == 200, f"PATCH datetime: {r.status_code} {r.text[:200]}"
     stored = read_cell(token, table_id, row_id, dt_col)
     assert stored == DT_MS, f"datetime cell={stored!r}, expected {DT_MS}"
@@ -154,15 +155,17 @@ def test_datetime_column_type(authed_page, workspace, admin_token, snapshot):
     )
     print(f"[ok] API: {DT_ISO} -> {stored}")
 
-    # ── step 3: API — a date cell lands on UTC midnight ────────────────────
-    r = patch_cell(token, table_id, row_id, date_col, DATE_ISO)
+    # ── step 3: API — a date is an int cell too; the client picks midnight ──
+    r = patch_cell(token, table_id, row_id, date_col, DATE_MS)
     assert r.status_code == 200, f"PATCH date: {r.status_code} {r.text[:200]}"
     stored = read_cell(token, table_id, row_id, date_col)
     assert stored == DATE_MS, f"date cell={stored!r}, expected {DATE_MS}"
     assert stored % DAY_MS == 0, f"date cell {stored} is not UTC-midnight aligned"
     print(f"[ok] API: {DATE_ISO} -> {stored} (midnight aligned)")
 
-    # ── step 4: API — unparseable input is a client error ──────────────────
+    # ── step 4: API — an int cell takes an integer, not a date string ──────
+    r = patch_cell(token, table_id, row_id, dt_col, DT_ISO)
+    assert r.status_code == 422, f"ISO string into an int cell returned {r.status_code}: {r.text[:300]}"
     r = patch_cell(token, table_id, row_id, dt_col, "not a date")
     assert 400 <= r.status_code < 500, (
         f"unparseable datetime returned {r.status_code}, expected 4xx "
@@ -183,7 +186,7 @@ def test_datetime_column_type(authed_page, workspace, admin_token, snapshot):
     print("[ok] API: cleared cell reads back null, not 0")
 
     # ── step 6: restore the value so the grid has something to render ──────
-    r = patch_cell(token, table_id, row_id, dt_col, DT_ISO)
+    r = patch_cell(token, table_id, row_id, dt_col, DT_MS)
     assert r.status_code == 200, f"PATCH restore: {r.status_code} {r.text[:200]}"
     assert read_cell(token, table_id, row_id, dt_col) == DT_MS
 

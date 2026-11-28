@@ -23,7 +23,7 @@ import time
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, reading_of, epoch_ms
 
 
 _TS = int(time.time()) % 100000
@@ -68,11 +68,11 @@ def test_row_create_appears_in_all_views(authed_page, pm_table, admin_token, sna
 
     # Identify key columns
     title_col = next(
-        (c for c in columns if c.get("name") == "Title" and c["type"] in ("text", "string")),
-        next((c for c in columns if c["type"] in ("text", "string")), None),
+        (c for c in columns if c.get("name") == "Title" and reading_of(c) == "text"),
+        next((c for c in columns if reading_of(c) == "text"), None),
     )
     status_col = next(
-        (c for c in columns if c.get("name") == "Status" and c["type"] == "select"), None
+        (c for c in columns if c.get("name") == "Status" and reading_of(c) == "select"), None
     )
     assert title_col, f"No text column found: {[c['name'] for c in columns]}"
     assert status_col, f"No Status column found: {[c['name'] for c in columns]}"
@@ -130,10 +130,10 @@ def test_row_create_appears_in_all_views(authed_page, pm_table, admin_token, sna
     row_data = {
         title_col["column_id"]: ROW_TITLE,
         status_col["column_id"]: ROW_STATUS,
-        start_col_id: ROW_START_DATE,
+        start_col_id: epoch_ms(ROW_START_DATE),
     }
     if end_col_id:
-        row_data[end_col_id] = ROW_END_DATE
+        row_data[end_col_id] = epoch_ms(ROW_END_DATE)
     r = api(
         "PUT", f"/api/v1/tables/{table_id}/rows/{new_row_id}", admin_token,
         json={"row_data": row_data},

@@ -13,30 +13,19 @@ from repository.table_view import TableViewRepository
 
 _SCHEMA_TTL = 60  # seconds
 
-# LatticeCast's column types and LatticeQL's ColumnKind are two different
-# vocabularies, and passing ours through unmapped fails schema validation for
-# the WHOLE workspace, not just the offending column - so one blob column
-# breaks every dashboard query in that workspace. Four of our ten types have
-# no counterpart under their own name:
+# LatticeCast's storage types and LatticeQL's storage kinds line up one to one,
+# except that LatticeQL calls a stored file `doc`. An unknown kind fails schema
+# validation for the WHOLE workspace, so a type with no counterpart is omitted
+# rather than passed through.
 #
-#   string   -> LatticeQL has only `text`
-#   checkbox -> it calls this `bool`
-#   blob     -> it calls this `doc`
-#
-# `datetime` passes through as itself from lattice-ql 0.3.0, which added it to
-# ColumnKind, let bucket() accept it, and taught codegen to read the cell as
-# epoch milliseconds instead of casting it to timestamptz. Against 0.2.0 it
-# had to be reported as `date`.
+# How a column is read (date, link, checkbox, select) never reaches LatticeQL:
+# options.display belongs to the client. A query that wants to treat an int as
+# a time says so itself, with bucket().
 _LQL_KIND_BY_COLUMN_TYPE: dict[str, str] = {
     "text": "text",
-    "string": "text",
-    "number": "number",
-    "date": "date",
-    "datetime": "datetime",
-    "select": "select",
-    "tags": "tags",
-    "checkbox": "bool",
-    "url": "url",
+    "int": "int",
+    "double": "double",
+    "strings": "strings",
 }
 
 

@@ -42,6 +42,11 @@ import {
 	parseWidths,
 	applyEditToRowData,
 	toggleCheckboxInRowData,
+	CHECKED,
+	checkboxCell,
+	columnChoice,
+	readAs,
+	temporalReading,
 	removeTagFromRowData,
 	addTagToRowData,
 	buildTemplateJSON,
@@ -49,6 +54,7 @@ import {
 	buildExportJSON,
 	triggerDownload
 } from '$lib/components/table/table.utils';
+import { toEpochMs } from '$lib/utils/temporal';
 import type {
 	Column,
 	ColumnChoice,
@@ -337,7 +343,7 @@ class TablePageStore {
 		if (this._savedEdit?.key === key && this._savedEdit.value === value) {
 			return this._savedEdit.promise;
 		}
-		const newData = applyEditToRowData(row.row_data, col.column_id, value, col.type);
+		const newData = applyEditToRowData(row.row_data, col.column_id, value, col);
 		error.set(null);
 		const tableId = this.tableId;
 		const promise = this._editWriteQueue.then(async () => {
@@ -863,10 +869,12 @@ class TablePageStore {
 					nc.values && nc.values.length > 0
 						? nc.values.map((v) => ({ value: v, color: randomHex() }))
 						: [];
+				// A header keyword names a reading; the column is created as storage type plus display.
+				const choice = columnChoice(nc.type);
 				await createColumn(tableId, {
 					name: nc.name,
-					type: nc.type as ColumnType,
-					options: { choices }
+					type: choice.type,
+					options: { choices, ...(choice.display ? { display: choice.display } : {}) }
 				});
 			}
 			await fetchTable(tableId);
@@ -882,17 +890,20 @@ class TablePageStore {
 					if (!col) continue;
 					const rawVal = previewRow[h];
 					if (rawVal === '' || rawVal === undefined) continue;
-					if (col.type === 'tags')
+					if (readAs(col) === 'tags')
 						data[col.column_id] = rawVal
 							.split(',')
 							.map((v) => v.trim())
 							.filter(Boolean);
-					else if (col.type === 'checkbox')
-						data[col.column_id] = rawVal.toLowerCase() === 'true' || rawVal === '1';
-					else if (col.type === 'number') {
+					else if (readAs(col) === 'checkbox')
+						data[col.column_id] = checkboxCell(
+							rawVal.toLowerCase() === 'true' || rawVal === '1' || rawVal === CHECKED
+						);
+					else if (readAs(col) === 'number') {
 						const n = Number(rawVal);
-						data[col.column_id] = isNaN(n) ? null : n;
-					} else data[col.column_id] = rawVal;
+						data[col.column_id] = isNaN(n) ? null : col.type === 'int' ? Math.trunc(n) : n;
+					} else if (temporalReading(col)) data[col.column_id] = toEpochMs(rawVal);
+					else data[col.column_id] = rawVal;
 				}
 				await createRow(tableId, { row_data: data });
 			}

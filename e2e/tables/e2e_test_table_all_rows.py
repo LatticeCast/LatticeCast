@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, epoch_ms
 from playwright.sync_api import expect
 
 
@@ -26,10 +26,10 @@ def test_table_all_rows(authed_page, admin_token, pm_table, snapshot):
         data = {
             column_ids["Title"]: f"full-row-{index:03d}",
             column_ids["Status"]: "todo",
-            start_col: "2026-10-01",
+            start_col: epoch_ms("2026-10-01"),
         }
         if end_col:
-            data[end_col] = "2026-10-31"
+            data[end_col] = epoch_ms("2026-10-31")
         response = api(
             "POST", f"/api/v1/tables/{table_id}/rows", admin_token,
             json={"row_data": data},

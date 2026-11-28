@@ -19,7 +19,7 @@ def test_number_columns_compare_numerically(admin_token):
     try:
         table_id = create_blank_table(token, "jobs", workspace_id)
         ids = {}
-        for name, kind in (("tries", "number"), ("max_tries", "number"), ("status", "text")):
+        for name, kind in (("tries", "int"), ("max_tries", "int"), ("status", "text")):
             r = api("POST", f"/api/v1/tables/{table_id}/columns", token, json={"name": name, "type": kind})
             assert r.status_code == 201, r.text[:200]
             ids[name] = next(c["column_id"] for c in r.json()["columns"] if c["name"] == name)

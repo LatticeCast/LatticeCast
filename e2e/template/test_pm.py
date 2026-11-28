@@ -18,7 +18,7 @@ import time
 
 import pytest
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, reading_of
 
 PM_COLUMNS = [
     ("Title", "text"),
@@ -29,7 +29,7 @@ PM_COLUMNS = [
     ("Assignee", "text"),
     ("Start Date", "date"),
     ("Due Date", "date"),
-    ("Estimate", "number"),
+    ("Estimate", "int"),
     ("Tags", "tags"),
     ("Description", "text"),
     ("Parent", "text"),
@@ -77,7 +77,7 @@ def test_pm_template_structure(authed_page, workspace, admin_token, snapshot):
     )
 
     for name, expected_type in PM_COLUMNS:
-        actual_type = col_map[name]["type"]
+        actual_type = reading_of(col_map[name])
         assert actual_type == expected_type, (
             f"column '{name}': expected type '{expected_type}', got '{actual_type}'"
         )

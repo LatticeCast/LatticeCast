@@ -8,6 +8,8 @@
 		getTagValues,
 		formatCellDate,
 		isTemporalType,
+		readAs,
+		isChecked,
 		formatBlobSize,
 		getBlobCellMetadata,
 		getColumnTypeLabel,
@@ -56,7 +58,7 @@
 	async function commitEdit(col: Column) {
 		if (editField !== col.column_id) return;
 		editField = null;
-		const newData = applyEditToRowData(currentRow.row_data, col.column_id, editVal, col.type);
+		const newData = applyEditToRowData(currentRow.row_data, col.column_id, editVal, col);
 		await onUpdateRow(currentRow.row_id, newData);
 	}
 
@@ -164,25 +166,27 @@
 					>
 				</label>
 
-				{#if col.type === 'checkbox'}
+				{#if readAs(col) === 'checkbox'}
 					<button
 						data-testid="row-panel-field-{col.column_id}-toggle"
-						class="relative inline-flex h-6 w-10 items-center rounded-full transition {currentRow
-							.row_data[col.column_id]
+						class="relative inline-flex h-6 w-10 items-center rounded-full transition {isChecked(
+							currentRow.row_data[col.column_id]
+						)
 							? 'bg-blue-500'
 							: 'bg-gray-200'}"
 						onclick={() => toggleCheckbox(col)}
 						role="switch"
-						aria-checked={!!currentRow.row_data[col.column_id]}
+						aria-checked={isChecked(currentRow.row_data[col.column_id])}
 					>
 						<span
-							class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition {currentRow
-								.row_data[col.column_id]
+							class="inline-block h-4 w-4 transform rounded-full bg-white shadow transition {isChecked(
+								currentRow.row_data[col.column_id]
+							)
 								? 'translate-x-5'
 								: 'translate-x-1'}"
 						></span>
 					</button>
-				{:else if col.type === 'select'}
+				{:else if readAs(col) === 'select'}
 					{@const choices = getChoices(col)}
 					{#if editField === col.column_id}
 						<select
@@ -215,7 +219,7 @@
 							{/if}
 						</button>
 					{/if}
-				{:else if col.type === 'tags'}
+				{:else if readAs(col) === 'tags'}
 					{@const tagVals = getTagValues(currentRow, col.column_id)}
 					{@const choices = getChoices(col)}
 					{@const available = choices.filter((c) => !tagVals.includes(c.value))}
@@ -265,7 +269,7 @@
 							</div>
 						{/if}
 					</div>
-				{:else if col.type === 'url'}
+				{:else if readAs(col) === 'url'}
 					{#if editField === col.column_id}
 						<input
 							type="url"
@@ -298,10 +302,10 @@
 							{/if}
 						</button>
 					{/if}
-				{:else if isTemporalType(col.type)}
+				{:else if isTemporalType(readAs(col))}
 					{#if editField === col.column_id}
 						<input
-							type={col.type === 'date' ? 'date' : 'datetime-local'}
+							type={readAs(col) === 'date' ? 'date' : 'datetime-local'}
 							class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder} focus:ring-blue-500"
 							bind:value={editVal}
 							onblur={() => commitEdit(col)}
@@ -312,7 +316,7 @@
 							autofocus
 						/>
 					{:else}
-						{@const dateVal = formatCellDate(currentRow.row_data[col.column_id], col.type)}
+						{@const dateVal = formatCellDate(currentRow.row_data[col.column_id], readAs(col))}
 						<button
 							class="flex min-h-[2.25rem] w-full items-center rounded-xl border px-3 py-2 text-left font-mono text-sm {T.inputBorder} hover:border-blue-400"
 							onclick={() => startEdit(col)}
@@ -320,10 +324,11 @@
 							{#if dateVal}{dateVal}{:else}<span class="font-sans text-gray-400">—</span>{/if}
 						</button>
 					{/if}
-				{:else if col.type === 'number'}
+				{:else if readAs(col) === 'number'}
 					{#if editField === col.column_id}
 						<input
 							type="number"
+							step={col.type === 'int' ? 1 : 'any'}
 							class="w-full rounded-xl border px-3 py-2 text-sm outline-none focus:ring-1 {T.inputBorder} {T.inputBg} {T.body} {T.inputFocusBorder} focus:ring-blue-500"
 							bind:value={editVal}
 							onblur={() => commitEdit(col)}
@@ -345,7 +350,7 @@
 							{/if}
 						</button>
 					{/if}
-				{:else if col.type === 'blob'}
+				{:else if readAs(col) === 'blob'}
 					{@const blob = getBlobCellMetadata(currentRow, col.column_id)}
 					{#if blob}
 						<button

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Column, Row, ViewConfig } from '$lib/types/table';
-	import { getChoiceColor } from './table.utils';
+	import { getChoiceColor, readAs } from './table.utils';
 	import { toDateInput } from '$lib/utils/temporal';
 	import { currentZone } from '$lib/stores/settings.store';
 	import {
@@ -49,8 +49,8 @@
 	const colorByColId = $derived(viewConfig.config.color_by as string | undefined);
 	const groupByColId = $derived(viewConfig.config.group_by as string | undefined);
 
-	const dateColumns = $derived(columns.filter((c) => c.type === 'date'));
-	const selectColumns = $derived(columns.filter((c) => c.type === 'select'));
+	const dateColumns = $derived(columns.filter((c) => readAs(c) === 'date'));
+	const selectColumns = $derived(columns.filter((c) => readAs(c) === 'select'));
 
 	const colorByCol = $derived(
 		colorByColId ? columns.find((c) => c.column_id === colorByColId) : undefined
@@ -58,7 +58,7 @@
 	const groupByCol = $derived(
 		groupByColId ? columns.find((c) => c.column_id === groupByColId) : undefined
 	);
-	const labelCol = $derived(columns.find((c) => c.type === 'text' || c.type === 'string'));
+	const labelCol = $derived(columns.find((c) => readAs(c) === 'text'));
 
 	async function saveConfig(patch: Record<string, unknown>) {
 		const newConfig = { ...viewConfig.config, ...patch };
@@ -348,7 +348,7 @@
 						class="sticky left-0 z-10 flex items-center gap-2 border-b px-3 {T.border} {T.tableHeaderBg}"
 						style="height: {ROW_HEIGHT - 4}px; width: {SIDEBAR_WIDTH + totalGridWidth}px"
 					>
-						{#if groupByCol.type === 'select' && group.key}
+						{#if readAs(groupByCol) === 'select' && group.key}
 							{@const choiceColor = getChoiceColor(groupByCol, group.key)}
 							<span
 								class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {choiceColor.cls}"

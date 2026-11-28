@@ -3,6 +3,7 @@ import type {
 	BlobKind,
 	Column,
 	ColumnChoice,
+	ColumnReading,
 	ColumnType,
 	Row
 } from '$lib/types/table';
@@ -15,23 +16,75 @@ import {
 } from '$lib/utils/temporal';
 import { currentZone } from '$lib/stores/settings.store';
 
-/** The column types whose cells hold an epoch-millisecond instant. */
-export function isTemporalType(type: ColumnType): type is TemporalType {
-	return type === 'date' || type === 'datetime';
+/** The readings whose cells hold an epoch-millisecond instant. */
+export function isTemporalType(reading: ColumnReading): reading is TemporalType {
+	return reading === 'date' || reading === 'datetime';
 }
 
-export const COLUMN_TYPES = [
-	'text',
-	'string',
-	'number',
-	'date',
-	'datetime',
-	'select',
-	'tags',
-	'checkbox',
-	'url',
-	'blob'
-] as const;
+/**
+ * How this client reads a column. The database knows only the storage type;
+ * `options.display` says which reading of it the user chose.
+ */
+export function readAs(column: Pick<Column, 'type' | 'options'>): ColumnReading {
+	const display = column.options?.display;
+	switch (column.type) {
+		case 'text':
+			return display === 'url' || display === 'select' ? display : 'text';
+		case 'int':
+			return display === 'date' || display === 'datetime' ? display : 'number';
+		case 'double':
+			return 'number';
+		case 'strings':
+			// An array of strings: tags unless the column says it is a checkbox (T, F).
+			return display === 'checkbox' ? 'checkbox' : 'tags';
+		default:
+			return column.type;
+	}
+}
+
+/** What the add-column dialog offers: a reading, and the storage type + display that make it. */
+export const COLUMN_CHOICES: ReadonlyArray<{
+	key: string;
+	label: string;
+	type: ColumnType;
+	display?: string;
+}> = [
+	{ key: 'text', label: 'text', type: 'text' },
+	{ key: 'url', label: 'url', type: 'text', display: 'url' },
+	{ key: 'select', label: 'select', type: 'text', display: 'select' },
+	{ key: 'checkbox', label: 'checkbox', type: 'strings', display: 'checkbox' },
+	{ key: 'int', label: 'integer', type: 'int' },
+	{ key: 'double', label: 'decimal', type: 'double' },
+	{ key: 'date', label: 'date', type: 'int', display: 'date' },
+	{ key: 'datetime', label: 'datetime', type: 'int', display: 'datetime' },
+	{ key: 'tags', label: 'tags', type: 'strings' },
+	{ key: 'blob', label: 'file', type: 'blob' }
+];
+
+/** The date or datetime reading of a column, or null when it is read as something else. */
+export function temporalReading(column: Pick<Column, 'type' | 'options'>): TemporalType | null {
+	const reading = readAs(column);
+	return isTemporalType(reading) ? reading : null;
+}
+
+/** The choice a keyword names, as in a CSV header `Name{{keyword}}`. `number` is a decimal; an unknown keyword is text. */
+export function columnChoice(key: string): (typeof COLUMN_CHOICES)[number] {
+	const wanted = key === 'number' ? 'double' : key;
+	return COLUMN_CHOICES.find((choice) => choice.key === wanted) ?? COLUMN_CHOICES[0];
+}
+
+/** A checkbox is a strings cell: ['T'] when checked, ['F'] when not. */
+export const CHECKED = 'T';
+export const UNCHECKED = 'F';
+
+export function isChecked(value: unknown): boolean {
+	return Array.isArray(value) && value.includes(CHECKED);
+}
+
+/** The cell to store for a checkbox state. */
+export function checkboxCell(checked: boolean): string[] {
+	return [checked ? CHECKED : UNCHECKED];
+}
 
 /** Fixed single-file blob categories. The UI selects a category, never a free-form accept string. */
 export const BLOB_KIND_OPTIONS: ReadonlyArray<{
@@ -63,7 +116,9 @@ export const BLOB_KIND_OPTIONS: ReadonlyArray<{
 
 /** Display the concrete content type for blob columns instead of the storage implementation. */
 export function getColumnTypeLabel(column: Pick<Column, 'type' | 'options'>): string {
-	return column.type === 'blob' ? (column.options?.kind ?? 'file') : column.type;
+	if (column.type === 'blob') return column.options?.kind ?? 'file';
+	const reading = readAs(column);
+	return reading === 'number' ? column.type : reading;
 }
 
 export interface FilterCondition {
@@ -109,11 +164,11 @@ export function getItemKey(item: RenderItem): string {
 export function getCellValue(
 	row: { row_data: Record<string, unknown> },
 	colId: string,
-	colType?: ColumnType
+	colType?: ColumnReading
 ): string {
 	const val = row.row_data[colId];
 	if (val === null || val === undefined) return '';
-	if (typeof val === 'boolean') return val ? '✓' : '';
+	if (colType === 'checkbox') return isChecked(val) ? '✓' : '';
 	if (isBlobCellMetadata(val)) return val.filename;
 	if (colType && isTemporalType(colType)) return formatCellDate(val, colType);
 	return String(val);
@@ -183,7 +238,7 @@ export function getTagValues(row: { row_data: Record<string, unknown> }, colId: 
 	return Array.isArray(val) ? (val as string[]) : [];
 }
 
-export function sortLabels(type: ColumnType): { asc: string; desc: string } {
+export function sortLabels(type: ColumnReading): { asc: string; desc: string } {
 	switch (type) {
 		case 'number':
 			return { asc: 'Ascending (1 → 9)', desc: 'Descending (9 → 1)' };
@@ -200,10 +255,14 @@ export function sortLabels(type: ColumnType): { asc: string; desc: string } {
 	}
 }
 
-/** Parse a string edit value to the correct runtime type for the given column type. */
-export function parseEditValue(editVal: string, colType: ColumnType): unknown {
-	if (colType === 'number') return editVal === '' ? null : Number(editVal);
-	if (colType === 'checkbox') return editVal === 'true';
+/** Parse a string edit value into what the column stores, by how the column is read. */
+export function parseEditValue(editVal: string, column: Pick<Column, 'type' | 'options'>): unknown {
+	const colType = readAs(column);
+	if (colType === 'number') {
+		if (editVal === '') return null;
+		return column.type === 'int' ? Math.trunc(Number(editVal)) : Number(editVal);
+	}
+	if (colType === 'checkbox') return checkboxCell(editVal === 'true');
 	if (isTemporalType(colType)) return fromInput(editVal, colType, currentZone());
 	if (editVal === '') return null;
 	return editVal;
@@ -214,9 +273,9 @@ export function applyEditToRowData(
 	rowData: Record<string, unknown>,
 	colId: string,
 	editVal: string,
-	colType: ColumnType
+	column: Pick<Column, 'type' | 'options'>
 ): Record<string, unknown> {
-	return { ...rowData, [colId]: parseEditValue(editVal, colType) };
+	return { ...rowData, [colId]: parseEditValue(editVal, column) };
 }
 
 /** Return new row_data with the checkbox toggled. */
@@ -224,7 +283,7 @@ export function toggleCheckboxInRowData(
 	rowData: Record<string, unknown>,
 	colId: string
 ): Record<string, unknown> {
-	return { ...rowData, [colId]: !rowData[colId] };
+	return { ...rowData, [colId]: checkboxCell(!isChecked(rowData[colId])) };
 }
 
 /** Return new row_data with the tag removed (no-op if not present). */
@@ -256,7 +315,9 @@ export function addTagToRowData(
  * rendered as the raw number 1798675200000 — thirteen digits matched none of
  * its patterns and fell to `return raw`.
  */
-export function formatCellDate(value: unknown, type: TemporalType = 'date'): string {
+/** Format an epoch-ms cell. A reading that is not a datetime is shown as a date. */
+export function formatCellDate(value: unknown, reading: ColumnReading = 'date'): string {
+	const type: TemporalType = reading === 'datetime' ? 'datetime' : 'date';
 	return formatTemporal(value, type, currentZone());
 }
 
@@ -335,7 +396,8 @@ export function sortRows(
 		return [...rowList].sort((a, b) => (dir === 'asc' ? a.row_id - b.row_id : b.row_id - a.row_id));
 	}
 	const sortCol = colList.find((c) => c.column_id === colId);
-	const choiceOrder = sortCol?.type === 'select' ? getChoices(sortCol).map((c) => c.value) : null;
+	const choiceOrder =
+		sortCol && readAs(sortCol) === 'select' ? getChoices(sortCol).map((c) => c.value) : null;
 	return [...rowList].sort((a, b) => {
 		const av = a.row_data[colId];
 		const bv = b.row_data[colId];
@@ -348,12 +410,12 @@ export function sortRows(
 			const cmp = getIdx(av) - getIdx(bv);
 			return dir === 'asc' ? cmp : -cmp;
 		}
-		if (sortCol && (isTemporalType(sortCol.type) || sortCol.type === 'number')) {
+		if (sortCol && (isTemporalType(readAs(sortCol)) || readAs(sortCol) === 'number')) {
 			// Compare the instants. localeCompare with numeric:true happens to
 			// order equal-width epochs correctly, but not a negative one
 			// (pre-1970) against a positive, and not a 12-digit against a 13.
-			const an = sortCol.type === 'number' ? Number(av) : toEpochMs(av);
-			const bn = sortCol.type === 'number' ? Number(bv) : toEpochMs(bv);
+			const an = readAs(sortCol) === 'number' ? Number(av) : toEpochMs(av);
+			const bn = readAs(sortCol) === 'number' ? Number(bv) : toEpochMs(bv);
 			const aMissing = an === null || an === undefined || Number.isNaN(an);
 			const bMissing = bn === null || bn === undefined || Number.isNaN(bn);
 			if (aMissing || bMissing) {
@@ -374,7 +436,7 @@ export function sortRows(
 export function getGroupKey(row: Row, col: Column, granularity: 'month' | 'day' = 'month'): string {
 	const val = row.row_data[col.column_id];
 	if (val === null || val === undefined || val === '') return '(empty)';
-	if (isTemporalType(col.type)) {
+	if (temporalReading(col)) {
 		// Bucket on the instant, in the reader's zone. The old code sliced the
 		// display string, which on an epoch number yielded '1798675200' as a
 		// "month".
@@ -470,7 +532,8 @@ export function buildCSV(colList: Column[], rowList: Row[]): string {
 					if (Array.isArray(val)) return escapeCSV(val.join(','));
 					// Export the readable instant, not the epoch integer — a CSV
 					// full of 1798675200000 is not something a person can use.
-					if (isTemporalType(col.type)) return escapeCSV(formatCellDate(val, col.type));
+					const temporal = temporalReading(col);
+					if (temporal) return escapeCSV(formatCellDate(val, temporal));
 					return escapeCSV(String(val));
 				})
 				.join(',')
@@ -485,8 +548,8 @@ export function buildExportJSON(colList: Column[], rowList: Row[]): string {
 		const obj: Record<string, unknown> = {};
 		for (const col of cols) {
 			const val = row.row_data[col.column_id] ?? null;
-			obj[col.name] =
-				val !== null && isTemporalType(col.type) ? formatCellDate(val, col.type) : val;
+			const temporal = temporalReading(col);
+			obj[col.name] = val !== null && temporal ? formatCellDate(val, temporal) : val;
 		}
 		return obj;
 	});

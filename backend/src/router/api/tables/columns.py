@@ -6,7 +6,7 @@ schema cache from the response (server is source of truth).
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.lattice_ql import invalidate_schema_cache
@@ -15,6 +15,7 @@ from models.table import ColumnCreate, ColumnUpdate
 from models.user import User
 from repository.table import TableRepository
 from repository.table_view import TableViewRepository
+from util.pg_errors import http_error_for
 
 from ._shared import _get_table_for_member
 
@@ -110,10 +111,12 @@ async def delete_column(
 # ── Per-column indexes: created on demand, never by add_column ──────────────
 #
 # Rows of every table share one physical table, so each index costs every write
-# of every table. Select / tags / checkbox / text equality is already served by
-# the shared row_data GIN. A per-column btree is allowed only on integer-valued
-# types (date, datetime); `number` is not indexed by product rule, not because
-# PostgreSQL cannot (indexes made for it before V79 can be listed and dropped).
+# of every table, and none is made unless asked for. text and strings equality
+# is already served by the shared row_data GIN; a per-column index adds a btree
+# for text and int (sorting, ranges) or a GIN for strings (array membership).
+# `double` is not indexed by product rule, not because PostgreSQL cannot (an
+# index made for a column before it became double can still be listed and
+# dropped), and `blob` cells are stored files.
 #
 # Known gaps, do not present these indexes as a speed-up yet:
 # - No query path uses them. LatticeQL compares through a different expression
@@ -121,8 +124,9 @@ async def delete_column(
 #   query_rows filters by containment and sorts by row columns only.
 # - CREATE / DROP INDEX here is not CONCURRENTLY: it blocks writes to the
 #   shared rows table, for every tenant, for as long as it runs.
-_GIN_SERVED_TYPES = frozenset({"text", "string", "select", "tags", "checkbox"})
-_RANGE_INDEX_TYPES = frozenset({"date", "datetime"})
+_GIN_SERVED_TYPES = frozenset({"text", "strings"})
+# Only a hint for the listing. PostgreSQL decides: create_row_data_index refuses the rest.
+_INDEXABLE_TYPES = frozenset({"text", "int", "strings"})
 
 
 def _index_state(table: Any, column: dict[str, Any], indexes: dict[str, dict]) -> dict[str, Any]:
@@ -140,7 +144,7 @@ def _index_state(table: Any, column: dict[str, Any], indexes: dict[str, dict]) -
         "type": col_type,
         "index": idx,
         "served_by": served_by,
-        "can_create_index": col_type in _RANGE_INDEX_TYPES,
+        "can_create_index": col_type in _INDEXABLE_TYPES,
     }
 
 
@@ -172,20 +176,19 @@ async def create_index(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
-    """Create the column's btree index. Only date and datetime (integer epoch-ms) qualify."""
+    """Create the column's index: btree for text and int, GIN for strings."""
     table = await _get_table_for_member(table_id, user, session)
     column = await _column_of(table, column_id, session)
-    col_type = column["type"]
-    if col_type not in _RANGE_INDEX_TYPES:
-        if col_type == "number":
-            reason = "number columns are not indexed; only integer-valued types (date, datetime) are"
-        elif col_type in _GIN_SERVED_TYPES:
-            reason = "equality on this type is already served by the shared GIN index"
-        else:
-            reason = "this column type has no index"
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Cannot index a {col_type} column: {reason}")
     repo = TableRepository(session)
-    await repo.create_column_index(table.workspace_id, table.table_id, column_id, col_type)
+    try:
+        await repo.create_column_index(table.workspace_id, table.table_id, column_id, column["type"])
+    except DBAPIError as exc:
+        # PostgreSQL refuses a type that takes no index (double, blob): a 422, not a 500.
+        await session.rollback()
+        mapped = http_error_for(exc)
+        if mapped is None:
+            raise
+        raise mapped from exc
     indexes = await repo.list_column_indexes(table.workspace_id, table.table_id)
     return _index_state(table, column, indexes)
 
@@ -197,7 +200,7 @@ async def drop_index(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ) -> dict[str, Any]:
-    """Drop the column's per-column index (also one created for a number column before V79)."""
+    """Drop the column's per-column index (also one left on a column that is now double)."""
     table = await _get_table_for_member(table_id, user, session)
     column = await _column_of(table, column_id, session)
     repo = TableRepository(session)

@@ -31,7 +31,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, reading_of
 
 NEW_OPTION = "blocked"
 
@@ -80,7 +80,7 @@ def test_column_option_add_remove(authed_page, pm_table, admin_token, snapshot):
 
     # Find Status select column
     status_col = next(
-        (c for c in columns if c.get("name") == "Status" and c.get("type") == "select"),
+        (c for c in columns if c.get("name") == "Status" and reading_of(c) == "select"),
         None,
     )
     assert status_col, "PM template has no 'Status' select column"

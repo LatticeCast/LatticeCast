@@ -33,7 +33,7 @@ import time
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api, login, seed_login_info
+from e2e_base import BASE, api, login, seed_login_info, column_body
 
 ADMIN_USER = "lattice"
 COL_NAME = "Website"
@@ -76,7 +76,7 @@ def test_column_url_type(authed_page, admin_token, workspace, snapshot):
 
     # ── 3. Add URL column ──────────────────────────────────────────────────
     r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
-            json={"name": COL_NAME, "type": "url"})
+            json=column_body(COL_NAME, "url"))
     assert r.status_code == 201, f"add url column: {r.status_code} {r.text[:200]}"
     schema = r.json()
     col = next((c for c in schema["columns"] if c["name"] == COL_NAME), None)

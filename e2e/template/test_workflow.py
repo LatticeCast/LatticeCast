@@ -20,7 +20,7 @@ import time
 
 import pytest
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, reading_of
 
 WF_COLUMNS = [
     ("name",        "text"),
@@ -30,8 +30,8 @@ WF_COLUMNS = [
     ("nexts",       "text"),
     ("true_next",   "text"),
     ("false_next",  "text"),
-    ("pos_x",       "number"),
-    ("pos_y",       "number"),
+    ("pos_x",       "double"),
+    ("pos_y",       "double"),
 ]
 
 TYPE_CHOICES = ["START", "STEP", "TOOL", "CONDITION", "INFO", "SUBGRAPH"]
@@ -70,7 +70,7 @@ def test_workflow_template_structure(authed_page, workspace, admin_token, snapsh
     assert not missing, f"missing columns: {missing}; got {list(col_map.keys())}"
 
     for name, expected_type in WF_COLUMNS:
-        actual_type = col_map[name]["type"]
+        actual_type = reading_of(col_map[name])
         assert actual_type == expected_type, (
             f"column '{name}': expected type '{expected_type}', "
             f"got '{actual_type}'"

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Column } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
+	import { readAs } from './table.utils';
 
 	let {
 		columns,
@@ -12,7 +13,7 @@
 		onchange: (colId: string | null) => void;
 	} = $props();
 
-	const selectColumns = $derived(columns.filter((c) => c.type === 'select'));
+	const selectColumns = $derived(columns.filter((c) => readAs(c) === 'select'));
 </script>
 
 <div class="flex items-center gap-2">

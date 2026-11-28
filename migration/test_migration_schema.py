@@ -318,8 +318,8 @@ def verify(psql_fn) -> list[str]:
             f"{result} public index(es) (V49)"
         )
 
-    # V48/V49: JSONB temporal cells are UTC epoch-millisecond numbers and a
-    # rows trigger enforces the representation for every write path.
+    # V80: the date/datetime normaliser is gone with those types; a rows
+    # trigger coerces int cells on every write path instead.
     for function_name, signature in [
         ("to_canonical_epoch_ms", "jsonb, text"),
         ("_normalize_row_data_timestamps", "jsonb, jsonb"),
@@ -329,27 +329,25 @@ def verify(psql_fn) -> list[str]:
             f"'public.{function_name}({signature})'"
             ");"
         ).strip()
-        if not result:
-            errors.append(f"MISSING TEMPORAL FUNCTION: {function_name} (V48/V49)")
+        if result:
+            errors.append(f"RETIRED TEMPORAL FUNCTION STILL PRESENT: {function_name} (V80)")
 
     result = psql_fn(
-        "SELECT 1 FROM information_schema.triggers "
-        "WHERE event_object_schema='public' "
-        "  AND event_object_table='rows' "
-        "  AND trigger_name='trg_rows_canonical_ts';"
-    )
-    if not result:
-        errors.append("MISSING TRIGGER: rows.trg_rows_canonical_ts (V49)")
-
-    result = psql_fn(
-        "SELECT public.to_canonical_epoch_ms("
-        "'\"2025-05-15\"'::jsonb, 'date')::text;"
+        "SELECT string_agg(trigger_name::text, ',' ORDER BY trigger_name::text) "
+        "FROM (SELECT DISTINCT trigger_name FROM information_schema.triggers "
+        "      WHERE event_object_schema='public' AND event_object_table='rows' "
+        "        AND trigger_name IN ('trg_rows_canonical_ts', 'trg_rows_coerce_ints')) AS found;"
     ).strip()
-    if result != "1747267200000":
-        errors.append(
-            "WRONG EPOCH NORMALIZATION: expected 1747267200000 for "
-            f"2025-05-15 UTC, got {result!r}"
-        )
+    if result != "trg_rows_coerce_ints":
+        errors.append(f"WRONG ROW TYPE TRIGGERS: expected trg_rows_coerce_ints only, got {result!r} (V80)")
+
+    result = psql_fn(
+        "SELECT public._coerce_row_data_ints("
+        "'[{\"column_id\": \"a\", \"name\": \"A\", \"type\": \"int\"}]'::jsonb, "
+        "'{\"a\": 3.0, \"b\": \"kept\"}'::jsonb)::text;"
+    ).strip()
+    if result != '{"a": 3, "b": "kept"}':
+        errors.append(f"WRONG INT COERCION: expected a=3 and b untouched, got {result!r} (V80)")
 
     # V60: all persisted application instants carry their UTC offset.
     result = psql_fn("SHOW timezone;").strip()
@@ -741,10 +739,11 @@ def verify(psql_fn) -> list[str]:
     if not result:
         errors.append("MISSING INDEX: rows.row_data GIN for LQL containment (V72)")
 
-    # V79: add_column creates no per-column index; the range types get a B-tree
+    # V79/V80: add_column creates no per-column index; text and int get a B-tree and
+    # strings a GIN,
     # only when create_row_data_index is asked for it, and list_row_data_indexes
-    # reports it. Choice/boolean containment uses the shared GIN, while free text
-    # and blob types never get an individual index. Roll back the probe.
+    # reports it. No other type takes one, and an old type cannot be added at all.
+    # Roll back the probe.
     try:
         psql_fn("""
         BEGIN;
@@ -766,8 +765,7 @@ def verify(psql_fn) -> list[str]:
             SELECT table_id INTO STRICT v_table FROM public.tables
             WHERE workspace_id = v_ws AND table_name = 'announcement';
             FOREACH v_type IN ARRAY ARRAY[
-                'text', 'string', 'url', 'blob', 'select', 'tags',
-                'checkbox', 'number', 'date', 'datetime'
+                'text', 'int', 'double', 'strings', 'blob'
             ] LOOP
                 v_config := public.add_column(
                     v_ws, v_table, 'probe_' || v_type, v_type,
@@ -782,21 +780,42 @@ def verify(psql_fn) -> list[str]:
                 IF v_exists THEN
                     RAISE EXCEPTION 'add_column must not create an index for %', v_type;
                 END IF;
-                IF v_type IN ('number', 'date', 'datetime') THEN
+                IF v_type IN ('text', 'int', 'strings') THEN
                     PERFORM public.create_row_data_index(
                         v_ws, v_idx, v_table,
                         v_config -> 'columns' -> -1 ->> 'column_id', v_type
                     );
                     IF NOT EXISTS (
                         SELECT 1 FROM public.list_row_data_indexes(v_ws, v_table)
-                        WHERE index_name = v_idx AND method = 'btree'
+                        WHERE index_name = v_idx
+                          AND method = CASE v_type WHEN 'strings' THEN 'gin' ELSE 'btree' END
                     ) THEN
                         RAISE EXCEPTION 'on-demand index for % not listed', v_type;
                     END IF;
-                ELSIF to_regclass('public.' || quote_ident(v_idx)) IS NOT NULL THEN
-                    RAISE EXCEPTION 'unexpected index for %', v_type;
+                ELSE
+                    -- PostgreSQL itself refuses a type that takes no index.
+                    BEGIN
+                        PERFORM public.create_row_data_index(
+                            v_ws, v_idx, v_table,
+                            v_config -> 'columns' -> -1 ->> 'column_id', v_type
+                        );
+                        RAISE EXCEPTION 'create_row_data_index accepted %', v_type;
+                    EXCEPTION WHEN invalid_parameter_value THEN
+                        NULL;
+                    END;
+                    IF to_regclass('public.' || quote_ident(v_idx)) IS NOT NULL THEN
+                        RAISE EXCEPTION 'unexpected index for %', v_type;
+                    END IF;
                 END IF;
             END LOOP;
+            BEGIN
+                PERFORM public.add_column(
+                    v_ws, v_table, 'probe_retired', 'select', '{}'::JSONB, v_user
+                );
+                RAISE EXCEPTION 'add_column accepted the retired type select';
+            EXCEPTION WHEN invalid_parameter_value THEN
+                NULL;
+            END;
         END;
         $probe$;
         ROLLBACK;

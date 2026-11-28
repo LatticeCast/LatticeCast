@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from playwright.sync_api import expect
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, column_body
 
 
 def test_document_row_edits_and_sanitized_preview(authed_page, admin_token, workspace, snapshot):
@@ -17,14 +17,14 @@ def test_document_row_edits_and_sanitized_preview(authed_page, admin_token, work
     columns = {}
     for name, kind, options in (("Label", "text", {}), ("Done", "checkbox", {}), ("Notes", "blob", {"kind": "text"})):
         result = api("POST", f"/api/v1/tables/{table_id}/columns", admin_token,
-                     json={"name": name, "type": kind, "options": options})
+                     json=column_body(name, kind, options))
         assert result.status_code == 201, result.text
         columns[name] = next(c["column_id"] for c in result.json()["columns"] if c["name"] == name)
     result = api("POST", f"/api/v1/tables/{table_id}/views", admin_token,
                  json={"name": "Table", "type": "table", "config": {}})
     assert result.status_code == 201, result.text
     result = api("POST", f"/api/v1/tables/{table_id}/rows", admin_token,
-                 json={"row_data": {columns["Label"]: "before", columns["Done"]: False}})
+                 json={"row_data": {columns["Label"]: "before", columns["Done"]: ["F"]}})
     assert result.status_code == 201, result.text
     row_id = result.json()["row_id"]
     row_path = f"/api/v1/tables/{table_id}/rows/{row_id}"
@@ -42,7 +42,7 @@ def test_document_row_edits_and_sanitized_preview(authed_page, admin_token, work
         checkbox.click()
     assert changed.value.status == 200
     result = api("GET", row_path, admin_token)
-    assert result.json()["row_data"][columns["Done"]] is True
+    assert result.json()["row_data"][columns["Done"]] == ["T"]
     assert result.json()["row_data"][columns["Notes"]] == metadata
 
     page.get_by_test_id(f"doc-open-{row_id}-{columns['Notes']}").click()

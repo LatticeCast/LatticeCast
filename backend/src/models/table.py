@@ -9,7 +9,9 @@ from pydantic import ConfigDict
 from sqlalchemy import BigInteger
 from sqlmodel import Field, SQLModel
 
-ColumnType = Literal["text", "string", "number", "date", "datetime", "select", "tags", "checkbox", "url", "blob"]
+# Storage types only. How a column is read (date, link, checkbox, select) is
+# the client's choice, carried in ColumnOptions.display.
+ColumnType = Literal["text", "int", "double", "strings", "blob"]
 BlobKind = Literal["file", "image", "text", "table"]
 
 
@@ -39,8 +41,10 @@ class ColumnOptions(SQLModel):
         default=None,
         max_length=32,
         description=(
-            "How a client should read the stored value, e.g. date, link, checkbox, select. "
-            "Advisory only: the server and LatticeQL never interpret it."
+            "How a client reads the stored value: url or select for a text column; date or datetime "
+            "(epoch milliseconds) for an int column; checkbox for a strings column, which is "
+            "otherwise read as tags. The client decides what it "
+            "means; the server stores it and never reads it."
         ),
     )
     accept: str | None = Field(
@@ -54,10 +58,10 @@ class ColumnCreate(SQLModel):
     type: ColumnType = Field(
         default="text",
         description=(
-            "Storage/reading kind. Deprecated, kept working: `string` (same as `text`), and `select`, "
-            "`checkbox`, `url`, which are only a way to read a stored string (use `text` plus "
-            "`options.display`). `number`, `date` and `datetime` are moving to integer or double storage "
-            "plus `options.display`; they keep working until that replacement ships."
+            "Storage type: `text`, `int` (BIGINT), `double`, `strings` (array of strings) or `blob`. "
+            "A link or select is a `text` column, a date an `int` column, and tags or a checkbox "
+            "(T, F) a `strings` column, each read through `options.display`. `text`, `int` and "
+            "`strings` can take a per-column index; `double` and `blob` cannot."
         ),
     )
     options: ColumnOptions = Field(default_factory=ColumnOptions)

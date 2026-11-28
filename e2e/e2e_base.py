@@ -22,6 +22,7 @@ import os
 import sys
 import threading
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -239,3 +240,57 @@ def seed_login_info(page, token: str, user_name: str, role: str = "admin") -> No
     """
     info = make_login_info(token, user_name, role)
     page.add_init_script(f"localStorage.setItem('loginInfo', {json.dumps(info)});")
+
+
+# --- Columns ----------------------------------------------------------------
+# The server stores five types (text, int, double, strings, blob). How a column is
+# read is the client's choice, kept in options.display; these mirror the web
+# client's readAs() so a test can say which reading it means.
+_READINGS: dict[str, tuple[str, str | None]] = {
+    "text": ("text", None),
+    "url": ("text", "url"),
+    "select": ("text", "select"),
+    "checkbox": ("strings", "checkbox"),
+    "int": ("int", None),
+    "double": ("double", None),
+    "date": ("int", "date"),
+    "datetime": ("int", "datetime"),
+    "tags": ("strings", None),
+    "blob": ("blob", None),
+}
+
+
+def column_body(name: str, reading: str, options: dict | None = None) -> dict:
+    """The POST /tables/{id}/columns body for a column read as `reading`."""
+    col_type, display = _READINGS[reading]
+    merged = dict(options or {})
+    if display:
+        merged["display"] = display
+    body: dict[str, Any] = {"name": name, "type": col_type}
+    if merged:
+        body["options"] = merged
+    return body
+
+
+def reading_of(column: dict) -> str:
+    """How the web client reads this column: its storage type plus options.display."""
+    options = column.get("options")
+    display = options.get("display") if isinstance(options, dict) else None
+    if column["type"] == "text" and display in ("url", "select"):
+        return display
+    if column["type"] == "strings":
+        # An array of strings: tags unless the column says it is a checkbox (T, F).
+        return "checkbox" if display == "checkbox" else "tags"
+    if column["type"] == "int" and display in ("date", "datetime"):
+        return display
+    return column["type"]
+
+
+def epoch_ms(day: str) -> int:
+    """UTC epoch milliseconds for an ISO date or datetime ('2026-06-01', '2026-06-01T12:30:00Z').
+
+    A date is an int column the client reads as a date; the API takes the integer."""
+    moment = datetime.fromisoformat(day.replace("Z", "+00:00"))
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    return int(moment.timestamp() * 1000)

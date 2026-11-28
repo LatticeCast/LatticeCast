@@ -31,7 +31,7 @@ import time
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, reading_of
 
 
 _SUFFIX = int(time.time()) % 100000
@@ -79,7 +79,7 @@ def test_kanban_groupby_persists(authed_page, workspace, admin_token, snapshot):
     # Pick a DIFFERENT select column to switch to (PM has Type, Status, Priority)
     select_cols = [
         c for c in schema.get("columns", [])
-        if c.get("type") == "select" and c.get("column_id") != initial_group_by
+        if reading_of(c) == "select" and c.get("column_id") != initial_group_by
     ]
     assert select_cols, (
         f"Need ≥2 select columns to test switch; found: "

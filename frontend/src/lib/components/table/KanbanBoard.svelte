@@ -6,6 +6,8 @@
 		getTagValues,
 		formatCellDate,
 		isTemporalType,
+		readAs,
+		isChecked,
 		getColumnTypeLabel
 	} from './table.utils';
 	import { updateRow } from '$lib/backend/tables';
@@ -137,7 +139,7 @@
 
 	// Prefer a column named "Priority" (select type) for card accent color; fall back to group col
 	const priorityCol = $derived(
-		columns.find((c) => c.name.toLowerCase() === 'priority' && c.type === 'select')
+		columns.find((c) => c.name.toLowerCase() === 'priority' && readAs(c) === 'select')
 	);
 
 	const choices = $derived(groupCol ? getChoices(groupCol) : []);
@@ -341,7 +343,7 @@
 								{#each cardColumns as col (col!.column_id)}
 									{@const val = row.row_data[col!.column_id]}
 									<div class="mb-1 last:mb-0">
-										{#if col!.type === 'select' && val}
+										{#if readAs(col!) === 'select' && val}
 											{@const choiceColor = getChoiceColor(col!, String(val))}
 											<span
 												class="inline-flex items-center rounded-full border px-1.5 py-0.5 text-xs font-medium {choiceColor.cls}"
@@ -349,7 +351,7 @@
 											>
 												{val}
 											</span>
-										{:else if col!.type === 'tags'}
+										{:else if readAs(col!) === 'tags'}
 											<div class="flex flex-wrap gap-1">
 												{#each getTagValues(row, col!.column_id) as tag (tag)}
 													{@const tc = getChoiceColor(col!, tag)}
@@ -361,11 +363,11 @@
 													</span>
 												{/each}
 											</div>
-										{:else if col!.type === 'checkbox'}
-											<span class="text-sm {val ? 'text-green-600' : 'text-gray-300'}">
-												{val ? '✓' : '✗'}
+										{:else if readAs(col!) === 'checkbox'}
+											<span class="text-sm {isChecked(val) ? 'text-green-600' : 'text-gray-300'}">
+												{isChecked(val) ? '✓' : '✗'}
 											</span>
-										{:else if col!.type === 'url' && val}
+										{:else if readAs(col!) === 'url' && val}
 											<a
 												href={String(val)}
 												target="_blank"
@@ -377,7 +379,9 @@
 											</a>
 										{:else if val !== null && val !== undefined && val !== ''}
 											<span class="block truncate text-sm {T.secondary}">
-												{isTemporalType(col!.type) ? formatCellDate(val, col!.type) : String(val)}
+												{isTemporalType(readAs(col!))
+													? formatCellDate(val, readAs(col!))
+													: String(val)}
 											</span>
 										{/if}
 									</div>

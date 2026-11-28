@@ -24,7 +24,7 @@ import time
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, column_body
 
 _TS = int(time.time())
 TABLE_NAME = f"inline-edit-{_TS}"
@@ -83,10 +83,10 @@ def test_inline_edit(authed_page, workspace, admin_token, snapshot):
 
     # ── Setup: columns (Name text, City text, Score number) ──────────────────
     col_ids = {}
-    col_types = {"Name": "text", "City": "text", "Score": "number"}
+    col_types = {"Name": "text", "City": "text", "Score": "double"}
     for name, ctype in col_types.items():
         r = api("POST", f"/api/v1/tables/{table_id}/columns", admin_token,
-                json={"name": name, "type": ctype})
+                json=column_body(name, ctype))
         assert r.status_code in (200, 201), f"create column {name!r}: {r.status_code} {r.text[:200]}"
         schema = r.json()
         col = next((c for c in schema.get("columns", []) if c["name"] == name), None)

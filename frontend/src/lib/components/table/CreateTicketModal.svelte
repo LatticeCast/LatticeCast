@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Column } from '$lib/types/table';
-	import { getChoices } from './table.utils';
+	import { getChoices, readAs } from './table.utils';
 	import { T } from '$lib/UI/theme.svelte';
 
 	let {
@@ -17,13 +17,13 @@
 
 	// Primary text column for the ticket title (prefer "Title", fallback to first text/string col)
 	const titleCol = $derived(
-		columns.find((c) => c.name === 'Title' && (c.type === 'text' || c.type === 'string')) ??
-			columns.find((c) => c.type === 'text' || c.type === 'string')
+		columns.find((c) => c.name === 'Title' && readAs(c) === 'text') ??
+			columns.find((c) => readAs(c) === 'text')
 	);
 
 	// Select columns to show (skip auto-generated "Key" column)
 	const selectCols = $derived(
-		columns.filter((c) => c.type === 'select' && c.name !== 'Key').slice(0, 4)
+		columns.filter((c) => readAs(c) === 'select' && c.name !== 'Key').slice(0, 4)
 	);
 
 	function initialSelectValues(): Record<string, string> {

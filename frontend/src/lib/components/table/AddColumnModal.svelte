@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { BLOB_KIND_OPTIONS, COLUMN_TYPES } from './table.utils';
+	import { BLOB_KIND_OPTIONS, COLUMN_CHOICES } from './table.utils';
 	import type { BlobKind, ColumnOptions } from '$lib/types/table';
 
 	let {
@@ -30,13 +30,16 @@
 		if (!newColName.trim()) return;
 		const blobOption = BLOB_KIND_OPTIONS.find((option) => option.value === newBlobKind);
 		const note = newColNote.trim();
+		// The dialog offers readings; the column is created as a storage type plus display.
+		const choice = COLUMN_CHOICES.find((c) => c.key === newColType) ?? COLUMN_CHOICES[0];
 		const options: ColumnOptions = {
 			...(newColType === 'blob'
 				? { kind: newBlobKind, ...(blobOption?.accept ? { accept: blobOption.accept } : {}) }
 				: {}),
+			...(choice.display ? { display: choice.display } : {}),
 			...(note ? { note } : {})
 		};
-		onAdd(newColName.trim(), newColType, Object.keys(options).length ? options : undefined);
+		onAdd(newColName.trim(), choice.type, Object.keys(options).length ? options : undefined);
 		reset();
 	}
 
@@ -79,8 +82,8 @@
 					class="w-full rounded-xl border border-gray-200 px-4 py-2 text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
 					bind:value={newColType}
 				>
-					{#each COLUMN_TYPES as t (t)}
-						<option value={t}>{t === 'blob' ? newBlobKind : t}</option>
+					{#each COLUMN_CHOICES as choice (choice.key)}
+						<option value={choice.key}>{choice.key === 'blob' ? newBlobKind : choice.label}</option>
 					{/each}
 				</select>
 			</div>

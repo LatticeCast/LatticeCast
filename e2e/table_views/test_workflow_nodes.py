@@ -31,7 +31,7 @@ import time
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, column_body
 
 
 _TS = int(time.time())
@@ -63,10 +63,7 @@ def goto_table(page, ws_id: str, table_id: str) -> None:
 
 def add_column(token: str, table_id: str, name: str, col_type: str,
                options: dict | None = None) -> str:
-    body: dict = {"name": name, "type": col_type}
-    if options:
-        body["options"] = options
-    r = api("POST", f"/api/v1/tables/{table_id}/columns", token, json=body)
+    r = api("POST", f"/api/v1/tables/{table_id}/columns", token, json=column_body(name, col_type, options))
     assert r.status_code in (200, 201), (
         f"add column {name!r}: {r.status_code} {r.text[:200]}"
     )
@@ -126,8 +123,8 @@ def test_workflow_nodes(authed_page, admin_token, snapshot) -> None:
             ]
         })
         nexts_col = add_column(token, TABLE_ID, "nexts", "text")
-        pos_x_col = add_column(token, TABLE_ID, "pos_x", "number")
-        pos_y_col = add_column(token, TABLE_ID, "pos_y", "number")
+        pos_x_col = add_column(token, TABLE_ID, "pos_x", "double")
+        pos_y_col = add_column(token, TABLE_ID, "pos_y", "double")
         print("[setup] columns created")
 
         # ── Setup: seed rows — 3 in "root", 2 in "sub" ──────────────────

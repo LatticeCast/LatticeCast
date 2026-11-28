@@ -36,7 +36,7 @@ import time
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, column_body
 
 
 def snap(page, name: str, snapshot: bool) -> None:
@@ -86,11 +86,10 @@ def test_column_delete_propagates(authed_page, workspace, admin_token, snapshot)
     print("[ok] added 'Table' view")
 
     r = api("POST", f"/api/v1/tables/{table_id}/columns", token,
-            json={"name": "TestCol", "type": "select",
-                  "options": {"choices": [
+            json=column_body("TestCol", "select", {"choices": [
                       {"value": "Alpha", "color": "#6b7280"},
                       {"value": "Beta", "color": "#6b7280"},
-                  ]}})
+                  ]}))
     assert r.status_code == 201, f"create TestCol column: {r.status_code} {r.text[:200]}"
     schema = r.json()
     test_col = next((c for c in schema["columns"] if c.get("name") == "TestCol"), None)

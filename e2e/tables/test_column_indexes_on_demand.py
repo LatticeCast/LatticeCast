@@ -1,4 +1,4 @@
-"""Per-column indexes are on demand, and a column can carry a note."""
+"""Per-column indexes are on demand: btree for text and int, GIN for strings, none for double or blob."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from time import time_ns
 from e2e_base import api, create_blank_table
 
 
-def _add(token, table_id, name, kind, **options):
-    r = api("POST", f"/api/v1/tables/{table_id}/columns", token, json={"name": name, "type": kind, "options": options})
+def _add(token, table_id, name, col_type, **options):
+    r = api("POST", f"/api/v1/tables/{table_id}/columns", token, json={"name": name, "type": col_type, "options": options})
     assert r.status_code == 201, r.text[:200]
     return next(c for c in r.json()["columns"] if c["name"] == name)
 
@@ -26,40 +26,53 @@ def test_indexes_are_created_only_on_request(admin_token):
     workspace_id = created.json()["workspace_id"]
     try:
         table_id = create_blank_table(token, "idx_probe", workspace_id)
-        due = _add(token, table_id, "due", "date", note="when it is due", display="date")
-        qty = _add(token, table_id, "qty", "number")
-        tag = _add(token, table_id, "label", "select")
-        note = _add(token, table_id, "memo", "text")
+        due = _add(token, table_id, "due", "int", note="when it is due", display="date")
+        qty = _add(token, table_id, "qty", "double")
+        status = _add(token, table_id, "status", "text", display="select")
+        done = _add(token, table_id, "done", "strings", display="checkbox")
+        doc = _add(token, table_id, "doc", "blob", kind="text")
 
-        # The note and display hint round-trip through the schema.
+        # The note and display hint round-trip through the schema; the server only stores them.
         assert due["options"]["note"] == "when it is due"
         assert due["options"]["display"] == "date"
-        assert note["options"].get("note") is None
+        assert status["options"].get("note") is None
 
-        # Adding a column creates no index.
-        assert _state(token, table_id, due["column_id"])["index"] is None
+        # Adding a column creates no index. text and strings equality still has the shared GIN.
+        for column in (due, qty, status, done, doc):
+            assert _state(token, table_id, column["column_id"])["index"] is None, column["name"]
         assert _state(token, table_id, due["column_id"])["served_by"] == "none"
-        assert _state(token, table_id, due["column_id"])["can_create_index"] is True
-        assert _state(token, table_id, qty["column_id"])["index"] is None
-        assert _state(token, table_id, tag["column_id"])["served_by"] == "shared_gin"
+        assert _state(token, table_id, status["column_id"])["served_by"] == "shared_gin"
+        assert _state(token, table_id, done["column_id"])["served_by"] == "shared_gin"
 
-        # An integer-valued type can ask for a btree, and the listing shows it.
-        r = api("POST", f"/api/v1/tables/{table_id}/columns/{due['column_id']}/index", token)
-        assert r.status_code == 201, r.text[:200]
-        assert r.json()["index"]["method"] == "btree"
-        assert _state(token, table_id, due["column_id"])["served_by"] == "btree"
+        # text and int take a btree, strings (an array of strings) a GIN, and the listing shows it.
+        for column, method in ((due, "btree"), (status, "btree"), (done, "gin")):
+            state = _state(token, table_id, column["column_id"])
+            assert state["can_create_index"] is True, column["name"]
+            r = api("POST", f"/api/v1/tables/{table_id}/columns/{column['column_id']}/index", token)
+            assert r.status_code == 201, f"{column['name']}: {r.status_code} {r.text[:200]}"
+            assert r.json()["index"]["method"] == method, f"{column['name']}: {r.json()['index']}"
+            assert _state(token, table_id, column["column_id"])["served_by"] == method
 
-        # number may hold fractions; select / text are served by the shared GIN: both refuse.
-        for column in (qty, tag, note):
+        # double and blob are never indexed.
+        for column in (qty, doc):
+            assert _state(token, table_id, column["column_id"])["can_create_index"] is False, column["name"]
             r = api("POST", f"/api/v1/tables/{table_id}/columns/{column['column_id']}/index", token)
             assert r.status_code == 422, f"{column['name']}: {r.status_code} {r.text[:200]}"
+            # The refusal is PostgreSQL's own, relayed: the API keeps no second copy of the rule.
+            assert "only text, int and strings columns take a per-column index" in r.text, r.text[:200]
 
-        # Dropping returns the column to unindexed.
-        r = api("DELETE", f"/api/v1/tables/{table_id}/columns/{due['column_id']}/index", token)
-        assert r.status_code == 200, r.text[:200]
-        assert _state(token, table_id, due["column_id"])["index"] is None
+        # Dropping returns each column to unindexed.
+        for column in (due, status, done):
+            r = api("DELETE", f"/api/v1/tables/{table_id}/columns/{column['column_id']}/index", token)
+            assert r.status_code == 200, r.text[:200]
+            assert _state(token, table_id, column["column_id"])["index"] is None
 
         r = api("POST", f"/api/v1/tables/{table_id}/columns/not-a-column/index", token)
         assert r.status_code == 404, r.text[:200]
+
+        # The types that only described a reading can no longer be created.
+        for retired in ("select", "checkbox", "url", "date", "datetime", "number", "string", "tags"):
+            r = api("POST", f"/api/v1/tables/{table_id}/columns", token, json={"name": f"old_{retired}", "type": retired})
+            assert r.status_code == 422, f"{retired}: {r.status_code} {r.text[:200]}"
     finally:
         api("DELETE", f"/api/v1/workspaces/{workspace_id}", token)

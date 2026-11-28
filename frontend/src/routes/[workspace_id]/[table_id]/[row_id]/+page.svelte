@@ -10,7 +10,8 @@
 		getChoiceColor,
 		getTagValues,
 		formatCellDate,
-		isTemporalType
+		isTemporalType,
+		readAs
 	} from '$lib/components/table/table.utils';
 	import { BRAND } from '$lib/UI/brand';
 	import type { Row, Table } from '$lib/types/table';
@@ -28,7 +29,9 @@
 	const sortedCols = $derived(table ? table.columns : []);
 
 	const badgeCols = $derived(
-		sortedCols.filter((c) => ['select', 'tags', 'text', 'number', 'date', 'url'].includes(c.type))
+		sortedCols.filter((c) =>
+			['select', 'tags', 'text', 'number', 'date', 'url'].includes(readAs(c))
+		)
 	);
 
 	const isTicketTable = $derived(!!table?.columns.find((c) => c.name === 'Key'));
@@ -106,7 +109,7 @@
 				{#each badgeCols as col (col.column_id)}
 					{@const val = row.row_data[col.column_id]}
 					{#if val !== null && val !== undefined && String(val) !== '' && !(Array.isArray(val) && val.length === 0)}
-						{#if col.type === 'select'}
+						{#if readAs(col) === 'select'}
 							{@const strVal = val as string}
 							{@const color = getChoiceColor(col, strVal)}
 							<span
@@ -116,7 +119,7 @@
 								<span class="text-xs font-normal text-gray-400">{col.name}:</span>
 								{strVal}
 							</span>
-						{:else if col.type === 'tags'}
+						{:else if readAs(col) === 'tags'}
 							{@const tags = getTagValues(row, col.column_id)}
 							{#each tags as tag (tag)}
 								{@const color = getChoiceColor(col, tag)}
@@ -127,14 +130,14 @@
 									{tag}
 								</span>
 							{/each}
-						{:else if isTemporalType(col.type)}
+						{:else if isTemporalType(readAs(col))}
 							<span
 								class="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs text-gray-600"
 							>
 								<span class="font-normal text-gray-400">{col.name}:</span>
-								{formatCellDate(val, col.type)}
+								{formatCellDate(val, readAs(col))}
 							</span>
-						{:else if col.type === 'url'}
+						{:else if readAs(col) === 'url'}
 							<!-- skip URL badges — shown in doc or fields section -->
 						{:else}
 							<span

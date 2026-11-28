@@ -18,13 +18,13 @@ import time
 
 import pytest
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, reading_of
 
 CRM_COLUMNS = [
     ("Title", "text"),
     ("Doc", "blob"),
     ("Stage", "select"),
-    ("Value", "number"),
+    ("Value", "double"),
     ("Owner", "text"),
     ("Close Date", "date"),
     ("Tags", "tags"),
@@ -75,7 +75,7 @@ def test_crm_template_columns(crm_table, admin_token):
     )
 
     for name, expected_type in CRM_COLUMNS:
-        actual_type = col_map[name]["type"]
+        actual_type = reading_of(col_map[name])
         assert actual_type == expected_type, (
             f"column '{name}': expected type '{expected_type}', got '{actual_type}'"
         )

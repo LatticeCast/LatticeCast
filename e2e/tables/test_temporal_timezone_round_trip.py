@@ -28,7 +28,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api, seed_login_info
+from e2e_base import BASE, api, seed_login_info, column_body
 
 # +8 with no DST, and -5/-4 with DST. A day boundary sits between them, which
 # is the whole point: one instant, two calendar days.
@@ -79,7 +79,7 @@ def test_temporal_timezone_round_trip(browser, workspace, admin_token, snapshot)
 
     col_ids: dict[str, str] = {}
     for name, col_type in ((DATE_COL, "date"), (DATETIME_COL, "datetime")):
-        r = api("POST", f"/api/v1/tables/{table_id}/columns", token, json={"name": name, "type": col_type})
+        r = api("POST", f"/api/v1/tables/{table_id}/columns", token, json=column_body(name, col_type))
         assert r.status_code in (200, 201), f"create {name}: {r.status_code} {r.text[:200]}"
         col = next((c for c in r.json()["columns"] if c["name"] == name), None)
         assert col is not None, f"{name} missing from schema: {r.json()['columns']}"

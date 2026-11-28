@@ -11,18 +11,6 @@ from sqlalchemy import select, text
 from models.table import Table
 from repository._base import RLSRepository
 
-# Indexed column types: numeric/temporal fields have B-tree range indexes;
-# single/multiple choice and boolean fields use the shared JSONB GIN.
-# Free text, URL, and blob columns do not request a per-column index.
-INDEXED_TYPES = {
-    "number",
-    "date",
-    "datetime",
-    "select",
-    "tags",
-    "checkbox",
-}
-
 
 class TableRepository(RLSRepository):
     async def create_from_template(
@@ -153,11 +141,9 @@ class TableRepository(RLSRepository):
         return f"idx_rd_{ws}_{table_id}_{cid}"
 
     async def create_column_index(self, workspace_id: UUID, table_id: int, column_id: str, col_type: str) -> None:
-        """app_user has no DDL — V11 defines create_row_data_index as
-        SECURITY DEFINER owned by dba; V18 fixed it to use
-        immutable_iso_to_ts() for date columns instead of ::NUMERIC."""
-        if col_type not in INDEXED_TYPES:
-            return
+        """Ask PostgreSQL for the column's index. It alone decides which types take one
+        (text, int, strings) and raises invalid_parameter_value for the rest; app_user has
+        no DDL, so create_row_data_index is SECURITY DEFINER, owned by dba."""
         idx_name = self._index_name(workspace_id, table_id, column_id)
         await self.session.execute(
             text("SELECT create_row_data_index(CAST(:ws AS uuid), :idx, CAST(:tid AS bigint), :cid, :ct)").bindparams(

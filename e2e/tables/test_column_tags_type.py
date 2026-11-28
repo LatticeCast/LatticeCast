@@ -38,7 +38,7 @@ import time
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, column_body
 
 COL_NAME = "Labels"
 TAG_CHOICES = [
@@ -83,7 +83,7 @@ def test_tags_add_remove(authed_page, workspace, admin_token, snapshot):
 
     # ── 2. Add tags column ─────────────────────────────────────────────────
     r = api("POST", f"/api/v1/tables/{table_id}/columns", token,
-            json={"name": COL_NAME, "type": "tags", "options": {"choices": TAG_CHOICES}})
+            json=column_body(COL_NAME, "tags", {"choices": TAG_CHOICES}))
     assert r.status_code == 201, f"add tags column: {r.status_code} {r.text[:200]}"
     schema = r.json()
     col = next((c for c in schema["columns"] if c["name"] == COL_NAME), None)

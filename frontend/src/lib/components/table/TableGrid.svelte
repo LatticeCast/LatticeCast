@@ -10,6 +10,8 @@
 		getTagValues,
 		formatCellDate,
 		isTemporalType,
+		readAs,
+		isChecked,
 		formatBlobSize,
 		getBlobCellMetadata,
 		getColumnTypeLabel,
@@ -315,7 +317,7 @@
 
 							<!-- Column dropdown menu -->
 							{#if colMenuId === col.column_id}
-								{@const sl = sortLabels(col.type)}
+								{@const sl = sortLabels(readAs(col))}
 								<div
 									class="absolute top-full left-0 z-30 mt-1 min-w-[168px] rounded-xl border py-1 shadow-xl {T.border} {T.cardBg}"
 									onclick={(e) => e.stopPropagation()}
@@ -344,7 +346,7 @@
 										>
 										Rename
 									</button>
-									{#if col.type === 'select' || col.type === 'tags'}
+									{#if readAs(col) === 'select' || readAs(col) === 'tags'}
 										<button
 											data-testid="col-manage-options-{col.column_id}"
 											class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm {T.secondary} {T.menuItemHover}"
@@ -547,7 +549,7 @@
 											/>
 										</svg>
 									</button>
-									{#if item.col.type === 'select' && item.key !== '(empty)'}
+									{#if readAs(item.col) === 'select' && item.key !== '(empty)'}
 										{@const color = getChoiceColor(item.col, item.key)}
 										<span
 											class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium {color.cls}"
@@ -634,9 +636,9 @@
 									style="width: {getColWidth(col)}px;"
 									onclick={() => {
 										if (
-											col.type !== 'checkbox' &&
-											col.type !== 'tags' &&
-											col.type !== 'blob' &&
+											readAs(col) !== 'checkbox' &&
+											readAs(col) !== 'tags' &&
+											readAs(col) !== 'blob' &&
 											!(editingCell?.rowId === row.row_id && editingCell?.colId === col.column_id)
 										) {
 											onStartEdit(row.row_id, col, row.row_data[col.column_id]);
@@ -644,7 +646,7 @@
 									}}
 								>
 									{#if editingCell?.rowId === row.row_id && editingCell?.colId === col.column_id}
-										{#if col.type === 'select'}
+										{#if readAs(col) === 'select'}
 											{@const choices = getChoices(col)}
 											<span data-testid="select-cell-{row.row_id}-{col.column_id}">
 												<select
@@ -666,9 +668,10 @@
 													{/each}
 												</select>
 											</span>
-										{:else if col.type === 'number'}
+										{:else if readAs(col) === 'number'}
 											<input
 												type="number"
+												step={col.type === 'int' ? 1 : 'any'}
 												class="w-full rounded border border-blue-400 bg-white px-2 py-1 text-sm text-gray-800 outline-none"
 												value={editValue}
 												oninput={(e) =>
@@ -683,9 +686,9 @@
 												}}
 												autofocus
 											/>
-										{:else if isTemporalType(col.type)}
+										{:else if isTemporalType(readAs(col))}
 											<input
-												type={col.type === 'date' ? 'date' : 'datetime-local'}
+												type={readAs(col) === 'date' ? 'date' : 'datetime-local'}
 												class="w-full rounded border border-blue-400 bg-white px-2 py-1 text-sm text-gray-800 outline-none"
 												value={editValue}
 												oninput={(e) =>
@@ -708,7 +711,7 @@
 											/>
 										{:else}
 											<input
-												type={col.type === 'url' ? 'url' : 'text'}
+												type={readAs(col) === 'url' ? 'url' : 'text'}
 												class="w-full rounded border border-blue-400 bg-white px-2 py-1 text-sm text-gray-800 outline-none"
 												value={editValue}
 												oninput={(e) =>
@@ -724,11 +727,12 @@
 												autofocus
 											/>
 										{/if}
-									{:else if col.type === 'checkbox'}
+									{:else if readAs(col) === 'checkbox'}
 										<button
 											data-testid="checkbox-cell-{row.row_id}-{col.column_id}"
-											class="relative inline-flex h-5 w-9 items-center rounded-full transition {row
-												.row_data[col.column_id]
+											class="relative inline-flex h-5 w-9 items-center rounded-full transition {isChecked(
+												row.row_data[col.column_id]
+											)
 												? 'bg-blue-500'
 												: 'bg-gray-200'}"
 											onclick={(e) => {
@@ -737,16 +741,17 @@
 											}}
 											aria-label="Toggle"
 											role="switch"
-											aria-checked={!!row.row_data[col.column_id]}
+											aria-checked={isChecked(row.row_data[col.column_id])}
 										>
 											<span
-												class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition {row
-													.row_data[col.column_id]
+												class="inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition {isChecked(
+													row.row_data[col.column_id]
+												)
 													? 'translate-x-4'
 													: 'translate-x-1'}"
 											></span>
 										</button>
-									{:else if col.type === 'blob' && col.options?.kind === 'text'}
+									{:else if readAs(col) === 'blob' && col.options?.kind === 'text'}
 										{@const blob = getBlobCellMetadata(row, col.column_id)}
 										<button
 											data-testid="doc-open-{row.row_id}-{col.column_id}"
@@ -769,7 +774,7 @@
 											</svg>
 											<span class="min-w-0 truncate text-blue-600">{blob?.filename ?? '+'}</span>
 										</button>
-									{:else if col.type === 'blob'}
+									{:else if readAs(col) === 'blob'}
 										{@const blob = getBlobCellMetadata(row, col.column_id)}
 										{#if blob}
 											<button
@@ -838,7 +843,7 @@
 												}}>Upload</button
 											>
 										{/if}
-									{:else if col.type === 'url'}
+									{:else if readAs(col) === 'url'}
 										{@const urlVal = (row.row_data[col.column_id] as string) ?? ''}
 										{#if urlVal && (urlVal.startsWith('http://') || urlVal.startsWith('https://'))}
 											<a
@@ -864,7 +869,7 @@
 												class="block min-h-[1.5rem] cursor-text py-1 text-gray-300">—</span
 											>
 										{/if}
-									{:else if col.type === 'select'}
+									{:else if readAs(col) === 'select'}
 										{@const selVal = (row.row_data[col.column_id] as string) ?? ''}
 										{#if selVal}
 											{@const color = getChoiceColor(col, selVal)}
@@ -876,7 +881,7 @@
 										{:else}
 											<span class="block min-h-[1.5rem] cursor-pointer py-1 text-gray-300">—</span>
 										{/if}
-									{:else if col.type === 'tags'}
+									{:else if readAs(col) === 'tags'}
 										{@const tagVals = getTagValues(row, col.column_id)}
 										{@const choices = getChoices(col)}
 										{@const available = choices.filter((c) => !tagVals.includes(c.value))}
@@ -937,9 +942,9 @@
 												</div>
 											{/if}
 										</div>
-									{:else if isTemporalType(col.type)}
+									{:else if isTemporalType(readAs(col))}
 										{@const raw = row.row_data[col.column_id]}
-										<span class="font-mono text-sm">{formatCellDate(raw, col.type)}</span>
+										<span class="font-mono text-sm">{formatCellDate(raw, readAs(col))}</span>
 									{:else}
 										{@const cellVal = row.row_data[col.column_id]}
 										{#if col.name === 'Key'}

@@ -13,7 +13,7 @@ Verifies:
 
 import time
 
-from e2e_base import BASE, api, login, seed_login_info
+from e2e_base import BASE, api, login, seed_login_info, reading_of
 
 USER = "lattice"
 SCREENSHOT_DIR = "/output"
@@ -51,7 +51,7 @@ def test_delete_workspace_cascades(browser, admin_token, snapshot):
     TABLE_ID = str(r.json()["table_id"])
     table_data = r.json()
     columns = table_data.get("columns", [])
-    text_col = next((c for c in columns if c["type"] in ("text", "string")), None)
+    text_col = next((c for c in columns if reading_of(c) == "text"), None)
 
     # ── Setup: create row ────────────────────────────────────────────────────
     print("[3] Setup: create row")

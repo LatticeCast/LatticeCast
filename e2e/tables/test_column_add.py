@@ -33,7 +33,7 @@ import time
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, column_body
 
 
 _TS = int(time.time()) % 100000
@@ -85,11 +85,10 @@ def test_column_add(authed_page, workspace, admin_token, snapshot):
 
     # ── Setup: Status select column (for kanban group_by) ─────────────────
     r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
-            json={"name": "Status", "type": "select",
-                  "options": {"choices": [
+            json=column_body("Status", "select", {"choices": [
                       {"value": "todo", "color": ""},
                       {"value": "done", "color": ""},
-                  ]}})
+                  ]}))
     assert r.status_code == 201, f"add Status col: {r.status_code} {r.text[:200]}"
     schema = r.json()
     status_col_id = _col_id(schema, "Status")
@@ -97,14 +96,14 @@ def test_column_add(authed_page, workspace, admin_token, snapshot):
 
     # ── Setup: date columns (for timeline start/end) ───────────────────────
     r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
-            json={"name": "Start", "type": "date"})
+            json=column_body("Start", "date"))
     assert r.status_code == 201, f"add Start col: {r.status_code} {r.text[:200]}"
     schema = r.json()
     start_col_id = _col_id(schema, "Start")
     print(f"[ok] Start col → {start_col_id}")
 
     r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
-            json={"name": "End", "type": "date"})
+            json=column_body("End", "date"))
     assert r.status_code == 201, f"add End col: {r.status_code} {r.text[:200]}"
     schema = r.json()
     end_col_id = _col_id(schema, "End")

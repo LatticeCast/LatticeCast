@@ -36,7 +36,7 @@ import time
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, column_body
 
 COL_NAME = "Done"
 
@@ -76,7 +76,7 @@ def test_checkbox_toggle(authed_page, workspace, admin_token, snapshot):
 
     # ── 2. Add checkbox column ─────────────────────────────────────────────
     r = api("POST", f"/api/v1/tables/{table_id}/columns", token,
-            json={"name": COL_NAME, "type": "checkbox"})
+            json=column_body(COL_NAME, "checkbox"))
     assert r.status_code == 201, f"add checkbox column: {r.status_code} {r.text[:200]}"
     schema = r.json()
     col = next((c for c in schema["columns"] if c["name"] == COL_NAME), None)
@@ -92,7 +92,7 @@ def test_checkbox_toggle(authed_page, workspace, admin_token, snapshot):
 
     # ── 4. Create row with checkbox=false ──────────────────────────────────
     r = api("POST", f"/api/v1/tables/{table_id}/rows", token,
-            json={"row_data": {col_id: False}})
+            json={"row_data": {col_id: ["F"]}})
     assert r.status_code in (200, 201), f"create row: {r.status_code} {r.text[:200]}"
     row = r.json()
     row_id = row["row_id"]
@@ -102,7 +102,7 @@ def test_checkbox_toggle(authed_page, workspace, admin_token, snapshot):
     r = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", token)
     assert r.status_code == 200, f"GET row: {r.status_code} {r.text[:200]}"
     stored = r.json()["row_data"].get(col_id)
-    assert stored is False, f"API: initial checkbox={stored!r}, expected False"
+    assert stored == ["F"], f"API: initial checkbox={stored!r}, expected ['F']"
     print("[ok] API: initial checkbox=False confirmed")
 
     # ── 6. Browser session ─────────────────────────────────────────────────
@@ -157,7 +157,7 @@ def test_checkbox_toggle(authed_page, workspace, admin_token, snapshot):
     r = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", token)
     assert r.status_code == 200, f"GET row after toggle: {r.status_code} {r.text[:200]}"
     stored = r.json()["row_data"].get(col_id)
-    assert stored is True, f"API: after toggle checkbox={stored!r}, expected True"
+    assert stored == ["T"], f"API: after toggle checkbox={stored!r}, expected ['T']"
     print("[ok] API: checkbox=True confirmed after toggle")
 
     # ── step 6: Click again → toggles back to false ────────────────────
@@ -180,7 +180,7 @@ def test_checkbox_toggle(authed_page, workspace, admin_token, snapshot):
     r = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", token)
     assert r.status_code == 200, f"GET row after 2nd toggle: {r.status_code} {r.text[:200]}"
     stored = r.json()["row_data"].get(col_id)
-    assert stored is False, f"API: after 2nd toggle checkbox={stored!r}, expected False"
+    assert stored == ["F"], f"API: after 2nd toggle checkbox={stored!r}, expected ['F']"
     print("[ok] API: checkbox=False confirmed after 2nd toggle")
 
     # ── step 8: Durability — toggle to true, navigate away and back ────
@@ -220,7 +220,7 @@ def test_checkbox_toggle(authed_page, workspace, admin_token, snapshot):
     r = api("GET", f"/api/v1/tables/{table_id}/rows/{row_id}", token)
     assert r.status_code == 200, f"GET row durability: {r.status_code} {r.text[:200]}"
     stored = r.json()["row_data"].get(col_id)
-    assert stored is True, f"API durability: checkbox={stored!r}, expected True"
+    assert stored == ["T"], f"API durability: checkbox={stored!r}, expected ['T']"
     print("[ok] API: durability confirmed checkbox=True")
 
     snap(page, "chk_05_durability_pass", snapshot)

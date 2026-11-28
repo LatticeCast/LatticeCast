@@ -8,16 +8,23 @@
 /** UUID string — always a 36-char hyphenated UUID */
 export type UUID = string;
 
-export type ColumnType =
+/** What the database stores. A column has exactly one of these. */
+export type ColumnType = 'text' | 'int' | 'double' | 'strings' | 'blob';
+
+/**
+ * How this client reads a column: its storage type plus `options.display`.
+ * The server stores `display` and never interprets it, so a link, a select, a
+ * checkbox or a date exists only here.
+ */
+export type ColumnReading =
 	| 'text'
-	| 'string'
+	| 'url'
+	| 'select'
+	| 'checkbox'
 	| 'number'
 	| 'date'
 	| 'datetime'
-	| 'select'
 	| 'tags'
-	| 'checkbox'
-	| 'url'
 	| 'blob';
 
 /** The rendering/picker hint for a single-file blob column. */
@@ -48,7 +55,7 @@ export interface ColumnOptions {
 	accept?: string;
 	/** Free-text annotation for the column. */
 	note?: string;
-	/** How to read the stored value (date, link, checkbox, select…). Advisory: the server never interprets it. */
+	/** How this client reads the stored value: url, select (text); date, datetime (int); checkbox (strings, otherwise tags). */
 	display?: string;
 }
 

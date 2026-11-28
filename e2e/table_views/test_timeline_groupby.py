@@ -27,7 +27,7 @@ import time
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api, login
+from e2e_base import BASE, api, login, column_body
 
 
 def _col_id(schema: dict, name: str) -> str:
@@ -71,30 +71,28 @@ def test_timeline_groupby_persists(authed_page, workspace, admin_token, snapshot
 
     # ── 3. Add date + select columns ─────────────────────────────────────────
     r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
-            json={"name": "Start", "type": "date"})
+            json=column_body("Start", "date"))
     assert r.status_code == 201, f"add Start col: {r.status_code} {r.text[:200]}"
     schema = r.json()
     start_col_id = _col_id(schema, "Start")
     print(f"[ok] Start col → {start_col_id}")
 
     r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
-            json={"name": "End", "type": "date"})
+            json=column_body("End", "date"))
     assert r.status_code == 201, f"add End col: {r.status_code} {r.text[:200]}"
     schema = r.json()
     end_col_id = _col_id(schema, "End")
     print(f"[ok] End col → {end_col_id}")
 
     r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
-            json={"name": "Status", "type": "select",
-                  "options": {"choices": [{"label": "Todo"}, {"label": "Done"}]}})
+            json=column_body("Status", "select", {"choices": [{"label": "Todo"}, {"label": "Done"}]}))
     assert r.status_code == 201, f"add Status col: {r.status_code} {r.text[:200]}"
     schema = r.json()
     status_col_id = _col_id(schema, "Status")
     print(f"[ok] Status col → {status_col_id}")
 
     r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", token,
-            json={"name": "Category", "type": "select",
-                  "options": {"choices": [{"label": "A"}, {"label": "B"}]}})
+            json=column_body("Category", "select", {"choices": [{"label": "A"}, {"label": "B"}]}))
     assert r.status_code == 201, f"add Category col: {r.status_code} {r.text[:200]}"
     schema = r.json()
     category_col_id = _col_id(schema, "Category")

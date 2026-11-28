@@ -32,7 +32,7 @@ from __future__ import annotations
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, reading_of
 
 NEW_COLOR = "#e74c3c"
 # Browser normalizes #RRGGBB → rgb(R, G, B) in getAttribute('style')
@@ -63,7 +63,7 @@ def test_column_option_colors(authed_page, pm_table, admin_token, snapshot):
 
     # ── API verify: find Status select column and its 'todo' choice ────────
     status_col = next(
-        (c for c in columns if c.get("name") == "Status" and c.get("type") == "select"),
+        (c for c in columns if c.get("name") == "Status" and reading_of(c) == "select"),
         None,
     )
     assert status_col, (

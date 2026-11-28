@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-from e2e_base import BASE, api
+from e2e_base import BASE, api, column_body, epoch_ms
 
 
 ADMIN_USER = "lattice"
@@ -91,9 +91,7 @@ def test_row_update(authed_page, admin_token, snapshot):
         ]
         col_ids = {}
         for name, ctype, options in col_defs:
-            payload: dict = {"name": name, "type": ctype}
-            if options:
-                payload["options"] = options
+            payload = column_body(name, ctype, options)
             r = api("POST", f"/api/v1/tables/{TABLE_ID}/columns", admin_token, json=payload)
             assert r.status_code in (200, 201), f"create column {name!r}: {r.status_code} {r.text[:200]}"
             schema = r.json()
@@ -106,8 +104,8 @@ def test_row_update(authed_page, admin_token, snapshot):
         initial_data = {
             col_ids["Name"]: "Alice",
             col_ids["Status"]: "todo",
-            col_ids["Done"]: False,
-            col_ids["Due"]: "2026-01-01",
+            col_ids["Done"]: ["F"],
+            col_ids["Due"]: epoch_ms("2026-01-01"),
         }
         r = api("POST", f"/api/v1/tables/{TABLE_ID}/rows", admin_token, json={"row_data": initial_data})
         assert r.status_code == 201, f"create row: {r.status_code} {r.text[:200]}"
@@ -213,7 +211,7 @@ def test_row_update(authed_page, admin_token, snapshot):
 
         row_api = get_row_from_api(admin_token, TABLE_ID, row_id)
         db_done = row_api["row_data"].get(col_ids["Done"])
-        assert db_done is True, f"Checkbox toggle DB verify failed: expected True, got {db_done!r}"
+        assert db_done == ["T"], f"Checkbox toggle DB verify failed: expected ['T'], got {db_done!r}"
         print("[ok] checkbox cell: false → true (DB verified)")
 
         # ── Test 4: Edit date cell (Due: 2026-01-01 → 2026-12-31) ────────
