@@ -16,12 +16,13 @@
 		currentTableId,
 		workspaces as workspacesStore,
 		tables as tablesStore,
-		initSidebar
+		initWorkspacesTables
 	} from '$lib/stores/table_schemas.store';
 	import type { Table, Workspace } from '$lib/types/table';
 	import { T } from '$lib/UI/theme.svelte';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
-	import { isUuid, navigate, navigateToTable } from '$lib/utils/url';
+	import { findWorkspace, workspacePath } from '$lib/utils/slugs';
+	import { navigate, navigateToTable } from '$lib/utils/url';
 	let loading = $state(true);
 	let error = $state('');
 	let showCreateWorkspace = $state(false);
@@ -31,9 +32,7 @@
 		if (!$workspacesStore.length) return null;
 		const wsParam = $page.params.workspace_id;
 		if (!wsParam) return null;
-		return isUuid(wsParam)
-			? ($workspacesStore.find((w) => w.workspace_id === wsParam) ?? null)
-			: ($workspacesStore.find((w) => w.workspace_name === wsParam) ?? null);
+		return findWorkspace(wsParam, $workspacesStore);
 	});
 
 	const activeTables = $derived(
@@ -82,7 +81,7 @@
 		loading = true;
 		error = '';
 		try {
-			await initSidebar();
+			await initWorkspacesTables();
 			rememberActiveWorkspace();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load data';
@@ -93,7 +92,7 @@
 
 	function rememberActiveWorkspace() {
 		if (!activeWorkspace || typeof localStorage === 'undefined') return;
-		localStorage.setItem('lastWorkspace', activeWorkspace.workspace_name);
+		localStorage.setItem('lastWorkspace', activeWorkspace.workspace_id);
 	}
 
 	function openWsSettings(ws: Workspace, e: MouseEvent) {
@@ -125,7 +124,7 @@
 			});
 			closeWsSettings();
 			if (isActive) {
-				goto(`/${encodeURIComponent(updated.workspace_name)}/`, { replaceState: true });
+				goto(`${workspacePath(updated, $workspacesStore)}/`, { replaceState: true });
 			}
 		} catch (e) {
 			wsSettingsError = e instanceof Error ? e.message : 'Failed to rename workspace';
@@ -145,7 +144,7 @@
 			closeWsSettings();
 			const next = $workspacesStore[0];
 			if (next) {
-				goto(`/${encodeURIComponent(next.workspace_name)}/`, { replaceState: true });
+				goto(`${workspacePath(next, $workspacesStore)}/`, { replaceState: true });
 			} else {
 				goto('/', { replaceState: true });
 			}
@@ -292,7 +291,7 @@
 					<div class="flex flex-wrap justify-center gap-2">
 						{#each $workspacesStore as ws (ws.workspace_id)}
 							<a
-								href="/{encodeURIComponent(ws.workspace_name)}/"
+								href="{workspacePath(ws, $workspacesStore)}/"
 								class="rounded-2xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
 							>
 								{ws.workspace_name}
@@ -310,7 +309,7 @@
 				{#each $workspacesStore as ws (ws.workspace_id)}
 					<a
 						data-testid="workspace-tab-{ws.workspace_id}"
-						href="/{encodeURIComponent(ws.workspace_name)}/"
+						href="{workspacePath(ws, $workspacesStore)}/"
 						class="rounded-2xl px-4 py-2 text-sm font-medium whitespace-nowrap transition {activeWorkspace.workspace_id ===
 						ws.workspace_id
 							? 'bg-blue-600 text-white'
@@ -337,7 +336,7 @@
 						<button
 							data-testid="home-workspace-members-{activeWorkspace.workspace_id}"
 							onclick={() =>
-								navigate(`/${encodeURIComponent(activeWorkspace.workspace_name)}/members`)}
+								navigate(`${workspacePath(activeWorkspace, $workspacesStore)}/members`)}
 							class="rounded-lg p-1 {T.muted} transition {T.hoverBg}"
 							aria-label="Workspace members"
 							title="Workspace members"
@@ -468,7 +467,7 @@
 		onClose={() => (showCreateWorkspace = false)}
 		onCreated={(ws) => {
 			showCreateWorkspace = false;
-			goto(`/${encodeURIComponent(ws.workspace_name)}/`);
+			goto(`${workspacePath(ws, $workspacesStore)}/`);
 		}}
 	/>
 {/if}

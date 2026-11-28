@@ -38,30 +38,24 @@ rows              → (table_id, row_id); row_data JSONB keyed by column UUID
 RustFS            → one-file blob cells at {workspace_id}/{table_id}/rows/{row_id}/blobs/{column_id}/{object}
 ```
 
-Children (`rows`, `table_views`) carry no `workspace_id`; the workspace is the parent table's, and RLS resolves permitted `table_id`s from workspace grants. Every RDS timestamp is a UTC `TIMESTAMPTZ`; `date`/`datetime` cells inside `row_data` are epoch-millisecond numbers. See `llm.root.md` and `llm.core.md`.
+Children (`rows`, `table_views`) carry no `workspace_id`; the workspace is the parent table's, and RLS resolves permitted `table_id`s from workspace grants. Every RDS timestamp is a UTC `TIMESTAMPTZ`; dates inside `row_data` are `int` cells of epoch milliseconds. See `llm.root.md` and `llm.core.md`.
 
 ## Column Types
 
-The API and frontend accept these ten column types. Each cell is stored under its column UUID in `rows.row_data`.
+A column has a storage type, and the client chooses how to read it. Each cell is stored under its column UUID in `rows.row_data`.
 
-| Type | Cell value | Meaning | Column index |
-|------|------------|---------|--------------|
-| `text` | String | Free-form text | None |
-| `string` | String | String-valued field | None |
-| `number` | Number | Numeric value, integer or fractional | None by product rule (indexes made before 0.93.0 remain; drop with `DELETE …/index`) |
-| `date` | Number | UTC epoch milliseconds, displayed as a date | B-tree on request (not used by any query yet, see below) |
-| `datetime` | Number | UTC epoch milliseconds, displayed with time | B-tree on request (not used by any query yet, see below) |
-| `select` | String | One value from the column's configured choices | Shared GIN for containment |
-| `tags` | Array of strings | Multiple selected tags | Shared GIN for containment |
-| `checkbox` | Boolean | Checked or unchecked | Shared GIN for containment |
-| `url` | String | URL value | None |
-| `blob` | Object metadata | One file in S3-compatible storage; the file body is outside PostgreSQL | None |
+| Type | Cell value | Read as (`options.display`) | Column index on request |
+|------|------------|-----------------------------|-------------------------|
+| `text` | String | text, `url`, `select` | B-tree |
+| `int` | Integer (BIGINT) | integer, `date`, `datetime` (UTC epoch milliseconds) | B-tree |
+| `double` | Number | decimal | None |
+| `strings` | Array of strings | tags, `checkbox` (`["T"]` / `["F"]`) | GIN |
+| `blob` | Object metadata | one file in S3-compatible storage | None |
 
-`email` and `phone` are not accepted column types. Blob cells are written through their dedicated blob endpoints.
-The shared GIN covers the whole `row_data` JSONB value; "None" means no separate column index is created.
-A new table has no columns; `POST /tables/template/{basic,pm,crm,workflow}` seeds a starter set. Adding a column never creates an index (0.93.0). A per-column B-tree is not a speed-up yet: LatticeQL and the grid's row query do not use it, and creating or dropping one blocks writes to the shared `rows` table while it runs. A column's options may carry `note` (a free-text annotation, entered in the add-column dialog and shown under the column name) and `display` (a hint for how a client reads the stored value, such as `date` or `link`); the server and LatticeQL never interpret `display`.
+The server stores `display` and `note` and never interprets them. Blob cells are written through their dedicated blob endpoints.
+A new table has no columns; `POST /tables/template/{basic,pm,crm,workflow}` seeds a starter set. Adding a column never creates an index. One GIN over `row_data` serves containment queries. A per-column index is not a proven speed-up yet: LatticeQL and the grid's row query do not use it, and creating or dropping one blocks writes to the shared `rows` table while it runs.
 
-**Deprecated types.** `string` (same as `text`), `select`, `checkbox` and `url` only describe how to read a stored string, so they are deprecated in favour of `text` plus `options.display`; `number`, `date` and `datetime` will move to integer or double storage plus `options.display`. All keep working. Ordering comparisons in LatticeQL (`<`, `<=`, `>`, `>=`) on `number`, `date` and `datetime` columns are numeric.
+Columns created before 0.94.0 keep their old type until converted with `migration/convert_column_type.py`.
 
 ## Tech Stack
 

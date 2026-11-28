@@ -57,6 +57,34 @@ Every endpoint that needs an admin is under `/api/v1/admin/`, and
 their own. `backend/tests/test_admin_routes.py` fails if an `/admin` route lacks
 the guard or an admin-only route sits outside `/admin`.
 
+## A workspace may have no owner
+
+Removing or demoting the last owner of a workspace is allowed by product
+decision, including an owner doing it to themselves. Zero owners is a valid
+state.
+
+- Do not "fix" this in a review by adding a check, constraint or trigger that
+  requires an owner, in the API or the database.
+- Consequence: only an owner may rename or delete a workspace or manage its
+  members, so none of those is possible through the API once it has no owner.
+
+## Workspace names are not unique
+
+Two workspaces may have the same `workspace_name`, by product decision.
+`workspace_id` is the identity.
+
+- Do not add a unique constraint or an "already exists" check on create or
+  rename.
+- An API call that names a workspace by `workspace_name` gets 409 when several
+  visible workspaces share it. The server never picks one.
+- The web client looks names up from the URL, so it adds a creation-order
+  suffix to duplicates, 0-based with the 0 unwritten: `seo`, `seo-1`, `seo-2`
+  (`frontend/src/lib/utils/slugs.ts`). A real name keeps itself, so a
+  workspace literally called `seo-1` takes that URL and the duplicate moves to
+  `seo-2`. Tables follow the same rule. The suffix counts only what the
+  signed-in user can see, and it shifts when an earlier namesake is deleted or
+  renamed.
+
 ## Horizontal scaling direction (planned, not yet implemented)
 
 Recorded ahead of implementation so these aren't rediscovered or
@@ -122,41 +150,21 @@ first. Only adopt this path, and only then:
   reopens a closed correctness question for no benefit if Option A would
   have covered the actual scaling need.
 
-## Column indexes are created on demand, and the type set is shrinking (0.93.0)
+## Column types are storage only, and indexes are on demand (0.94.0)
 
 Every table's rows live in one physical `rows` table and the user picks each
 column's type at run time, so the platform cannot know which columns will be
-queried. An index nobody uses still taxes every INSERT and UPDATE of every
-table, and a `::numeric` expression index can make a write fail when a cell
-holds junk. So:
+queried, and an index nobody uses still taxes every write of every table.
 
-- A blank table has no columns; the user decides which to add, and only a
-  template (`basic`, `pm`, `crm`, `workflow`) seeds a starter set.
-- `add_column` and the templates create no index (V79). Equality on select/tags/checkbox/text is
-  served by the shared `row_data` GIN; a per-column btree is for range queries
-  and is created only through `POST /tables/{id}/columns/{column_id}/index`.
+- The storage types are `text`, `int`, `double`, `strings`, `blob`. A date, a
+  link, a select, tags and a checkbox are readings of those, chosen by the
+  client in `options.display`. The server never reads it.
+- Converting an old column depends on its data and meaning, so no migration
+  does it; an operator or an LLM converts one column at a time.
+- A blank table has no columns; only a template seeds a starter set.
+- No index is created automatically. On request: btree for `text` and `int`,
+  GIN for `strings`. `double` is refused by product rule. PostgreSQL decides.
 - Indexes of deleted tables are reclaimed out of band
-  (`drop_orphan_row_indexes`), not by a trigger: `DROP INDEX` takes an
-  exclusive lock on the shared `rows` table, which inside a cascading delete
-  would stall or deadlock every tenant.
-- Only integer-valued types may be indexed (`date`, `datetime`: epoch-ms).
-  `number` is refused as a product rule (it is a double, not an integer), not
-  because PostgreSQL cannot index it; indexes created for it before 0.93.0
-  stay until dropped.
-- Open, not solved in 0.93.x: nothing uses a per-column btree. LatticeQL
-  compares through a different expression and resolves `table_id` by
-  subquery, so the partial index (`WHERE table_id = N`) never applies;
-  `query_rows` filters by containment and sorts by row columns. And
-  `CREATE`/`DROP INDEX` runs inside the request, not `CONCURRENTLY`, so it
-  blocks every tenant's writes to `rows` while it runs. Until both are fixed
-  the index endpoints are bookkeeping, not a performance feature.
-- Direction (not finished): storage types become `text`, `int`, `double`,
-  `tags`, `blob`; date, checkbox, select, url become a client-side reading of
-  those, carried in `options.display` and annotated by `options.note`.
-  `select`, `checkbox`, `url`, `string` are deprecated now and keep working.
-  Existing `number` columns convert to `int` only if every stored value is an
-  integer, otherwise `double`; stage and prod data decide this, so it is not
-  decided here.
-- LQL ordering comparisons are numeric for number/date/datetime, guarded so an
-  empty or non-numeric cell is NULL rather than an error. That guard means the
-  comparison does not use a btree on `(row_data->>col)::numeric` yet.
+  (`drop_orphan_row_indexes`): `DROP INDEX` locks the shared `rows` table.
+- Open: no query is shown to use a per-column index, and `CREATE`/`DROP INDEX`
+  runs inside the request, not `CONCURRENTLY`, blocking writes to `rows`.

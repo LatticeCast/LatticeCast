@@ -11,8 +11,8 @@
 		workspaces,
 		tables,
 		tablesByWorkspace,
-		initSidebar,
-		resetSidebar
+		initWorkspacesTables,
+		resetWorkspacesTables
 	} from '$lib/stores/table_schemas.store';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { hydrateFromServer } from '$lib/stores/settings.store';
@@ -23,8 +23,9 @@
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
 	import Sidebar from '$lib/components/sidebar/Sidebar.svelte';
 	import TopBar from '$lib/components/layout/TopBar.svelte';
-	import { isUuid, prettifyWorkspacePathname, navigate } from '$lib/utils/url';
+	import { prettifyWorkspacePathname, navigate } from '$lib/utils/url';
 	import { findTableForPath } from '$lib/utils/table-route';
+	import { findWorkspace, tableSlugs, workspacePath, workspaceSlug } from '$lib/utils/slugs';
 
 	let { children } = $props();
 	let menuOpen = $state(false);
@@ -32,8 +33,8 @@
 
 	const expandedWorkspaces = new SvelteSet<string>();
 
-	async function refreshSidebar() {
-		await initSidebar();
+	async function refreshWorkspacesTables() {
+		await initWorkspacesTables();
 		expandedWorkspaces.clear();
 		for (const ws of $workspaces) {
 			if ($tablesByWorkspace[ws.workspace_id]?.length) expandedWorkspaces.add(ws.workspace_id);
@@ -45,16 +46,18 @@
 		if (!browser) return;
 		const wsParam = $page.params.workspace_id;
 		if (!wsParam) return;
-		const ws = isUuid(wsParam)
-			? $workspaces.find((w) => w.workspace_id === wsParam)
-			: $workspaces.find((w) => w.workspace_name.toLowerCase() === wsParam.toLowerCase());
+		const ws = findWorkspace(wsParam, $workspaces);
 		if (!ws) return;
-		let newPathname = prettifyWorkspacePathname($page.url.pathname, wsParam, ws.workspace_name);
+		const wsName = workspaceSlug(ws, $workspaces);
+		let newPathname = prettifyWorkspacePathname($page.url.pathname, wsParam, wsName);
 		const tableParam = $page.params.table_id;
 		if (tableParam) {
 			const table = findTableForPath(wsParam, tableParam, $workspaces, $tables);
 			if (!table) return;
-			newPathname = `/${encodeURIComponent(ws.workspace_name)}/${encodeURIComponent(table.table_name)}`;
+			const tableName = [...tableSlugs(ws.workspace_id, $tables)].find(
+				([item]) => item.table_id === table.table_id
+			)?.[1];
+			newPathname = `/${encodeURIComponent(wsName)}/${encodeURIComponent(tableName ?? table.table_name)}`;
 			if ($page.params.row_id) newPathname += `/${encodeURIComponent($page.params.row_id)}`;
 		}
 		if (newPathname !== $page.url.pathname) {
@@ -73,11 +76,11 @@
 
 		return authStore.subscribe((auth) => {
 			if (auth?.accessToken) {
-				void refreshSidebar();
+				void refreshWorkspacesTables();
 				void hydrateUserConfig(auth.accessToken);
 				return;
 			}
-			resetSidebar();
+			resetWorkspacesTables();
 			expandedWorkspaces.clear();
 		});
 	});
@@ -100,7 +103,7 @@
 
 	function onWorkspaceCreated(ws: Workspace) {
 		showCreateWorkspace = false;
-		navigate(`/${encodeURIComponent(ws.workspace_name)}/`);
+		navigate(`${workspacePath(ws, $workspaces)}/`);
 	}
 
 	afterNavigate(({ from }) => {
@@ -108,16 +111,15 @@
 		if (!from || !$authStore?.accessToken) return;
 		const wsId = $page.params.workspace_id;
 		if (!wsId) return;
-		const decoded = decodeURIComponent(wsId);
-		const ws = $workspaces.find((w) => w.workspace_id === wsId || w.workspace_name === decoded);
+		const ws = findWorkspace(wsId, $workspaces);
 		if (!ws) {
-			refreshSidebar();
+			refreshWorkspacesTables();
 			return;
 		}
 		const tableParam = $page.params.table_id;
 		if (tableParam) {
 			const known = !!findTableForPath(wsId, tableParam, $workspaces, $tables);
-			if (!known) refreshSidebar();
+			if (!known) refreshWorkspacesTables();
 		}
 	});
 

@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from middleware.auth import get_current_user, get_rls_session
@@ -20,6 +20,7 @@ from models.workspace import (
 )
 from repository.user import resolve_user_by_email
 from repository.workspace import WorkspaceRepository
+from util.pg_errors import http_error_for
 
 
 async def _resolve_member_user(
@@ -51,8 +52,6 @@ async def _resolve_member_user(
         status_code=status.HTTP_404_NOT_FOUND, detail="User not found — provide user_id, user_name, or user_email"
     )
 
-
-RESERVED_WORKSPACE_NAMES = frozenset({"settings", "config", "members", "login", "callback", "debug", "api"})
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
 
@@ -96,17 +95,16 @@ async def create_workspace(
     workspace and read+write+owner rows atomically. It must bypass RLS at
     INSERT time because the creator is not yet a member.
     """
-    if data.workspace_name.lower() in RESERVED_WORKSPACE_NAMES:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That workspace name is reserved")
     try:
         result = await session.execute(text("SELECT create_workspace(:name)").bindparams(name=data.workspace_name))
         await session.commit()
-    except IntegrityError as exc:
+    except DBAPIError as exc:
+        # PostgreSQL refuses a reserved name; relay its refusal.
         await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="A workspace with that name already exists",
-        ) from exc
+        mapped = http_error_for(exc)
+        if mapped is None:
+            raise
+        raise mapped from exc
     created = result.scalar_one()
     return WorkspaceResponse(
         workspace_id=created["workspace_id"],
@@ -176,11 +174,9 @@ async def update_member_role(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Update a member's access level (owner only). Blocks demoting the last owner.
+    """Update a member's access level (owner only).
 
-    One roster read answers both questions about the target — that it is a
-    member at all, and whether it currently holds owner. Readable because the
-    caller is an owner (workspace_members_owner, V52).
+    The last owner may be demoted; a workspace may have no owner (decision.md).
     """
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
@@ -195,9 +191,6 @@ async def update_member_role(
     target_member = await repo.get_member_with_info(workspace.workspace_id, target.user_id)
     if target_member is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
-    if data.level != "owner" and target_member.level == "owner":
-        if await repo.count_owners(workspace.workspace_id) <= 1:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot demote the last owner")
     await repo.grant(workspace.workspace_id, target.user_id, data.level)
     return await repo.get_member_with_info(workspace.workspace_id, target.user_id)
 
@@ -211,9 +204,7 @@ async def remove_member(
 ):
     """Remove a member from a workspace (owner only). member_user_id can be UUID or user_name.
 
-    One roster read answers both questions about the target — that it is a
-    member at all, and whether it currently holds owner. Readable because the
-    caller is an owner (workspace_members_owner, V52).
+    The last owner may be removed; a workspace may have no owner (decision.md).
     """
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
@@ -225,12 +216,8 @@ async def remove_member(
     except ValueError:
         pass
     member = await _resolve_member_user(member_data, session)
-    target_member = await repo.get_member_with_info(workspace.workspace_id, member.user_id)
-    if target_member is None:
+    if await repo.get_member_with_info(workspace.workspace_id, member.user_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Member not found")
-    if target_member.level == "owner":
-        if await repo.count_owners(workspace.workspace_id) <= 1:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot remove the last owner")
     await repo.remove_member(workspace_id=workspace.workspace_id, user_id=member.user_id)
 
 
@@ -259,27 +246,22 @@ async def update_workspace(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Update workspace name (owner only). workspace_name must be globally unique."""
-    if data.workspace_name.lower() in RESERVED_WORKSPACE_NAMES:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="That workspace name is reserved")
+    """Update workspace name (owner only). Names need not be unique."""
     repo = WorkspaceRepository(session)
     workspace = await _get_workspace_or_404(workspace_id, repo)
     await _require_owner(workspace.workspace_id, user.user_id, repo)
 
-    # Check uniqueness: workspace_name is globally unique
-    conflict = await session.execute(
-        select(Workspace).where(
-            func.lower(Workspace.workspace_name) == data.workspace_name.lower(),
-            Workspace.workspace_id != workspace.workspace_id,
-        )
-    )
-    if conflict.scalars().first() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A workspace with that name already exists")
-
     workspace.workspace_name = data.workspace_name
     workspace.updated_at = datetime.now(UTC)
     session.add(workspace)
-    await session.commit()
+    try:
+        await session.commit()
+    except DBAPIError as exc:
+        await session.rollback()
+        mapped = http_error_for(exc)
+        if mapped is None:
+            raise
+        raise mapped from exc
     await session.refresh(workspace)  # refreshes attached instance — safe
     return await _build_workspace_response(workspace, user.user_id, repo)
 

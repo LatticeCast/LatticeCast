@@ -502,7 +502,7 @@ def verify(psql_fn) -> list[str]:
     # V46 removes caller-controlled identities from self-service functions.
     for function_name, signature in [
         ("create_workspace", "character varying"),
-        ("get_user_sidebar", ""),
+        ("get_workspaces_tables", ""),
         ("get_current_user_password_hash", ""),
         ("set_current_user_password_hash", "character varying"),
     ]:
@@ -516,7 +516,9 @@ def verify(psql_fn) -> list[str]:
 
     for old_function, signature in [
         ("create_workspace", "character varying, uuid"),
+        ("get_workspaces_tables", "uuid"),
         ("get_user_sidebar", "uuid"),
+        ("get_user_sidebar", ""),
     ]:
         result = psql_fn(
             "SELECT to_regprocedure("
@@ -842,6 +844,33 @@ def verify(psql_fn) -> list[str]:
         """)
     except subprocess.CalledProcessError as exc:
         errors.append(f"V79 ORPHAN INDEX PROBE: {exc.stderr}")
+
+    # V81: PostgreSQL itself refuses a reserved workspace name and a blank view name.
+    try:
+        psql_fn("""
+        BEGIN;
+        DO $probe$
+        BEGIN
+            BEGIN
+                INSERT INTO public.workspaces (workspace_name) VALUES ('API');
+                RAISE EXCEPTION 'a reserved workspace name was accepted';
+            EXCEPTION WHEN check_violation THEN
+                NULL;
+            END;
+            BEGIN
+                UPDATE public.table_views SET config = config || '{"name": " "}'::JSONB;
+                IF FOUND THEN
+                    RAISE EXCEPTION 'a blank view name was accepted';
+                END IF;
+            EXCEPTION WHEN check_violation THEN
+                NULL;
+            END;
+        END;
+        $probe$;
+        ROLLBACK;
+        """)
+    except subprocess.CalledProcessError as exc:
+        errors.append(f"V81 NAME CHECK PROBE: {exc.stderr}")
 
     # V73: template seed functions must emit the final blob/text schema directly.
     # The dispatcher must no longer depend on a legacy doc conversion pass.

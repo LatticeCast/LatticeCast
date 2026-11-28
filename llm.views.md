@@ -19,8 +19,7 @@ dashboard block -> POST /tables/{table_id}/views/{view_name}/blocks/{block_id}/q
   `(table_id, view_name, block_id)`. LQL is server-compiled against workspace
   schema so it keeps membership/RLS scope; invalidate schema cache after column
   changes.
-- LQL `<`, `<=`, `>`, `>=` are numeric when either side is a `number`,
-  `date` or `datetime` column or a numeric literal (LatticeQL 0.6.3); empty or
-  non-numeric cells read as NULL. A non-numeric literal is a 400; a database
-  type error from the query is a 422. `select`, `bool`, `url` kinds are
-  deprecated for `text` plus a display hint (LatticeQL 0.6.4).
+- LQL `<`, `<=`, `>`, `>=` are numeric when either side is an `int` or `double`
+  column or a numeric literal; empty or non-numeric cells read as NULL. A
+  non-numeric literal is a 400; a database type error from the query is a 422.
+  `bucket()` takes an `int` column (epoch milliseconds). LatticeQL 0.6.5.

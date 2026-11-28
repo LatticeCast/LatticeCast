@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.94.0 — 2026-11-28
+
+**Breaking changes**
+
+- Column types are storage types only: `text`, `int`, `double`, `strings` (array of strings), `blob`.
+  The API refuses `string`, `number`, `date`, `datetime`, `select`, `tags`, `checkbox` and `url`.
+  How a column is read is the client's choice, in `options.display` (`url`, `select`; `date`,
+  `datetime`; `checkbox`, otherwise tags).
+- A date cell is an integer (epoch milliseconds); a date string is refused. A checkbox is
+  `["T"]` / `["F"]`.
+- Existing columns are not converted by the migration. Convert each with
+  `migration/convert_column_type.py` (`list`, then `convert` one column; dump first).
+- `get_user_sidebar()` is now `get_workspaces_tables()` (V82); the endpoint is unchanged.
+
+**Other changes**
+
+- Per-column index on request: btree for `text` and `int`, GIN for `strings`, none for `double` or
+  `blob`. PostgreSQL decides and the API relays its refusal. No query is shown to use them yet.
+- Workspace names need not be unique. The API answers 409 to a name shared by several visible
+  workspaces; the web client addresses them as `name`, `name-1`, `name-2`.
+- The last owner of a workspace may be demoted or removed; zero owners is allowed.
+- PostgreSQL refuses reserved workspace names and blank view names (V81).
+- Needs LatticeQL 0.6.5 (`int`, `double`, `strings` kinds).
+
 ## 0.93.1 — 2026-11-28
 
 - A column's note is now a real feature: the add-column dialog has a Note field, and the grid shows

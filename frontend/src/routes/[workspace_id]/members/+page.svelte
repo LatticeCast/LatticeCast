@@ -14,6 +14,7 @@
 	import { workspaceMembers } from '$lib/stores/workspace_members.store';
 	import type { WorkspaceAccessLevel, WorkspaceMemberFull } from '$lib/types/table';
 	import { get } from 'svelte/store';
+	import { findWorkspace } from '$lib/utils/slugs';
 	import {
 		currentWorkspace,
 		workspaces,
@@ -56,16 +57,10 @@
 				initialized = true;
 			}
 
-			let workspace = get(currentWorkspace);
-			if (
-				!workspace ||
-				(workspace.workspace_id !== wsParam && workspace.workspace_name !== wsParam)
-			) {
+			let workspace = findWorkspace(wsParam, get(workspaces));
+			if (!workspace) {
 				await fetchWorkspaces();
-				workspace =
-					get(workspaces).find(
-						(item) => item.workspace_id === wsParam || item.workspace_name === wsParam
-					) ?? null;
+				workspace = findWorkspace(wsParam, get(workspaces));
 			}
 			if (!workspace) {
 				goto('/');

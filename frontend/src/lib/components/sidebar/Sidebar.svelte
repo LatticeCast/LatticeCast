@@ -3,6 +3,7 @@
 	import { authStore } from '$lib/stores/auth.store';
 	import { currentTable, workspaces, tablesByWorkspace } from '$lib/stores/table_schemas.store';
 	import { navigate, navigateToTable } from '$lib/utils/url';
+	import { workspacePath } from '$lib/utils/slugs';
 	import type { SvelteSet } from 'svelte/reactivity';
 
 	let {
@@ -63,7 +64,7 @@
 								</button>
 								<button
 									data-testid="sidebar-workspace-{ws.workspace_id}"
-									onclick={() => navigate(`/${encodeURIComponent(ws.workspace_name)}/`)}
+									onclick={() => navigate(`${workspacePath(ws, $workspaces)}/`)}
 									class="flex min-w-0 flex-1 items-center gap-2 rounded-r-lg px-1.5 py-1.5 text-left transition hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-gray-800 dark:hover:text-blue-400"
 								>
 									<span class="truncate font-medium">{ws.workspace_name}</span>

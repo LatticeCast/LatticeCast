@@ -1,35 +1,26 @@
 import { get } from 'svelte/store';
 
-import { fetchSidebar } from '$lib/backend/table_schemas';
-import { tables, workspaces, type SidebarTable } from '$lib/stores/table_schemas.store';
+import { fetchWorkspacesTables } from '$lib/backend/table_schemas';
+import { tables, workspaces, type PreloadTable } from '$lib/stores/table_schemas.store';
 import type { Workspace } from '$lib/types/table';
-import { isUuid } from './url';
+import { findWorkspace, tableSlugs } from './slugs';
 
 /** Resolve a browser path to the numeric identity used by the API. */
 export function findTableForPath(
 	workspaceParam: string,
 	tableParam: string,
-	workspaceList: Pick<Workspace, 'workspace_id' | 'workspace_name'>[],
-	tableList: Pick<SidebarTable, 'workspace_id' | 'table_id' | 'table_name'>[]
+	workspaceList: Pick<Workspace, 'workspace_id' | 'workspace_name' | 'created_at'>[],
+	tableList: Pick<PreloadTable, 'workspace_id' | 'table_id' | 'table_name'>[]
 ) {
-	const workspaceName = decodeURIComponent(workspaceParam);
 	const tableName = decodeURIComponent(tableParam);
-	const matchingWorkspaces = workspaceList
-		.filter((ws) =>
-			isUuid(workspaceName)
-				? ws.workspace_id === workspaceName
-				: ws.workspace_name.toLowerCase() === workspaceName.toLowerCase()
-		)
-		.map((ws) => ws.workspace_id);
-	if (matchingWorkspaces.length === 0) return null;
+	const workspace = findWorkspace(workspaceParam, workspaceList);
+	if (!workspace) return null;
 
-	const candidates = tableList.filter((table) => matchingWorkspaces.includes(table.workspace_id));
-	// A name is always a name, even if it consists only of digits. When a
-	// workspace name is shared, the first-created matching table wins.
-	const byName = candidates
-		.filter((table) => table.table_name === tableName)
-		.sort((a, b) => a.table_id - b.table_id)[0];
-	if (byName) return byName;
+	const candidates = tableList.filter((table) => table.workspace_id === workspace.workspace_id);
+	// A name is always a name, even if it consists only of digits.
+	for (const [table, slug] of tableSlugs(workspace.workspace_id, candidates)) {
+		if (slug === tableName) return table;
+	}
 
 	// Keep existing numeric bookmarks readable while presenting named URLs.
 	if (!/^[1-9]\d*$/.test(tableName)) return null;
@@ -41,7 +32,7 @@ export async function resolveTableForPath(workspaceParam: string, tableParam: st
 	if (table) return table;
 	// The sidebar stores are empty on a direct browser visit. Fetch the same
 	// authorised table list used by navigation before resolving the name.
-	await fetchSidebar();
+	await fetchWorkspacesTables();
 	table = findTableForPath(workspaceParam, tableParam, get(workspaces), get(tables));
 	return table;
 }

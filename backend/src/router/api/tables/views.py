@@ -1,11 +1,13 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from middleware.auth import get_current_user, get_rls_session
 from models.user import User
 from repository.table_view import TableViewRepository
+from util.pg_errors import http_error_for
 
 from ._shared import _get_table_for_member
 
@@ -68,17 +70,23 @@ async def create_view(
     table = await _get_table_for_member(table_id, user, session)
     name = (data.get("name") or "").strip()
     view_type = data.get("type") or ""
-    if not name:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="View name is required")
     extra_config = data.get("config") or {}
     full_config = {"name": name, "type": view_type, **extra_config}
     view_repo = TableViewRepository(session)
-    return await view_repo.create_view(
-        workspace_id=table.workspace_id,
-        table_id=table.table_id,
-        config=full_config,
-        created_by=user.user_id,
-    )
+    try:
+        return await view_repo.create_view(
+            workspace_id=table.workspace_id,
+            table_id=table.table_id,
+            config=full_config,
+            created_by=user.user_id,
+        )
+    except DBAPIError as exc:
+        # PostgreSQL refuses a blank name or an unknown view type; relay it.
+        await session.rollback()
+        mapped = http_error_for(exc)
+        if mapped is None:
+            raise
+        raise mapped from exc
 
 
 @router.put("/{table_id}/views/{view_id}")
@@ -105,13 +113,20 @@ async def update_view(
     if "config" in data:
         patch.update(data["config"] or {})
 
-    return await view_repo.update_view(
-        workspace_id=table.workspace_id,
-        table_id=table.table_id,
-        view_id=view_id,
-        patch=patch,
-        updated_by=user.user_id,
-    )
+    try:
+        return await view_repo.update_view(
+            workspace_id=table.workspace_id,
+            table_id=table.table_id,
+            view_id=view_id,
+            patch=patch,
+            updated_by=user.user_id,
+        )
+    except DBAPIError as exc:
+        await session.rollback()
+        mapped = http_error_for(exc)
+        if mapped is None:
+            raise
+        raise mapped from exc
 
 
 @router.delete("/{table_id}/views/{view_id}")

@@ -20,7 +20,7 @@ def snap(page, name: str, snapshot: bool) -> None:
 
 
 def test_member_level_change(authed_page, workspace, admin_token, snapshot):
-    """Change write -> owner -> read and keep the last owner intact."""
+    """Change write -> owner -> read, then drop the last owner: zero owners is allowed."""
     page = authed_page
     ws_id, ws_name = workspace
     suffix = int(time.time() * 1000) % 10_000_000
@@ -88,28 +88,25 @@ def test_member_level_change(authed_page, workspace, admin_token, snapshot):
         assert target["level"] == "read"
         snap(page, "member_level_03_read", snapshot)
 
-        print("[6] UI: attempt to demote the last owner")
-        admin_member = next(member for member in members if member["level"] == "owner")
-        admin_user_id = admin_member["user_id"]
-        admin_level_select = page.get_by_test_id(f"level-select-{admin_user_id}")
-        admin_level_select.wait_for(state="visible", timeout=5000)
+        print("[6] API: the last owner removes themselves; zero owners is allowed")
+        other = api("POST", "/api/v1/workspaces", admin_token, json={"workspace_name": f"solo-{suffix}"})
+        assert other.status_code == 201, other.text[:200]
+        solo_id = other.json()["workspace_id"]
+        own = api("GET", f"/api/v1/workspaces/{solo_id}/members", admin_token).json()
+        response = api("DELETE", f"/api/v1/workspaces/{solo_id}/members/{own[0]['user_id']}", admin_token)
+        assert response.status_code == 204, f"remove last owner: {response.status_code} {response.text[:200]}"
+        listed = api("GET", "/api/v1/workspaces", admin_token).json()
+        assert solo_id not in [w["workspace_id"] for w in listed], "no membership row may survive"
 
+        print("[7] UI: the last owner demotes themselves")
+        admin_member = next(member for member in members if member["level"] == "owner")
+        admin_level_select = page.get_by_test_id(f"level-select-{admin_member['user_id']}")
+        admin_level_select.wait_for(state="visible", timeout=5000)
         with page.expect_response("**/api/v1/workspaces/*/members/*") as response_info:
             admin_level_select.select_option("write")
-        assert response_info.value.status == 400
-
-        error = page.get_by_test_id("members-error")
-        error.wait_for(state="visible", timeout=5000)
-        assert "last owner" in (error.text_content() or "").lower()
-        assert admin_level_select.input_value() == "owner"
-
-        response = api("GET", f"/api/v1/workspaces/{ws_id}/members", admin_token)
-        assert response.status_code == 200
-        admin_member = next(
-            member for member in response.json() if member["user_id"] == admin_user_id
-        )
-        assert admin_member["level"] == "owner"
-        snap(page, "member_level_04_last_owner_blocked", snapshot)
+        assert response_info.value.status == 200
+        assert response_info.value.json()["level"] == "write"
+        snap(page, "member_level_04_no_owner", snapshot)
     finally:
         response = api("DELETE", f"/api/v1/admin/users/{member_email}", admin_token)
         assert response.status_code in (204, 404)

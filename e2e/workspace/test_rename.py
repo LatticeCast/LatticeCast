@@ -8,7 +8,7 @@ Verifies:
   3. UI: URL updates to new workspace name after rename.
   4. BE: GET /workspaces confirms new name persists.
   5. UI: navigate away and back — new URL still resolves.
-  6. UI: duplicate rename attempt shows error.
+  6. UI: renaming onto a taken name is allowed and the newer one gets a -1 URL.
   7. Teardown: DELETE workspace via API.
 
 Usage:
@@ -102,36 +102,24 @@ def test_workspace_rename(authed_page, admin_token, workspace, snapshot):
     not_found.wait_for(state="visible", timeout=10000)
     snap(page, "t47_05_old_url_404", snapshot)
 
-    # ── Step 8: UI — duplicate rename shows error ────────────────────────
-    print("[8] Verify duplicate name error in settings")
-    page.goto(f"{BASE}/{ws_new_name}/", wait_until="networkidle")
-    settings_btn2 = page.get_by_test_id("ws-settings-btn")
-    settings_btn2.wait_for(state="visible", timeout=10000)
-    settings_btn2.click()
-
-    rename_input2 = page.get_by_test_id("ws-rename-input")
-    rename_input2.wait_for(state="visible", timeout=5000)
-
-    # Try to rename to an existing workspace name (use any other ws name)
-    r_ws2 = api("GET", "/api/v1/workspaces", admin_token)
-    other_ws2 = next(
-        (w for w in r_ws2.json() if w["workspace_id"] != ws_id), None
-    )
-    if other_ws2:
-        rename_input2.fill(other_ws2["workspace_name"])
+    # ── Step 8: UI — renaming onto a taken name is allowed; URL gets -1 ──
+    print("[8] Rename a newer workspace to the same name: its URL takes -1")
+    other_name = f"ws-twin-{suffix}"
+    r = api("POST", "/api/v1/workspaces", admin_token, json={"workspace_name": other_name})
+    assert r.status_code == 201, r.text[:200]
+    other_id = r.json()["workspace_id"]
+    try:
+        page.goto(f"{BASE}/{other_name}/", wait_until="networkidle")
+        page.get_by_test_id("ws-settings-btn").click()
+        rename_input2 = page.get_by_test_id("ws-rename-input")
+        rename_input2.wait_for(state="visible", timeout=5000)
+        rename_input2.fill(ws_new_name)
         page.get_by_test_id("ws-settings-save").click()
-
-        error_el = page.get_by_test_id("ws-settings-error")
-        error_el.wait_for(state="visible", timeout=5000)
-        error_text = error_el.text_content() or ""
-        assert "already exists" in error_text.lower(), (
-            f"Expected 'already exists' error, got: {error_text}"
-        )
-        snap(page, "t47_06_duplicate_error", snapshot)
-
-        # Close dialog
-        page.get_by_test_id("ws-settings-cancel").click()
-    else:
-        print("    (skipped — no other workspace for duplicate test)")
+        expect(page).to_have_url(re.compile(re.escape(f"{ws_new_name}-1") + "/?$"), timeout=10000)
+        tab = page.get_by_test_id(f"workspace-tab-{other_id}")
+        assert "bg-blue-600" in tab.get_attribute("class"), "the renamed workspace is not the open one"
+        snap(page, "t47_06_duplicate_suffix", snapshot)
+    finally:
+        api("DELETE", f"/api/v1/workspaces/{other_id}", admin_token)
 
     print("PASS: test_workspace_rename")

@@ -120,7 +120,7 @@ def verify(psql_fn) -> list[str]:
         _USER_A,
         "SELECT jsonb_array_length(payload->'workspaces') || ',' || "
         "jsonb_array_length(payload->'tables') "
-        "FROM (SELECT public.get_user_sidebar() payload) s;",
+        "FROM (SELECT public.get_workspaces_tables() payload) s;",
     ).strip()
     if sidebar_counts != "1,1":
         errors.append(

@@ -9,11 +9,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.db import get_login_session, get_session
 from models.user import User, UserInfo, UserPassword, UserResponse
 from repository.user import UserRepository, bootstrap_user
+from util.pg_errors import http_error_for
 
 router = APIRouter(prefix="/users", tags=["admin-users"])
 
@@ -89,14 +91,22 @@ async def create_user(
             detail="User already exists",
         )
 
-    user = await bootstrap_user(
-        login_session=login_session,
-        app_session=session,
-        email=data.email,
-        role=data.role,
-        user_name=data.user_name,
-        allow_no_pwd=data.allow_no_pwd,
-    )
+    try:
+        user = await bootstrap_user(
+            login_session=login_session,
+            app_session=session,
+            email=data.email,
+            role=data.role,
+            user_name=data.user_name,
+            allow_no_pwd=data.allow_no_pwd,
+        )
+    except DBAPIError as exc:
+        # The handle names the default workspace, so PostgreSQL may refuse it.
+        await login_session.rollback()
+        mapped = http_error_for(exc)
+        if mapped is None:
+            raise
+        raise mapped from exc
     return await _build_response(user, login_session)
 
 

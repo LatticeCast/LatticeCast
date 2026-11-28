@@ -1,6 +1,6 @@
 // src/lib/stores/table_schemas.store.ts
 //
-// SSOT for sidebar + home: one bulk fetch via GET /api/v1/workspaces_tables
+// SSOT for workspaces and tables: one bulk fetch via GET /api/v1/workspaces_tables
 // hydrates the whole menu tree, so first-table-click no longer pays a
 // schema round-trip. Two independent arrays — workspaces + tables —
 // because empty workspaces (zero tables) still need to appear.
@@ -10,7 +10,7 @@
 import { writable, derived, get } from 'svelte/store';
 import type { Column, Table, TableSchema, Workspace } from '$lib/types/table';
 
-export interface SidebarTable {
+export interface PreloadTable {
 	workspace_id: string;
 	table_id: number;
 	table_name: string;
@@ -22,13 +22,18 @@ export interface SidebarTable {
 	};
 }
 
-export interface SidebarPayload {
-	workspaces: { workspace_id: string; workspace_name: string; level: 'read' | 'write' | 'owner' }[];
-	tables: SidebarTable[];
+export interface WorkspacesTablesPayload {
+	workspaces: {
+		workspace_id: string;
+		workspace_name: string;
+		created_at: string;
+		level: 'read' | 'write' | 'owner';
+	}[];
+	tables: PreloadTable[];
 }
 
 // ── Sidebar caches kept writable so per-mutation controllers can patch them
-//    without re-running the bulk fetch. Hydrated by applySidebar().
+//    without re-running the bulk fetch. Hydrated by applyWorkspacesTables().
 export const workspaces = writable<Workspace[]>([]);
 export const tables = writable<Table[]>([]);
 
@@ -79,13 +84,13 @@ export function applySchema(schema: TableSchema, tableId?: number): void {
 	});
 }
 
-export function applySidebar(payload: SidebarPayload): void {
+export function applyWorkspacesTables(payload: WorkspacesTablesPayload): void {
 	workspaces.set(
 		payload.workspaces.map((w) => ({
 			workspace_id: w.workspace_id,
 			workspace_name: w.workspace_name,
 			level: w.level,
-			created_at: '',
+			created_at: w.created_at,
 			updated_at: ''
 		}))
 	);
@@ -121,14 +126,6 @@ export function toggleMenu(): void {
 	menuOpen.update((v) => !v);
 }
 
-export function resolveWorkspaceParam(param: string, wsList: Workspace[]): string | null {
-	if (/^[0-9a-f]{8}-/.test(param)) {
-		return wsList.some((w) => w.workspace_id === param) ? param : null;
-	}
-	const decoded = decodeURIComponent(param);
-	return wsList.find((w) => w.workspace_name === decoded)?.workspace_id ?? null;
-}
-
 export function resetMenu(): void {
 	workspaces.set([]);
 	tables.set([]);
@@ -136,16 +133,16 @@ export function resetMenu(): void {
 	currentTableId.set(null);
 }
 
-export async function initSidebar(): Promise<void> {
+export async function initWorkspacesTables(): Promise<void> {
 	try {
-		const { fetchSidebar } = await import('$lib/backend/table_schemas');
-		await fetchSidebar();
+		const { fetchWorkspacesTables } = await import('$lib/backend/table_schemas');
+		await fetchWorkspacesTables();
 	} catch {
 		// best-effort
 	}
 }
 
-export function resetSidebar(): void {
+export function resetWorkspacesTables(): void {
 	workspaces.set([]);
 	tables.set([]);
 }

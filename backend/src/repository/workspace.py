@@ -1,7 +1,8 @@
 # src/repository/workspace.py
 from uuid import UUID
 
-from sqlalchemy import func, select, text
+from fastapi import HTTPException, status
+from sqlalchemy import delete, func, select, text
 
 from models.user import UserInfo
 from models.workspace import MemberFullResponse, Workspace, WorkspaceMember
@@ -54,18 +55,18 @@ class WorkspaceRepository(RLSRepository):
         await self.session.commit()
 
     async def remove_member(self, workspace_id: UUID, user_id: UUID) -> None:
-        """Delete every action row this member holds (read/write/owner)."""
-        result = await self.session.execute(
-            select(WorkspaceMember).where(
+        """Delete every action row this member holds (read/write/owner).
+
+        One statement: an owner removing themselves would, row by row, lose the
+        RLS right to delete the rest as soon as their owner row went.
+        """
+        await self.session.execute(
+            delete(WorkspaceMember).where(
                 WorkspaceMember.workspace_id == workspace_id,
                 WorkspaceMember.user_id == user_id,
             )
         )
-        members = result.scalars().all()
-        for member in members:
-            await self.session.delete(member)
-        if members:
-            await self.session.commit()
+        await self.session.commit()
 
     async def get_members_with_info(self, workspace_id: UUID) -> list[MemberFullResponse]:
         """One entry per distinct member, aggregated to their highest level."""
@@ -141,21 +142,12 @@ class WorkspaceRepository(RLSRepository):
         )
         return _highest_level(result.scalar_one() or [])
 
-    async def count_owners(self, workspace_id: UUID) -> int:
-        result = await self.session.execute(
-            select(func.count())
-            .select_from(WorkspaceMember)
-            .where(
-                WorkspaceMember.workspace_id == workspace_id,
-                WorkspaceMember.action == "owner",
-            )
-        )
-        return result.scalar_one()
-
     async def resolve_workspace(self, identifier: str) -> Workspace | None:
         """Resolve a workspace by UUID string or workspace_name (case-insensitive).
 
         Tries UUID parse first; falls back to LOWER(workspace_name) lookup.
+        Names are not unique: a name that matches more than one workspace the
+        caller can see is refused with 409 rather than guessed.
         """
         try:
             workspace_uuid = UUID(identifier)
@@ -168,7 +160,13 @@ class WorkspaceRepository(RLSRepository):
         result = await self._execute(
             select(Workspace).where(func.lower(Workspace.workspace_name) == identifier.lower())
         )
-        return result.scalar_one_or_none()
+        matches = result.scalars().all()
+        if len(matches) > 1:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Several workspaces have that name; use workspace_id",
+            )
+        return matches[0] if matches else None
 
     async def get_first_owned_workspace(self, user_id: UUID) -> Workspace | None:
         """Return the first workspace the user owns, or any workspace they can

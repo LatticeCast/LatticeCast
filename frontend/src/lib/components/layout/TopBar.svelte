@@ -5,6 +5,7 @@
 	import { currentTable, workspaces, tables } from '$lib/stores/table_schemas.store';
 	import { navigate, tablePath } from '$lib/utils/url';
 	import { findTableForPath } from '$lib/utils/table-route';
+	import { findWorkspace, workspaceSlug } from '$lib/utils/slugs';
 
 	let {
 		menuOpen = $bindable()
@@ -55,11 +56,11 @@
 		<span class="shrink-0 text-white/40">/</span>
 		{#if $page.params.workspace_id}
 			{@const wsId = $page.params.workspace_id}
-			{@const wsName =
-				$workspaces.find((w) => w.workspace_id === wsId || w.workspace_name === wsId)
-					?.workspace_name ?? wsId}
+			{@const workspace = findWorkspace(wsId, $workspaces)}
+			{@const wsName = workspace?.workspace_name ?? wsId}
+			{@const wsUrlName = workspace ? workspaceSlug(workspace, $workspaces) : wsId}
 			<button
-				onclick={() => navigate(`/${encodeURIComponent(wsName)}`)}
+				onclick={() => navigate(`/${encodeURIComponent(wsUrlName)}`)}
 				data-testid="breadcrumb-workspace"
 				class="min-w-0 truncate rounded px-1 py-0.5 text-sm text-white/70 hover:text-white"
 				>{wsName}</button
@@ -69,7 +70,7 @@
 				{@const tableName = table?.table_name ?? $currentTable?.table_name ?? $page.params.table_id}
 				{@const tableUrl = table
 					? tablePath(table.workspace_id, table.table_id)
-					: `/${encodeURIComponent(wsName)}/${encodeURIComponent(tableName)}`}
+					: `/${encodeURIComponent(wsUrlName)}/${encodeURIComponent(tableName)}`}
 				<span class="shrink-0 text-white/40">/</span>
 				<button
 					onclick={() => navigate(tableUrl)}

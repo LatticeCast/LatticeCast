@@ -8,8 +8,8 @@ router = APIRouter(prefix="/workspaces_tables")
 
 
 @router.get("")
-async def get_user_sidebar(user=Depends(get_current_user), session=Depends(get_rls_session)):
-    r = await session.execute(text("SELECT public.get_user_sidebar()"))
+async def get_workspaces_tables(user=Depends(get_current_user), session=Depends(get_rls_session)):
+    r = await session.execute(text("SELECT public.get_workspaces_tables()"))
     payload = r.scalar_one()
     repo = WorkspaceRepository(session)
     for workspace in payload.get("workspaces", []):

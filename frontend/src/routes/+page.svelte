@@ -6,9 +6,10 @@
 	import {
 		currentTableId,
 		workspaces as workspacesStore,
-		initSidebar
+		initWorkspacesTables
 	} from '$lib/stores/table_schemas.store';
 	import { get } from 'svelte/store';
+	import { workspacePath } from '$lib/utils/slugs';
 	import { T } from '$lib/UI/theme.svelte';
 	import CreateWorkspaceModal from '$lib/components/sidebar/CreateWorkspaceModal.svelte';
 
@@ -19,13 +20,17 @@
 	onMount(async () => {
 		currentTableId.set(null);
 		try {
-			await initSidebar();
+			await initWorkspacesTables();
 			const ws = get(workspacesStore);
 			if (ws.length > 0) {
-				const lastName =
+				const last =
 					typeof localStorage !== 'undefined' ? localStorage.getItem('lastWorkspace') : null;
-				const target = lastName ? (ws.find((w) => w.workspace_name === lastName) ?? ws[0]) : ws[0];
-				goto(`/${encodeURIComponent(target.workspace_name)}/`, { replaceState: true });
+				// The id; a name is what an older session stored.
+				const target =
+					ws.find((w) => w.workspace_id === last) ??
+					ws.find((w) => w.workspace_name === last) ??
+					ws[0];
+				goto(`${workspacePath(target, ws)}/`, { replaceState: true });
 				return;
 			}
 		} catch (e) {
@@ -65,7 +70,7 @@
 		onClose={() => (showCreateWorkspace = false)}
 		onCreated={(ws) => {
 			showCreateWorkspace = false;
-			goto(`/${encodeURIComponent(ws.workspace_name)}/`);
+			goto(`${workspacePath(ws, $workspacesStore)}/`);
 		}}
 	/>
 {/if}

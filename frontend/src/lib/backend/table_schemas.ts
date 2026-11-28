@@ -1,10 +1,13 @@
-// lib/backend/table_schemas.ts — fetch the sidebar preload payload.
+// lib/backend/table_schemas.ts — fetch the workspaces and tables preload payload.
 
 import { authenticatedRequestJson } from './client';
-import { applySidebar, type SidebarPayload } from '$lib/stores/table_schemas.store';
+import {
+	applyWorkspacesTables,
+	type WorkspacesTablesPayload
+} from '$lib/stores/table_schemas.store';
 
-export async function fetchSidebar(): Promise<SidebarPayload> {
-	const payload = await authenticatedRequestJson<SidebarPayload>('/workspaces_tables');
-	applySidebar(payload);
+export async function fetchWorkspacesTables(): Promise<WorkspacesTablesPayload> {
+	const payload = await authenticatedRequestJson<WorkspacesTablesPayload>('/workspaces_tables');
+	applyWorkspacesTables(payload);
 	return payload;
 }
