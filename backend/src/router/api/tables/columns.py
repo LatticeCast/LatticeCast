@@ -111,9 +111,16 @@ async def delete_column(
 #
 # Rows of every table share one physical table, so each index costs every write
 # of every table. Select / tags / checkbox / text equality is already served by
-# the shared row_data GIN; a per-column btree is for range queries only, and is
-# limited to integer-valued types. `number` may hold fractions, so it cannot be
-# indexed; indexes created for it before V79 can still be listed and dropped.
+# the shared row_data GIN. A per-column btree is allowed only on integer-valued
+# types (date, datetime); `number` is not indexed by product rule, not because
+# PostgreSQL cannot (indexes made for it before V79 can be listed and dropped).
+#
+# Known gaps, do not present these indexes as a speed-up yet:
+# - No query path uses them. LatticeQL compares through a different expression
+#   and finds table_id by subquery, so the partial index never applies;
+#   query_rows filters by containment and sorts by row columns only.
+# - CREATE / DROP INDEX here is not CONCURRENTLY: it blocks writes to the
+#   shared rows table, for every tenant, for as long as it runs.
 _GIN_SERVED_TYPES = frozenset({"text", "string", "select", "tags", "checkbox"})
 _RANGE_INDEX_TYPES = frozenset({"date", "datetime"})
 
@@ -171,7 +178,7 @@ async def create_index(
     col_type = column["type"]
     if col_type not in _RANGE_INDEX_TYPES:
         if col_type == "number":
-            reason = "a number column may hold fractions, so it cannot be indexed"
+            reason = "number columns are not indexed; only integer-valued types (date, datetime) are"
         elif col_type in _GIN_SERVED_TYPES:
             reason = "equality on this type is already served by the shared GIN index"
         else:

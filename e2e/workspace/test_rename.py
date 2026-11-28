@@ -19,6 +19,7 @@ import re
 import time
 
 import pytest
+from playwright.sync_api import expect
 
 from e2e_base import BASE, api
 
@@ -63,7 +64,6 @@ def test_workspace_rename(authed_page, admin_token, workspace, snapshot):
 
     # ── Step 4: UI — verify URL updated to new name ─────────────────────
     print("[4] Verify URL contains new workspace name")
-    from playwright.sync_api import expect
     expect(page).to_have_url(re.compile(re.escape(ws_new_name)), timeout=10000)
     snap(page, "t47_03_url_updated", snapshot)
 

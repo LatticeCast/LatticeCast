@@ -43,6 +43,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 
 try:
@@ -108,7 +109,6 @@ def main():
             # not match the new check_constraint regex ^[a-z0-9][a-z0-9_-]{2,31}$.
             # Coerce: lower, replace invalid chars with '-', truncate to 32, fall
             # back to 'user-' + first 8 of user_id when result is empty.
-            import re
             cleaned = []
             for uid, email, uname, cfg in merged:
                 u = (uname or "").lower()

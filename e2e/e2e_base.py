@@ -24,6 +24,7 @@ import threading
 import time
 from typing import Any
 
+import pytest
 import requests
 
 BASE: str = os.environ.get("BASE_URL", "http://localhost:13491").rstrip("/")
@@ -75,8 +76,6 @@ def is_cloudfront_block(status: int, server: str, body: str) -> bool:
 def waf_block_abort(where: str, status: int, server: str, body: str) -> None:
     """Fail the whole run at once with a clear message instead of cascading 403s."""
     if is_cloudfront_block(status, server, body):
-        import pytest
-
         pytest.exit(
             f"CloudFront/WAF 403 on {where}: this IP is rate-limited (3000 req / 100 logins per 5 min). "
             f"Lower E2E_MAX_RPS (now {MAX_RPS}), wait 5 minutes, and rerun. Not retrying.",

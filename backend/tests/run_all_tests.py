@@ -10,16 +10,12 @@ Runs:
 """
 
 import sys
-from pathlib import Path
 
-# Add tests directory to path
-tests_dir = Path(__file__).parent
-sys.path.insert(0, str(tests_dir))
+from e2e_auth_test import run_all_tests as run_auth_tests
+from e2e_storage_test import run_all_tests as run_storage_tests
+
 
 def main():
-    from e2e_auth_test import run_all_tests as run_auth_tests
-    from e2e_storage_test import run_all_tests as run_storage_tests
-
     print("\n" + "=" * 70)
     print("                    LATTICE_CAST BACKEND E2E TESTS")
     print("=" * 70)

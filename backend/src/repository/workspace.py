@@ -1,17 +1,11 @@
 # src/repository/workspace.py
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import func, select, text
 
-from models.workspace import Workspace, WorkspaceMember
+from models.user import UserInfo
+from models.workspace import MemberFullResponse, Workspace, WorkspaceMember
 from repository._base import RLSRepository
-
-if TYPE_CHECKING:
-    # Imported for the annotations only; the runtime import stays inside the
-    # methods that build these, which is why ruff could not resolve the
-    # quoted forward references.
-    from models.workspace import MemberFullResponse
 
 _LEVEL_ORDER = ("read", "write", "owner")
 
@@ -73,11 +67,8 @@ class WorkspaceRepository(RLSRepository):
         if members:
             await self.session.commit()
 
-    async def get_members_with_info(self, workspace_id: UUID) -> list["MemberFullResponse"]:
+    async def get_members_with_info(self, workspace_id: UUID) -> list[MemberFullResponse]:
         """One entry per distinct member, aggregated to their highest level."""
-        from models.user import UserInfo
-        from models.workspace import MemberFullResponse
-
         result = await self._execute(
             select(
                 WorkspaceMember.workspace_id,
@@ -101,7 +92,7 @@ class WorkspaceRepository(RLSRepository):
             for row in result.all()
         ]
 
-    async def get_member_with_info(self, workspace_id: UUID, user_id: UUID) -> "MemberFullResponse | None":
+    async def get_member_with_info(self, workspace_id: UUID, user_id: UUID) -> MemberFullResponse | None:
         for member in await self.get_members_with_info(workspace_id):
             if member.user_id == user_id:
                 return member

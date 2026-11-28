@@ -1,10 +1,10 @@
 COMPOSE ?= docker compose
 E2E_PYTEST_ARGS ?= --tb=short -q
 
-.PHONY: e2e e2e-up lint lint-be lint-fe lint-db
+.PHONY: e2e e2e-up lint lint-be lint-fe lint-db lint-e2e
 
-# Run the same backend, frontend, and migration linters enforced by pre-commit.
-lint: lint-be lint-fe lint-db
+# Run the same backend, frontend, migration, and e2e linters enforced by pre-commit.
+lint: lint-be lint-fe lint-db lint-e2e
 
 lint-be:
 	$(COMPOSE) exec -T backend uv run ruff check src tests
@@ -12,8 +12,13 @@ lint-be:
 lint-fe:
 	$(COMPOSE) exec -T frontend npm run lint:check
 
+# SQL lint, then ruff over the migration tooling's own Python.
 lint-db:
 	$(COMPOSE) --profile migration run --rm --entrypoint python migration linter.py
+	$(COMPOSE) --profile migration run --rm --entrypoint ruff migration check .
+
+lint-e2e:
+	$(COMPOSE) --profile test run --rm --no-deps -T e2e ruff check .
 
 # Start the remote Chromium and E2E runner required by the test suite.
 e2e-up:

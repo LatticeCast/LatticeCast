@@ -3,10 +3,12 @@ import json
 from typing import Any
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from core.db import reapply_rls_context
 from models.row import Row, RowPut, RowUpdate
 
 
@@ -72,8 +74,6 @@ class RowRepository:
         first can deadlock with that cascade when a later FK check needs a
         KEY SHARE lock on tables. Keep this order for every row mutation.
         """
-        from fastapi import HTTPException
-
         await self.session.execute(
             text("SELECT 1 FROM public.tables WHERE table_id = :tid FOR KEY SHARE"),
             {"tid": table_id},
@@ -115,8 +115,6 @@ class RowRepository:
         include_total: bool,
     ) -> dict[str, Any]:
         """Call the RLS-scoped PostgreSQL query function without ORM hydration."""
-        from core.db import reapply_rls_context
-
         await reapply_rls_context(self.session)
         result = await self.session.execute(
             text("""

@@ -18,6 +18,13 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, call
 from uuid import uuid4
 
+from models.row import Row, RowUpdate
+from models.table import Table
+from repository.row import RowRepository
+from repository.table import TableRepository
+from repository.user import bootstrap_user
+from repository.workspace import WorkspaceRepository
+
 
 def _run(coro):
     return asyncio.run(coro)
@@ -43,8 +50,6 @@ class TestWorkspaceRepositoryCreate:
         """create() adds workspace to session, commits, then refreshes — attached."""
 
         async def _run_test():
-            from repository.workspace import WorkspaceRepository
-
             session = _make_session()
             repo = WorkspaceRepository(session)
             workspace = await repo.create("my-workspace")
@@ -58,8 +63,6 @@ class TestWorkspaceRepositoryCreate:
         """session.add() must precede refresh so the instance is attached."""
 
         async def _run_test():
-            from repository.workspace import WorkspaceRepository
-
             session = _make_session()
             call_order: list[str] = []
             session.add.side_effect = lambda _: call_order.append("add")
@@ -80,8 +83,6 @@ class TestWorkspaceRepositoryGrant:
 
     def test_executes_grant_function_and_commits_without_refresh(self):
         async def _run_test():
-            from repository.workspace import WorkspaceRepository
-
             session = _make_session()
             session.execute = AsyncMock()
             repo = WorkspaceRepository(session)
@@ -102,8 +103,6 @@ class TestTableRepositoryCreateFromTemplate:
         """The PG template function returns a row, rather than an attached ORM object."""
 
         async def _run_test():
-            from repository.table import TableRepository
-
             workspace_id = uuid4()
             created_by = uuid4()
             now = datetime.now(UTC).replace(tzinfo=None)
@@ -137,9 +136,6 @@ class TestTableRepositoryUpdate:
         """Renames use UPDATE ... RETURNING, not mutation of the passed object."""
 
         async def _run_test():
-            from models.table import Table
-            from repository.table import TableRepository
-
             workspace_id = uuid4()
             table = Table(workspace_id=workspace_id, table_id=7, table_name="old-name")
             now = datetime.now(UTC).replace(tzinfo=None)
@@ -173,8 +169,6 @@ class TestBootstrapUser:
         """bootstrap_user creates the User in login_session before refreshing it."""
 
         async def _run_test():
-            from repository.user import bootstrap_user
-
             login_session = _make_session()
             app_session = _make_session()
             result = await bootstrap_user(login_session, app_session, "person@example.com")
@@ -194,9 +188,6 @@ class TestRowRepositoryUpdate:
         """patch_row_data returns the updated row; the input row stays detached-safe."""
 
         async def _run_test():
-            from models.row import Row, RowUpdate
-            from repository.row import RowRepository
-
             workspace_id = uuid4()
             row = Row(
                 table_id=7,
@@ -233,8 +224,6 @@ class TestRowRepositoryUpdate:
         """create() uses raw INSERT+RETURNING (PG trigger sets row_id) — must NOT call refresh."""
 
         async def _run_test():
-            from repository.row import RowRepository
-
             workspace_id = uuid4()
             now = datetime.now(UTC).replace(tzinfo=None)
 

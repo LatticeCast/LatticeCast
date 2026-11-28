@@ -140,8 +140,16 @@ holds junk. So:
   exclusive lock on the shared `rows` table, which inside a cascading delete
   would stall or deadlock every tenant.
 - Only integer-valued types may be indexed (`date`, `datetime`: epoch-ms).
-  `number` may hold fractions, so it is refused; indexes created for it before
-  0.93.0 stay until dropped.
+  `number` is refused as a product rule (it is a double, not an integer), not
+  because PostgreSQL cannot index it; indexes created for it before 0.93.0
+  stay until dropped.
+- Open, not solved in 0.93.x: nothing uses a per-column btree. LatticeQL
+  compares through a different expression and resolves `table_id` by
+  subquery, so the partial index (`WHERE table_id = N`) never applies;
+  `query_rows` filters by containment and sorts by row columns. And
+  `CREATE`/`DROP INDEX` runs inside the request, not `CONCURRENTLY`, so it
+  blocks every tenant's writes to `rows` while it runs. Until both are fixed
+  the index endpoints are bookkeeping, not a performance feature.
 - Direction (not finished): storage types become `text`, `int`, `double`,
   `tags`, `blob`; date, checkbox, select, url become a client-side reading of
   those, carried in `options.display` and annotated by `options.note`.

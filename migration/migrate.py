@@ -36,6 +36,9 @@ import time
 from pathlib import Path
 
 import psycopg2
+import test_migration_rls
+import test_migration_schema
+import test_migration_seed
 
 MIGRATION_DIR = Path(__file__).parent
 CHECKSUMS_FILE = MIGRATION_DIR / "checksums.txt"
@@ -489,11 +492,6 @@ def step_test() -> bool:
         print("  ✓ Migrations applied")
 
         # Verify
-        sys.path.insert(0, str(Path(__file__).parent))
-        import test_migration_schema
-        import test_migration_rls
-        import test_migration_seed
-
         all_errors = []
         for name, module in [
             ("schema", test_migration_schema),

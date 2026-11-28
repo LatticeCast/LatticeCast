@@ -13,11 +13,15 @@ Run inside Docker:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
-import sys
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
+from sqlalchemy import TextClause
+
+from repository.dashboard import DashboardRepository
 
 
 def _run(coro):
@@ -42,8 +46,6 @@ class TestExecute:
     def test_execute_returns_empty_list(self):
         async def _run_test():
             session = self._make_session([])
-            from repository.dashboard import DashboardRepository
-
             rows = await DashboardRepository.execute(session, "SELECT 1", {})
             assert rows == []
             session.execute.assert_called_once()
@@ -54,8 +56,6 @@ class TestExecute:
         async def _run_test():
             fake_rows = [{"measure": 5}, {"measure": 3}]
             session = self._make_session(fake_rows)
-            from repository.dashboard import DashboardRepository
-
             rows = await DashboardRepository.execute(session, "SELECT 1", {})
             assert rows == [{"measure": 5}, {"measure": 3}]
 
@@ -63,12 +63,8 @@ class TestExecute:
 
     def test_execute_passes_sql_as_text(self):
         """session.execute receives a SQLAlchemy text() clause."""
-        from sqlalchemy import TextClause
-
         async def _run_test():
             session = self._make_session([])
-            from repository.dashboard import DashboardRepository
-
             await DashboardRepository.execute(session, "SELECT 42 AS n", {})
             call_args = session.execute.call_args
             stmt = call_args[0][0]
@@ -81,8 +77,6 @@ class TestExecute:
 
         async def _run_test():
             session = self._make_session([{"count": 7}])
-            from repository.dashboard import DashboardRepository
-
             params = {
                 "workspace_id": "00000000-0000-0000-0000-000000000001",
                 "table_name": "Tasks",
@@ -123,8 +117,6 @@ class TestWorkspaceLQLEndpoint:
     """Integration tests for the workspace-scoped HTTP API."""
 
     def test_unreadable_workspace_returns_404(self):
-        import httpx
-
         async def _run_test():
             async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
                 headers = await _lattice_auth_headers(client)
@@ -138,8 +130,6 @@ class TestWorkspaceLQLEndpoint:
         _run(_run_test())
 
     def test_invalid_lql_returns_400(self):
-        import httpx
-
         async def _run_test():
             async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
                 headers = await _lattice_auth_headers(client)
@@ -157,10 +147,6 @@ class TestWorkspaceLQLEndpoint:
         _run(_run_test())
 
     def test_query_can_name_any_table_in_workspace(self):
-        import json
-
-        import httpx
-
         async def _run_test():
             async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
                 headers = await _lattice_auth_headers(client)
@@ -181,53 +167,3 @@ class TestWorkspaceLQLEndpoint:
 
         _run(_run_test())
 
-
-@_skip_integration
-class TestDashboardRepositoryIntegration:
-    """Direct DashboardRepository.execute() against a real DB session."""
-
-    @pytest.mark.xfail(
-        reason=("LatticeQL-generated SQL uses `tables.table_name` dropped in V21. Execution requires a schema update."),
-        strict=False,
-    )
-    def test_execute_count_query(self):
-        """Seed rows, compile LQL, execute via DashboardRepository, verify count."""
-        import httpx
-
-        async def _run_test():
-            async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
-                headers = await _lattice_auth_headers(client)
-                r = await client.get("/api/v1/workspaces", headers=headers)
-                assert r.status_code == 200
-                ws_id = r.json()[0]["workspace_id"]
-
-                await client.post(
-                    "/api/v1/tables",
-                    json={"table_id": "dash_repo_test", "workspace_id": str(ws_id)},
-                    headers=headers,
-                )
-                for _ in range(3):
-                    await client.post(
-                        "/api/v1/tables/dash_repo_test/rows",
-                        json={"row_data": {}},
-                        headers=headers,
-                    )
-
-            sys.path.insert(0, "/app/src")
-            from config.db import app_session_factory  # type: ignore[import]
-
-            from config.lattice_ql import compile_lql
-            from repository.dashboard import DashboardRepository
-
-            async with app_session_factory() as session:
-                sql, params = await compile_lql(
-                    'table("dash_repo_test") | aggregate(count())',
-                    str(ws_id),
-                    session,
-                )
-                rows = await DashboardRepository.execute(session, sql, params, None)
-
-            assert len(rows) == 1, f"Expected 1 aggregate row, got {rows}"
-            assert rows[0].get("measure") is not None
-
-        _run(_run_test())

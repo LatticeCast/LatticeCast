@@ -3,10 +3,7 @@ Tests for config/lattice_ql.py — schema cache + compile helper.
 
 Unit test:    mock the PG cache + table schema reads; assert the backend binds
               its authorised workspace to compiler output.
-Integration:  real workspace + table; verify schema shape and compile output.
-              Execution via asyncpg is marked xfail: the SQL LatticeQL generates
-              references `tables.table_name` which was dropped in migration V21.
-              Full execution requires a DB schema update (future work).
+Execution against a real database is covered by e2e (e2e/tables/test_lql_*.py).
 
 Run inside Docker:
     docker compose exec -T backend sh -lc \
@@ -16,11 +13,11 @@ Run inside Docker:
 from __future__ import annotations
 
 import asyncio
-import os
-import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from config.lattice_ql import compile_lql, invalidate_schema_cache
 
 # ---------------------------------------------------------------------------
 # Unit tests (no live services required)
@@ -63,8 +60,6 @@ class TestCompileLql:
                     return_value={"columns": fake_table.columns}
                 )
 
-                from config.lattice_ql import compile_lql
-
                 result = await compile_lql(
                     'table("Tasks") | aggregate(count())',
                     "00000000-0000-0000-0000-000000000001",
@@ -103,8 +98,6 @@ class TestCompileLql:
                 instance = MockRepo.return_value
                 instance.list_by_workspace = AsyncMock(return_value=[])
 
-                from config.lattice_ql import compile_lql
-
                 result = await compile_lql(
                     'table("Tasks") | aggregate(count())',
                     "00000000-0000-0000-0000-000000000001",
@@ -129,8 +122,6 @@ class TestCompileLql:
             session_mock = MagicMock()
 
             with patch("config.lattice_ql.cache_get", AsyncMock(return_value=cached_schema)):
-                from config.lattice_ql import compile_lql
-
                 with pytest.raises(ValueError):
                     await compile_lql("this is not valid lql !!!!", "ws-id", session_mock)
 
@@ -141,162 +132,9 @@ class TestCompileLql:
 
         async def _run_test():
             with patch("config.lattice_ql.cache_delete", AsyncMock()) as cache_delete_mock:
-                from config.lattice_ql import invalidate_schema_cache
-
                 await invalidate_schema_cache("my-workspace-id")
 
             cache_delete_mock.assert_called_once_with("lql:schema:my-workspace-id")
 
         _run(_run_test())
 
-
-# ---------------------------------------------------------------------------
-# Integration tests (require live backend stack: DB)
-# ---------------------------------------------------------------------------
-
-BACKEND_URL = os.environ.get("BASE_URL", "http://localhost:13491")
-BACKEND_LIVE = os.environ.get("INTEGRATION_TESTS", "0") == "1"
-
-_skip_integration = pytest.mark.skipif(
-    not BACKEND_LIVE,
-    reason="Set INTEGRATION_TESTS=1 to run against a live stack",
-)
-
-
-async def _lattice_auth_headers(client) -> dict:
-    """Password login as the dev seed user, return Bearer headers with a signed JWT."""
-    resp = await client.post(
-        "/api/v1/login/password",
-        json={"user_name": "lattice", "password": ""},
-    )
-    assert resp.status_code == 200, resp.text
-    return {"Authorization": f"Bearer {resp.json()['access_token']}"}
-
-
-@_skip_integration
-class TestCompileLqlIntegration:
-    """Integration tests — require `docker compose up` with dev stack running."""
-
-    def test_get_schema_reflects_real_table(self):
-        """Creating a table then calling get_schema returns its columns in the schema dict."""
-        import httpx
-
-        async def _run_test():
-            # Create a workspace + table via API (password login → signed JWT)
-            async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
-                headers = await _lattice_auth_headers(client)
-
-                # Get existing workspace
-                r = await client.get("/api/v1/workspaces", headers=headers)
-                assert r.status_code == 200
-                workspaces = r.json()
-                assert workspaces, "No workspaces found — bootstrap dev user first"
-                ws_id = workspaces[0]["workspace_id"]
-
-                # Create a test table
-                r = await client.post(
-                    "/api/v1/tables",
-                    json={"table_id": "lql_test_schema", "workspace_id": str(ws_id)},
-                    headers=headers,
-                )
-                # 409 means it already exists from a previous run — that's fine
-                assert r.status_code in (201, 409), f"Unexpected: {r.status_code} {r.text}"
-
-                # Fetch the schema via the helper
-                # We re-import to get a fresh module state inside Docker
-                sys.path.insert(0, "/app/src")
-                from config.db import app_session_factory  # type: ignore[import]
-
-                from config.lattice_ql import get_schema  # noqa: E402
-
-                async with app_session_factory() as session:
-                    schema = await get_schema(str(ws_id), session)
-
-                assert "lql_test_schema" in schema, f"Table not found in schema keys: {list(schema.keys())}"
-                entry = schema["lql_test_schema"]
-                assert "columns" in entry
-                # Default template adds Doc, Title, Description columns
-                assert "Doc" in entry["columns"] or "Title" in entry["columns"]
-
-        _run(_run_test())
-
-    def test_compile_lql_returns_sql_and_params(self):
-        """compile_lql against a real table returns (sql, params) without error."""
-        import httpx
-
-        async def _run_test():
-            async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
-                headers = await _lattice_auth_headers(client)
-                r = await client.get("/api/v1/workspaces", headers=headers)
-                ws_id = r.json()[0]["workspace_id"]
-
-            sys.path.insert(0, "/app/src")
-            from config.db import app_session_factory  # type: ignore[import]
-
-            from config.lattice_ql import compile_lql
-
-            async with app_session_factory() as session:
-                sql, params = await compile_lql(
-                    'table("lql_test_schema") | aggregate(count())',
-                    str(ws_id),
-                    session,
-                )
-
-            assert isinstance(sql, str) and sql.strip()
-            assert params == {"workspace_id": str(ws_id)}
-
-        _run(_run_test())
-
-    @pytest.mark.xfail(
-        reason=(
-            "LatticeQL-generated SQL uses `tables.table_name` (V21 dropped that column). "
-            "Full execution requires a DB schema update to re-add table_name as an alias."
-        ),
-        strict=False,
-    )
-    def test_execute_count_query(self):
-        """Execute compiled count query via asyncpg and verify row count."""
-        import httpx
-
-        async def _run_test():
-            import asyncpg
-
-            async with httpx.AsyncClient(base_url=BACKEND_URL) as client:
-                headers = await _lattice_auth_headers(client)
-                ws_r = await client.get("/api/v1/workspaces", headers=headers)
-                ws_id = ws_r.json()[0]["workspace_id"]
-
-                # Insert 2 rows so count is predictable
-                for _ in range(2):
-                    await client.post(
-                        "/api/v1/tables/lql_test_schema/rows",
-                        json={"row_data": {}},
-                        headers=headers,
-                    )
-
-            sys.path.insert(0, "/app/src")
-            from config.db import app_session_factory  # type: ignore[import]
-
-            from config.lattice_ql import compile_lql
-
-            async with app_session_factory() as session:
-                sql, params = await compile_lql(
-                    'table("lql_test_schema") | aggregate(count())',
-                    str(ws_id),
-                    session,
-                )
-
-            # Execute via asyncpg using app_user credentials from env
-            db_url = os.environ.get(
-                "APP_DB_URL",
-                "postgresql://app_user:app_password@db:5432/db",
-            )
-            conn = await asyncpg.connect(db_url)
-            try:
-                rows = await conn.fetch(sql, params["workspace_id"])
-                count = rows[0]["measure"]
-                assert count >= 2
-            finally:
-                await conn.close()
-
-        _run(_run_test())

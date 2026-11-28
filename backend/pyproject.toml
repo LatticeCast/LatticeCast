@@ -1,6 +1,6 @@
 [project]
 name = "lattice-cast-backend"
-version = "0.93.0"
+version = "0.93.1"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi",
@@ -37,6 +37,7 @@ select = [
     "I",   # isort
     "UP",  # pyupgrade
     "B",   # flake8-bugbear
+    "PLC0415", # imports belong at the head of the file, never inside a function
 ]
 ignore = [
     "E501", # line too long (handled by formatter)

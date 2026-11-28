@@ -7,6 +7,13 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
+from router.api.announcements import (
+    ANNOUNCEMENT_TABLE_NAME,
+    ANNOUNCEMENT_WORKSPACE_ID,
+    AnnouncementQueryRequest,
+    query_announcements,
+)
+
 
 def _run(coro):
     return asyncio.run(coro)
@@ -17,13 +24,6 @@ class TestAnnouncementQuery:
         """The endpoint compiles and executes supplied LQL under the announcement read identity."""
 
         async def _run_test():
-            from router.api.announcements import (
-                ANNOUNCEMENT_TABLE_NAME,
-                ANNOUNCEMENT_WORKSPACE_ID,
-                AnnouncementQueryRequest,
-                query_announcements,
-            )
-
             session = AsyncMock()
             caller_lql = 'table("Announcements") | limit(10)'
             compiled_sql = "SELECT title FROM rows"

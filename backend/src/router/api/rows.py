@@ -201,10 +201,8 @@ async def list_rows(
 
     repo = RowRepository(session)
     if filter_json:
-        import json as json_mod
-
         try:
-            contains = json_mod.loads(filter_json)
+            contains = json.loads(filter_json)
         except Exception:
             contains = {}
         if contains:

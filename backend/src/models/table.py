@@ -33,7 +33,7 @@ class ColumnOptions(SQLModel):
     note: str | None = Field(
         default=None,
         max_length=500,
-        description="Free-text annotation for the column, shown by the UI next to its name.",
+        description="Free-text annotation for the column; the grid shows it under the column name.",
     )
     display: str | None = Field(
         default=None,

@@ -303,6 +303,15 @@
 									</svg>
 								{/if}
 							</div>
+							{#if col.options?.note}
+								<p
+									data-testid="col-note-{col.column_id}"
+									class="truncate text-xs font-normal tracking-normal normal-case {T.muted}"
+									title={col.options.note}
+								>
+									{col.options.note}
+								</p>
+							{/if}
 
 							<!-- Column dropdown menu -->
 							{#if colMenuId === col.column_id}

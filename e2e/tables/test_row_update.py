@@ -17,6 +17,7 @@ Run:
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
 
 import pytest
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
@@ -242,9 +243,7 @@ def test_row_update(authed_page, admin_token, snapshot):
         # write -- so assert the type and the day it lands on rather than a
         # fixed number, which would only hold for one zone.
         assert isinstance(db_due, int), f"date cell should store an integer instant, got {db_due!r}"
-        from datetime import datetime, timezone as _tz
-
-        utc_day = datetime.fromtimestamp(db_due / 1000, _tz.utc).strftime("%Y-%m-%d")
+        utc_day = datetime.fromtimestamp(db_due / 1000, UTC).strftime("%Y-%m-%d")
         assert utc_day in ("2026-12-30", "2026-12-31"), (
             f"instant {db_due} is {utc_day} in UTC, not the day that was picked "
             "(a zone offset moves it by at most one day)"

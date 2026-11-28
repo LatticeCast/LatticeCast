@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
+
 import httpx
 import pytest
 from prometheus_client import REGISTRY, generate_latest
 
 from main import app
+from metrics import EVENT_LOOP_LAG_SECONDS, event_loop_lag_loop
+from util.security import hash_password, verify_password_async
 
 
 def _sample(name: str, **labels) -> float:
@@ -42,12 +47,6 @@ def test_pool_gauges_are_zero_before_engines_exist():
 
 @pytest.mark.asyncio
 async def test_event_loop_lag_sees_a_blocked_loop_and_bcrypt_does_not_block_it():
-    import asyncio
-    import time
-
-    from metrics import EVENT_LOOP_LAG_SECONDS, event_loop_lag_loop
-    from util.security import hash_password, verify_password_async
-
     def total() -> float:
         return _sample("lc_event_loop_lag_seconds_sum")
 

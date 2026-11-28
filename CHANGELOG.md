@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.93.1 — 2026-11-28
+
+- A column's note is now a real feature: the add-column dialog has a Note field, and the grid shows
+  the note under the column name (full text on hover). 0.93.0 only stored it, while the API
+  description claimed the UI showed it. e2e `tables/test_column_note.py`.
+- Corrected claims from 0.93.0 about per-column indexes:
+  - `number` is refused as a product rule, not because it "may hold fractions and cannot be
+    indexed"; the 422 message and the docs now say so.
+  - A per-column btree is not used by any query yet. LatticeQL compares through a different
+    expression and resolves `table_id` by subquery, so the partial index never applies; the grid's
+    `query_rows` filters by containment and sorts by row columns.
+  - Creating or dropping one is a plain `CREATE`/`DROP INDEX` inside the request, which blocks
+    writes to the shared `rows` table for every tenant while it runs.
+  Both are open problems recorded in `decision.md`; no behaviour changed here.
+- e2e pages randomly never finished loading (a different test failed on each run, always a 15 s
+  page-load timeout). Cause: the `browser` container ran on the host network, and Chromium aborts
+  every in-flight request with `net::ERR_NETWORK_CHANGED` when an interface in its namespace
+  changes, which on the host is any container starting or stopping anywhere on the machine. It now
+  has its own network namespace and reaches the proxy at the same `http://localhost:${NGX_PORT}`
+  through socat. Under the same interface churn: host network 1 stall in 60 loads, isolated 0 in 60.
+- Imports belong at the head of the file. Ruff `PLC0415` (import inside a function) is now enforced
+  for the backend, and `e2e/` and `migration/` Python, which no linter covered, are checked for
+  `E402` + `PLC0415` (`make lint-e2e`, `make lint-db`; both in pre-commit). The 62 inline imports found are gone.
+  - They were hiding a broken one: four `INTEGRATION_TESTS=1` tests in `test_lattice_ql.py` and
+    `test_dashboard.py` imported `config.db`, a module that does not exist, and used table ids that
+    stopped working in v0.80. Nothing ever ran them. Removed; e2e covers LQL execution.
+
 ## 0.93.0 — 2026-11-28
 
 - Per-column indexes are on demand. `add_column` no longer creates one (V79); equality on

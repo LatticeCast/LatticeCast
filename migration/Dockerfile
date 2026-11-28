@@ -19,6 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     apt-get update && apt-get install -y --no-install-recommends docker-ce-cli && \
     rm -rf /var/lib/apt/lists/*
 
-RUN uv pip install --system psycopg2-binary sqlfluff
+RUN uv pip install --system psycopg2-binary sqlfluff ruff
 
 WORKDIR /jetbase

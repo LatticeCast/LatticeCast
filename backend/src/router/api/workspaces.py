@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from middleware.auth import get_current_user, get_rls_session
-from models.user import User
+from models.user import User, UserInfo
 from models.workspace import (
     MemberCreate,
     MemberFullResponse,
@@ -30,8 +30,6 @@ async def _resolve_member_user(
 
     v40: email lives on gdpr.user_info; app role has SELECT on it.
     """
-    from models.user import UserInfo
-
     if data.user_id:
         user = await session.get(User, data.user_id)
         if user:

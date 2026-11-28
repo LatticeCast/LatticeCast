@@ -6,8 +6,15 @@ docker compose --profile migration run --rm migration
 docker compose up -d
 docker compose exec frontend npm run check
 docker compose exec frontend npm run build
-docker compose exec backend ruff check src
+make lint   # lint-be, lint-fe, lint-db, lint-e2e: what pre-commit runs
 ```
+
+- Python imports go at the head of the file, never inside a function. Ruff
+  `PLC0415` enforces it in backend, e2e and migration code.
+- The e2e `browser` container must stay off the host network: Chromium drops
+  in-flight requests (`net::ERR_NETWORK_CHANGED`) whenever a host interface
+  changes, i.e. whenever any container on the machine starts or stops. socat
+  inside it maps `localhost:${NGX_PORT}` to the proxy.
 
 - Frontend changes: type-check/build and focused E2E/snapshot. Keep server data
   in writable stores populated by controllers; review every `$effect` as a

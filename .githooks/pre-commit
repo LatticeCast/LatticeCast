@@ -15,6 +15,9 @@ make lint-fe
 echo "[pre-commit] SQL migration lint"
 make lint-db
 
+echo "[pre-commit] E2E lint"
+make lint-e2e
+
 echo "[pre-commit] Fresh-database migration verification"
 docker compose --profile migration run --rm --entrypoint python \
     migration migrate.py --test-only

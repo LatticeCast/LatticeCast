@@ -48,9 +48,9 @@ The API and frontend accept these ten column types. Each cell is stored under it
 |------|------------|---------|--------------|
 | `text` | String | Free-form text | None |
 | `string` | String | String-valued field | None |
-| `number` | Number | Numeric value; may hold fractions, so it cannot be indexed | None (indexes made before 0.93.0 remain; drop with `DELETE …/index`) |
-| `date` | Number | UTC epoch milliseconds, displayed as a date | B-tree on request |
-| `datetime` | Number | UTC epoch milliseconds, displayed with time | B-tree on request |
+| `number` | Number | Numeric value, integer or fractional | None by product rule (indexes made before 0.93.0 remain; drop with `DELETE …/index`) |
+| `date` | Number | UTC epoch milliseconds, displayed as a date | B-tree on request (not used by any query yet, see below) |
+| `datetime` | Number | UTC epoch milliseconds, displayed with time | B-tree on request (not used by any query yet, see below) |
 | `select` | String | One value from the column's configured choices | Shared GIN for containment |
 | `tags` | Array of strings | Multiple selected tags | Shared GIN for containment |
 | `checkbox` | Boolean | Checked or unchecked | Shared GIN for containment |
@@ -59,7 +59,7 @@ The API and frontend accept these ten column types. Each cell is stored under it
 
 `email` and `phone` are not accepted column types. Blob cells are written through their dedicated blob endpoints.
 The shared GIN covers the whole `row_data` JSONB value; "None" means no separate column index is created.
-A new table has no columns; `POST /tables/template/{basic,pm,crm,workflow}` seeds a starter set. Adding a column never creates an index (0.93.0). A column's options may carry `note` (a free-text annotation) and `display` (a hint for how a client reads the stored value, such as `date` or `link`); the server and LatticeQL never interpret `display`.
+A new table has no columns; `POST /tables/template/{basic,pm,crm,workflow}` seeds a starter set. Adding a column never creates an index (0.93.0). A per-column B-tree is not a speed-up yet: LatticeQL and the grid's row query do not use it, and creating or dropping one blocks writes to the shared `rows` table while it runs. A column's options may carry `note` (a free-text annotation, entered in the add-column dialog and shown under the column name) and `display` (a hint for how a client reads the stored value, such as `date` or `link`); the server and LatticeQL never interpret `display`.
 
 **Deprecated types.** `string` (same as `text`), `select`, `checkbox` and `url` only describe how to read a stored string, so they are deprecated in favour of `text` plus `options.display`; `number`, `date` and `datetime` will move to integer or double storage plus `options.display`. All keep working. Ordering comparisons in LatticeQL (`<`, `<=`, `>`, `>=`) on `number`, `date` and `datetime` columns are numeric.
 

@@ -1,6 +1,7 @@
 # src/main.py
 
 import asyncio
+import json
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -208,8 +209,6 @@ async def status() -> StatusResponse:
 
 def export_openapi_spec(output_path: str = "openapi.json") -> str:
     """Export OpenAPI spec to a JSON file"""
-    import json
-
     spec = app.openapi()
     with open(output_path, "w") as f:
         json.dump(spec, f, indent=2)

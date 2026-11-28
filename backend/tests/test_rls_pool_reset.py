@@ -30,8 +30,10 @@ import uuid
 import pytest
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session
 
 import core.db as core_db
+from config.settings import settings
 from core.db import (
     RLS_IDENTITY_SETTING,
     clear_rls_identity,
@@ -110,8 +112,6 @@ def test_install_rls_reset_hook_is_idempotent(monkeypatch):
 
 
 def _database_url() -> str:
-    from config.settings import settings
-
     return settings.database.app_async_url
 
 
@@ -166,8 +166,6 @@ def test_pooled_connection_never_hands_over_a_previous_identity(db_url: str):
 
 
 def test_install_rls_identity_hook_is_idempotent(monkeypatch):
-    from sqlalchemy.orm import Session
-
     registered: list[tuple[str, object]] = []
     real_listen = event.listen
 

@@ -184,9 +184,14 @@ services:
     stdin_open: true
 
   # Headless Chromium host. Runs `playwright run-server` on :4445 so the
-  # e2e container can remote-drive it. Also shares the host network
-  # so the FE running inside Chromium can fetch http://localhost:13491/api/...
-  # exactly like the developer's local browser would.
+  # e2e container can remote-drive it.
+  #
+  # Not on the host network: Chromium aborts every in-flight request with
+  # net::ERR_NETWORK_CHANGED whenever an interface in its network namespace
+  # changes, and on the host that is any container starting or stopping
+  # anywhere on the machine, so pages randomly never finished loading. In its
+  # own namespace it sees only lo and eth0. socat keeps the URL the same as a
+  # developer's browser: http://localhost:${NGX_PORT} here reaches the proxy.
   #
   # mem_limit + cpus: a buggy e2e test can put Chromium into a
   # pathological case (infinite re-render, leaked contexts, runaway
@@ -207,11 +212,17 @@ services:
     environment:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       BROWSER_PORT: ${E2E_BROWSER_PORT:-4445}
+      NGX_PORT: ${NGX_PORT}
+    ports:
+      - "127.0.0.1:${E2E_BROWSER_PORT:-4445}:${E2E_BROWSER_PORT:-4445}"
     command:
-      ["sh", "-c", "exec python3 -m playwright run-server --host 0.0.0.0 --port $${BROWSER_PORT}"]
+      - sh
+      - -c
+      - >-
+        socat TCP-LISTEN:$${NGX_PORT},bind=127.0.0.1,fork,reuseaddr TCP:lattice-cast:$${NGX_PORT} &
+        exec python3 -m playwright run-server --host 0.0.0.0 --port $${BROWSER_PORT}
     mem_limit: 2g
     cpus: 2.0
-    network_mode: host
 
   # Observability (Prometheus + Perses). `docker compose --profile monitor up -d`; config lives in ./monitor.
   prometheus:

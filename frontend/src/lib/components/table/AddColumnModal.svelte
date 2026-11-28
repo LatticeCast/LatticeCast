@@ -17,26 +17,31 @@
 	let newColName = $state('');
 	let newColType = $state<string>('text');
 	let newBlobKind = $state<BlobKind>('file');
+	let newColNote = $state('');
+
+	function reset() {
+		newColName = '';
+		newColType = 'text';
+		newBlobKind = 'file';
+		newColNote = '';
+	}
 
 	function handleAdd() {
 		if (!newColName.trim()) return;
 		const blobOption = BLOB_KIND_OPTIONS.find((option) => option.value === newBlobKind);
-		onAdd(
-			newColName.trim(),
-			newColType,
-			newColType === 'blob'
+		const note = newColNote.trim();
+		const options: ColumnOptions = {
+			...(newColType === 'blob'
 				? { kind: newBlobKind, ...(blobOption?.accept ? { accept: blobOption.accept } : {}) }
-				: undefined
-		);
-		newColName = '';
-		newColType = 'text';
-		newBlobKind = 'file';
+				: {}),
+			...(note ? { note } : {})
+		};
+		onAdd(newColName.trim(), newColType, Object.keys(options).length ? options : undefined);
+		reset();
 	}
 
 	function handleClose() {
-		newColName = '';
-		newColType = 'text';
-		newBlobKind = 'file';
+		reset();
 		onClose();
 	}
 </script>
@@ -99,6 +104,22 @@
 					</p>
 				</div>
 			{/if}
+			<div class="mb-6">
+				<label class="mb-1 block text-sm font-medium text-gray-600" for="col-note"
+					>Note <span class="font-normal text-gray-400">(optional)</span></label
+				>
+				<input
+					id="col-note"
+					data-testid="add-column-note-input"
+					class="w-full rounded-xl border border-gray-200 px-4 py-2 text-gray-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+					bind:value={newColNote}
+					maxlength="500"
+					placeholder="What this column is for"
+					onkeydown={(e) => {
+						if (e.key === 'Enter') handleAdd();
+					}}
+				/>
+			</div>
 			<div class="flex gap-3">
 				<button
 					data-testid="add-column-cancel-btn"
