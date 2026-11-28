@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.92.4 — 2026-11-28
+
+- LQL ordering comparisons (`<`, `<=`, `>`, `>=`) on `number`, `date` and `datetime`
+  columns are numeric (LatticeQL 0.6.3). `r.try_count < 10` used to be a 500 and
+  `r.try_count < "10"` matched nothing, because cells were compared as text. An
+  empty, missing or non-numeric cell reads as NULL, so it never matches and never
+  errors. A non-numeric literal (`< "abc"`) is a 400 at compile time.
+- `POST /workspaces/{id}/lql`: a Postgres type or data error from the caller's own
+  query (SQLSTATE class 22, `42804`, `42883`, `42846`) is a 422 instead of a 500.
+  Other database errors stay 500.
+- e2e `tables/test_lql_number_compare.py` covers literal, quoted literal, column vs
+  column, an empty cell, and the 4xx for a non-numeric literal.
+
 ## 0.92.3 — 2026-11-22
 
 - Fix: a blob upload (`PUT .../blob/{column_id}`) racing a row or workspace delete could return 500 when the row vanished between the recheck and the ownership insert (foreign-key violation); it now returns 404 "Row not found". Found because pacing the e2e requests changed the timing of the race test.

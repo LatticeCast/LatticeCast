@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy.exc import DBAPIError
 
 from router.api.lql import LQLRequest, query_workspace_lql, router
 
@@ -68,6 +69,30 @@ class TestWorkspaceLQL(unittest.TestCase):
             with self.assertRaises(HTTPException) as raised:
                 asyncio.run(query_workspace_lql(WORKSPACE_ID, LQLRequest(lql="bad"), None, session))
             self.assertEqual(raised.exception.status_code, 400)
+
+    def _run_with_execute_error(self, exc):
+        session = AsyncMock()
+        with (
+            patch("router.api.lql.WorkspaceRepository") as repository,
+            patch("router.api.lql.compile_lql", new_callable=AsyncMock) as compile_lql,
+            patch("router.api.lql.DashboardRepository.execute", new_callable=AsyncMock) as execute,
+            patch("router.api.lql.sqlstate_of", return_value=exc),
+        ):
+            repository.return_value.get_by_id = AsyncMock(return_value=SimpleNamespace(workspace_id=WORKSPACE_ID))
+            compile_lql.return_value = ("SELECT 1", {})
+            execute.side_effect = DBAPIError("SELECT 1", {}, Exception("boom"))
+            asyncio.run(query_workspace_lql(WORKSPACE_ID, LQLRequest(lql="x"), None, session))
+
+    def test_database_type_error_is_a_422_not_a_500(self):
+        for code in ("42883", "42804", "22P02"):
+            with self.subTest(code=code), self.assertRaises(HTTPException) as raised:
+                self._run_with_execute_error(code)
+            self.assertEqual(raised.exception.status_code, 422)
+            self.assertIn(code, raised.exception.detail)
+
+    def test_other_database_errors_stay_server_errors(self):
+        with self.assertRaises(DBAPIError):
+            self._run_with_execute_error("57014")
 
 
 if __name__ == "__main__":
