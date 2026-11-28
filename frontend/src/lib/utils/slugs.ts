@@ -48,6 +48,8 @@ function workspaceNames<T extends NamedWorkspace>(list: T[]): Map<T, string> {
 
 /** The URL name of `ws` among `list` (`ws` replaces any stale entry with its id). */
 export function workspaceSlug(ws: NamedWorkspace, list: NamedWorkspace[]): string {
+	// A name shaped like a UUID would be read as an id, possibly another workspace's.
+	if (isUuid(ws.workspace_name)) return ws.workspace_id;
 	const others = list.filter((item) => item.workspace_id !== ws.workspace_id);
 	const known = list.find((item) => item.workspace_id === ws.workspace_id);
 	const entry = { ...ws, created_at: known?.created_at || ws.created_at };

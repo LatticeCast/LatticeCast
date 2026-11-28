@@ -36,6 +36,7 @@ import time
 from pathlib import Path
 
 import psycopg2
+import test_convert_column_type
 import test_migration_rls
 import test_migration_schema
 import test_migration_seed
@@ -505,6 +506,13 @@ def step_test() -> bool:
                 all_errors.extend(errors)
             else:
                 print(f"  ✓ {name} passed")
+
+        errors = test_convert_column_type.verify(psql_query, test_dsn)
+        for err in errors:
+            print(f"  ✗ convert: {err}")
+        all_errors.extend(errors)
+        if not errors:
+            print("  ✓ convert passed")
 
         if all_errors:
             print(f"  ✗ {len(all_errors)} error(s)")

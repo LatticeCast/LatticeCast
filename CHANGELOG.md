@@ -1,5 +1,34 @@
 # Changelog
 
+## 0.94.1 — 2026-11-28
+
+**Breaking change**
+
+- Every write checks the changed cells against their storage type (V84): `text` takes a string,
+  `int` an integer, `double` a number, `strings` an array of strings, and null is always allowed.
+  Anything else is a 422, except that an empty string sent to an `int` or `double` cell is stored
+  as null and `3.0` in an `int` cell as `3`. Unchanged cells, blob columns and columns still on an
+  old type are not checked by this rule.
+
+**Fixes**
+
+- A column's type changes only when every stored value fits the new type (V83); nothing is
+  converted. Before, `text` to `int` was accepted over `"abc"` and later writes to that row failed.
+- The web client no longer truncates a fraction typed into an int cell, or turns unreadable input
+  into null.
+- A workspace named like a UUID is addressed by its own id.
+- A type change drops the column's old index, and row writes wait for a type change in progress
+  (V85).
+- `convert_column_type.py`: `true`/`false` become `["T"]`/`["F"]` only with `--display checkbox`;
+  arrays must hold strings; invalid cells are cleared before any rewrite; blank text converts to
+  null.
+- CSV import checks number cells before creating anything.
+- Pins LatticeQL 0.6.5.
+
+**Upgrading** is not finished until old columns are converted: until then LatticeQL omits them, and
+an old checkbox column (`true`/`false`) shows as unchecked. Run the migrations, then
+`convert_column_type.py list` and `convert` each column it names.
+
 ## 0.94.0 — 2026-11-28
 
 **Breaking changes**
@@ -22,14 +51,7 @@
   workspaces; the web client addresses them as `name`, `name-1`, `name-2`.
 - The last owner of a workspace may be demoted or removed; zero owners is allowed.
 - PostgreSQL refuses reserved workspace names and blank view names (V81).
-- A column's type changes only when every stored value fits the new type (V83); nothing is converted.
-- Every write checks the changed cells against their storage type: `text`, `int`, `double`,
-  `strings` (V84).
-- The web client no longer truncates a fraction typed into an int cell.
 
-**Upgrading** is not finished until old columns are converted: until then LatticeQL omits them, and
-an old checkbox column (`true`/`false`) shows as unchecked. Run the migrations, then
-`convert_column_type.py list` and `convert` each column it names.
 - Needs LatticeQL 0.6.5 (`int`, `double`, `strings` kinds).
 
 ## 0.93.1 — 2026-11-28

@@ -866,11 +866,41 @@ class TablePageStore {
 		input.value = '';
 	}
 
+	/** Throw, naming the line, if any number cell of the preview cannot be stored. */
+	private checkImportNumbers() {
+		const existing = get(columns);
+		for (const header of this.importPreviewHeaders) {
+			const name = header.match(/^(.+)\{\{(\w+)\}\}$/)?.[1].trim() ?? header;
+			const planned = this.importNewColumns.find((nc) => nc.name === name);
+			const choice = planned ? columnChoice(planned.type) : undefined;
+			const column =
+				existing.find((c) => c.name === name) ??
+				(choice && { type: choice.type, options: { display: choice.display } });
+			if (!column || readAs(column) !== 'number') continue;
+			this.importPreviewRows.forEach((row, index) => {
+				const raw = row[header];
+				if (raw === '' || raw === undefined) return;
+				// Line 1 is the header.
+				const where = `line ${index + 2}, column "${name}"`;
+				let value: unknown;
+				try {
+					value = parseEditValue(raw, column);
+				} catch (e) {
+					throw new Error(`${where}: ${e instanceof Error ? e.message : 'invalid value'}`);
+				}
+				if (column.type === 'int' && value !== null && !Number.isInteger(value))
+					throw new Error(`${where}: "${raw}" is not an integer`);
+			});
+		}
+	}
+
 	async commitImport() {
 		this.importingData = true;
 		this.importError = null;
 		const tableId = this.tableId;
 		try {
+			// Check the whole file before creating anything, so a bad cell leaves no half import.
+			this.checkImportNumbers();
 			for (const nc of this.importNewColumns) {
 				const choices =
 					nc.values && nc.values.length > 0

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
+import { workspaceSlug } from './slugs';
 import { findTableForPath } from './table-route';
 
 const firstWorkspace = '11111111-1111-4111-8111-111111111111';
@@ -39,5 +40,14 @@ describe('table URL resolution', () => {
 		const uuidName = '33333333-3333-4333-8333-333333333333';
 		const named = [{ workspace_id: firstWorkspace, workspace_name: uuidName, created_at: 'a' }];
 		expect(findTableForPath(uuidName, 'data-reports', named, tables)?.table_id).toBe(60);
+	});
+
+	it('addresses a workspace named like a UUID by its own id', () => {
+		const impostor = {
+			workspace_id: secondWorkspace,
+			workspace_name: firstWorkspace,
+			created_at: 'b'
+		};
+		expect(workspaceSlug(impostor, [workspaces[0], impostor])).toBe(secondWorkspace);
 	});
 });

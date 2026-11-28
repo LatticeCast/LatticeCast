@@ -31,6 +31,17 @@ def test_type_change_and_int_input(authed_page, workspace, admin_token):
     columns = api("GET", f"/api/v1/tables/{table_id}", token).json()["columns"]
     assert next(c["type"] for c in columns if c["column_id"] == label) == "text"
 
+    # An index built for the old type is dropped with it, so it cannot refuse a later write.
+    code = _add(token, table_id, "code", "int")
+    r = api("POST", f"/api/v1/tables/{table_id}/columns/{code}/index", token)
+    assert r.status_code == 201, r.text[:200]
+    r = api("PATCH", f"/api/v1/tables/{table_id}/columns/{code}", token, json={"type": "text"})
+    assert r.status_code == 200, r.text[:200]
+    indexes = api("GET", f"/api/v1/tables/{table_id}/indexes", token).json()["columns"]
+    assert next(c["index"] for c in indexes if c["column_id"] == code) is None
+    r = api("PATCH", row_path, token, json={"row_data": {code: "99999999999999999999"}})
+    assert r.status_code == 200, f"{r.status_code} {r.text[:200]}"
+
     # Every int fits a double, so that change is accepted.
     r = api("PATCH", f"/api/v1/tables/{table_id}/columns/{count}", token, json={"type": "double"})
     assert r.status_code == 200, r.text[:200]

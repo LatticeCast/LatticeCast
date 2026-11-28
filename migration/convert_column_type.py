@@ -22,8 +22,9 @@ database stores it in the column's options and never reads it.
 Stored values change only where the stored form must:
     text     a boolean or number becomes its text ('true', '3')
     int      3.0 becomes 3 and an empty string becomes null
-    strings  true becomes ["T"], false becomes ["F"], and a lone string its
-             one-element array
+    double   an empty string becomes null
+    strings  a lone string becomes its one-element array; with --display
+             checkbox, true/"true" becomes ["T"] and false/"false" ["F"]
 A value that does not fit the target type stops the conversion. Look at it,
 then pick another type, pass --parse-strings if it is a number written as
 text ("12"), or pass --clear-invalid to null those cells.
@@ -39,6 +40,7 @@ import os
 import sys
 
 import psycopg2
+from psycopg2 import sql
 
 STORAGE_TYPES = ("text", "int", "double", "strings", "blob")
 BIGINT_MIN, BIGINT_MAX = -(2**63), 2**63 - 1
@@ -76,48 +78,67 @@ WHERE table_id = %(tid)s AND row_data ? %(col)s AND jsonb_typeof(row_data -> %(c
 LIMIT 5
 """
 
-# Cells that cannot be stored as the target type, per target.
+# Cells that cannot be stored as the target type, per target. A CASE guards every
+# cast, so text that is not a number is never handed to ::NUMERIC.
+_KIND = "jsonb_typeof(row_data -> %(col)s)"
+_TEXT = "btrim(row_data ->> %(col)s)"
+_NUMERIC_TEXT_OK = (
+    f"CASE WHEN {_TEXT} = '' THEN TRUE "
+    f"WHEN NOT %(parse)s OR {_TEXT} !~ %(number)s THEN FALSE "
+    f"ELSE NOT %(integral)s OR {_TEXT}::NUMERIC BETWEEN %(lo)s AND %(hi)s END"
+)
 INVALID_WHERE = {
-    "text": "jsonb_typeof(row_data -> %(col)s) IN ('array', 'object')",
+    "text": f"{_KIND} IN ('array', 'object')",
     "int": (
-        "CASE jsonb_typeof(row_data -> %(col)s) "
-        "WHEN 'null' THEN FALSE "
-        "WHEN 'string' THEN btrim(row_data ->> %(col)s) <> '' "
+        f"CASE {_KIND} WHEN 'null' THEN FALSE "
+        f"WHEN 'string' THEN NOT ({_NUMERIC_TEXT_OK}) "
         "WHEN 'number' THEN (row_data ->> %(col)s)::NUMERIC %% 1 <> 0 "
         "     OR (row_data ->> %(col)s)::NUMERIC NOT BETWEEN %(lo)s AND %(hi)s "
         "ELSE TRUE END"
     ),
-    "double": "jsonb_typeof(row_data -> %(col)s) NOT IN ('null', 'number')",
-    "strings": "jsonb_typeof(row_data -> %(col)s) NOT IN ('null', 'array', 'boolean', 'string')",
-}
-
-# Cells that are valid for the target but stored in another form, and their new form.
-REWRITE = {
-    "text": (
-        "jsonb_typeof(row_data -> %(col)s) IN ('boolean', 'number')",
-        "to_jsonb(row_data ->> %(col)s)",
-    ),
     "double": (
-        "jsonb_typeof(row_data -> %(col)s) = 'string' AND btrim(row_data ->> %(col)s) = ''",
-        "'null'::JSONB",
-    ),
-    "int": (
-        "jsonb_typeof(row_data -> %(col)s) <> 'null' AND (row_data ->> %(col)s) !~ '^-?[0-9]+$'",
-        "CASE jsonb_typeof(row_data -> %(col)s) WHEN 'number' "
-        "THEN to_jsonb((row_data ->> %(col)s)::NUMERIC::BIGINT) ELSE 'null'::JSONB END",
+        f"CASE {_KIND} WHEN 'null' THEN FALSE WHEN 'number' THEN FALSE "
+        f"WHEN 'string' THEN NOT ({_NUMERIC_TEXT_OK}) ELSE TRUE END"
     ),
     "strings": (
-        "jsonb_typeof(row_data -> %(col)s) IN ('boolean', 'string')",
-        "CASE WHEN row_data -> %(col)s IN ('true'::JSONB, '\"true\"'::JSONB) THEN '[\"T\"]'::JSONB "
-        "WHEN row_data -> %(col)s IN ('false'::JSONB, '\"false\"'::JSONB) THEN '[\"F\"]'::JSONB "
-        "WHEN btrim(row_data ->> %(col)s) = '' THEN 'null'::JSONB "
-        "ELSE jsonb_build_array(row_data ->> %(col)s) END",
+        f"CASE {_KIND} WHEN 'null' THEN FALSE WHEN 'string' THEN FALSE "
+        "WHEN 'array' THEN EXISTS (SELECT 1 FROM jsonb_array_elements(row_data -> %(col)s) AS item "
+        "                         WHERE jsonb_typeof(item) <> 'string') "
+        "ELSE TRUE END"
+    ),
+    "checkbox": (
+        f"CASE {_KIND} WHEN 'null' THEN FALSE WHEN 'boolean' THEN FALSE "
+        f"WHEN 'string' THEN {_TEXT} NOT IN ('', 'true', 'false', 'T', 'F') "
+        "WHEN 'array' THEN row_data -> %(col)s NOT IN ('[\"T\"]'::JSONB, '[\"F\"]'::JSONB) "
+        "ELSE TRUE END"
+    ),
+}
+
+# Cells that are valid for the target but stored in another form: (which, new form).
+_BLANK_NUMBER = f"CASE WHEN {_TEXT} = '' THEN 'null'::JSONB "
+REWRITE = {
+    "text": (f"{_KIND} IN ('boolean', 'number')", "to_jsonb(row_data ->> %(col)s)"),
+    "int": (
+        f"CASE {_KIND} WHEN 'string' THEN TRUE "
+        "WHEN 'number' THEN (row_data ->> %(col)s) !~ '^-?[0-9]+$' ELSE FALSE END",
+        f"{_BLANK_NUMBER}ELSE to_jsonb((row_data ->> %(col)s)::NUMERIC::BIGINT) END",
+    ),
+    "double": (f"{_KIND} = 'string'", f"{_BLANK_NUMBER}ELSE to_jsonb({_TEXT}::NUMERIC) END"),
+    "strings": (
+        f"{_KIND} = 'string'",
+        f"CASE WHEN {_TEXT} = '' THEN 'null'::JSONB ELSE jsonb_build_array(row_data ->> %(col)s) END",
+    ),
+    "checkbox": (
+        f"{_KIND} IN ('boolean', 'string')",
+        "CASE WHEN row_data ->> %(col)s IN ('true', 'T') THEN '[\"T\"]'::JSONB "
+        "WHEN row_data ->> %(col)s IN ('false', 'F') THEN '[\"F\"]'::JSONB "
+        "ELSE 'null'::JSONB END",
     ),
 }
 
 
-def connect():
-    conn = psycopg2.connect(os.environ.get("DATABASE_URL", "postgresql://dba_user:dba_pws@db:5432/db"))
+def connect(dsn: str | None = None):
+    conn = psycopg2.connect(dsn or os.environ.get("DATABASE_URL", "postgresql://dba_user:dba_pws@db:5432/db"))
     conn.autocommit = False
     return conn
 
@@ -167,16 +188,33 @@ def cmd_list(args) -> int:
 
 
 def cmd_convert(args) -> int:
-    params = {"tid": args.table_id, "col": args.column_id, "lo": BIGINT_MIN, "hi": BIGINT_MAX}
-    conn = connect()
+    if args.display == "checkbox" and args.type != "strings":
+        print("checkbox is a reading of a strings column: use --type strings", file=sys.stderr)
+        return 2
+    # true/false become ['T']/['F'] only when the column is to be read as a checkbox.
+    target = "checkbox" if args.display == "checkbox" else args.type
+    params = {
+        "tid": args.table_id,
+        "col": args.column_id,
+        "lo": BIGINT_MIN,
+        "hi": BIGINT_MAX,
+        "parse": args.parse_strings,
+        "integral": args.type == "int",
+        "number": "^-?[0-9]+$" if args.type == "int" else "^-?[0-9]+([.][0-9]+)?$",
+    }
+    cells = "FROM public.rows WHERE table_id = %(tid)s AND row_data ? %(col)s"
+    conn = connect(args.dsn)
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT config -> 'columns' FROM public.tables WHERE table_id = %s FOR UPDATE", (args.table_id,))
+            cur.execute(
+                "SELECT config -> 'columns', workspace_id::TEXT FROM public.tables WHERE table_id = %s FOR UPDATE",
+                (args.table_id,),
+            )
             row = cur.fetchone()
             if row is None or not isinstance(row[0], list):
                 print(f"table {args.table_id} not found", file=sys.stderr)
                 return 2
-            columns = row[0]
+            columns, workspace_id = row
             column = next((c for c in columns if c.get("column_id") == args.column_id), None)
             if column is None:
                 print(f"column {args.column_id} not found in table {args.table_id}", file=sys.stderr)
@@ -188,64 +226,55 @@ def cmd_convert(args) -> int:
             print(f"column  {column.get('name')!r}  {column.get('type')} -> {args.type}  display={args.display}")
             print(f"data    {json.dumps(facts(cur, args.table_id, args.column_id), ensure_ascii=False)}")
 
-            # The column takes its new type first: the rows trigger checks every cell
-            # written below against it.
+            cur.execute(f"SELECT count(*) {cells} AND {INVALID_WHERE[target]}", params)
+            invalid = cur.fetchone()[0]
+            if invalid and not args.clear_invalid:
+                print(f"STOP    {invalid} cell(s) cannot be stored as {target}; nothing changed.", file=sys.stderr)
+                print("        Pick another type, or pass --clear-invalid to null them.", file=sys.stderr)
+                conn.rollback()
+                return 1
+
+            # The column takes its new type first: the rows trigger checks every
+            # cell written below against it.
             options = column.get("options")
             if not isinstance(options, dict):
                 options = {}
+            options = {k: v for k, v in options.items() if k != "display"}
             if args.display:
-                options = {**options, "display": args.display}
-            else:
-                options = {k: v for k, v in options.items() if k != "display"}
+                options["display"] = args.display
             new_columns = [
                 {**c, "type": args.type, "options": options} if c.get("column_id") == args.column_id else c
                 for c in columns
             ]
             cur.execute(
-                "UPDATE public.tables SET config = jsonb_set(config, '{columns}', %s::JSONB) "
-                "WHERE table_id = %s RETURNING workspace_id::TEXT",
+                "UPDATE public.tables SET config = jsonb_set(config, '{columns}', %s::JSONB) WHERE table_id = %s",
                 (json.dumps(new_columns), args.table_id),
             )
-            workspace_id = cur.fetchone()[0]
-
-            if args.parse_strings and args.type in ("int", "double"):
+            # An index built for the old type would refuse the rewritten cells.
+            if column.get("type") != args.type:
                 cur.execute(
-                    "UPDATE public.rows "
-                    "SET row_data = jsonb_set(row_data, ARRAY[%(col)s], to_jsonb(btrim(row_data ->> %(col)s)::NUMERIC)) "
-                    "WHERE table_id = %(tid)s AND jsonb_typeof(row_data -> %(col)s) = 'string' "
-                    "AND btrim(row_data ->> %(col)s) ~ %(number)s",
-                    {**params, "number": "^-?[0-9]+$" if args.type == "int" else "^-?[0-9]+([.][0-9]+)?$"},
+                    "SELECT public._build_rd_idx_name(%s::UUID, %s::BIGINT, %s), "
+                    "public._build_rd_idx_name(%s::BIGINT, %s)",
+                    (workspace_id, args.table_id, args.column_id, args.table_id, args.column_id),
                 )
-                print(f"parsed  {cur.rowcount} numeric string(s) into numbers")
+                for index_name in cur.fetchone():
+                    cur.execute(sql.SQL("DROP INDEX IF EXISTS public.{}").format(sql.Identifier(index_name)))
 
-            cur.execute(
-                f"SELECT count(*) FROM public.rows WHERE table_id = %(tid)s AND row_data ? %(col)s "
-                f"AND {INVALID_WHERE[args.type]}",
-                params,
-            )
-            invalid = cur.fetchone()[0]
-            if invalid and not args.clear_invalid:
-                print(f"STOP    {invalid} cell(s) cannot be stored as {args.type}; nothing changed.", file=sys.stderr)
-                print("        Pick another type, or pass --clear-invalid to null them.", file=sys.stderr)
-                conn.rollback()
-                return 1
             if invalid:
                 cur.execute(
-                    f"UPDATE public.rows SET row_data = jsonb_set(row_data, ARRAY[%(col)s], 'null'::JSONB) "
-                    f"WHERE table_id = %(tid)s AND row_data ? %(col)s AND {INVALID_WHERE[args.type]}",
+                    "UPDATE public.rows SET row_data = jsonb_set(row_data, ARRAY[%(col)s], 'null'::JSONB) "
+                    f"WHERE table_id = %(tid)s AND row_data ? %(col)s AND {INVALID_WHERE[target]}",
                     params,
                 )
                 print(f"cleared {cur.rowcount} invalid cell(s) to null")
-
-            if args.type in REWRITE:
-                where, value = REWRITE[args.type]
+            if target in REWRITE:
+                where, value = REWRITE[target]
                 cur.execute(
                     f"UPDATE public.rows SET row_data = jsonb_set(row_data, ARRAY[%(col)s], {value}) "
                     f"WHERE table_id = %(tid)s AND row_data ? %(col)s AND {where}",
                     params,
                 )
-                print(f"rewrote {cur.rowcount} cell(s) into {args.type} form")
-
+                print(f"rewrote {cur.rowcount} cell(s) into {target} form")
             # LatticeQL caches the workspace schema; it still names the old type.
             cur.execute("DELETE FROM private.cache WHERE cache_key = %s", (f"lql:schema:{workspace_id}",))
 
@@ -277,7 +306,7 @@ def main() -> int:
     convert.add_argument("--parse-strings", action="store_true", help='int/double: read "12" as the number 12')
     convert.add_argument("--clear-invalid", action="store_true", help="null the cells that do not fit the type")
     convert.add_argument("--apply", action="store_true", help="write the change (default is a dry run)")
-    convert.set_defaults(run=cmd_convert)
+    convert.set_defaults(run=cmd_convert, dsn=None)
 
     args = parser.parse_args()
     return args.run(args)
