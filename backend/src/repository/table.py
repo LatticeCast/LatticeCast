@@ -160,16 +160,32 @@ class TableRepository(RLSRepository):
             return
         idx_name = self._index_name(workspace_id, table_id, column_id)
         await self.session.execute(
-            text("SELECT create_row_data_index(:ws, :idx, :tid, :cid, :ct)").bindparams(
+            text("SELECT create_row_data_index(CAST(:ws AS uuid), :idx, CAST(:tid AS bigint), :cid, :ct)").bindparams(
                 ws=str(workspace_id), idx=idx_name, tid=table_id, cid=column_id, ct=col_type
             )
         )
         await self.session.commit()
 
+    async def list_column_indexes(self, workspace_id: UUID, table_id: int) -> dict[str, dict]:
+        """Per-column indexes of one table, keyed by the index name's column prefix.
+
+        The name carries only the first 12 hex digits of the column id, so the
+        caller matches columns with `_index_name`.
+        """
+        result = await self.session.execute(
+            text("SELECT index_name, method, size_bytes FROM list_row_data_indexes(CAST(:ws AS uuid), CAST(:tid AS bigint))").bindparams(
+                ws=str(workspace_id), tid=table_id
+            )
+        )
+        return {
+            row.index_name: {"name": row.index_name, "method": row.method, "size_bytes": int(row.size_bytes)}
+            for row in result
+        }
+
     async def drop_column_index(self, workspace_id: UUID, table_id: int, column_id: str) -> None:
         idx_name = self._index_name(workspace_id, table_id, column_id)
         await self.session.execute(
-            text("SELECT drop_row_data_index(:ws, :idx, :tid, :cid)").bindparams(
+            text("SELECT drop_row_data_index(CAST(:ws AS uuid), :idx, CAST(:tid AS bigint), :cid)").bindparams(
                 ws=str(workspace_id), idx=idx_name, tid=table_id, cid=column_id
             )
         )

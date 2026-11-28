@@ -42,8 +42,8 @@ async def create_table(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_rls_session),
 ):
-    """Create a blank table via the V38 PG function — atomic INSERT +
-    __schema__/__order__ setup + per-column indexes in one transaction."""
+    """Create a table with no columns: the user adds the ones they want. Columns
+    come from `POST /tables/template/{kind}` (basic, pm, crm, workflow)."""
     ws_repo = WorkspaceRepository(session)
     if data.workspace_id:
         workspace = await ws_repo.resolve_workspace(data.workspace_id)

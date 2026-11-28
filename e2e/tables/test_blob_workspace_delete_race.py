@@ -38,7 +38,7 @@ def test_blob_put_during_workspace_delete(admin_token):
         try:
             table_response = api(
                 "POST",
-                "/api/v1/tables",
+                "/api/v1/tables/template/basic",
                 token,
                 json={"workspace_id": workspace_id, "table_name": "articles"},
             )

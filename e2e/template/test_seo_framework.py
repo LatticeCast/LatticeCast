@@ -62,7 +62,7 @@ def test_seo_framework(browser, admin_token):
 
     try:
         # ── 2. CREATE table ────────────────────────────────────────────────────
-        r = api("POST", "/api/v1/tables", token,
+        r = api("POST", "/api/v1/tables/template/basic", token,
                 json={"table_name": TABLE_ID, "workspace_id": ws_id})
         assert r.status_code == 201, f"create table: {r.status_code} {r.text[:200]}"
         TABLE_ID = str(r.json()["table_id"])

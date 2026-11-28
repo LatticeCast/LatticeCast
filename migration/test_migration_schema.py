@@ -741,9 +741,10 @@ def verify(psql_fn) -> list[str]:
     if not result:
         errors.append("MISSING INDEX: rows.row_data GIN for LQL containment (V72)")
 
-    # V77: new columns create B-tree indexes only for range/sort types.
-    # Choice/boolean containment uses the shared GIN, while free text and
-    # blob types do not create individual indexes. Roll back the probe.
+    # V79: add_column creates no per-column index; the range types get a B-tree
+    # only when create_row_data_index is asked for it, and list_row_data_indexes
+    # reports it. Choice/boolean containment uses the shared GIN, while free text
+    # and blob types never get an individual index. Roll back the probe.
     try:
         psql_fn("""
         BEGIN;
@@ -778,8 +779,22 @@ def verify(psql_fn) -> list[str]:
                 );
                 v_exists := to_regclass('public.' || quote_ident(v_idx))
                     IS NOT NULL;
-                IF v_exists <> (v_type IN ('number', 'date', 'datetime')) THEN
-                    RAISE EXCEPTION 'wrong V77 index behavior for %', v_type;
+                IF v_exists THEN
+                    RAISE EXCEPTION 'add_column must not create an index for %', v_type;
+                END IF;
+                IF v_type IN ('number', 'date', 'datetime') THEN
+                    PERFORM public.create_row_data_index(
+                        v_ws, v_idx, v_table,
+                        v_config -> 'columns' -> -1 ->> 'column_id', v_type
+                    );
+                    IF NOT EXISTS (
+                        SELECT 1 FROM public.list_row_data_indexes(v_ws, v_table)
+                        WHERE index_name = v_idx AND method = 'btree'
+                    ) THEN
+                        RAISE EXCEPTION 'on-demand index for % not listed', v_type;
+                    END IF;
+                ELSIF to_regclass('public.' || quote_ident(v_idx)) IS NOT NULL THEN
+                    RAISE EXCEPTION 'unexpected index for %', v_type;
                 END IF;
             END LOOP;
         END;
@@ -787,7 +802,27 @@ def verify(psql_fn) -> list[str]:
         ROLLBACK;
         """)
     except subprocess.CalledProcessError as exc:
-        errors.append(f"V77 COLUMN INDEX PROBE: {exc.stderr}")
+        errors.append(f"V79 COLUMN INDEX PROBE: {exc.stderr}")
+
+    # V79: indexes of a deleted table are dropped by drop_orphan_row_indexes.
+    try:
+        psql_fn("""
+        BEGIN;
+        DO $probe$
+        DECLARE
+            v_idx TEXT := 'idx_rd_orphan_probe';
+        BEGIN
+            EXECUTE 'CREATE INDEX idx_rd_orphan_probe ON public.rows (row_id) WHERE table_id = 999999999';
+            PERFORM public.drop_orphan_row_indexes(100000);
+            IF to_regclass('public.' || v_idx) IS NOT NULL THEN
+                RAISE EXCEPTION 'orphan index survived';
+            END IF;
+        END;
+        $probe$;
+        ROLLBACK;
+        """)
+    except subprocess.CalledProcessError as exc:
+        errors.append(f"V79 ORPHAN INDEX PROBE: {exc.stderr}")
 
     # V73: template seed functions must emit the final blob/text schema directly.
     # The dispatcher must no longer depend on a legacy doc conversion pass.

@@ -204,7 +204,15 @@
 		<div class="pt-16 text-center {T.muted}">Loading...</div>
 	{:else if sortedColumns.length === 0}
 		<div class="mx-4 my-4 rounded-xl border p-8 text-center {T.border} {T.tableHeaderBg} {T.muted}">
-			No columns defined yet. Click "+ Column" to start.
+			<p>This table has no columns yet.</p>
+			<button
+				data-testid="grid-add-column-btn"
+				onclick={onShowAddColumn}
+				disabled={addingColumn}
+				class="mt-3 rounded-lg border px-3 py-1.5 text-sm font-medium hover:bg-gray-100 disabled:opacity-50 {T.border}"
+			>
+				+ Column
+			</button>
 		</div>
 	{:else}
 		<table

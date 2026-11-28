@@ -5,7 +5,7 @@ Flow:
   1. Navigate to claude's default workspace
   2. Create a new workspace via "+ New" button in the tab strip
   3. On new workspace page: create blank table → card appears → click to navigate
-  4. Verify blank table grid renders (thead + default columns)
+  4. Verify the blank table has no columns and shows the add-column button
   5. Navigate back to workspace → create PM template table
   6. Verify redirect + PM grid (13 columns + Sprint Board + Roadmap views)
   7. Open sidebar → expand workspace → verify both tables listed
@@ -179,13 +179,14 @@ def test_workspace_table_create(authed_page, admin_token, snapshot):
 
     print(f"    navigated to: {page.url}")
 
+    # A blank table has no columns; the grid offers the button to add the first one.
     try:
-        page.wait_for_selector("table thead", timeout=10000)
-        cols = _col_names(page)
-        print(f"    blank table columns: {cols}")
+        page.wait_for_selector("[data-testid='grid-add-column-btn']", timeout=10000)
+        assert page.locator("table thead").count() == 0
+        print("    blank table has no columns; add-column button shown")
     except PlaywrightTimeout:
         _snap(page, "t15_FAIL_blank_grid", True)
-        pytest.fail("<thead> not rendered for blank table")
+        pytest.fail("add-column button not rendered for blank table")
 
     _snap(page, "t15_05_blank_table_grid", snapshot)
 

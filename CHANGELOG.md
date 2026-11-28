@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.93.0 — 2026-11-28
+
+- Per-column indexes are on demand. `add_column` no longer creates one (V79); equality on
+  select / tags / checkbox / text is served by the shared `row_data` GIN, and a btree is only for
+  range queries. Existing indexes are untouched.
+  - `GET /tables/{id}/indexes`: for each column, its index (name, method, size) or what serves it
+    (`btree`, `shared_gin`, `none`) and whether an index can be created.
+  - `POST /tables/{id}/columns/{column_id}/index`: create the btree. Only `date` and `datetime`
+    (integer epoch-ms) qualify; `number` may hold fractions and is refused with 422, as are types the
+    shared GIN already serves.
+  - `DELETE /tables/{id}/columns/{column_id}/index`: drop it, including one made for a `number`
+    column before V79.
+  - `create_column_index` / `drop_column_index` had no caller and never worked (untyped bind
+    parameters, no matching function); fixed.
+- `POST /tables` creates a table with no columns; the user decides which to add. The old blank set
+  (Title, Doc, Description) is the `basic` template: `POST /tables/template/basic`. Templates
+  (basic, pm, crm, workflow) create no index either. An empty table's grid now has an add-column
+  button (the "+ Column" hint had no button to click). V79 redefines `_seed_blank`, adds
+  `_seed_basic`, and redefines `create_table_from_template`.
+- Fix: deleting a table or workspace left its per-column indexes on the shared `rows` table
+  forever. One dev database had 13,749 such orphans for 139 live tables (195 MB, 280 ms to plan a
+  query, 15 s read timeouts right after a restart). V79 adds `drop_orphan_row_indexes(limit)`.
+  **After migrating an existing database**, run it as `mgr`/dba in separate transactions until it
+  returns 0: `SELECT public.drop_orphan_row_indexes(200);`. It is not run by the migration, which
+  could not hold that many locks in one transaction. An on-demand index of a later deleted table
+  is cleaned by the same call.
+- Column options carry `note` (annotation, max 500) and `display` (reading hint such as date, link,
+  checkbox; advisory, never interpreted by the server or LQL).
+- `select`, `checkbox`, `url`, `string` are documented as deprecated in the API schema (still
+  accepted); LatticeQL 0.6.4 lists `select`, `bool`, `url` as deprecated kinds in favour of `text`
+  plus a display hint. `number`, `date`, `datetime` follow once integer and double storage exist.
+
 ## 0.92.4 — 2026-11-28
 
 - LQL ordering comparisons (`<`, `<=`, `>`, `>=`) on `number`, `date` and `datetime`

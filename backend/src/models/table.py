@@ -30,6 +30,19 @@ class ColumnOptions(SQLModel):
         default=None,
         description="Blob UI hint: file=any binary, image=image, text=plain/Markdown/CSV, table=tabular data.",
     )
+    note: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Free-text annotation for the column, shown by the UI next to its name.",
+    )
+    display: str | None = Field(
+        default=None,
+        max_length=32,
+        description=(
+            "How a client should read the stored value, e.g. date, link, checkbox, select. "
+            "Advisory only: the server and LatticeQL never interpret it."
+        ),
+    )
     accept: str | None = Field(
         default=None,
         description="Optional HTML file-input accept hint. It does not enforce server-side MIME validation.",
@@ -38,7 +51,15 @@ class ColumnOptions(SQLModel):
 
 class ColumnCreate(SQLModel):
     name: str
-    type: ColumnType = "text"
+    type: ColumnType = Field(
+        default="text",
+        description=(
+            "Storage/reading kind. Deprecated, kept working: `string` (same as `text`), and `select`, "
+            "`checkbox`, `url`, which are only a way to read a stored string (use `text` plus "
+            "`options.display`). `number`, `date` and `datetime` are moving to integer or double storage "
+            "plus `options.display`; they keep working until that replacement ships."
+        ),
+    )
     options: ColumnOptions = Field(default_factory=ColumnOptions)
 
 

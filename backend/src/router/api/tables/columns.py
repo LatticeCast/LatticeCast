@@ -13,6 +13,7 @@ from config.lattice_ql import invalidate_schema_cache
 from middleware.auth import get_current_user, get_rls_session
 from models.table import ColumnCreate, ColumnUpdate
 from models.user import User
+from repository.table import TableRepository
 from repository.table_view import TableViewRepository
 
 from ._shared import _get_table_for_member
@@ -104,3 +105,95 @@ async def delete_column(
         raise
     await invalidate_schema_cache(str(table.workspace_id))
     return await view_repo.get_tables_schema(table.workspace_id, table.table_id)
+
+
+# ── Per-column indexes: created on demand, never by add_column ──────────────
+#
+# Rows of every table share one physical table, so each index costs every write
+# of every table. Select / tags / checkbox / text equality is already served by
+# the shared row_data GIN; a per-column btree is for range queries only, and is
+# limited to integer-valued types. `number` may hold fractions, so it cannot be
+# indexed; indexes created for it before V79 can still be listed and dropped.
+_GIN_SERVED_TYPES = frozenset({"text", "string", "select", "tags", "checkbox"})
+_RANGE_INDEX_TYPES = frozenset({"date", "datetime"})
+
+
+def _index_state(table: Any, column: dict[str, Any], indexes: dict[str, dict]) -> dict[str, Any]:
+    col_type = column["type"]
+    idx = indexes.get(TableRepository._index_name(table.workspace_id, table.table_id, column["column_id"]))
+    if idx is not None:
+        served_by = idx["method"]
+    elif col_type in _GIN_SERVED_TYPES:
+        served_by = "shared_gin"
+    else:
+        served_by = "none"
+    return {
+        "column_id": column["column_id"],
+        "name": column.get("name"),
+        "type": col_type,
+        "index": idx,
+        "served_by": served_by,
+        "can_create_index": col_type in _RANGE_INDEX_TYPES,
+    }
+
+
+@router.get("/{table_id}/indexes")
+async def list_indexes(
+    table_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+) -> dict[str, Any]:
+    """Which columns of this table have an index, and what serves each of the others."""
+    table = await _get_table_for_member(table_id, user, session)
+    schema = await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id)
+    indexes = await TableRepository(session).list_column_indexes(table.workspace_id, table.table_id)
+    return {"columns": [_index_state(table, c, indexes) for c in schema["columns"] if "column_id" in c and "type" in c]}
+
+
+async def _column_of(table: Any, column_id: str, session: AsyncSession) -> dict[str, Any]:
+    schema = await TableViewRepository(session).get_tables_schema(table.workspace_id, table.table_id)
+    for column in schema["columns"]:
+        if column.get("column_id") == column_id:
+            return column
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found")
+
+
+@router.post("/{table_id}/columns/{column_id}/index", status_code=status.HTTP_201_CREATED)
+async def create_index(
+    table_id: int,
+    column_id: str,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+) -> dict[str, Any]:
+    """Create the column's btree index. Only date and datetime (integer epoch-ms) qualify."""
+    table = await _get_table_for_member(table_id, user, session)
+    column = await _column_of(table, column_id, session)
+    col_type = column["type"]
+    if col_type not in _RANGE_INDEX_TYPES:
+        if col_type == "number":
+            reason = "a number column may hold fractions, so it cannot be indexed"
+        elif col_type in _GIN_SERVED_TYPES:
+            reason = "equality on this type is already served by the shared GIN index"
+        else:
+            reason = "this column type has no index"
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Cannot index a {col_type} column: {reason}")
+    repo = TableRepository(session)
+    await repo.create_column_index(table.workspace_id, table.table_id, column_id, col_type)
+    indexes = await repo.list_column_indexes(table.workspace_id, table.table_id)
+    return _index_state(table, column, indexes)
+
+
+@router.delete("/{table_id}/columns/{column_id}/index")
+async def drop_index(
+    table_id: int,
+    column_id: str,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_rls_session),
+) -> dict[str, Any]:
+    """Drop the column's per-column index (also one created for a number column before V79)."""
+    table = await _get_table_for_member(table_id, user, session)
+    column = await _column_of(table, column_id, session)
+    repo = TableRepository(session)
+    await repo.drop_column_index(table.workspace_id, table.table_id, column_id)
+    indexes = await repo.list_column_indexes(table.workspace_id, table.table_id)
+    return _index_state(table, column, indexes)

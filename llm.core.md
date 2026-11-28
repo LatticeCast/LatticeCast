@@ -16,6 +16,17 @@ workspace UUID -> table BIGINT -> row/view/blob children
   the table FK.
 - PATCH merges non-blob cells; PUT replaces non-blob cells. Blob writes use
   `/tables/{table_id}/rows/{row_id}/blob/{column_id}` only.
+- `POST /tables` makes an empty table (no columns); the starter columns come
+  from `POST /tables/template/{basic,pm,crm,workflow}`.
+- Per-column indexes are on demand: `add_column` creates none (V79). Select/tags/
+  checkbox/text equality uses the shared `row_data` GIN; a btree is only for
+  range queries on `date`/`datetime`. `number` may hold fractions and is never
+  indexed. `GET /tables/{id}/indexes`, `POST|DELETE /tables/{id}/columns/{column_id}/index`.
+- Deleting a table does not drop its per-column indexes. Reclaim them with
+  `SELECT public.drop_orphan_row_indexes(200);` (mgr/dba, one call per
+  transaction, until 0).
+- Column options may carry `note` (annotation) and `display` (reading hint);
+  the server and LQL never interpret `display`.
 - `date`/`datetime` row values are UTC epoch milliseconds; DB timestamps are
   UTC `TIMESTAMPTZ`.
 - RLS is the authorization boundary; normal routes use its session, login/admin

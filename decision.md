@@ -121,3 +121,34 @@ first. Only adopt this path, and only then:
   split across nodes). It is schema + RLS policy + trigger work that
   reopens a closed correctness question for no benefit if Option A would
   have covered the actual scaling need.
+
+## Column indexes are created on demand, and the type set is shrinking (0.93.0)
+
+Every table's rows live in one physical `rows` table and the user picks each
+column's type at run time, so the platform cannot know which columns will be
+queried. An index nobody uses still taxes every INSERT and UPDATE of every
+table, and a `::numeric` expression index can make a write fail when a cell
+holds junk. So:
+
+- A blank table has no columns; the user decides which to add, and only a
+  template (`basic`, `pm`, `crm`, `workflow`) seeds a starter set.
+- `add_column` and the templates create no index (V79). Equality on select/tags/checkbox/text is
+  served by the shared `row_data` GIN; a per-column btree is for range queries
+  and is created only through `POST /tables/{id}/columns/{column_id}/index`.
+- Indexes of deleted tables are reclaimed out of band
+  (`drop_orphan_row_indexes`), not by a trigger: `DROP INDEX` takes an
+  exclusive lock on the shared `rows` table, which inside a cascading delete
+  would stall or deadlock every tenant.
+- Only integer-valued types may be indexed (`date`, `datetime`: epoch-ms).
+  `number` may hold fractions, so it is refused; indexes created for it before
+  0.93.0 stay until dropped.
+- Direction (not finished): storage types become `text`, `int`, `double`,
+  `tags`, `blob`; date, checkbox, select, url become a client-side reading of
+  those, carried in `options.display` and annotated by `options.note`.
+  `select`, `checkbox`, `url`, `string` are deprecated now and keep working.
+  Existing `number` columns convert to `int` only if every stored value is an
+  integer, otherwise `double`; stage and prod data decide this, so it is not
+  decided here.
+- LQL ordering comparisons are numeric for number/date/datetime, guarded so an
+  empty or non-numeric cell is NULL rather than an error. That guard means the
+  comparison does not use a btree on `(row_data->>col)::numeric` yet.

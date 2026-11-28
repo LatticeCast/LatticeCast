@@ -32,10 +32,8 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from e2e_base import BASE, api
 
 ADMIN_USER = "lattice"
-# Not "Title": the blank template already seeds Title, Doc and Description,
-# and V39 enforces unique normalized column names per table -- so creating
-# one called Title is a 409, not a new column. This test is about resizing
-# a column it created, so give it a name of its own.
+# A blank table has no columns, so this test adds the one it resizes and
+# gives it a name of its own.
 COL_NAME = "ResizeCol"
 VIEW_NAME = "Resize View"
 DRAG_DELTA = 100  # px to drag right

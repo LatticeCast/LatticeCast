@@ -46,6 +46,10 @@ export interface ColumnOptions {
 	kind?: BlobKind;
 	/** HTML file-input accept value, for example `image/*` or `.pdf`. */
 	accept?: string;
+	/** Free-text annotation for the column. */
+	note?: string;
+	/** How to read the stored value (date, link, checkbox, select…). Advisory: the server never interprets it. */
+	display?: string;
 }
 
 // ─── PG output shapes (BE passthrough) ────────────────────────────────────────

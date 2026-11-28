@@ -20,7 +20,7 @@ Self-hosted Airtable-like table engine and unified backend. Flexible JSONB table
 - **Views** — Table (spreadsheet), Kanban (drag-and-drop), Timeline/Gantt (date bars), Dashboard (LatticeQL charts, numbers, lists) and Workflow (node graph), all customizable
 - **PM Template** — Jira-like project management with epic/story/task/bug types, Sprint Board (Kanban) and Roadmap (Timeline) views; ticket key is `<type>-<row_id>` (e.g. `story-5`)
 - **CRM Template** — Pipeline Kanban plus a Sales Dashboard whose blocks are LatticeQL queries over the same rows
-- **JSONB Indexing** — one PostgreSQL GIN over `table_id` and `row_data` supports containment queries across dynamic schemas; number/date range fields keep B-tree indexes
+- **JSONB Indexing** — one PostgreSQL GIN over `row_data` supports containment queries across dynamic schemas; per-column B-tree indexes are created only on request (`POST /tables/{id}/columns/{column_id}/index`, date/datetime only) and listed with `GET /tables/{id}/indexes`
 - **Blob cells** — a `blob` column holds exactly one file (`file`, `image`, `text`, `table` kinds) in RustFS; PM tickets use a `text` blob for Markdown notes
 - **Import** — CSV/JSON import and templates in the table UI
 - **Authentication** — LC-local HS256 JWTs, password login with rotating refresh tokens, and a first-party SSO issuer (authorization code + PKCE, native handoff) so static front ends need no auth backend
@@ -48,9 +48,9 @@ The API and frontend accept these ten column types. Each cell is stored under it
 |------|------------|---------|--------------|
 | `text` | String | Free-form text | None |
 | `string` | String | String-valued field | None |
-| `number` | Number | Numeric value | B-tree for range/sort |
-| `date` | Number | UTC epoch milliseconds, displayed as a date | B-tree for range/sort |
-| `datetime` | Number | UTC epoch milliseconds, displayed with time | B-tree for range/sort |
+| `number` | Number | Numeric value; may hold fractions, so it cannot be indexed | None (indexes made before 0.93.0 remain; drop with `DELETE …/index`) |
+| `date` | Number | UTC epoch milliseconds, displayed as a date | B-tree on request |
+| `datetime` | Number | UTC epoch milliseconds, displayed with time | B-tree on request |
 | `select` | String | One value from the column's configured choices | Shared GIN for containment |
 | `tags` | Array of strings | Multiple selected tags | Shared GIN for containment |
 | `checkbox` | Boolean | Checked or unchecked | Shared GIN for containment |
@@ -59,6 +59,9 @@ The API and frontend accept these ten column types. Each cell is stored under it
 
 `email` and `phone` are not accepted column types. Blob cells are written through their dedicated blob endpoints.
 The shared GIN covers the whole `row_data` JSONB value; "None" means no separate column index is created.
+A new table has no columns; `POST /tables/template/{basic,pm,crm,workflow}` seeds a starter set. Adding a column never creates an index (0.93.0). A column's options may carry `note` (a free-text annotation) and `display` (a hint for how a client reads the stored value, such as `date` or `link`); the server and LatticeQL never interpret `display`.
+
+**Deprecated types.** `string` (same as `text`), `select`, `checkbox` and `url` only describe how to read a stored string, so they are deprecated in favour of `text` plus `options.display`; `number`, `date` and `datetime` will move to integer or double storage plus `options.display`. All keep working. Ordering comparisons in LatticeQL (`<`, `<=`, `>`, `>=`) on `number`, `date` and `datetime` columns are numeric.
 
 ## Tech Stack
 

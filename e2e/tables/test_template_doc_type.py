@@ -9,11 +9,11 @@ import pytest
 from e2e_base import api
 
 
-@pytest.mark.parametrize("kind", ("blank", "crm", "pm"))
+@pytest.mark.parametrize("kind", ("basic", "crm", "pm"))
 def test_template_doc_columns_are_text_blobs(admin_token, workspace, kind):
     workspace_id, _ = workspace
     name = f"seed-doc-type-{kind}-{time.time_ns()}"
-    path = "/api/v1/tables" if kind == "blank" else f"/api/v1/tables/template/{kind}"
+    path = f"/api/v1/tables/template/{kind}"
     response = api(
         "POST", path, admin_token,
         json={"table_name": name, "workspace_id": workspace_id},
@@ -28,3 +28,13 @@ def test_template_doc_columns_are_text_blobs(admin_token, workspace, kind):
     assert doc["options"]["kind"] == "text", f"{kind} Doc kind: {doc}"
     assert all(col["type"] != "doc" for col in columns)
     assert all(col.get("options", {}).get("kind") != "doc" for col in columns)
+
+
+def test_blank_table_has_no_columns(admin_token, workspace):
+    workspace_id, _ = workspace
+    response = api(
+        "POST", "/api/v1/tables", admin_token,
+        json={"table_name": f"blank-empty-{time.time_ns()}", "workspace_id": workspace_id},
+    )
+    assert response.status_code == 201, response.text[:200]
+    assert response.json()["columns"] == []
