@@ -255,13 +255,23 @@ export function sortLabels(type: ColumnReading): { asc: string; desc: string } {
 	}
 }
 
+/**
+ * Never alters what was typed: a fraction in an int column goes to the server,
+ * which refuses it. Only values JavaScript cannot carry are rejected here.
+ */
+function parseNumber(text: string, type: ColumnType): number | null {
+	if (text.trim() === '') return null;
+	const n = Number(text);
+	if (!Number.isFinite(n)) throw new Error(`"${text}" is not a number`);
+	if (type === 'int' && Number.isInteger(n) && !Number.isSafeInteger(n))
+		throw new Error(`"${text}" is too large to edit without losing digits`);
+	return n;
+}
+
 /** Parse a string edit value into what the column stores, by how the column is read. */
 export function parseEditValue(editVal: string, column: Pick<Column, 'type' | 'options'>): unknown {
 	const colType = readAs(column);
-	if (colType === 'number') {
-		if (editVal === '') return null;
-		return column.type === 'int' ? Math.trunc(Number(editVal)) : Number(editVal);
-	}
+	if (colType === 'number') return parseNumber(editVal, column.type);
 	if (colType === 'checkbox') return checkboxCell(editVal === 'true');
 	if (isTemporalType(colType)) return fromInput(editVal, colType, currentZone());
 	if (editVal === '') return null;

@@ -22,6 +22,14 @@
   workspaces; the web client addresses them as `name`, `name-1`, `name-2`.
 - The last owner of a workspace may be demoted or removed; zero owners is allowed.
 - PostgreSQL refuses reserved workspace names and blank view names (V81).
+- A column's type changes only when every stored value fits the new type (V83); nothing is converted.
+- Every write checks the changed cells against their storage type: `text`, `int`, `double`,
+  `strings` (V84).
+- The web client no longer truncates a fraction typed into an int cell.
+
+**Upgrading** is not finished until old columns are converted: until then LatticeQL omits them, and
+an old checkbox column (`true`/`false`) shows as unchecked. Run the migrations, then
+`convert_column_type.py list` and `convert` each column it names.
 - Needs LatticeQL 0.6.5 (`int`, `double`, `strings` kinds).
 
 ## 0.93.1 — 2026-11-28

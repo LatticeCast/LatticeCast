@@ -79,9 +79,14 @@ async def update_column(
                 detail="A column with that name already exists",
             ) from exc
         raise
-    except Exception as e:
-        if "not found" in str(e).lower():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found") from e
+    except DBAPIError as exc:
+        # PostgreSQL refuses an unknown type, or one the stored values do not fit.
+        await session.rollback()
+        mapped = http_error_for(exc)
+        if mapped is not None:
+            raise mapped from exc
+        if "not found" in str(exc).lower():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Column not found") from exc
         raise
     await invalidate_schema_cache(str(table.workspace_id))
     return await view_repo.get_tables_schema(table.workspace_id, table.table_id)

@@ -61,7 +61,11 @@ export function workspacePath(ws: NamedWorkspace, list: NamedWorkspace[]): strin
 /** Resolve a route parameter (a UUID or a URL name) to its workspace. */
 export function findWorkspace<T extends NamedWorkspace>(param: string, list: T[]): T | null {
 	const wanted = decodeURIComponent(param);
-	if (isUuid(wanted)) return list.find((ws) => ws.workspace_id === wanted) ?? null;
+	// A workspace may be *named* like a UUID, so an unknown id falls through to names.
+	if (isUuid(wanted)) {
+		const byId = list.find((ws) => ws.workspace_id === wanted);
+		if (byId) return byId;
+	}
 	for (const [ws, slug] of workspaceNames(list)) {
 		if (slug.toLowerCase() === wanted.toLowerCase()) return ws;
 	}

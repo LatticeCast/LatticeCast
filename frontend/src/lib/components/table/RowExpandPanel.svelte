@@ -39,6 +39,7 @@
 	} = $props();
 
 	let editField = $state<string | null>(null);
+	let editError = $state('');
 	let editVal = $state('');
 	let tagsPopup = $state<string | null>(null);
 	let imagePreview = $state<{ url: string; filename: string; column: Column } | null>(null);
@@ -58,7 +59,14 @@
 	async function commitEdit(col: Column) {
 		if (editField !== col.column_id) return;
 		editField = null;
-		const newData = applyEditToRowData(currentRow.row_data, col.column_id, editVal, col);
+		editError = '';
+		let newData: Record<string, unknown>;
+		try {
+			newData = applyEditToRowData(currentRow.row_data, col.column_id, editVal, col);
+		} catch (e) {
+			editError = e instanceof Error ? e.message : 'Invalid value';
+			return;
+		}
 		await onUpdateRow(currentRow.row_id, newData);
 	}
 
@@ -158,6 +166,9 @@
 
 	<!-- Fields list -->
 	<div class="flex-1 overflow-y-auto px-6 py-4">
+		{#if editError}
+			<p data-testid="row-panel-edit-error" class="text-xs text-red-500">{editError}</p>
+		{/if}
 		{#each sortedCols as col (col.column_id)}
 			<div class="mb-5">
 				<label class="mb-1 block text-xs font-semibold tracking-wide uppercase {T.muted}">

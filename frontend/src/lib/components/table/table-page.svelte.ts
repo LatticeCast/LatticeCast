@@ -41,6 +41,7 @@ import {
 	parseCSV,
 	parseWidths,
 	applyEditToRowData,
+	parseEditValue,
 	toggleCheckboxInRowData,
 	CHECKED,
 	checkboxCell,
@@ -343,8 +344,14 @@ class TablePageStore {
 		if (this._savedEdit?.key === key && this._savedEdit.value === value) {
 			return this._savedEdit.promise;
 		}
-		const newData = applyEditToRowData(row.row_data, col.column_id, value, col);
 		error.set(null);
+		let newData: Record<string, unknown>;
+		try {
+			newData = applyEditToRowData(row.row_data, col.column_id, value, col);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Invalid value');
+			return false;
+		}
 		const tableId = this.tableId;
 		const promise = this._editWriteQueue.then(async () => {
 			try {
@@ -899,10 +906,8 @@ class TablePageStore {
 						data[col.column_id] = checkboxCell(
 							rawVal.toLowerCase() === 'true' || rawVal === '1' || rawVal === CHECKED
 						);
-					else if (readAs(col) === 'number') {
-						const n = Number(rawVal);
-						data[col.column_id] = isNaN(n) ? null : col.type === 'int' ? Math.trunc(n) : n;
-					} else if (temporalReading(col)) data[col.column_id] = toEpochMs(rawVal);
+					else if (readAs(col) === 'number') data[col.column_id] = parseEditValue(rawVal, col);
+					else if (temporalReading(col)) data[col.column_id] = toEpochMs(rawVal);
 					else data[col.column_id] = rawVal;
 				}
 				await createRow(tableId, { row_data: data });

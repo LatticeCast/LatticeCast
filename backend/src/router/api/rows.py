@@ -172,7 +172,7 @@ async def create_row(
 
     repo = RowRepository(session)
     try:
-        # A raw INSERT still passes through trg_rows_coerce_ints (V80), so a
+        # A raw INSERT still passes through trg_rows_check_types (V84), so a
         # bad timestamp is rejected here too, not only on patch/put.
         return await repo.create(
             workspace_id=table.workspace_id,

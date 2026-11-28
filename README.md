@@ -55,7 +55,9 @@ A column has a storage type, and the client chooses how to read it. Each cell is
 The server stores `display` and `note` and never interprets them. Blob cells are written through their dedicated blob endpoints.
 A new table has no columns; `POST /tables/template/{basic,pm,crm,workflow}` seeds a starter set. Adding a column never creates an index. One GIN over `row_data` serves containment queries. A per-column index is not a proven speed-up yet: LatticeQL and the grid's row query do not use it, and creating or dropping one blocks writes to the shared `rows` table while it runs.
 
-Columns created before 0.94.0 keep their old type until converted with `migration/convert_column_type.py`.
+A column's type changes only when every stored value already fits it.
+
+Upgrading is not finished until columns created before 0.94.0 are converted with `migration/convert_column_type.py`: until then LatticeQL omits them, and an old checkbox column shows as unchecked.
 
 ## Tech Stack
 

@@ -318,8 +318,8 @@ def verify(psql_fn) -> list[str]:
             f"{result} public index(es) (V49)"
         )
 
-    # V80: the date/datetime normaliser is gone with those types; a rows
-    # trigger coerces int cells on every write path instead.
+    # V80/V84: the date/datetime normaliser is gone with those types; a rows
+    # trigger checks changed cells on every write path instead.
     for function_name, signature in [
         ("to_canonical_epoch_ms", "jsonb, text"),
         ("_normalize_row_data_timestamps", "jsonb, jsonb"),
@@ -336,18 +336,18 @@ def verify(psql_fn) -> list[str]:
         "SELECT string_agg(trigger_name::text, ',' ORDER BY trigger_name::text) "
         "FROM (SELECT DISTINCT trigger_name FROM information_schema.triggers "
         "      WHERE event_object_schema='public' AND event_object_table='rows' "
-        "        AND trigger_name IN ('trg_rows_canonical_ts', 'trg_rows_coerce_ints')) AS found;"
+        "        AND trigger_name IN ('trg_rows_canonical_ts', 'trg_rows_check_types')) AS found;"
     ).strip()
-    if result != "trg_rows_coerce_ints":
-        errors.append(f"WRONG ROW TYPE TRIGGERS: expected trg_rows_coerce_ints only, got {result!r} (V80)")
+    if result != "trg_rows_check_types":
+        errors.append(f"WRONG ROW TYPE TRIGGERS: expected trg_rows_check_types only, got {result!r} (V84)")
 
     result = psql_fn(
-        "SELECT public._coerce_row_data_ints("
+        "SELECT public._check_row_data("
         "'[{\"column_id\": \"a\", \"name\": \"A\", \"type\": \"int\"}]'::jsonb, "
         "'{\"a\": 3.0, \"b\": \"kept\"}'::jsonb)::text;"
     ).strip()
     if result != '{"a": 3, "b": "kept"}':
-        errors.append(f"WRONG INT COERCION: expected a=3 and b untouched, got {result!r} (V80)")
+        errors.append(f"WRONG INT COERCION: expected a=3 and b untouched, got {result!r} (V84)")
 
     # V60: all persisted application instants carry their UTC offset.
     result = psql_fn("SHOW timezone;").strip()
@@ -871,6 +871,16 @@ def verify(psql_fn) -> list[str]:
         """)
     except subprocess.CalledProcessError as exc:
         errors.append(f"V81 NAME CHECK PROBE: {exc.stderr}")
+
+    # V83: a type change is accepted only when every stored value fits.
+    result = psql_fn(
+        "SELECT concat_ws(',', "
+        "public._column_value_fits('int', '3'), public._column_value_fits('int', '3.5'), "
+        "public._column_value_fits('int', '\"3\"'), public._column_value_fits('text', '\"x\"'), "
+        "public._column_value_fits('strings', '[\"a\"]'), public._column_value_fits('strings', '[1]'));"
+    ).strip()
+    if result != "t,f,f,t,t,f":
+        errors.append(f"WRONG TYPE FIT RULE: {result!r} (V83)")
 
     # V73: template seed functions must emit the final blob/text schema directly.
     # The dispatcher must no longer depend on a legacy doc conversion pass.

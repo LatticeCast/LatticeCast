@@ -97,6 +97,10 @@ REWRITE = {
         "jsonb_typeof(row_data -> %(col)s) IN ('boolean', 'number')",
         "to_jsonb(row_data ->> %(col)s)",
     ),
+    "double": (
+        "jsonb_typeof(row_data -> %(col)s) = 'string' AND btrim(row_data ->> %(col)s) = ''",
+        "'null'::JSONB",
+    ),
     "int": (
         "jsonb_typeof(row_data -> %(col)s) <> 'null' AND (row_data ->> %(col)s) !~ '^-?[0-9]+$'",
         "CASE jsonb_typeof(row_data -> %(col)s) WHEN 'number' "
@@ -184,13 +188,33 @@ def cmd_convert(args) -> int:
             print(f"column  {column.get('name')!r}  {column.get('type')} -> {args.type}  display={args.display}")
             print(f"data    {json.dumps(facts(cur, args.table_id, args.column_id), ensure_ascii=False)}")
 
+            # The column takes its new type first: the rows trigger checks every cell
+            # written below against it.
+            options = column.get("options")
+            if not isinstance(options, dict):
+                options = {}
+            if args.display:
+                options = {**options, "display": args.display}
+            else:
+                options = {k: v for k, v in options.items() if k != "display"}
+            new_columns = [
+                {**c, "type": args.type, "options": options} if c.get("column_id") == args.column_id else c
+                for c in columns
+            ]
+            cur.execute(
+                "UPDATE public.tables SET config = jsonb_set(config, '{columns}', %s::JSONB) "
+                "WHERE table_id = %s RETURNING workspace_id::TEXT",
+                (json.dumps(new_columns), args.table_id),
+            )
+            workspace_id = cur.fetchone()[0]
+
             if args.parse_strings and args.type in ("int", "double"):
                 cur.execute(
                     "UPDATE public.rows "
                     "SET row_data = jsonb_set(row_data, ARRAY[%(col)s], to_jsonb(btrim(row_data ->> %(col)s)::NUMERIC)) "
                     "WHERE table_id = %(tid)s AND jsonb_typeof(row_data -> %(col)s) = 'string' "
-                    "AND btrim(row_data ->> %(col)s) ~ '^-?[0-9]+([.][0-9]+)?$'",
-                    params,
+                    "AND btrim(row_data ->> %(col)s) ~ %(number)s",
+                    {**params, "number": "^-?[0-9]+$" if args.type == "int" else "^-?[0-9]+([.][0-9]+)?$"},
                 )
                 print(f"parsed  {cur.rowcount} numeric string(s) into numbers")
 
@@ -222,23 +246,6 @@ def cmd_convert(args) -> int:
                 )
                 print(f"rewrote {cur.rowcount} cell(s) into {args.type} form")
 
-            options = column.get("options")
-            if not isinstance(options, dict):
-                options = {}
-            if args.display:
-                options = {**options, "display": args.display}
-            else:
-                options = {k: v for k, v in options.items() if k != "display"}
-            new_columns = [
-                {**c, "type": args.type, "options": options} if c.get("column_id") == args.column_id else c
-                for c in columns
-            ]
-            cur.execute(
-                "UPDATE public.tables SET config = jsonb_set(config, '{columns}', %s::JSONB) "
-                "WHERE table_id = %s RETURNING workspace_id::TEXT",
-                (json.dumps(new_columns), args.table_id),
-            )
-            workspace_id = cur.fetchone()[0]
             # LatticeQL caches the workspace schema; it still names the old type.
             cur.execute("DELETE FROM private.cache WHERE cache_key = %s", (f"lql:schema:{workspace_id}",))
 

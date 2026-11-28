@@ -34,4 +34,10 @@ describe('table URL resolution', () => {
 	it('prefers a numeric table name over a legacy numeric identity', () => {
 		expect(findTableForPath('homun', '60', workspaces, tables)?.table_id).toBe(62);
 	});
+
+	it('finds a workspace whose name looks like a UUID', () => {
+		const uuidName = '33333333-3333-4333-8333-333333333333';
+		const named = [{ workspace_id: firstWorkspace, workspace_name: uuidName, created_at: 'a' }];
+		expect(findTableForPath(uuidName, 'data-reports', named, tables)?.table_id).toBe(60);
+	});
 });
